@@ -15,8 +15,11 @@ class GloMPOOptimizer:
         intelligently restart others. """
 
     def __init__(self,
+                 task: Callable,
                  optimizers: dict,
+                 bounds: Sequence[Tuple[float, float]],
                  max_jobs: int,
+                 task_kwargs: Union[dict, None] = None,
                  visualisation: bool = False,
                  visualisation_args: Union[dict, None] = None):
         """
@@ -24,6 +27,8 @@ class GloMPOOptimizer:
 
         Parameters
         ----------
+        task : Callable
+            The function to be minimised.
         optimizers: dict, Callables
             Dictionary of callable optimization functions with keywords describing their behaviour. Recognized keywords
             are:
@@ -36,6 +41,7 @@ class GloMPOOptimizer:
 
         max_jobs : int
             The maximum number of local optimizers run in parallel.
+        task_kwargs :
         visualisation : bool
             If True then a dynamic plot is generated to demonstrate the performance of the optimizers. Further options
             (see visualisation_args) allow this plotting to be recorded and saved as a film.
@@ -43,7 +49,6 @@ class GloMPOOptimizer:
             Optional arguments to parameterize the dynamic plotting feature.
         """
 
-        # TODO Also implement check to see if it is an instance of an approved base class
         if 'default' not in optimizers:
             raise ValueError("'default' not found in optimizer dictionary. This value must be set.")
         for optimizer in optimizers.values():
@@ -53,6 +58,7 @@ class GloMPOOptimizer:
         self.optimizers = optimizers
 
         self.max_jobs = max_jobs
+        self.bounds = bounds
 
         self.optimizer_jobs = []
         self.hyperparm_jobs = []
@@ -68,6 +74,7 @@ class GloMPOOptimizer:
 
     def start_manager(self):
         """ Begins the optimization routine. """
+
         pass
 
     # TODO Selection of new starting points can be driven by a Gaussian Process (Probably unrealistic unless a LOT of
