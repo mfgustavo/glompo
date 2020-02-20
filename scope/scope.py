@@ -1,6 +1,6 @@
 
 
-from typing import Union
+from typing import *
 import matplotlib.animation as ani
 import matplotlib.lines as lines
 import matplotlib.patches as patches
@@ -11,9 +11,13 @@ import numpy as np
 class ParallelOptimizerScope:
     """ Constructs and records the dynamic plotting of optimizers run in parallel"""
 
-    def __init__(self, num_streams: int, x_range: tuple = (), y_range: tuple = (), visualise: int = 0,
-                 record_movie: bool = False, writer_args: Union[dict, None] = None,
-                 movie_args: Union[dict, None] = None):
+    def __init__(self, num_streams: int,
+                 x_range: Tuple[float, float] = (),
+                 y_range: Tuple[float, float] = (),
+                 visualise_gpr: bool = True,
+                 record_movie: bool = False,
+                 writer_kwargs: Union[Dict[str, Any], None] = None,
+                 movie_kwargs: Union[Dict[str, Any], None] = None):
         """
         Initializes the plot and movie recorder.
 
@@ -21,21 +25,21 @@ class ParallelOptimizerScope:
         ----------
         num_streams : int
             Total number of optimizers being run in parallel.
-        x_range : tuple
+        x_range : Tuple[float, float]
             Sets the x-axis limits of the plot, default is an empty tuple which leads the plot to automatically and
             constantly rescale the axis.
-        y_range : tuple
+        y_range : Tuple[float, float]
             Sets the y-axis limits of the plot, default is an empty tuple which leads the plot to automatically and
             constantly rescale the axis.
-        visualise : int
-            Accepts values 0 and 1. The plot will show the regression itself if set to 0 and will show only the
-            predicted mean and uncertainty if set to 1.
+        visualise_gpr : int
+            If True the plot will show the regression itself if False only the predicted mean and uncertainty on the
+            mean will be shown.
         record_movie : bool
             If True then a matplotlib.animation.FFMpegWriter instance is created to record the plot.
-        writer_args : Union[dict, None]
+        writer_kwargs : Union[Dict[str, Any], None]
             Optional dictionary of arguments to be sent to the initialisation of the matplotlib.animation.FFMpegWriter
             class.
-        movie_args : Union[dict, None]
+        movie_kwargs : Union[Dict[str, Any], None]
             Optional dictionary of arguments to be sent to matplotlib.animation.FFMpegWriter.setup().
         """
         # TODO Set workdir
@@ -70,14 +74,18 @@ class ParallelOptimizerScope:
             self.ax.add_patch(stream[3])
 
         # Create custom legend
+        self.visualise_gpr = visualise_gpr
         leg_elements = [lines.Line2D([], [], ls='-', c='black', label='Optimizer Evaluations'),
                         lines.Line2D([], [], ls='', marker='o', c='black', label='Point in Training Set'),
-                        lines.Line2D([], [], ls='--', c='black', label='Estimated Mean'),
-                        patches.Patch(fc='silver', ec='black', ls=':', label='Mean Uncertainty'),
                         lines.Line2D([], [], ls='', marker=6, c='black', label='Hyperparam. Opt. Started'),
                         lines.Line2D([], [], ls='', marker=7, c='black', label='Hyperparam. Updated'),
-                        lines.Line2D([], [], ls='', marker='x', c='black', label='Optimizer Killed'),
-                        lines.Line2D([], [], ls='-.', c='black', label='Regression and Uncertainty')]
+                        lines.Line2D([], [], ls='', marker='x', c='black', label='Optimizer Killed')]
+        if visualise_gpr:
+            leg_elements.append(lines.Line2D([], [], ls='-.', c='black', label='Regression and Uncertainty'))
+        else:
+            leg_elements.append(lines.Line2D([], [], ls='--', c='black', label='Estimated Mean'))
+            leg_elements.append(patches.Patch(fc='silver', ec='black', ls=':', label='Mean Uncertainty'))
+
         self.ax.legend(loc='upper right', handles=leg_elements)
 
         self.ax.set_xlim(x_range[0], x_range[1]) if x_range else self.ax.set_autoscalex_on(True)
@@ -85,8 +93,8 @@ class ParallelOptimizerScope:
 
         self.record_movie = record_movie
         if record_movie:
-            self.writer = ani.FFMpegFileWriter(**writer_args)
-            self.writer.setup(fig=self.fig, **movie_args)
+            self.writer = ani.FFMpegFileWriter(**writer_kwargs)
+            self.writer.setup(fig=self.fig, **movie_kwargs)
 
     def _update(self):
         self.ax.relim()

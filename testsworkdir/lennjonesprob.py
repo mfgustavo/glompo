@@ -1,4 +1,6 @@
 
+import matplotlib
+matplotlib.use('qt5agg')
 
 from scm.params.core.callbacks import EarlyStopping
 from scm.params.core.jobcollection import *

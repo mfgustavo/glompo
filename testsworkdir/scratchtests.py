@@ -562,15 +562,53 @@ def test_glompoclass():
     from scm.params.optimizers.cma import CMAOptimizer
 
     cma = CMAOptimizer()
-    glompo = GloMPOOptimizer(optimizers={'default': cma},
-                             max_jobs=3,
-                             visualisation=True,
-                             visualisation_args={'visualise': 1,
-                                                 'record_movie': True,
-                                                 'writer_args': {'fps': 10},
-                                                 'movie_args': {'outfile': 'movie.mp4',
-                                                              'dpi': 300}})
+    print(cma)
+
+
+def test_toyengines():
+    from testsworkdir.toy_engines.rosenbrock import Rosenbrock
+    from testsworkdir.toy_engines.ackley import Ackley
+    from testsworkdir.toy_engines.expproblem import ExpProblem
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    for i in range(1, 30):
+        rose = Rosenbrock(i, 0)
+        assert rose([1]*i) == 0
+
+    ack = Ackley()
+    assert ack(0, 0) == 0
+
+    fig, ax = plt.subplots(1, 3)
+
+    ax[0].set_title('Rosenbrock')
+    rose = Rosenbrock(2)
+    x = np.linspace(-1.5, 2, 50)
+    y = np.linspace(-0.5, 3, 50)
+    X, Y = np.meshgrid(x, y)
+    Z = rose([X, Y])
+    ax[0].contourf(X, Y, Z)
+
+    ax[1].set_title('Ackley')
+    x = np.linspace(-4, 4, 80)
+    y = np.linspace(-4, 4, 80)
+    X, Y = np.meshgrid(x, y)
+    Z = ack(X, Y)
+    ax[1].contourf(X, Y, Z)
+
+    ax[2].set_title('ExpProblem')
+    exp = ExpProblem(delay=0, npar=2)
+    xrange = np.linspace(0.5, 1, 80)
+    yrange = np.linspace(0.5, 1, 80)
+    X, Y = np.meshgrid(xrange, yrange)
+    Z = np.zeros_like(X)
+    for i, x in enumerate(xrange):
+        for j, y in enumerate(yrange):
+            Z[i, j] = exp(np.array([x, y]))
+    ax[2].contourf(X, Y, Z)
+
+    plt.show()
 
 
 if __name__ == '__main__':
-    test_log_exp_kernel()
+    test_toyengines()

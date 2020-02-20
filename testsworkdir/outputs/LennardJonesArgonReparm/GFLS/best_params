@@ -1,4 +1,0 @@
-Engine LennardJones
-    eps 60
-    r_min 3.0
-EndEngine
