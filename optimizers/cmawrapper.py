@@ -30,8 +30,9 @@ class CMAOptimizer(BaseOptimizer):
 
     needscaler = True
 
-    def __init__(self, sigma=0.5, sampler='full', **cmasettings):
+    def __init__(self, opt_id, sigma=0.5, sampler='full', **cmasettings):
         """ Initialize with the above parameters. """
+        super().__init__(opt_id)
         self.sigma = sigma
 
         # Sort all non-native CMA options into the custom cmaoptions key 'vv':
@@ -51,10 +52,9 @@ class CMAOptimizer(BaseOptimizer):
         self.dir = None
         self.es = None
         self.result = None
-        self._signal_pipe = None
 
     def minimize(self, function, x0, bounds, results_queue=None, signal_pipe=None, callbacks=None, **kwargs):
-        self._signal_pipe = signal_pipe
+        self.signal_pipe = signal_pipe
         self.dir = os.path.abspath('.')+os.sep+'cmadata'+os.sep
         if not os.path.isdir(self.dir):
             os.makedirs(self.dir)
@@ -75,7 +75,7 @@ class CMAOptimizer(BaseOptimizer):
             es.tell(solutions, [function(x) for x in solutions])
             es.logger.add()
             if results_queue:
-                results_queue.put(es.countiter, self.result.x, self.result.fx)
+                results_queue.put(self._opt_id, es.countiter, self.result.x, self.result.fx)
             self.result.x, self.result.fx = es.result[:2]
             self._customtermination(callbacks)
             print(f'At CMA Iteration: {es.countiter}. Best f(x)={es.best.f:.3e}.')
@@ -118,6 +118,6 @@ class CMAOptimizer(BaseOptimizer):
     def callstop(self, reason=None):
         if reason:
             print(reason)
-            if self._signal_pipe:
-                self._signal_pipe.send(reason)
+            if self.signal_pipe:
+                self.signal_pipe.send(reason)
         self.es.callbackstop = 1

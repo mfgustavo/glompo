@@ -1,29 +1,20 @@
 
 
 # Native Python imports
-from typing import *
+from time import time
 import multiprocessing as mp
 
 # Package imports
 from ..scope.scope import ParallelOptimizerScope
-from ..optimizers.baseoptimizer import BaseOptimizer
+from ..optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
+from ..common.namedtuples import *
+from .gpr import GaussianProcessRegression
+from .expkernel import ExpKernel
 
 # Other Python packages
 import numpy as np
 
 __all__ = ['GloMPOOptimizer']
-
-
-class Result(NamedTuple):
-    x: Sequence[float]
-    fx: float
-    stats: Dict[str, Any]
-    origin: Dict[str, Any]  # Optimizer name, settings, starting point and termination condition
-
-
-class Bound(NamedTuple):
-    min: float
-    max: float
 
 
 class GloMPOOptimizer:
@@ -210,9 +201,9 @@ class GloMPOOptimizer:
             raise ValueError(f"Cannot parse x0_criteria = {x0_criteria}. See docstring for allowed values.")
 
         # Save max conditions and counters
-        self.tmax = np.clip(int(tmax), 1, None) if tmax or tmax == 0 else None
-        self.fmax = np.clip(int(fmax), 1, None) if fmax or fmax == 0 else None
-        self.omax = np.clip(int(omax), 1, None) if omax or omax == 0 else None
+        self.tmax = np.clip(int(tmax), 1, None) if tmax or tmax == 0 else np.inf
+        self.fmax = np.clip(int(fmax), 1, None) if fmax or fmax == 0 else np.inf
+        self.omax = np.clip(int(omax), 1, None) if omax or omax == 0 else np.inf
 
         self.t_counter = None
         self.o_counter = 0
@@ -226,35 +217,55 @@ class GloMPOOptimizer:
             self.scope = ParallelOptimizerScope(num_streams=max_jobs, **visualisation_args)
 
         # Setup multiprocessing variables
-        self.optimizer_jobs = []
-        self.hyperparm_jobs = []
-        self.hunting_jobs = []
+        self.optimizer_processes = {}
+        self.hyperparm_processes = {}
+        self.hunting_processes = {}
+        self.signal_pipes = {}
 
         self.manager = mp.Manager()
         self.optimizer_queue = self.manager.Queue()
         self.hyperparm_queue = self.manager.Queue()
         self.hunting_queue = self.manager.Queue()
 
-    def start_manager(self) -> Result:
+        # Setup GPRs
+        self.gprs = {}
+
+    def start_manager(self) -> MinimizeResult:
         """ Begins the optimization routine.
 
         Parameters
         ----------
         """
-
-        pass
+        self.t_counter = time()
+        converged = self._check_convergence()
+        while self.tmax < time() - self.t_counter and self.o_counter < self.omax and self.f_counter < self.fmax \
+                and not converged:
+            if mp.active_children() < self.max_jobs:
+                self._start_new_job()
 
     # TODO Selection of new starting points can be driven by a Gaussian Process (Probably unrealistic unless a LOT of
     #  optimizers are started), Genetic Algorithms (Reasonable but still no feeling for the error surface) or random
     #  (very easy to implement and possible same quality as the others given the sparse space).
+
     def _start_new_job(self):
+        self.o_counter += 1
+        # TODO we want processes to be daemons. A stuck optimizer somewhere that we havent cleaned up should not stop
+        #  us closing the manager.
         pass
 
-    def _kill_job(self):
+    def _kill_job(self, opt_id):
+        del self.gprs[opt_id]
+        # TODO The signal to end will not be read instantly unless listeners are added to the wrappers
+        #  alternatively we can send the signal and if it doesnt co-operate in x time we force it to die.
+        #  Optimal solution would be to have both, first solution is 'proper' and the second is an extra layer of
+        #  safety.
         pass
 
     def _start_hunt(self):
         pass
+
+    # TODO Check status/ check health. If we haven't heard from an optimizer in a while we need to make sure the thing
+    #  is still running properly. Maybe we need listeners here to detect when a process ends.
 
     def _optimize_hyperparameters(self):
         pass
@@ -276,8 +287,18 @@ class GloMPOOptimizer:
                 x0.append(bounds.min + (bounds.max - bounds.min) * np.random.rand())
         return np.array(x0)
 
-    def _setup_new_optimizer(self) -> Tuple[Callable, Dict[str, Any]]:
+    def _setup_new_optimizer(self) -> OptimizerPackage:
         # TODO add intelligence to pick optimizer?
         selected, init_args, call_args = self.optimizers['default']
         optimizer = selected(**init_args)
-        return optimizer, call_args
+        self.gprs[self.o_counter] = GaussianProcessRegression(kernel=ExpKernel(alpha=0.100,
+                                                                               beta=5.00),
+                                                              dims=1,
+                                                              sigma_noise=0.01)
+        self.signal_pipes[self.o_counter], child_pipe = mp.Pipe()
+        return OptimizerPackage(self.o_counter, optimizer, call_args, child_pipe)
+
+    def _check_convergence(self):
+        if self.region_stability_check:
+            self._explore_basin()
+        return False

@@ -2,7 +2,10 @@
 Base class from which all optimizers must inherit in order to be compatible with GloMPO.
 """
 
-import multiprocessing as mp
+from ..common.namedtuples import *
+
+from multiprocessing.connection import Connection
+from multiprocessing import Queue
 from typing import *
 from abc import ABC, abstractmethod
 
@@ -58,13 +61,18 @@ class BaseOptimizer(ABC):
         """
         pass
 
+    def __init__(self, opt_id: int = None, signal_pipe: Type[Connection] = None, results_queue: Type[Queue] = None):
+        self.__opt_id = opt_id
+        self.__signal_pipe = signal_pipe
+        self.__results_queue = results_queue
+        self.__SIGNAL_DICT = {0: self.save_state,
+                              1: self.callstop}
+
     @abstractmethod
     def minimize(self,
                  function: Callable,
                  x0: Sequence[float],
                  bounds: Sequence[Tuple[float, float]],
-                 results_queue: Type[mp.Manager().Queue],
-                 signal_pipe,
                  callbacks: Callable = None, **kwargs) -> MinimizeResult:
         # TODO Expand description of results_queue and signal_pipe
         """
@@ -72,7 +80,8 @@ class BaseOptimizer(ABC):
         variable values. The `callbacks` argument allows for specific callbacks such as early stopping.
 
         NB Must include a call to put every iteration in the results_queue. Messages to the manager must be sent via the
-        signal_pipe
+        message_manager method. Messages from the manager can be read by the check_messages method. For proper GloMPO
+        functionality these must all be implemented appropriately in this method.
 
         Example:
 
@@ -89,14 +98,19 @@ class BaseOptimizer(ABC):
         """
         pass
 
+    def check_messages(self):
+        while self.__signal_pipe.poll():
+            code = self.__signal_pipe.recv()
+            self.__SIGNAL_DICT[code]()
+
+    def message_manager(self):
+        pass
+
     def callstop(self, reason=None):
         """
         Signal to terminate the :meth:`minimize` loop while still returning a result
         """
         pass
 
-    def pause(self):
-        pass
-
-    def unpause(self):
+    def save_state(self):
         pass

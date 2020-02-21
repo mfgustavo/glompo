@@ -558,7 +558,6 @@ def test_killing_logic():
 
 
 def test_glompoclass():
-    from interfaces.paramswrapper import GloMPOOptimizer
     from scm.params.optimizers.cma import CMAOptimizer
 
     cma = CMAOptimizer()
@@ -610,5 +609,45 @@ def test_toyengines():
     plt.show()
 
 
+def test_datadraw():
+    from testsworkdir.toy_engines.data import DataDrawer
+
+    eng = DataDrawer("toy_engines/hist.dat")
+    for i in range(20):
+        print(eng(3))
+
+
+def test_signaller():
+    import multiprocessing as mp
+    from time import time, sleep
+    from typing import Type
+
+    class Opt:
+        def __init__(self, pipe, queue):
+            self.pipe = pipe
+            self.queue = queue
+
+        def start(self, x):
+            self.pipe.send("Starting")
+            for i in range(3):
+                print(f"{i} Working")
+                self.queue.put(i ** x)
+            self.pipe.send("Ended")
+
+    par_pipe, child_pipe = mp.Pipe()
+    man = mp.Manager()
+    q = man.Queue()
+    opt = Opt(child_pipe, q)
+    opt.start(2)
+    # p = mp.Process(target=opt.start, args=(5,))
+    # p.start()
+    print(par_pipe.recv())
+    print(par_pipe.recv())
+    while not q.empty():
+        print(q.get_nowait())
+    print("Done")
+    # p.join()
+
+
 if __name__ == '__main__':
-    test_toyengines()
+    test_signaller()

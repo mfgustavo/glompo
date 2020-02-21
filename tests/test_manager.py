@@ -427,7 +427,7 @@ class TestMangerInit:
 class TestManagerMethods:
     optimizer = GloMPOOptimizer(task=lambda x, y: x**2 + y**2,
                                 n_parms=2,
-                                optimizers={'default': CMAOptimizer()},
+                                optimizers={'default': CMAOptimizer(0)},
                                 bounds=((-5, 5), (-3, 3)),
                                 max_jobs=2)
 
