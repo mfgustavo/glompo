@@ -4,15 +4,13 @@ import warnings
 import numpy as np
 import os
 
-# AMS
-from scm.params.core.parameteroptimization import Optimization
-from scm.params.core.lossfunctions import Loss
-
 # Optsam Package
 from optsam.fwrap import ResidualsWrapper
 from optsam.codec import VectorCodec, BoxTanh
 from optsam.opt_gfls import GFLS
 from optsam.driver import driver
+from optsam.logger import Logger
+from optsam.algo_base import AlgoBase
 
 # This Package
 from .baseoptimizer import BaseOptimizer, MinimizeResult
@@ -25,14 +23,14 @@ class GFLSOptimizer(BaseOptimizer):
     def __init__(
         self,
         opt_id: int,
-        tmax: Union[int, None] = None,
-        imax: Union[int, None] = None,
-        fmax: Union[int, None] = None,
+        tmax: Optional[int] = None,
+        imax: Optional[int] = None,
+        fmax: Optional[int] = None,
         verbose: int = 30,
-        save_logger: Union[str, None] = None,
-        gfls_kwargs: Union[dict, None] = None,
+        save_logger: Optional[str] = None,
+        gfls_kwargs: Optional[dict] = None,
     ):
-        """ Initialises some configurations of the GFLS optimizer that cannot be passed through ParAMS.
+        """ Instance of the GFLS optimizer that can be used through GloMPO.
 
         Parameters
         ----------
@@ -58,28 +56,58 @@ class GFLSOptimizer(BaseOptimizer):
             Arguments passed to the setup of the GFLS class. See opt_gfls.py or documentation.
         """
         super().__init__(opt_id)
-        self.tmax: int = tmax
-        self.imax: int = imax
-        self.fmax: int = fmax
-        self.verbose: bool = verbose
-        self.save_logger: bool = save_logger
+        self.tmax = tmax
+        self.imax = imax
+        self.fmax = fmax
+        self.verbose = verbose
+        self.save_logger = save_logger
         self.algorithm = GFLS(**gfls_kwargs)
 
     # noinspection PyMethodOverriding
     def minimize(
         self,
-        function: Callable,
-        x0: Sequence[float],
+        function: Callable[Sequence[float], float],
+        x0: Union[Sequence[float], Type[Logger]],
         bounds: Sequence[Tuple[float, float]],
-        callbacks: Callable = None,
+        callbacks: Sequence[Callable[[Type[Logger, AlgoBase, Union[str, None]]], Any]] = None,
     ) -> MinimizeResult:
 
-        if callbacks:
-            warnings.warn(
-                "Callbacks are not supported by the GFLS optimizer. Please use options in the initialisation "
-                "method to control its behaviour.",
-                UserWarning,
-            )
+        """
+        Executes the task of minimizing a function with GFLS.
+
+        Parameters
+        ----------
+        function : Callable[Sequence[float], Sequence[float]]
+            Function to be minimized.
+
+            NB: GFLS is a unique class of optimizer that requires the function being
+            minimized to return a sequence of residual errors between the function values evaluated at a trial set of
+            parameters and some reference values. This means it is not generally applicable to all problems.
+
+            function must include an implementation of function.resids() which returns these residuals.
+
+        x0 : Union[Sequence[float], Type[Logger]]
+            Initial set of starting parameters or an instance of optsam.Logger with a saved history of at least one
+            iteration.
+        bounds : Sequence[Tuple[float, float]]
+            Sequence of tuples of the form (min, max) which bound the parameters.
+        callbacks : Sequence[Callable[[Type[Logger, AlgoBase, Union[str, None]]], Any]]
+            A list of functions called after every iteration. GFLS compatible callbacks can be found at the end of this
+            file.
+
+            If GFLS is being used through the GloMPO manager calls to send iteration results to the manager and check
+            incoming signals from it are automatically added to this list. Only send functionality you want over and
+            above this.
+
+            Each callback takes three arguments: ``logger``, ``algorithm`` and ``stopcond``. The ``logger`` is the same
+            as the return value of optsam.driver, except that it only contains information of iterations so far.
+            The ``algorithm`` is the one given to the driver. ``stopcond`` is the stopping condition after the current
+            iteration and is ``None`` when the driver should carry on. The callback returns an updated value for
+            ``stopcond``. If the callback has no return value, i.e. equivalent to returning ``None``.
+        """
+
+        if not callable(function.resids):
+            raise NotImplementedError("GFLS requires function to include a resids() method.")
 
         gfls_bounds = []
         for bnd in bounds:
@@ -90,9 +118,15 @@ class GFLSOptimizer(BaseOptimizer):
                 gfls_bounds.append(BoxTanh(bnd[0], bnd[1]))
         vector_codec = VectorCodec(gfls_bounds)
 
-        for i, x in enumerate(x0):
-            if x < bounds[i][0] or x > bounds[i][1]:
-                raise ValueError("x0 values outside of bounds.")
+        if not isinstance(x0, Logger):
+            for i, x in enumerate(x0):
+                if x < bounds[i][0] or x > bounds[i][1]:
+                    raise ValueError("x0 values outside of bounds.")
+
+        if callable(callbacks):
+            callbacks = [callbacks]
+        if self.__results_queue:
+            callbacks = [self.message_manager, self.check_messages, *callbacks]
 
         fw = ResidualsWrapper(function.resids, vector_codec.decode)
         logger = driver(
@@ -102,7 +136,8 @@ class GFLSOptimizer(BaseOptimizer):
             self.tmax,
             self.imax,
             self.fmax,
-            self.verbose
+            self.verbose,
+            callbacks
         )
         if self.save_logger:
             if "/" in self.save_logger:
@@ -126,20 +161,27 @@ class GFLSOptimizer(BaseOptimizer):
 
         return result
 
+    def message_manager(self, logger: Logger, *args):
+        i = logger.current
+        x = logger.get("pars")
+        fx = logger.get("func")
+        self.__results_queue.put((self.__opt_id, i, x, fx))
 
-class ResidualLossFunction(Loss):
-    """ Special cost function which returns a numpy array of residual errors. Must be used in conjunction with the GFLS
-        optimizer.
-    """
+    def check_messages(self, logger: Logger, *args):
+        conds = []
+        while self.__signal_pipe.poll():
+            code, sig_args = self.__signal_pipe.recv()
+            conds.append(self.__SIGNAL_DICT[code](logger, *sig_args))
+        if any([cond is not None for cond in conds]):
+            return True
 
-    def eval_entry(self, weight, y_ref: float, y_pred: float = None) -> float:
-        if y_pred is None:
-            ret = y_ref / weight  # Comparator
+    def save_state(self, logger: Logger, file_name: str):
+        if "/" in file_name:
+            path, name = tuple(file_name.rsplit("/", 1))
+            os.makedirs(path)
         else:
-            ret = (y_ref - y_pred) / weight  # No comparator
-        self.contribution.append(ret)
-        return ret
+            name = file_name
+        logger.save(name)
 
-    def eval_final(self) -> np.ndarray:
-        self.fx = np.sum(np.array(self.contribution) ** 2)
-        return self.fx
+    def callstop(self, logger: Logger):
+        return "Manager Termination"

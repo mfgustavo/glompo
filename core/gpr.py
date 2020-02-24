@@ -1,31 +1,32 @@
 
 
 import numpy as np
-
+from typing import *
 
 class GaussianProcessRegression:
     """ A class which creates and calculates a Gaussian Process Regression """
 
-    def __init__(self, kernel: callable, dims: int, sigma_noise: float = 0, mean: float = 0, cache_results: bool = True):
+    def __init__(self,
+                 kernel: Callable[[float, float], float],
+                 dims: int,
+                 sigma_noise: Optional[float] = 0,
+                 mean: Optional[float] = 0,
+                 cache_results: Optional[bool] = True):
         """ Sets up the Gaussian Process Regression with its kernel.
 
             Parameters:
             -----------
-            kernel : callable
+            kernel : Callable[[float, float], float]
                 A function which return the covariance between two points.
             dims : int
                 The number of dimensions in the input space.
-            sigma_noise : float
+            sigma_noise : Optional[float]
                 The standard deviation of noise in the known points.
-            acquisition : callable
-                Function which returns the optimal point for next evaluation or solution.
-            engine : callable
-                Function which returns an evaluation of the function to be optimised.
-            mean : float
+            mean : Optional[float]
                 The value to which the process defaults. Can accept a float value (defaulting to zero) or None.
                 If None the mean function is assumed to be an unknown and independent of x. It is calculated as a
                 free parameter in the regression with a totally uninformed prior.
-            cache_results : bool
+            cache_results : Optional[bool]
                 If True the results of some matrix constructions and inversions are cached. This can increase speed
                 but requires more memory.
         """
@@ -99,7 +100,7 @@ class GaussianProcessRegression:
         chol_mat = np.linalg.cholesky(covar_fun)
         rand = np.random.normal(0, 1, test_count)
 
-        return mean_func + np.matmul(chol_mat, rand)
+        return mean_func.flatten() + np.matmul(chol_mat, rand)
 
     def sample_all(self, x: np.ndarray) -> np.ndarray:
         """ Returns the current mean function and a single standard deviation confidence interval around it at the
@@ -109,9 +110,9 @@ class GaussianProcessRegression:
         # Nest x if it is one point or one dimension
         x_nest = np.reshape(x, (-1, self.dims))
         mean_func, covar_fun = self._calc_kernels(x_nest)
-        return mean_func, np.sqrt(np.diag(covar_fun))
+        return mean_func.flatten(), np.sqrt(np.diag(covar_fun))
 
-    def estimate_mean(self):
+    def estimate_mean(self) -> Tuple[float, float]:
         ones = np.ones(len(self.training_pts))
         train_x = tuple([*self.training_pts])  # Tuple used as dict key in the cache decorator
         train_y = np.reshape([*self.training_pts.values()], (-1, 1))
@@ -130,12 +131,12 @@ class GaussianProcessRegression:
 
         return self.mean_estimate, self.mean_uncertainty
 
-    def _kernel_matrix(self, x1, x2):
+    def _kernel_matrix(self, x1, x2) -> np.ndarray:
         vec1 = np.reshape(x1, (-1, self.dims))
         vec2 = np.reshape(x2, (-1, self.dims))
         mat = np.zeros((len(vec1), len(vec2)))
 
-        symmetric = np.all(vec1 == vec2)
+        symmetric = np.array_equal(vec1, vec2)
 
         if symmetric:
             key = tuple(map(tuple, vec1))
@@ -153,7 +154,7 @@ class GaussianProcessRegression:
                     mat[i, j] = self.kernel(vec1[i], vec2[j])
         return mat
 
-    def _inv_kernel_matrix(self, x1, x2, sigma):
+    def _inv_kernel_matrix(self, x1, x2, sigma) -> np.ndarray:
         key = tuple(map(tuple, x1)), sigma
         if key in self._inv_kernel_cache and self._cache_results:
             return self._inv_kernel_cache[key]

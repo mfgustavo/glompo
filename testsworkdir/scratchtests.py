@@ -649,5 +649,79 @@ def test_signaller():
     # p.join()
 
 
+def test_gpr():
+    from core.gpr import GaussianProcessRegression
+    import numpy as np
+
+    class _SEKernel:
+        """ Implements and calculates instances of the squared-exponential covariance function. """
+
+        @staticmethod
+        def _norm(x: np.ndarray) -> float:
+            return np.sqrt(np.sum(x ** 2))
+
+        def __init__(self, len_scale: float = 1, sigma_signal: float = 1, sigma_noise: float = 0):
+            """ Initialises the kernel hyper-parameters.
+
+                Parameters:
+                -----------
+                len_scale : float
+                    Length scale hyper-parameter.
+                sigma_signal : float
+                    Standard deviation of the signal.
+                sigma_noise : float
+                    Standard deviation of the noise in given data points.
+            """
+            self.len_scale = len_scale
+            self.sigma_signal = sigma_signal
+            self.sigma_noise = sigma_noise
+
+        def __call__(self, x1: np.ndarray, x2: np.ndarray) -> float:
+            calc = self.sigma_signal ** 2
+            calc *= np.exp(- 0.5 * self.len_scale ** -2 * self._norm(x1 - x2) ** 2)
+            calc += self.sigma_noise ** 2 * np.all(x1 == x2)
+            return calc
+
+    class TestGPR2D:
+        gpr = GaussianProcessRegression(kernel=_SEKernel(),
+                                        dims=2,
+                                        sigma_noise=0,
+                                        mean=0,
+                                        cache_results=False)
+        for i in np.linspace(0, 2 * np.pi, 10):
+            for j in np.linspace(0, 2 * np.pi, 10):
+                gpr.add_known((i, j), np.sin(i) * np.sin(j) + 10)
+
+        def test_dims1(self):
+            loc_gpr = GaussianProcessRegression(kernel=_SEKernel(),
+                                                dims=2,
+                                                sigma_noise=0,
+                                                mean=0,
+                                                cache_results=False)
+            for i in range(3):
+                loc_gpr.add_known((i, i + 1), (i + 5) ** 2)
+
+            for i, x in enumerate(loc_gpr.training_pts):
+                assert x[0] == i
+                assert x[1] == i + 1
+                assert loc_gpr.training_pts[x] == (i + 5) ** 2
+
+        def test_dims2(self):
+            x_pts = np.random.rand(25, 2) * 2 * np.pi
+            mean, std = self.gpr.sample_all(x_pts)
+            print(mean)
+            print(std)
+
+        def test_dims3(self):
+            x_pts = np.random.rand(25, 2) * 2 * np.pi
+            y_pts = self.gpr.sample(x_pts)
+            print(y_pts)
+
+        def test_dims4(self):
+            assert np.isclose(self.gpr.estimate_mean()[0], 10)
+
+    print(TestGPR2D().test_dims3())
+
+
 if __name__ == '__main__':
-    test_signaller()
+    test_gpr()

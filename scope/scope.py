@@ -45,17 +45,19 @@ class ParallelOptimizerScope:
         # TODO Set workdir
         # TODO delete all tmp pics if the program crashes
         # TODO use the visualise variable
+        # TODO add stream to include normal termination. Possibly use '*'
         self.fig, self.ax = plt.subplots(figsize=(12, 8))
-        self.streams = [[self.ax.plot([], [])[0],  # 0 Follows every optimizer iteration
-                         self.ax.plot([], [], ls='', marker='o')[0],  # 1 Plots the points added to the train sets
-                         self.ax.plot([], ls='--')[0],  # 2 Plots the mean functions
-                         patches.Rectangle((0, 0), 0, 0, ls=':'),  # 3 Plots the uncertainty on the mean
-                         self.ax.plot([], [], ls='', marker=6)[0],  # 4 Plots where optimisation jobs are started
-                         self.ax.plot([], [], ls='', marker=7)[0],  # 5 Plots where hyperparms are changed
-                         self.ax.plot([], [], ls='', marker='x', zorder=500)[0],  # 6 Plots termination points
-                         self.ax.plot([], [], ls='-.')[0],  # 7 GPR
-                         self.ax.plot([], [], ls='-.')[0],  # 8 GPR Upper Sigma
-                         self.ax.plot([], [], ls='-.')[0]]  # 9 GPR Lower Sigma
+        self.streams = [{'all_opt':    self.ax.plot([], [])[0],  # 0 Follows every optimizer iteration
+                         'train_pts':  self.ax.plot([], [], ls='', marker='o')[0],  # 1 Points in training set
+                         'mean':       self.ax.plot([], ls='--')[0],  # 2 Plots the mean functions
+                         'st_dev':     patches.Rectangle((0, 0), 0, 0, ls=':'),  # 3 Plots the uncertainty on the mean
+                         'hyper_init': self.ax.plot([], [], ls='', marker=6)[0],  # 4 New hyperparms are looked for
+                         'hyper_up':   self.ax.plot([], [], ls='', marker=7)[0],  # 5 Hyperparms are changed
+                         'opt_kill':   self.ax.plot([], [], ls='', marker='x', zorder=500)[0],  # 6 Killed optimizer
+                         'opt_norm':   self.ax.plot([], [], ls='', marker='*', zorder=500)[0],  # 7 Converged optimizer
+                         'gpr_mean':   self.ax.plot([], [], ls='-.')[0],  # 8 GPR
+                         'gpr_upper':  self.ax.plot([], [], ls='-.')[0],  # 9 GPR Upper Sigma
+                         'gpr_lower':  self.ax.plot([], [], ls='-.')[0]}  # 10 GPR Lower Sigma
                         for _ in range(num_streams)]
 
         # Match colors for a single optimisation
@@ -79,7 +81,8 @@ class ParallelOptimizerScope:
                         lines.Line2D([], [], ls='', marker='o', c='black', label='Point in Training Set'),
                         lines.Line2D([], [], ls='', marker=6, c='black', label='Hyperparam. Opt. Started'),
                         lines.Line2D([], [], ls='', marker=7, c='black', label='Hyperparam. Updated'),
-                        lines.Line2D([], [], ls='', marker='x', c='black', label='Optimizer Killed')]
+                        lines.Line2D([], [], ls='', marker='x', c='black', label='Optimizer Killed'),
+                        lines.Line2D([], [], ls='', marker='*', c='black', label='Optimizer Converged')]
         if visualise_gpr:
             leg_elements.append(lines.Line2D([], [], ls='-.', c='black', label='Regression and Uncertainty'))
         else:
@@ -106,14 +109,14 @@ class ParallelOptimizerScope:
 
     def update_optimizer(self, n_stream: int, pt: tuple):
         """ Given pt tuple is used to update the 'n_stream'th optimizer plot."""
-        line = self.streams[n_stream][0]
+        line = self.streams[n_stream]['all_opt']
         line.set_xdata(np.append(line.get_xdata(), pt[0]))
         line.set_ydata(np.append(line.get_ydata(), pt[1]))
         self._update()
 
     def update_scatter(self, n_stream: int, pt: tuple):
         """ Given pt tuple is used to update the 'n_stream'th training data plot."""
-        line = self.streams[n_stream][1]
+        line = self.streams[n_stream]['train_pts']
         line.set_xdata(np.append(line.get_xdata(), pt[0]))
         line.set_ydata(np.append(line.get_ydata(), pt[1]))
         self._update()
@@ -121,12 +124,12 @@ class ParallelOptimizerScope:
     def update_mean(self, n_stream: int, mu: float, sigma: float):
         """ Given mu and sigma is used to update the 'n_stream'th mean and uncertainty plots."""
         # Mean line
-        line = self.streams[n_stream][2]
+        line = self.streams[n_stream]['mean']
         line.set_xdata((0, self.ax.get_xlim()[1]))
         line.set_ydata((mu, mu))
 
         # Uncertainty Rectangle
-        rec = self.streams[n_stream][3]
+        rec = self.streams[n_stream]['st_dev']
         rec.xy = (0, mu - 2 * sigma)
         rec.set_width(self.ax.get_xlim()[1])
         rec.set_height(4 * sigma)
@@ -134,14 +137,14 @@ class ParallelOptimizerScope:
 
     def update_opt_start(self, n_stream: int, pt: tuple):
         """ Given pt tuple is used to update the 'n_stream'th start hyperparameter optimizer plot."""
-        line = self.streams[n_stream][4]
+        line = self.streams[n_stream]['hyper_init']
         line.set_xdata(np.append(line.get_xdata(), pt[0]))
         line.set_ydata(np.append(line.get_ydata(), pt[1]))
         self._update()
 
     def update_opt_end(self, n_stream: int, pt: tuple):
         """ Given pt tuple is used to update the 'n_stream'th end hyperparameter optimizer plot."""
-        line = self.streams[n_stream][5]
+        line = self.streams[n_stream]['hyper_up']
         line.set_xdata(np.append(line.get_xdata(), pt[0]))
         line.set_ydata(np.append(line.get_ydata(), pt[1]))
         self._update()
@@ -149,13 +152,27 @@ class ParallelOptimizerScope:
     def update_kill(self, n_stream: int):
         """ The 'n_stream'th kill optimizer plot is updated at its final point. """
         # Add dead optimizer marker
-        line = self.streams[n_stream][6]
+        line = self.streams[n_stream]['opt_kill']
         x_pt, y_pt = self.get_farthest_pt(n_stream)
         line.set_xdata(x_pt)
         line.set_ydata(y_pt)
 
         # Shrink the uncertainty patch
-        rec = self.streams[n_stream][3]
+        rec = self.streams[n_stream]['opt_kill']
+        rec.set_width(y_pt)
+
+        self._update()
+
+    def update_norm_terminate(self, n_stream: int):
+        """ The 'n_stream'th normal optimizer plot is updated at its final point. """
+        # Add dead optimizer marker
+        line = self.streams[n_stream]['opt_norm']
+        x_pt, y_pt = self.get_farthest_pt(n_stream)
+        line.set_xdata(x_pt)
+        line.set_ydata(y_pt)
+
+        # Shrink the uncertainty patch
+        rec = self.streams[n_stream]['opt_norm']
         rec.set_width(y_pt)
 
         self._update()
@@ -163,15 +180,15 @@ class ParallelOptimizerScope:
     def update_gpr(self, n_stream: int, x: np.ndarray, y: np.ndarray, lower_sig: np.ndarray, upper_sig: np.ndarray):
         """ Given mu and sigma is used to update the 'n_stream'th mean and uncertainty plots."""
         # Mean line
-        line = self.streams[n_stream][7]
+        line = self.streams[n_stream]['gpr']
         line.set_xdata(x)
         line.set_ydata(y)
 
         # Uncertainty
-        line = self.streams[n_stream][8]
+        line = self.streams[n_stream]['gpr_lower']
         line.set_xdata(x)
         line.set_ydata(lower_sig)
-        line = self.streams[n_stream][9]
+        line = self.streams[n_stream]['gpr_upper']
         line.set_xdata(x)
         line.set_ydata(upper_sig)
         self._update()
@@ -186,6 +203,15 @@ class ParallelOptimizerScope:
 
     def get_farthest_pt(self, n_stream: int):
         """ Returns the furthest evaluated point of the 'n_stream'th optimizer. """
-        x_pt = float(self.streams[n_stream][0].get_xdata()[-1])
-        y_pt = float(self.streams[n_stream][0].get_ydata()[-1])
-        return x_pt, y_pt
+        x_pt_all = float(self.streams[n_stream]['all_opt'].get_xdata()[-1])
+        y_pt_all = float(self.streams[n_stream]['all_opt'].get_ydata()[-1])
+
+        x_pt_tps = float(self.streams[n_stream]['all_opt'].get_xdata()[-1])
+        y_pt_tps = float(self.streams[n_stream]['all_opt'].get_ydata()[-1])
+
+        if x_pt_all > x_pt_tps:
+            x, y = x_pt_all, y_pt_all
+        else:
+            x, y = x_pt_tps, y_pt_tps
+
+        return x, y

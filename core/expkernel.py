@@ -1,4 +1,4 @@
-from typing import Union
+from typing import *
 from functools import wraps
 import numpy as np
 import scipy.optimize as sciopt
@@ -43,9 +43,13 @@ class ExpKernel:
     # TODO Check the eigenvalues of the final solution. If they are not all the same sign then it can indicate a
     #  saddle point and problem with tyhe solution. Consider then forcing a restart but bounding away from the
     #  incumbent solution.
-    def optimize_hyperparameters(self, time_series: np.ndarray, loss_series: np.ndarray, noise: bool = True,
-                                 bounds: Union[tuple, None] = None, x0: Union[tuple, None] = None,
-                                 verbose: bool = True) -> np.ndarray:
+    def optimize_hyperparameters(self,
+                                 time_series: np.ndarray,
+                                 loss_series: np.ndarray,
+                                 noise: Optional[bool] = True,
+                                 bounds: Optional[Sequence[Tuple[float, float]]] = None,
+                                 x0: Optional[Sequence[float]] = None,
+                                 verbose: Optional[bool] = True) -> Union[Tuple[float, float, float], None]:
         """ Maximises the log-marginal likelihood of the kernel with respect to the hyperparameters alpha, beta and
         sigma. Alpha and beta are updated in place and alpha, beta and sigma are all returned.
 
@@ -55,17 +59,18 @@ class ExpKernel:
             Independent training variables used for the optimisation.
         loss_series : np.ndarray
             Dependent training variables used for the optimisation.
-        noise : bool
+        noise : Optional[bool]
             If True the method also optimises for sigma, the standard deviation of the measurement error.
-        bounds : tuple
+        bounds : Optional[Sequence[Tuple[float, float]]]
             Bounds on the optimized hyperparameters of shape (n, 2) where n is two or three depending on the number of
             hyperparameters being optimzed i.e. with or without noise. Each individual tuple takes the form
             (xmin, xmax).
-        x0 : tuple
+        x0 : Optional[Sequence[float]]
             Tuple of shape n representing the first starting point of the optimization. Restart values are chosen
             randomly based on bounds.
-        verbose : bool
+        verbose : Optional[bool]
             If True prints status messages during the optimization, prints nothing otherwise
+
         Returns
         -------
         alpha : float

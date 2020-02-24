@@ -1,4 +1,5 @@
 # TODO Throw away first x number of CMA evaluations, it has terrible burn-in. How to define x?
+import warnings
 
 from .baseoptimizer import MinimizeResult, BaseOptimizer
 import os
@@ -53,8 +54,7 @@ class CMAOptimizer(BaseOptimizer):
         self.es = None
         self.result = None
 
-    def minimize(self, function, x0, bounds, results_queue=None, signal_pipe=None, callbacks=None, **kwargs):
-        self.signal_pipe = signal_pipe
+    def minimize(self, function, x0, bounds, callbacks=None, **kwargs):
         self.dir = os.path.abspath('.')+os.sep+'cmadata'+os.sep
         if not os.path.isdir(self.dir):
             os.makedirs(self.dir)
@@ -74,8 +74,9 @@ class CMAOptimizer(BaseOptimizer):
             solutions = es.ask()
             es.tell(solutions, [function(x) for x in solutions])
             es.logger.add()
-            if results_queue:
-                results_queue.put(self._opt_id, es.countiter, self.result.x, self.result.fx)
+            if self.__results_queue:
+                self.message_manager(es.countiter, self.result.x, self.result.fx)
+                self.check_messages()
             self.result.x, self.result.fx = es.result[:2]
             self._customtermination(callbacks)
             print(f'At CMA Iteration: {es.countiter}. Best f(x)={es.best.f:.3e}.')
@@ -115,9 +116,14 @@ class CMAOptimizer(BaseOptimizer):
         if callbacks and callbacks():
             self.callstop()
 
+    def message_manager(self, i, x, fx):
+        self.__results_queue.put((self.__opt_id, i, x, fx))
+
     def callstop(self, reason=None):
         if reason:
             print(reason)
-            if self.signal_pipe:
-                self.signal_pipe.send(reason)
         self.es.callbackstop = 1
+
+    def save_state(self, *args):
+        warnings.warn("CMA save_state not yet implemented.", NotImplemented)
+        pass

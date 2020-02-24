@@ -61,7 +61,7 @@ class BaseOptimizer(ABC):
         """
         pass
 
-    def __init__(self, opt_id: int = None, signal_pipe: Type[Connection] = None, results_queue: Type[Queue] = None):
+    def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None):
         self.__opt_id = opt_id
         self.__signal_pipe = signal_pipe
         self.__results_queue = results_queue
@@ -98,19 +98,19 @@ class BaseOptimizer(ABC):
         """
         pass
 
-    def check_messages(self):
+    def check_messages(self, *args):
         while self.__signal_pipe.poll():
-            code = self.__signal_pipe.recv()
-            self.__SIGNAL_DICT[code]()
+            code, sig_args = self.__signal_pipe.recv()
+            self.__SIGNAL_DICT[code](*sig_args)
 
-    def message_manager(self):
+    def message_manager(self, *args):
         pass
 
-    def callstop(self, reason=None):
+    def callstop(self, *args):
         """
         Signal to terminate the :meth:`minimize` loop while still returning a result
         """
         pass
 
-    def save_state(self):
+    def save_state(self, *args):
         pass
