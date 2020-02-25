@@ -10,7 +10,7 @@ class GaussianProcessRegression:
                  kernel: Callable[[float, float], float],
                  dims: int,
                  sigma_noise: Optional[float] = 0,
-                 mean: Optional[float] = 0,
+                 mean: Optional[float] = None,
                  cache_results: Optional[bool] = True):
         """ Sets up the Gaussian Process Regression with its kernel.
 
@@ -54,12 +54,13 @@ class GaussianProcessRegression:
         k_test_train = self._kernel_matrix(x, train_x)
         k_train_test = np.transpose(k_test_train)
         k_test_test = self._kernel_matrix(x, x)
-        invK = self._inv_kernel_matrix(train_x, train_x, self.sigma_noise)
+        invK = self._inv_kernel_matrix(train_x, train_x,
+                                       self.sigma_noise + 1e-3)  # NB Added here for numerical stability
 
         calc_core = np.matmul(k_test_train, invK)
 
         # Calculation of the covariance function
-        covar_fun = k_test_test - np.matmul(calc_core, k_train_test)  # + 1e-6 * np.identity(test_count)
+        covar_fun = k_test_test - np.matmul(calc_core, k_train_test)
 
         # Calculation of the mean function
         if self.mean is not None:
@@ -97,7 +98,7 @@ class GaussianProcessRegression:
         test_count = len(x_nest)
 
         mean_func, covar_fun = self._calc_kernels(x_nest)
-        chol_mat = np.linalg.cholesky(covar_fun)
+        chol_mat = np.linalg.cholesky(covar_fun + 1e-6 * np.identity(test_count))  # Added for numerical stability
         rand = np.random.normal(0, 1, test_count)
 
         return mean_func.flatten() + np.matmul(chol_mat, rand)
