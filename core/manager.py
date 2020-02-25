@@ -1,6 +1,7 @@
 
 
 # Native Python imports
+import warnings
 from time import time
 import multiprocessing as mp
 
@@ -243,6 +244,8 @@ class GloMPOOptimizer:
             if mp.active_children() < self.max_jobs:
                 self._start_new_job()
 
+        # TODO NB scaling needs to happen in GPR. How? Should this be kernel side or GloMPO side?
+
     # TODO Selection of new starting points can be driven by a Gaussian Process (Probably unrealistic unless a LOT of
     #  optimizers are started), Genetic Algorithms (Reasonable but still no feeling for the error surface) or random
     #  (very easy to implement and possible same quality as the others given the sparse space).
@@ -259,19 +262,19 @@ class GloMPOOptimizer:
         #  alternatively we can send the signal and if it doesnt co-operate in x time we force it to die.
         #  Optimal solution would be to have both, first solution is 'proper' and the second is an extra layer of
         #  safety.
-        pass
+        warnings.warn(NotImplemented, "Method not implemented.")
 
     def _start_hunt(self):
-        pass
+        warnings.warn(NotImplemented, "Method not implemented.")
 
     # TODO Check status/ check health. If we haven't heard from an optimizer in a while we need to make sure the thing
     #  is still running properly. Maybe we need listeners here to detect when a process ends.
 
     def _optimize_hyperparameters(self):
-        pass
+        warnings.warn(NotImplemented, "Method not implemented.")
 
     def _explore_basin(self):
-        pass
+        warnings.warn(NotImplemented, "Method not implemented.")
 
     def _generate_x0(self):
         x0 = []
@@ -290,15 +293,19 @@ class GloMPOOptimizer:
     def _setup_new_optimizer(self) -> OptimizerPackage:
         # TODO add intelligence to pick optimizer?
         selected, init_args, call_args = self.optimizers['default']
+
         optimizer = selected(**init_args)
+
         self.gprs[self.o_counter] = GaussianProcessRegression(kernel=ExpKernel(alpha=0.100,
                                                                                beta=5.00),
-                                                              dims=1,
-                                                              sigma_noise=0.01)
+                                                              dims=1)
+
         self.signal_pipes[self.o_counter], child_pipe = mp.Pipe()
+
         return OptimizerPackage(self.o_counter, optimizer, call_args, child_pipe)
 
     def _check_convergence(self):
+        warnings.warn(NotImplemented, "Method not implemented.")
         if self.region_stability_check:
             self._explore_basin()
         return False

@@ -73,6 +73,90 @@ def test_exp_kernel():
     plt.show()
 
 
+def test_unscaled_exp_kernel():
+    """ Tests the exp kernel. """
+
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from core.expkernel import ExpKernel
+    from testsworkdir.toyopti import ToyOptimizer
+    from testsworkdir.sekernel import _SEKernel
+    from core.gpr import GaussianProcessRegression
+
+
+    fig0, axlst0 = plt.subplots(4, 2, figsize=(20, 20))
+    fig1, axlst1 = plt.subplots(4, 2, figsize=(20, 20))
+    axlst = (axlst0, axlst1)
+
+    kernel0 = ExpKernel(alpha=0.1,
+                        beta=5.0)
+    kernel1 = _SEKernel(50, 1)
+    engine = ToyOptimizer(init=1e9,
+                          min_=65e7,
+                          steps_to_conv=100,
+                          noise=0.15,
+                          elitism=False,
+                          restart_chance=0.25)
+    gpr = [GaussianProcessRegression(kernel=kernel,
+                                     dims=1,
+                                     sigma_noise=0.3,
+                                     mean=0,
+                                     cache_results=True) for kernel in [kernel0, kernel1]]
+
+    ntrain = 8
+
+    t = np.arange(0, 500)
+    y = np.array([engine() for _ in t])
+
+    k = 30
+    selected = np.transpose([[t[k * i], y[k * i]] for i in range(ntrain)])
+    trains = selected[0]
+    ytrain = selected[1]
+    yscale = np.std(selected[1])
+    ymove  = np.mean(selected[1])
+
+    print(np.mean(ytrain))
+    ytrain -= ymove
+    print(np.mean(ytrain))
+
+    print(np.var(ytrain))
+    ytrain /= yscale
+    print(np.var(ytrain))
+
+    # gpr[0].kernel.rho = yscale
+
+    # opt_gam = True
+    # opt_res = gpr[0].kernel.optimize_hyperparameters(trains, ytrain, opt_gam)
+    # if opt_gam:
+    #     gpr[0].sigma_noise = opt_res[2]
+
+    for n in range(2):
+        nrow = 0
+        ncol = 0
+
+        for i in range(ntrain):
+            gpr[n].add_known(trains[i], ytrain[i])
+            stats_mean, stats_sd = gpr[n].sample_all(t)
+            stats_mean = stats_mean.flatten()
+
+            axlst[n][nrow, ncol].plot(t, y, c='red')
+            axlst[n][nrow, ncol].plot(t, stats_mean * yscale + ymove, c='black', ls='--')
+            axlst[n][nrow, ncol].fill_between(t, (stats_mean + 2 * stats_sd) * yscale + ymove,
+                                              (stats_mean - 2 * stats_sd) * yscale + ymove,
+                                              fc='silver', ec='grey', ls='--')
+            axlst[n][nrow, ncol].scatter([*gpr[n].training_pts], np.array([*gpr[n].training_pts.values()]) * yscale + ymove,
+                                         c='darkred', zorder=100)
+            axlst[n][nrow, ncol].set_xlabel('x')
+            axlst[n][nrow, ncol].set_ylabel('f(x)')
+
+            nrow += 1
+            if nrow > 3:
+                nrow = 0
+                ncol += 1
+
+    plt.show()
+
+
 def test_log_exp_kernel():
     """ Tests the exp kernel. """
 
@@ -366,6 +450,51 @@ def regress_real_results():
     plt.show()
 
 
+def regress_unscaled_real_results():
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import os
+    from core.expkernel import ExpKernel
+    from core.gpr import GaussianProcessRegression
+
+    streams = {}
+    for file in os.listdir('inputs/ToonOptimizerTests'):
+        if file.endswith('.txt'):
+            streams[file.replace('.txt', '')] = np.loadtxt(f"inputs/ToonOptimizerTests/{file}")
+
+    for stream in streams:
+        kernel = ExpKernel(alpha=0.1,
+                           beta=5.0)
+        gpr = GaussianProcessRegression(kernel=kernel,
+                                        dims=1,
+                                        sigma_noise=0.01)
+
+        y = streams[stream]
+        t = np.arange(len(streams[stream]))
+        step = int(np.max(t) / 50)
+        data = np.transpose([t, y])
+        t_training, y_training = np.transpose(data[::step])
+        for pt in range(len(t_training)):
+            gpr.add_known(t_training[pt], y_training[pt])
+
+        # gpr.sigma_noise = kernel.optimize_hyperparameters(t_training, y_training)[2]
+        mu, sigma = gpr.estimate_mean()
+        stats_mean, stats_sd = gpr.sample_all(t)
+        stats_mean = stats_mean.flatten()
+
+        fig, ax = plt.subplots()
+        ax.set_title(f"{stream} (\u03BC = {mu:.2E} \u00B1 {np.sqrt(sigma):.2E})")
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Error")
+
+        ax.scatter(t_training, y_training, c='darkred', zorder=50)
+        ax.plot(t, y, c='red', ls='-')
+        ax.plot(t, stats_mean, c='black', ls='--')
+        ax.fill_between(t, (stats_mean + 2 * stats_sd), (stats_mean - 2 * stats_sd),
+                        fc='silver', ec='grey', ls='--')
+    plt.show()
+
+
 def regress_log_real_results():
     import matplotlib.pyplot as plt
     import numpy as np
@@ -651,77 +780,68 @@ def test_signaller():
 
 def test_gpr():
     from core.gpr import GaussianProcessRegression
+    from core.expkernel import ExpKernel
     import numpy as np
+    import matplotlib.pyplot as plt
 
-    class _SEKernel:
-        """ Implements and calculates instances of the squared-exponential covariance function. """
-
-        @staticmethod
-        def _norm(x: np.ndarray) -> float:
-            return np.sqrt(np.sum(x ** 2))
-
-        def __init__(self, len_scale: float = 1, sigma_signal: float = 1, sigma_noise: float = 0):
-            """ Initialises the kernel hyper-parameters.
-
-                Parameters:
-                -----------
-                len_scale : float
-                    Length scale hyper-parameter.
-                sigma_signal : float
-                    Standard deviation of the signal.
-                sigma_noise : float
-                    Standard deviation of the noise in given data points.
-            """
-            self.len_scale = len_scale
-            self.sigma_signal = sigma_signal
-            self.sigma_noise = sigma_noise
-
-        def __call__(self, x1: np.ndarray, x2: np.ndarray) -> float:
-            calc = self.sigma_signal ** 2
-            calc *= np.exp(- 0.5 * self.len_scale ** -2 * self._norm(x1 - x2) ** 2)
-            calc += self.sigma_noise ** 2 * np.all(x1 == x2)
-            return calc
-
-    class TestGPR2D:
-        gpr = GaussianProcessRegression(kernel=_SEKernel(),
-                                        dims=2,
+    class TestGPR1D:
+        gpr = GaussianProcessRegression(kernel=ExpKernel(0.1, 5),
+                                        dims=1,
                                         sigma_noise=0,
-                                        mean=0,
+                                        mean=None,
                                         cache_results=False)
-        for i in np.linspace(0, 2 * np.pi, 10):
-            for j in np.linspace(0, 2 * np.pi, 10):
-                gpr.add_known((i, j), np.sin(i) * np.sin(j) + 10)
+        # yscale = 3.5
+        for i in range(10):
+            gpr.add_known(i, (0.5 * np.exp(- 0.2 * i) + 3)) #/ yscale)
+        y_pts = [(0.5 * np.exp(- 0.2 * i) + 3) for i in range(10)]
 
-        def test_dims1(self):
-            loc_gpr = GaussianProcessRegression(kernel=_SEKernel(),
-                                                dims=2,
-                                                sigma_noise=0,
-                                                mean=0,
-                                                cache_results=False)
-            for i in range(3):
-                loc_gpr.add_known((i, i + 1), (i + 5) ** 2)
+        plt.scatter(range(10), [0.5 * np.exp(- 0.2 * i) + 3 for i in range(10)])
+        plt.plot(np.linspace(0.5, 20.5, 20), gpr.sample_all(np.linspace(0.5, 20.5, 20))[0])
+        plt.plot(np.linspace(0.5, 20.5, 20), (gpr.sample_all(np.linspace(0.5, 20.5, 20))[0] + 2 * gpr.sample_all(np.linspace(0.5, 20.5, 20))[1]))
+        plt.plot(np.linspace(0.5, 20.5, 20), (gpr.sample_all(np.linspace(0.5, 20.5, 20))[0] - 2 * gpr.sample_all(np.linspace(0.5, 20.5, 20))[1]))
+        print(gpr.sample_all(np.linspace(0.5, 20.5, 20))[1])
+        plt.show()
 
-            for i, x in enumerate(loc_gpr.training_pts):
+        def test_dict(self):
+            for i, x in enumerate(self.gpr.training_pts):
                 assert x[0] == i
-                assert x[1] == i + 1
-                assert loc_gpr.training_pts[x] == (i + 5) ** 2
+                assert self.gpr.training_pts[x] * self.yscale == 0.5 * np.exp(- 0.2 * i) + 3
 
-        def test_dims2(self):
-            x_pts = np.random.rand(25, 2) * 2 * np.pi
+        def test_mean(self):
+            before = self.gpr.sample_all(500000)[0] * self.yscale
+            self.gpr.mean = 8
+            after = self.gpr.sample_all(500000)[0] * self.yscale
+            assert not np.isclose(before, after)
+            self.gpr.mean = None
+
+        def test_sample_all(self):
+            np.random.seed(1)
+            x_pts = np.random.rand(25) * 10
             mean, std = self.gpr.sample_all(x_pts)
-            print(mean)
-            print(std)
+            assert len(mean) == 25
+            assert len(std) == 25
+            assert np.ndim(mean) == 1
+            assert np.ndim(std) == 1
 
-        def test_dims3(self):
-            x_pts = np.random.rand(25, 2) * 2 * np.pi
-            y_pts = self.gpr.sample(x_pts)
-            print(y_pts)
+        def test_sample(self):
+            np.random.seed(1)
+            x_pts = np.random.rand(25) * 20
+            y_pts = self.gpr.sample(x_pts) * self.yscale
+            assert len(y_pts) == 25
+            assert np.ndim(y_pts) == 1
 
-        def test_dims4(self):
-            assert np.isclose(self.gpr.estimate_mean()[0], 10)
+        def test_estmean(self):
+            assert np.isclose(self.gpr.estimate_mean()[0] * self.yscale, 5, atol=1e-2)
 
-    print(TestGPR2D().test_dims3())
+        def test_noise(self):
+            before = self.gpr.sample_all(np.linspace(0.5, 20.5, 20))[1] * self.yscale
+            self.gpr.sigma_noise = 0.01
+            after = self.gpr.sample_all(np.linspace(0.5, 20.5, 20))[1] * self.yscale
+            assert np.all(before < after)
+            self.gpr.sigma_noise = 0
+
+    TestGPR1D().test_sample()
 
 
 if __name__ == '__main__':
-    test_gpr()
+    test_unscaled_exp_kernel()

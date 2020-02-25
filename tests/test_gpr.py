@@ -41,7 +41,7 @@ class TestGPR2D:
                                     dims=2,
                                     sigma_noise=0,
                                     mean=None,
-                                    cache_results=False)
+                                    cache_results=True)
     for i in np.linspace(0, 2 * np.pi, 10):
         for j in np.linspace(0, 2 * np.pi, 10):
             gpr.add_known((i, j), np.sin(i) * np.sin(j) + 10)
@@ -79,26 +79,41 @@ class TestGPR2D:
     def test_estmean(self):
         assert np.isclose(self.gpr.estimate_mean()[0], 10)
 
+    def test_regression(self):
+        y_est = np.array([])
+        y_ref = np.array([])
+        for i in np.linspace(0, 2 * np.pi, 10):
+            for j in np.linspace(0, 2 * np.pi, 10):
+                np.append(y_est, self.gpr.sample_all([i, j])[0])
+                np.append(y_ref, [np.sin(i) * np.sin(j) + 10])
+        assert np.allclose(y_est, y_ref, rtol=1e-3)
+
+
+def f(x):
+    return 0.5 * np.exp(- 0.2 * x) + 3
+
 
 class TestGPR1D:
     gpr = GaussianProcessRegression(kernel=ExpKernel(0.1, 5.00),
                                     dims=1,
-                                    sigma_noise=0,
+                                    sigma_noise=0.0001,
                                     mean=None,
                                     cache_results=False)
+
     for i in range(10):
-        gpr.add_known(i, 0.5 * np.exp(- 0.2 * i))
+        gpr.add_known(i, f(i))
 
     def test_dict(self):
         for i, x in enumerate(self.gpr.training_pts):
             assert x[0] == i
-            assert self.gpr.training_pts[x] == 0.5 * np.exp(- 0.2 * i)
+            assert self.gpr.training_pts[x] == f(i)
 
     def test_mean(self):
         before = self.gpr.sample_all(500000)[0]
+        assert np.isclose(before, 3.5, rtol=0.5)
         self.gpr.mean = 8
         after = self.gpr.sample_all(500000)[0]
-        assert not np.isclose(before, after)
+        assert np.isclose(after, 8, rtol=0.5)
         self.gpr.mean = None
 
     def test_sample_all(self):
@@ -110,19 +125,24 @@ class TestGPR1D:
         assert np.ndim(mean) == 1
         assert np.ndim(std) == 1
 
-    def test_dims_sample(self):
+    def test_sample(self):
         np.random.seed(1)
-        x_pts = np.random.rand(5) * 10
+        x_pts = np.random.rand(25) * 20
         y_pts = self.gpr.sample(x_pts)
-        assert len(y_pts) == 5
+        assert len(y_pts) == 25
         assert np.ndim(y_pts) == 1
 
     def test_estmean(self):
-        assert np.isclose(self.gpr.estimate_mean()[0], 5, atol=1e-2)
+        assert np.isclose(self.gpr.estimate_mean()[0], 3, rtol=1e-1)
 
     def test_noise(self):
         before = self.gpr.sample_all(np.linspace(0.5, 20.5, 20))[1]
-        self.gpr.sigma_noise = 0.01
+        self.gpr.sigma_noise = 0.1
         after = self.gpr.sample_all(np.linspace(0.5, 20.5, 20))[1]
         assert np.all(before < after)
-        self.gpr.sigma_noise = 0
+        self.gpr.sigma_noise = 0.0001
+
+    def test_regression(self):
+        y_est = self.gpr.sample_all(range(10))[0]
+        y_ref = np.array([f(i) for i in range(10)])
+        assert np.allclose(y_est, y_ref, rtol=1e-3)

@@ -22,7 +22,7 @@ def cache(func: callable):
 class ExpKernel:
     """ Implements and calculates instances of the exponential kernel described in Swerszky et al. (2014). """
 
-    def __init__(self, alpha: float, beta: float):
+    def __init__(self, alpha: float, beta: float, rho: float = 1):
         """ Initialises the kernel hyper-parameters.
 
             Parameters:

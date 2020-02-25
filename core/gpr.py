@@ -3,6 +3,7 @@
 import numpy as np
 from typing import *
 
+
 class GaussianProcessRegression:
     """ A class which creates and calculates a Gaussian Process Regression """
 
@@ -118,7 +119,8 @@ class GaussianProcessRegression:
         train_x = tuple([*self.training_pts])  # Tuple used as dict key in the cache decorator
         train_y = np.reshape([*self.training_pts.values()], (-1, 1))
 
-        invK = self._inv_kernel_matrix(train_x, train_x, self.sigma_noise)
+        invK = self._inv_kernel_matrix(train_x, train_x,
+                                       self.sigma_noise + 1e-3)  # NB Added here for numerical stability
 
         calc = np.matmul(ones, invK)
         calc = np.matmul(calc, np.transpose(ones))
