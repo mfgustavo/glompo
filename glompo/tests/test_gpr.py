@@ -1,7 +1,7 @@
 
 
-from ..core.gpr import GaussianProcessRegression
-from ..core.expkernel import ExpKernel
+from glompo.core.manager import GaussianProcessRegression
+from glompo.core.expkernel import ExpKernel
 
 import numpy as np
 
@@ -36,6 +36,58 @@ class _SEKernel:
         return calc
 
 
+class TestDictionary:
+    loc_gpr = GaussianProcessRegression(kernel=_SEKernel(),
+                                        dims=2,
+                                        sigma_noise=0,
+                                        mean=None,
+                                        cache_results=False)
+    for i in range(10):
+        loc_gpr.add_known((i, i + 1), (i + 5) ** 2)
+
+    def test_hidden_dict(self):
+        for i, x in enumerate(self.loc_gpr._training_pts):
+            assert x[0] == i
+            assert x[1] == i + 1
+            assert self.loc_gpr._training_pts[x] == (i + 5) ** 2
+
+    def test_coords_getter(self):
+        for i, x in enumerate(self.loc_gpr.training_coords()):
+            assert x[0] == i
+            assert x[1] == i + 1
+
+    def test_vals_getter(self):
+        for i, y in enumerate(self.loc_gpr.training_values()):
+            assert y == (i + 5) ** 2
+
+    def test_dict_getter(self):
+        tp_dict = self.loc_gpr.training_dict()
+        for i, x in enumerate(tp_dict):
+            assert x[0] == i
+            assert x[1] == i + 1
+            assert tp_dict[x] == (i + 5) ** 2
+
+    def test_vals_getter_denormed(self):
+        self.loc_gpr.rescale()
+        for i, y in enumerate(self.loc_gpr.training_values()):
+            assert np.isclose(y, (i + 5) ** 2)
+        for i, y in enumerate(self.loc_gpr.training_values(True)):
+            assert np.isclose(y, ((i + 5) ** 2 - 98.5) / 55.0549725)
+
+    def test_dict_getter_denormed(self):
+        self.loc_gpr.rescale()
+        tp_dict = self.loc_gpr.training_dict()
+        for i, x in enumerate(tp_dict):
+            assert x[0] == i
+            assert x[1] == i + 1
+            assert np.isclose(tp_dict[x], (i + 5) ** 2)
+        tp_dict = self.loc_gpr.training_dict(True)
+        for i, x in enumerate(tp_dict):
+            assert x[0] == i
+            assert x[1] == i + 1
+            assert np.isclose(tp_dict[x], ((i + 5) ** 2 - 98.5) / 55.0549725)
+
+
 class TestGPR2D:
     gpr = GaussianProcessRegression(kernel=_SEKernel(),
                                     dims=2,
@@ -45,20 +97,6 @@ class TestGPR2D:
     for i in np.linspace(0, 2 * np.pi, 10):
         for j in np.linspace(0, 2 * np.pi, 10):
             gpr.add_known((i, j), np.sin(i) * np.sin(j) + 10)
-
-    def test_dict(self):
-        loc_gpr = GaussianProcessRegression(kernel=_SEKernel(),
-                                            dims=2,
-                                            sigma_noise=0,
-                                            mean=None,
-                                            cache_results=False)
-        for i in range(3):
-            loc_gpr.add_known((i, i+1), (i+5)**2)
-
-        for i, x in enumerate(loc_gpr.training_pts):
-            assert x[0] == i
-            assert x[1] == i+1
-            assert loc_gpr.training_pts[x] == (i+5)**2
 
     def test_sample_all(self):
         np.random.seed(1)
@@ -88,6 +126,31 @@ class TestGPR2D:
                 np.append(y_ref, [np.sin(i) * np.sin(j) + 10])
         assert np.allclose(y_est, y_ref, rtol=1e-3)
 
+    def test_rescale1(self):
+        self.gpr.rescale()
+        y = [*self.gpr._training_pts.values()]
+        assert np.isclose(np.mean(y), 0)
+        assert np.isclose(np.std(y), 1)
+
+    def test_rescale2(self):
+        self.gpr.rescale()
+        self.gpr.rescale()
+        self.gpr.rescale()
+        y = [*self.gpr._training_pts.values()]
+        assert np.isclose(np.mean(y), 0)
+        assert np.isclose(np.std(y), 1)
+
+    def test_rescale3(self):
+        self.gpr.rescale((10, 0.45))
+        y_new = [*self.gpr._training_pts.values()]
+        assert np.isclose(np.mean(y_new), 0)
+        assert np.isclose(np.std(y_new), 1)
+        assert self.gpr.normalisation_constants == (10, 0.45)
+
+    def test_denorm(self):
+        for x in self.gpr._training_pts:
+            assert np.sin(x[0]) * np.sin(x[1]) + 10 == self.gpr._denormalise(self.gpr._training_pts[x])
+
 
 def f(x):
     return 0.5 * np.exp(- 0.2 * x) + 3
@@ -104,9 +167,9 @@ class TestGPR1D:
         gpr.add_known(i, f(i))
 
     def test_dict(self):
-        for i, x in enumerate(self.gpr.training_pts):
+        for i, x in enumerate(self.gpr._training_pts):
             assert x[0] == i
-            assert self.gpr.training_pts[x] == f(i)
+            assert self.gpr._training_pts[x] == f(i)
 
     def test_mean(self):
         before = self.gpr.sample_all(500000)[0]
@@ -146,3 +209,33 @@ class TestGPR1D:
         y_est = self.gpr.sample_all(range(10))[0]
         y_ref = np.array([f(i) for i in range(10)])
         assert np.allclose(y_est, y_ref, rtol=1e-3)
+
+    def test_rescale1(self):
+        y_old = [*self.gpr._training_pts.values()]
+        mean_old = np.mean(y_old)
+        st_old = np.std(y_old)
+
+        self.gpr.rescale((mean_old, st_old))
+        y_new = [*self.gpr._training_pts.values()]
+
+        assert np.isclose(np.mean(y_new), 0)
+        assert np.isclose(np.std(y_new), 1)
+        assert self.gpr.normalisation_constants == (mean_old, st_old)
+
+    def test_rescale2(self):
+        self.gpr.rescale()
+        y = [*self.gpr._training_pts.values()]
+        assert np.isclose(np.mean(y), 0)
+        assert np.isclose(np.std(y), 1)
+
+    def test_rescale3(self):
+        self.gpr.rescale()
+        self.gpr.rescale()
+        self.gpr.rescale()
+        y = [*self.gpr._training_pts.values()]
+        assert np.isclose(np.mean(y), 0)
+        assert np.isclose(np.std(y), 1)
+
+    def test_denorm(self):
+        for i, x in enumerate(self.gpr._denormalise(np.array([*self.gpr._training_pts.values()]))):
+            assert f(i) == x

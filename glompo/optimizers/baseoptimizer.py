@@ -2,8 +2,6 @@
 Base class from which all optimizers must inherit in order to be compatible with GloMPO.
 """
 
-from ..common.namedtuples import *
-
 from multiprocessing.connection import Connection
 from multiprocessing import Queue
 from typing import *
@@ -79,8 +77,8 @@ class BaseOptimizer(ABC):
         Minimizes a function, given an initial list of variable values `x0`, and possibly a list of `bounds` on the
         variable values. The `callbacks` argument allows for specific callbacks such as early stopping.
 
-        NB Must include a call to put every iteration in the results_queue. Messages to the manager must be sent via the
-        message_manager method. Messages from the manager can be read by the check_messages method. For proper GloMPO
+        NB Must include a call to put every iteration in the results_queue. Messages to the mp_manager must be sent via the
+        message_manager method. Messages from the mp_manager can be read by the check_messages method. For proper GloMPO
         functionality these must all be implemented appropriately in this method.
 
         Example:

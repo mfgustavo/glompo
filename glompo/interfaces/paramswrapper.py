@@ -11,7 +11,7 @@ from scm.params.optimizers.base import *
 from scm.params.core.parameteroptimization import Optimization
 
 # Package imports
-from scope.scope import ParallelOptimizerScope
+from glompo.scope.scope import ParallelOptimizerScope
 
 
 class GloMPOOptimizer(BaseOptimizer):
@@ -82,7 +82,7 @@ class GloMPOOptimizer(BaseOptimizer):
         x0 : Sequence[float]
         bounds : Sequence[Tuple[float, float]]
         callbacks : Callable
-            Callbacks used to terminate optimizers early. Their use is *strongly* discouraged when using GloMPOOptimizer
+            Callbacks used to terminate optimizers early. Their use is *strongly* discouraged when using GloMPOManager
         parent : Union[Type[Optimization], None]
             Instance of the Optimization class which bundles function together. Allows access to various optimization
             functions like individual error function contributions or performance at each iteration.

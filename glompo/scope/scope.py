@@ -14,7 +14,7 @@ class ParallelOptimizerScope:
     def __init__(self, num_streams: int,
                  x_range: Tuple[float, float] = (),
                  y_range: Tuple[float, float] = (),
-                 visualise_gpr: bool = True,
+                 visualise_gpr: bool = False,
                  record_movie: bool = False,
                  writer_kwargs: Union[Dict[str, Any], None] = None,
                  movie_kwargs: Union[Dict[str, Any], None] = None):
@@ -31,7 +31,7 @@ class ParallelOptimizerScope:
         y_range : Tuple[float, float]
             Sets the y-axis limits of the plot, default is an empty tuple which leads the plot to automatically and
             constantly rescale the axis.
-        visualise_gpr : int
+        visualise_gpr : bool
             If True the plot will show the regression itself if False only the predicted mean and uncertainty on the
             mean will be shown.
         record_movie : bool

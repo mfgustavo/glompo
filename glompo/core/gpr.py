@@ -12,7 +12,8 @@ class GaussianProcessRegression:
                  dims: int,
                  sigma_noise: Optional[float] = 0,
                  mean: Optional[float] = None,
-                 cache_results: Optional[bool] = True):
+                 cache_results: Optional[bool] = True,
+                 normalisation_constants: Optional[Tuple[float, float]] = (0, 1)):
         """ Sets up the Gaussian Process Regression with its kernel.
 
             Parameters:
@@ -30,27 +31,34 @@ class GaussianProcessRegression:
             cache_results : Optional[bool]
                 If True the results of some matrix constructions and inversions are cached. This can increase speed
                 but requires more memory.
+            normalisation_constants : Optional[Tuple[float, float]]
+                Data fed into the GPR is automatically normalised using the tuple provided in the form of (mean, stdev).
+                Data will remain unchanged if the default (0, 1) is used.
         """
         self.kernel = kernel
         self.dims = dims
-        self.training_pts = {}
+        self._training_pts = {}
         self.sigma_noise = sigma_noise
         self.mean = mean
-        # mean_estimate and mean_uncertainty are approximated by the regression
-        self.mean_estimate = None
-        self.mean_uncertainty = None
+        self.normalisation_constants = normalisation_constants
         # Caches for repeatedly constructed and inverted matrices
         self._cache_results = cache_results
         self._kernel_cache = {}
         self._inv_kernel_cache = {}
 
+    def _normalise(self, y: np.ndarray) -> np.ndarray:
+        return (y - self.normalisation_constants[0]) / self.normalisation_constants[1]
+
+    def _denormalise(self, y: np.ndarray) -> np.ndarray:
+        return y * self.normalisation_constants[1] + self.normalisation_constants[0]
+
     def _calc_kernels(self, x: np.ndarray) -> np.ndarray:
         """ Returns the mean and covariance matrices using the test points in x. """
         test_count = len(x)
-        train_count = len(self.training_pts)
+        train_count = len(self._training_pts)
 
-        train_x = np.array([*self.training_pts])
-        train_y = np.array([*self.training_pts.values()])
+        train_x = np.array([*self._training_pts])
+        train_y = np.array([*self._training_pts.values()])
 
         k_test_train = self._kernel_matrix(x, train_x)
         k_train_test = np.transpose(k_test_train)
@@ -78,9 +86,9 @@ class GaussianProcessRegression:
             r_mat = np.matmul(ones_train_len, r_mat)
             r_mat = ones_test_len - r_mat
 
-            self.estimate_mean()
-            mean_func += self.mean_estimate * np.transpose(r_mat)
-            covar_correction = self.mean_uncertainty * np.matmul(np.transpose(r_mat), r_mat)
+            mean_estimate, mean_uncertainty = self.estimate_mean()
+            mean_func += mean_estimate * np.transpose(r_mat)
+            covar_correction = mean_uncertainty * np.matmul(np.transpose(r_mat), r_mat)
             covar_fun += covar_correction
 
         return mean_func, covar_fun
@@ -89,12 +97,48 @@ class GaussianProcessRegression:
         """ Adds points known from the real function to the regression. """
         x_nest = np.reshape(x, (-1, self.dims))
         f_nest = np.reshape(f, (-1, 1))
-        for i, pt in enumerate(x_nest):
-            self.training_pts[tuple(pt)] = f_nest[i]
+        f_nest = self._normalise(f_nest)
 
-    def sample(self, x: np.ndarray) -> np.ndarray:
-        """ Return a sample of the Gaussian Process at the point/s in x. """
-        # TODO: Rewrite to deal with tuple inputs
+        for i, pt in enumerate(x_nest):
+            self._training_pts[tuple(pt)] = f_nest[i]
+
+    def training_coords(self) -> np.ndarray:
+        """ Returns all the coordinates of the points passed to the GP formatted as a numpy array. """
+        return np.array([*self._training_pts])
+
+    def training_values(self, scaled: bool = False) -> np.ndarray:
+        """ Returns all the values of the points passed to the GP formatted as a numpy array.
+            If scaled is True then values scaled by the stored normalisation constants are returned.
+            Note that this does not guarantee that the values are normalised. To do so, call rescale() before extracting
+            the values.
+            If scaled is False then the real values are returned.
+        """
+        vals = np.array([*self._training_pts.values()]).flatten()
+        if scaled:
+            return vals
+        else:
+            return self._denormalise(vals)
+
+    def training_dict(self, scaled: bool = False) -> Dict[np.ndarray, np.ndarray]:
+        """ Returns all the point and values passed to the GP as a dictionary.
+            If scaled is True then values scaled by the stored normalisation constants are returned.
+            Note that this does not guarantee that the values are normalised. To do so, call rescale() before extracting
+            the values.
+            If scaled is False then the real values are returned.
+        """
+
+        if scaled:
+            return self._training_pts
+        else:
+            training_pts = dict(self._training_pts)
+            for x in training_pts:
+                training_pts[x] = self._denormalise(self._training_pts[x])
+            return training_pts
+
+    def sample(self, x: np.ndarray, scaled: bool = False) -> np.ndarray:
+        """ Return a sample of the Gaussian Process at the point/s in x.
+            If scaled is True then normalised values are returned otherwise they are returned in real space.
+        """
         x_nest = np.reshape(x, (-1, self.dims))
         test_count = len(x_nest)
 
@@ -102,22 +146,38 @@ class GaussianProcessRegression:
         chol_mat = np.linalg.cholesky(covar_fun + 1e-6 * np.identity(test_count))  # Added for numerical stability
         rand = np.random.normal(0, 1, test_count)
 
-        return mean_func.flatten() + np.matmul(chol_mat, rand)
+        ans = mean_func.flatten() + np.matmul(chol_mat, rand)
+        if not scaled:
+            ans = self._denormalise(ans)
 
-    def sample_all(self, x: np.ndarray) -> np.ndarray:
+        return ans
+
+    def sample_all(self, x: np.ndarray, scaled: bool = False) -> np.ndarray:
         """ Returns the current mean function and a single standard deviation confidence interval around it at the
-            points in x. Returns a tuple in the order (mean, sd)
+            points in x. Returns a tuple in the order (mean, sd).
+            If scaled is True then normalised values are returned otherwise they are returned in real space.
         """
         # TODO: Rewrite to deal with tuple inputs
         # Nest x if it is one point or one dimension
         x_nest = np.reshape(x, (-1, self.dims))
         mean_func, covar_fun = self._calc_kernels(x_nest)
-        return mean_func.flatten(), np.sqrt(np.diag(covar_fun))
 
-    def estimate_mean(self) -> Tuple[float, float]:
-        ones = np.ones(len(self.training_pts))
-        train_x = tuple([*self.training_pts])  # Tuple used as dict key in the cache decorator
-        train_y = np.reshape([*self.training_pts.values()], (-1, 1))
+        mean_func = mean_func.flatten()
+        covar_fun = np.sqrt(np.diag(covar_fun))
+
+        if not scaled:
+            mean_func = self._denormalise(mean_func)
+            covar_fun = self._denormalise(covar_fun)
+
+        return mean_func, covar_fun
+
+    def estimate_mean(self, scaled: bool = False) -> Tuple[float, float]:
+        """ Returns the estimate and uncertainty of the mean for the GPR.
+            If scaled is True then normalised values are returned otherwise they are returned in real space.
+        """
+        ones = np.ones(len(self._training_pts))
+        train_x = tuple([*self._training_pts])  # Tuple used as dict key in the cache decorator
+        train_y = np.reshape([*self._training_pts.values()], (-1, 1))
 
         invK = self._inv_kernel_matrix(train_x, train_x,
                                        self.sigma_noise + 1e-3)  # NB Added here for numerical stability
@@ -125,14 +185,39 @@ class GaussianProcessRegression:
         calc = np.matmul(ones, invK)
         calc = np.matmul(calc, np.transpose(ones))
         calc = calc ** -1
-        self.mean_uncertainty = calc
+        mean_uncertainty = calc
 
         calc = calc * ones
         calc = np.matmul(calc, invK)
         calc = np.matmul(calc, train_y)
-        self.mean_estimate = calc[0]
+        mean_estimate = calc[0]
 
-        return self.mean_estimate, self.mean_uncertainty
+        if not scaled:
+            mean_estimate = self._denormalise(mean_estimate)
+            mean_uncertainty = self._denormalise(mean_uncertainty)
+
+        return mean_estimate, mean_uncertainty
+
+    def rescale(self, normalisation_constants: Optional[Tuple[float, float]] = None):
+        """
+        Changes the scaling of the data in the GPR. If values for mean and st_dev are provided these are used as the new
+        parameters. If not the data is scaled by the mean and standard deviation of the data in the GPR dictionary.
+        """
+        mean_old, st_old = self.normalisation_constants
+        if normalisation_constants:
+            mean_new, st_new = normalisation_constants
+        else:
+            real_pts = np.array([*self._training_pts.values()]) * st_old + mean_old
+            mean_new = np.mean(real_pts)
+            st_new = np.std(real_pts)
+
+        for pt in self._training_pts:
+            old_space = self._training_pts[pt]
+            real_space = old_space * st_old + mean_old
+            new_space = (real_space - mean_new) / st_new
+            self._training_pts[pt] = new_space
+
+        self.normalisation_constants = (mean_new, st_new)
 
     def _kernel_matrix(self, x1, x2) -> np.ndarray:
         vec1 = np.reshape(x1, (-1, self.dims))
@@ -176,8 +261,8 @@ class GaussianProcessRegression:
     #     matrix from scratch again as it uses the previously calculated inverse of training points. The final matrix
     #     far is cached."""
     #
-    #     n_train_pts = len(self.training_pts)
-    #     x_train_pts = np.array([*self.training_pts])
+    #     n_train_pts = len(self._training_pts)
+    #     x_train_pts = np.array([*self._training_pts])
     #
     #     if len(self._matrix_cache[0]) == 0:
     #         self._matrix_cache = 1 / (self._kernel_matrix(x_train_pts[0], x_train_pts[0]) + self.sigma_noise ** 2)

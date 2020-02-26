@@ -95,7 +95,7 @@ class GFLSOptimizer(BaseOptimizer):
             A list of functions called after every iteration. GFLS compatible callbacks can be found at the end of this
             file.
 
-            If GFLS is being used through the GloMPO manager calls to send iteration results to the manager and check
+            If GFLS is being used through the GloMPO mp_manager calls to send iteration results to the mp_manager and check
             incoming signals from it are automatically added to this list. Only send functionality you want over and
             above this.
 

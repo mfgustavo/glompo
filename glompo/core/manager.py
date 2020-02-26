@@ -2,23 +2,22 @@
 
 # Native Python imports
 import warnings
+from typing import *
 from time import time
 import multiprocessing as mp
 
 # Package imports
+from ..common.namedtuples import *
 from ..scope.scope import ParallelOptimizerScope
 from ..optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
-from ..common.namedtuples import *
 from .gpr import GaussianProcessRegression
 from .expkernel import ExpKernel
 
 # Other Python packages
 import numpy as np
 
-__all__ = ['GloMPOOptimizer']
 
-
-class GloMPOOptimizer:
+class GloMPOManager:
     """ Runs given jobs in parallel and tracks their progress using Gaussian Process Regressions.
         Based on these predictions the class will update hyperparameters, kill poor performing jobs and
         intelligently restart others. """
@@ -65,10 +64,10 @@ class GloMPOOptimizer:
             Values can also optionally be (1, 3) tuples of optimizers and dictionaries of optimizer keywords. The first
             is passed to the optimizer during initialisation and the second during execution.
             For example:
-                {'default': CMAOptimizer}: The manager will use only CMA-ES type optimizers in all cases and use default
+                {'default': CMAOptimizer}: The mp_manager will use only CMA-ES type optimizers in all cases and use default
                     values for them. In cases such as this the optimzer should have no non-default parameters other than
                     func, x0 and bounds.
-                {'default': CMAOptimizer, 'late': (CMAOptimizer, {'sigma': 0.1}, None)}: The manager will act as above
+                {'default': CMAOptimizer, 'late': (CMAOptimizer, {'sigma': 0.1}, None)}: The mp_manager will act as above
                     but in noisy areas CMAOptimizers are initialised with a smaller step size. No special keywords are
                     passed for the minimization itself.
 
@@ -87,12 +86,12 @@ class GloMPOOptimizer:
 
         convergence_criteria: str
             Criteria used for convergence. Supported arguments:
-                'omax': The manager delivers the best answer obtained after initialising omax optimizers. Note that
+                'omax': The mp_manager delivers the best answer obtained after initialising omax optimizers. Note that
                     these are not guaranteed to be allowed to terminate themselves i.e. GloMPO may still kill them
                     early.
-                'sing_conv': The manager delivers the answer obtained by the first optimizer to be allowed to reach full
+                'sing_conv': The mp_manager delivers the answer obtained by the first optimizer to be allowed to reach full
                     convergence.
-                'n_conv':  The manager delivers the answer obtained by the nth optimizer to be allowed to reach full
+                'n_conv':  The mp_manager delivers the answer obtained by the nth optimizer to be allowed to reach full
                     convergence. Replace n with an integer value.
                     WARNING: It is strongly recommended that this criteria is used with some early termination criteria
                         such as omax, tmax or fmax since later optimizations may not improve on earlier runs and thus
@@ -114,18 +113,18 @@ class GloMPOOptimizer:
             Note: If tmax is reached GloMPO will not run region_stability_checks.
 
         omax : Optional[int]
-            Maximum number of optimizers (in total) that can be started by the manager.
+            Maximum number of optimizers (in total) that can be started by the mp_manager.
 
         fmax : Optional[int]
             Maximum number of function calls that are allowed between all optimizers.
 
         region_stability_check: bool = False
             If True, local optimizers are started around a candidate solution which has been selected as a final
-            solution. This is used to measure its reproducibility. If the check fails, the manager resumes looking for
+            solution. This is used to measure its reproducibility. If the check fails, the mp_manager resumes looking for
             another solution.
 
         report_statistics: bool = False
-            If True, the manager reports the statistical significance of the suggested solution.
+            If True, the mp_manager reports the statistical significance of the suggested solution.
 
         history_logging: int = 0
             Indicates the level of logging the user would like:
@@ -141,6 +140,9 @@ class GloMPOOptimizer:
         visualisation_args : Union[dict, None]
             Optional arguments to parameterize the dynamic plotting feature. See ParallelOptimizationScope.
         """
+
+        print("Hello Here I Am")
+
         # Save and wrap task
         def task_args_wrapper(func, *args, **kwargs):
             def wrapper(x):
@@ -223,10 +225,10 @@ class GloMPOOptimizer:
         self.hunting_processes = {}
         self.signal_pipes = {}
 
-        self.manager = mp.Manager()
-        self.optimizer_queue = self.manager.Queue()
-        self.hyperparm_queue = self.manager.Queue()
-        self.hunting_queue = self.manager.Queue()
+        self.mp_manager = mp.Manager()
+        self.optimizer_queue = self.mp_manager.Queue()
+        self.hyperparm_queue = self.mp_manager.Queue()
+        self.hunting_queue = self.mp_manager.Queue()
 
         # Setup GPRs
         self.gprs = {}
@@ -253,7 +255,7 @@ class GloMPOOptimizer:
     def _start_new_job(self):
         self.o_counter += 1
         # TODO we want processes to be daemons. A stuck optimizer somewhere that we havent cleaned up should not stop
-        #  us closing the manager.
+        #  us closing the mp_manager.
         pass
 
     def _kill_job(self, opt_id):

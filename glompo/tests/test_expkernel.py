@@ -1,6 +1,6 @@
 
 
-from ..core.expkernel import ExpKernel
+from glompo.core.expkernel import ExpKernel
 import numpy as np
 
 

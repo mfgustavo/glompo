@@ -55,7 +55,7 @@ class CMAOptimizer(BaseOptimizer):
         self.result = None
 
     def minimize(self, function, x0, bounds, callbacks=None, **kwargs):
-        self.dir = os.path.abspath('.')+os.sep+'cmadata'+os.sep
+        self.dir = os.path.abspath('') + os.sep + 'cmadata' + os.sep
         if not os.path.isdir(self.dir):
             os.makedirs(self.dir)
 
