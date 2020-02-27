@@ -14,7 +14,7 @@ from scm.params.core.parameteroptimization import Optimization
 from glompo.scope.scope import ParallelOptimizerScope
 
 
-class GloMPOOptimizer(BaseOptimizer):
+class ParamsGlompoOptimizer(BaseOptimizer):
     """ Runs given jobs in parallel and tracks their progress using Gaussian Process Regressions.
         Based on these predictions the class will update hyperparameters, kill poor performing jobs and
         intelligently restart others. """

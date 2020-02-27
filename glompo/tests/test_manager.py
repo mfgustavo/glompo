@@ -26,14 +26,14 @@ class TestMangerInit:
         with pytest.raises(TypeError):
             GloMPOManager(None,
                           2,
-                          {'default': OptimizerTest1()},
+                          {'default': OptimizerTest1},
                           ((0, 1), (0, 1)),
                           5)
 
     def test_task2(self):
         GloMPOManager(lambda x, y: x + y,
                       2,
-                      {'default': OptimizerTest1()},
+                      {'default': OptimizerTest1},
                       ((0, 1), (0, 1)),
                       5)
 
@@ -41,7 +41,7 @@ class TestMangerInit:
         with pytest.raises(TypeError):
             GloMPOManager(lambda x, y: x + y,
                           2,
-                          {'default': OptimizerTest2()},
+                          {'default': OptimizerTest2},
                           ((0, 1), (0, 1)),
                           5)
 
@@ -49,14 +49,14 @@ class TestMangerInit:
         with pytest.raises(ValueError):
             GloMPOManager(lambda x, y: x + y,
                           2,
-                          {'other': OptimizerTest1()},
+                          {'other': OptimizerTest1},
                           ((0, 1), (0, 1)),
                           5)
 
     def test_optimizer3(self):
         GloMPOManager(lambda x, y: x + y,
                       2,
-                      {'default': (OptimizerTest1(), None, None)},
+                      {'default': (OptimizerTest1, None, None)},
                       ((0, 1), (0, 1)),
                       5)
 
@@ -64,23 +64,23 @@ class TestMangerInit:
         with pytest.raises(TypeError):
             GloMPOManager(lambda x, y: x + y,
                           2,
-                          {'default': (OptimizerTest2(), None, None)},
+                          {'default': (OptimizerTest2, None, None)},
                           ((0, 1), (0, 1)),
                           5)
 
     def test_optimizer5(self):
         opt = GloMPOManager(lambda x, y: x + y,
                             2,
-                            {'default': OptimizerTest1(),
-                               'early': (OptimizerTest1(), None, None),
-                               'late': (OptimizerTest1(), {'kwarg': 9}, None),
-                               'noisy': (OptimizerTest1(), None, {'kwarg': 1923})},
+                            {'default': OptimizerTest1,
+                             'early': (OptimizerTest1, None, None),
+                             'late': (OptimizerTest1, {'kwarg': 9}, None),
+                             'noisy': (OptimizerTest1, None, {'kwarg': 1923})},
                             ((0, 1), (0, 1)),
                             5)
         errors = []
         if not isinstance(opt.optimizers['default'], tuple):
             errors.append("Not Tuple")
-        if not isinstance(opt.optimizers['default'][0], OptimizerTest1):
+        if not opt.optimizers['default'][0] == OptimizerTest1:
             errors .append("First element not optimizer")
         if opt.optimizers['default'][1] is not None:
             errors.append("Second element not None")
@@ -91,16 +91,16 @@ class TestMangerInit:
     def test_optimizer6(self):
         opt = GloMPOManager(lambda x, y: x + y,
                             2,
-                            {'default': OptimizerTest1(),
-                               'early': (OptimizerTest1(), None, None),
-                               'late': (OptimizerTest1(), {'kwarg': 9}, None),
-                               'noisy': (OptimizerTest1(), None, {'kwarg': 1923})},
+                            {'default': OptimizerTest1,
+                             'early': (OptimizerTest1, None, None),
+                             'late': (OptimizerTest1, {'kwarg': 9}, None),
+                             'noisy': (OptimizerTest1, None, {'kwarg': 1923})},
                             ((0, 1), (0, 1)),
                             5)
         errors = []
         if not isinstance(opt.optimizers['early'], tuple):
             errors.append("Not Tuple")
-        if not isinstance(opt.optimizers['early'][0], OptimizerTest1):
+        if not opt.optimizers['early'][0] == OptimizerTest1:
             errors .append("First element not optimizer")
         if opt.optimizers['early'][1] is not None:
             errors.append("Second element not None")
@@ -111,16 +111,16 @@ class TestMangerInit:
     def test_optimizer7(self):
         opt = GloMPOManager(lambda x, y: x + y,
                             2,
-                            {'default': OptimizerTest1(),
-                               'early': (OptimizerTest1(), None, None),
-                               'late': (OptimizerTest1(), {'kwarg': 9}, None),
-                               'noisy': (OptimizerTest1(), None, {'kwarg': 1923})},
+                            {'default': OptimizerTest1,
+                             'early': (OptimizerTest1, None, None),
+                             'late': (OptimizerTest1, {'kwarg': 9}, None),
+                             'noisy': (OptimizerTest1, None, {'kwarg': 1923})},
                             ((0, 1), (0, 1)),
                             5)
         errors = []
         if not isinstance(opt.optimizers['late'], tuple):
             errors.append("Not Tuple")
-        if not isinstance(opt.optimizers['late'][0], OptimizerTest1):
+        if not opt.optimizers['late'][0] == OptimizerTest1:
             errors .append("First element not optimizer")
         if not isinstance(opt.optimizers['late'][1], dict):
             errors.append("Second element not dict")
@@ -131,16 +131,16 @@ class TestMangerInit:
     def test_optimizer8(self):
         opt = GloMPOManager(lambda x, y: x + y,
                             2,
-                            {'default': OptimizerTest1(),
-                               'early': (OptimizerTest1(), None, None),
-                               'late': (OptimizerTest1(), {'kwarg': 9}, None),
-                               'noisy': (OptimizerTest1(), None, {'kwarg': 1923})},
+                            {'default': OptimizerTest1,
+                             'early': (OptimizerTest1, None, None),
+                             'late': (OptimizerTest1, {'kwarg': 9}, None),
+                             'noisy': (OptimizerTest1, None, {'kwarg': 1923})},
                             ((0, 1), (0, 1)),
                             5)
         errors = []
         if not isinstance(opt.optimizers['noisy'], tuple):
             errors.append("Not Tuple")
-        if not isinstance(opt.optimizers['noisy'][0], OptimizerTest1):
+        if not opt.optimizers['noisy'][0] == OptimizerTest1:
             errors .append("First element not optimizer")
         if opt.optimizers['noisy'][1] is not None:
             errors.append("Second element not None")
@@ -152,7 +152,7 @@ class TestMangerInit:
         with pytest.raises(ValueError):
             GloMPOManager(lambda x, y: x + y,
                           2,
-                          {'default': OptimizerTest1()},
+                          {'default': OptimizerTest1},
                           ((0, 1), (0, 1)),
                           0)
 
@@ -160,7 +160,7 @@ class TestMangerInit:
         with pytest.raises(ValueError):
             GloMPOManager(lambda x, y: x + y,
                           2,
-                          {'default': OptimizerTest1()},
+                          {'default': OptimizerTest1},
                           ((0, 1), (0, 1)),
                           -5)
 
@@ -168,7 +168,7 @@ class TestMangerInit:
         with pytest.raises(TypeError):
             GloMPOManager(lambda x, y: x + y,
                           2,
-                          {'default': OptimizerTest1()},
+                          {'default': OptimizerTest1},
                           ((0, 1), (0, 1)),
                           2.5646)
 
@@ -176,7 +176,7 @@ class TestMangerInit:
         with pytest.raises(TypeError):
             GloMPOManager(lambda x, y: x + y,
                           2,
-                          {'default': OptimizerTest1()},
+                          {'default': OptimizerTest1},
                           ((0, 1), (0, 1)),
                           None)
 
@@ -184,7 +184,7 @@ class TestMangerInit:
         with pytest.raises(ValueError):
             GloMPOManager(lambda x: x + 1,
                           1,
-                          {'default': OptimizerTest1()},
+                          {'default': OptimizerTest1},
                           ((0, 1), (0, 1)),
                           5)
 
@@ -192,7 +192,7 @@ class TestMangerInit:
         with pytest.raises(ValueError):
             GloMPOManager(lambda x, y: x + y,
                           2,
-                          {'default': OptimizerTest1()},
+                          {'default': OptimizerTest1},
                           ((1, 1), (0, 1)),
                           5)
 
@@ -200,7 +200,7 @@ class TestMangerInit:
         with pytest.raises(ValueError):
             GloMPOManager(lambda x, y: x + y,
                           2,
-                          {'default': OptimizerTest1()},
+                          {'default': OptimizerTest1},
                           ((0, 1), (1, 1)),
                           5)
 
@@ -208,7 +208,7 @@ class TestMangerInit:
         with pytest.raises(ValueError):
             GloMPOManager(lambda x, y: x + y,
                           2,
-                          {'default': OptimizerTest1()},
+                          {'default': OptimizerTest1},
                           ((1, 1), (1, 1)),
                           5)
 
@@ -216,7 +216,7 @@ class TestMangerInit:
         with pytest.raises(ValueError):
             GloMPOManager(lambda x, y: x + y,
                           2,
-                          {'default': OptimizerTest1()},
+                          {'default': OptimizerTest1},
                           ((2, 1), (0, 1)),
                           5)
 
@@ -224,7 +224,7 @@ class TestMangerInit:
         with pytest.raises(ValueError):
             GloMPOManager(lambda x, y: x + y,
                           2,
-                          {'default': OptimizerTest1()},
+                          {'default': OptimizerTest1},
                           ((0, 1), (2, 1)),
                           5)
 
@@ -232,14 +232,14 @@ class TestMangerInit:
         with pytest.raises(ValueError):
             GloMPOManager(lambda x, y: x + y,
                           2,
-                          {'default': OptimizerTest1()},
+                          {'default': OptimizerTest1},
                           ((2, 1), (2, 1)),
                           5)
 
     def test_x0crit1(self):
         GloMPOManager(lambda x, y: x + y,
                       2,
-                      {'default': OptimizerTest1()},
+                      {'default': OptimizerTest1},
                       ((0, 1), (0, 1)),
                       5,
                       x0_criteria='rand')
@@ -248,7 +248,7 @@ class TestMangerInit:
         with pytest.raises(ValueError):
             GloMPOManager(lambda x, y: x + y,
                           2,
-                          {'default': OptimizerTest1()},
+                          {'default': OptimizerTest1},
                           ((0, 1), (0, 1)),
                           5,
                           x0_criteria='not_allowed')
@@ -256,7 +256,7 @@ class TestMangerInit:
     def test_convcrit1(self):
         GloMPOManager(lambda x, y: x + y,
                       2,
-                      {'default': OptimizerTest1()},
+                      {'default': OptimizerTest1},
                       ((0, 1), (0, 1)),
                       5,
                       convergence_criteria='sing_conv')
@@ -265,7 +265,7 @@ class TestMangerInit:
         with pytest.raises(ValueError):
             GloMPOManager(lambda x, y: x + y,
                           2,
-                          {'default': OptimizerTest1()},
+                          {'default': OptimizerTest1},
                           ((0, 1), (0, 1)),
                           5,
                           convergence_criteria='not_allowed')
@@ -274,7 +274,7 @@ class TestMangerInit:
         with pytest.raises(ValueError):
             GloMPOManager(lambda x, y: x + y,
                           2,
-                          {'default': OptimizerTest1()},
+                          {'default': OptimizerTest1},
                           ((0, 1), (0, 1)),
                           5,
                           omax='x')
@@ -282,7 +282,7 @@ class TestMangerInit:
     def test_omax2(self):
         opt = GloMPOManager(lambda x, y: x + y,
                             2,
-                            {'default': OptimizerTest1()},
+                            {'default': OptimizerTest1},
                             ((0, 1), (0, 1)),
                             5,
                             omax=4.3)
@@ -291,7 +291,7 @@ class TestMangerInit:
     def test_omax3(self):
         opt = GloMPOManager(lambda x, y: x + y,
                             2,
-                            {'default': OptimizerTest1()},
+                            {'default': OptimizerTest1},
                             ((0, 1), (0, 1)),
                             5,
                             omax=-6)
@@ -300,7 +300,7 @@ class TestMangerInit:
     def test_omax4(self):
         opt = GloMPOManager(lambda x, y: x + y,
                             2,
-                            {'default': OptimizerTest1()},
+                            {'default': OptimizerTest1},
                             ((0, 1), (0, 1)),
                             5,
                             omax=0)
@@ -310,7 +310,7 @@ class TestMangerInit:
         with pytest.raises(ValueError):
             GloMPOManager(lambda x, y: x + y,
                           2,
-                          {'default': OptimizerTest1()},
+                          {'default': OptimizerTest1},
                           ((0, 1), (0, 1)),
                           5,
                           fmax='x')
@@ -318,7 +318,7 @@ class TestMangerInit:
     def test_fmax2(self):
         opt = GloMPOManager(lambda x, y: x + y,
                             2,
-                            {'default': OptimizerTest1()},
+                            {'default': OptimizerTest1},
                             ((0, 1), (0, 1)),
                             5,
                             fmax=4.3)
@@ -327,7 +327,7 @@ class TestMangerInit:
     def test_fmax3(self):
         opt = GloMPOManager(lambda x, y: x + y,
                             2,
-                            {'default': OptimizerTest1()},
+                            {'default': OptimizerTest1},
                             ((0, 1), (0, 1)),
                             5,
                             fmax=-6)
@@ -336,7 +336,7 @@ class TestMangerInit:
     def test_fmax4(self):
         opt = GloMPOManager(lambda x, y: x + y,
                             2,
-                            {'default': OptimizerTest1()},
+                            {'default': OptimizerTest1},
                             ((0, 1), (0, 1)),
                             5,
                             fmax=0)
@@ -346,7 +346,7 @@ class TestMangerInit:
         with pytest.raises(ValueError):
             GloMPOManager(lambda x, y: x + y,
                           2,
-                          {'default': OptimizerTest1()},
+                          {'default': OptimizerTest1},
                           ((0, 1), (0, 1)),
                           5,
                           tmax='x')
@@ -354,7 +354,7 @@ class TestMangerInit:
     def test_tmax2(self):
         opt = GloMPOManager(lambda x, y: x + y,
                             2,
-                            {'default': OptimizerTest1()},
+                            {'default': OptimizerTest1},
                             ((0, 1), (0, 1)),
                             5,
                             tmax=4.3)
@@ -363,7 +363,7 @@ class TestMangerInit:
     def test_tmax3(self):
         opt = GloMPOManager(lambda x, y: x + y,
                             2,
-                            {'default': OptimizerTest1()},
+                            {'default': OptimizerTest1},
                             ((0, 1), (0, 1)),
                             5,
                             tmax=-6)
@@ -372,7 +372,7 @@ class TestMangerInit:
     def test_tmax4(self):
         opt = GloMPOManager(lambda x, y: x + y,
                             2,
-                            {'default': OptimizerTest1()},
+                            {'default': OptimizerTest1},
                             ((0, 1), (0, 1)),
                             5,
                             tmax=0)
@@ -381,7 +381,7 @@ class TestMangerInit:
     def test_history_logging1(self):
         opt = GloMPOManager(lambda x, y: x + y,
                             2,
-                            {'default': OptimizerTest1()},
+                            {'default': OptimizerTest1},
                             ((0, 1), (0, 1)),
                             5,
                             history_logging=0)
@@ -390,7 +390,7 @@ class TestMangerInit:
     def test_history_logging2(self):
         opt = GloMPOManager(lambda x, y: x + y,
                             2,
-                            {'default': OptimizerTest1()},
+                            {'default': OptimizerTest1},
                             ((0, 1), (0, 1)),
                             5,
                             history_logging=-5)
@@ -399,7 +399,7 @@ class TestMangerInit:
     def test_history_logging3(self):
         opt = GloMPOManager(lambda x, y: x + y,
                             2,
-                            {'default': OptimizerTest1()},
+                            {'default': OptimizerTest1},
                             ((0, 1), (0, 1)),
                             5,
                             history_logging=10)
@@ -408,7 +408,7 @@ class TestMangerInit:
     def test_history_logging4(self):
         opt = GloMPOManager(lambda x, y: x + y,
                             2,
-                            {'default': OptimizerTest1()},
+                            {'default': OptimizerTest1},
                             ((0, 1), (0, 1)),
                             5,
                             history_logging=23.56)
@@ -418,7 +418,7 @@ class TestMangerInit:
         with pytest.raises(ValueError):
             GloMPOManager(lambda x, y: x + y,
                           2,
-                          {'default': OptimizerTest1()},
+                          {'default': OptimizerTest1},
                           ((0, 1), (0, 1)),
                           5,
                           history_logging='x')
@@ -427,7 +427,7 @@ class TestMangerInit:
 class TestManagerMethods:
     optimizer = GloMPOManager(task=lambda x, y: x ** 2 + y ** 2,
                               n_parms=2,
-                              optimizers={'default': CMAOptimizer(0)},
+                              optimizers={'default': CMAOptimizer},
                               bounds=((-5, 5), (-3, 3)),
                               max_jobs=2)
 

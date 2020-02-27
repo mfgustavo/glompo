@@ -20,4 +20,3 @@ class OptimizerPackage(NamedTuple):
     opt_id: int
     optimizer: Callable
     call_kwargs: Dict[str, Any]
-    pipe: Type[Connection]

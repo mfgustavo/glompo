@@ -31,7 +31,7 @@ class CMAOptimizer(BaseOptimizer):
 
     needscaler = True
 
-    def __init__(self, opt_id, sigma=0.5, sampler='full', **cmasettings):
+    def __init__(self, opt_id=None, sigma=0.5, sampler='full', **cmasettings):
         """ Initialize with the above parameters. """
         super().__init__(opt_id)
         self.sigma = sigma
@@ -74,7 +74,7 @@ class CMAOptimizer(BaseOptimizer):
             solutions = es.ask()
             es.tell(solutions, [function(x) for x in solutions])
             es.logger.add()
-            if self.__results_queue:
+            if self._results_queue:
                 self.message_manager(es.countiter, self.result.x, self.result.fx)
                 self.check_messages()
             self.result.x, self.result.fx = es.result[:2]
@@ -117,7 +117,7 @@ class CMAOptimizer(BaseOptimizer):
             self.callstop()
 
     def message_manager(self, i, x, fx):
-        self.__results_queue.put((self.__opt_id, i, x, fx))
+        self._results_queue.put((self._opt_id, i, x, fx))
 
     def callstop(self, reason=None):
         if reason:

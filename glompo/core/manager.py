@@ -2,7 +2,6 @@
 
 # Native Python imports
 import warnings
-from typing import *
 from time import time
 import multiprocessing as mp
 
@@ -64,12 +63,12 @@ class GloMPOManager:
             Values can also optionally be (1, 3) tuples of optimizers and dictionaries of optimizer keywords. The first
             is passed to the optimizer during initialisation and the second during execution.
             For example:
-                {'default': CMAOptimizer}: The mp_manager will use only CMA-ES type optimizers in all cases and use default
-                    values for them. In cases such as this the optimzer should have no non-default parameters other than
-                    func, x0 and bounds.
-                {'default': CMAOptimizer, 'late': (CMAOptimizer, {'sigma': 0.1}, None)}: The mp_manager will act as above
-                    but in noisy areas CMAOptimizers are initialised with a smaller step size. No special keywords are
-                    passed for the minimization itself.
+                {'default': CMAOptimizer}: The mp_manager will use only CMA-ES type optimizers in all cases and use
+                    default values for them. In cases such as this the optimzer should have no non-default parameters
+                    other than func, x0 and bounds.
+                {'default': CMAOptimizer, 'noisy': (CMAOptimizer, {'sigma': 0.1}, None)}: The mp_manager will act as
+                    above but in noisy areas CMAOptimizers are initialised with a smaller step size. No special keywords
+                    are passed for the minimization itself.
 
         bounds : Sequence[Tuple[float, float]]
             Sequence of tuples of the form (min, max) limiting the range of each parameter.
@@ -89,8 +88,8 @@ class GloMPOManager:
                 'omax': The mp_manager delivers the best answer obtained after initialising omax optimizers. Note that
                     these are not guaranteed to be allowed to terminate themselves i.e. GloMPO may still kill them
                     early.
-                'sing_conv': The mp_manager delivers the answer obtained by the first optimizer to be allowed to reach full
-                    convergence.
+                'sing_conv': The mp_manager delivers the answer obtained by the first optimizer to be allowed to reach
+                    full convergence.
                 'n_conv':  The mp_manager delivers the answer obtained by the nth optimizer to be allowed to reach full
                     convergence. Replace n with an integer value.
                     WARNING: It is strongly recommended that this criteria is used with some early termination criteria
@@ -120,8 +119,8 @@ class GloMPOManager:
 
         region_stability_check: bool = False
             If True, local optimizers are started around a candidate solution which has been selected as a final
-            solution. This is used to measure its reproducibility. If the check fails, the mp_manager resumes looking for
-            another solution.
+            solution. This is used to measure its reproducibility. If the check fails, the mp_manager resumes looking
+            for another solution.
 
         report_statistics: bool = False
             If True, the mp_manager reports the statistical significance of the suggested solution.
@@ -140,8 +139,6 @@ class GloMPOManager:
         visualisation_args : Union[dict, None]
             Optional arguments to parameterize the dynamic plotting feature. See ParallelOptimizationScope.
         """
-
-        print("Hello Here I Am")
 
         # Save and wrap task
         def task_args_wrapper(func, *args, **kwargs):
@@ -165,7 +162,7 @@ class GloMPOManager:
         for key in optimizers:
             if not isinstance(optimizers[key], tuple):
                 optimizers[key] = (optimizers[key], None, None)
-            if not isinstance(optimizers[key][0], BaseOptimizer):
+            if not issubclass(optimizers[key][0], BaseOptimizer):
                 raise TypeError(f"{optimizers[key][0]} not an instance of BaseOptimizer.")
         self.optimizers = optimizers
 
@@ -241,6 +238,11 @@ class GloMPOManager:
         """
         self.t_counter = time()
         converged = self._check_convergence()
+
+        for i in range(self.max_jobs):
+            opt = self._setup_new_optimizer()
+            self._start_new_job()
+
         while self.tmax < time() - self.t_counter and self.o_counter < self.omax and self.f_counter < self.fmax \
                 and not converged:
             if mp.active_children() < self.max_jobs:
@@ -252,8 +254,7 @@ class GloMPOManager:
     #  optimizers are started), Genetic Algorithms (Reasonable but still no feeling for the error surface) or random
     #  (very easy to implement and possible same quality as the others given the sparse space).
 
-    def _start_new_job(self):
-        self.o_counter += 1
+    def _start_new_job(self, opt_id: int, optimizer: BaseOptimizer, call_args):
         # TODO we want processes to be daemons. A stuck optimizer somewhere that we havent cleaned up should not stop
         #  us closing the mp_manager.
         pass
@@ -267,16 +268,16 @@ class GloMPOManager:
         warnings.warn(NotImplemented, "Method not implemented.")
 
     def _start_hunt(self):
-        warnings.warn(NotImplemented, "Method not implemented.")
+        pass
 
     # TODO Check status/ check health. If we haven't heard from an optimizer in a while we need to make sure the thing
     #  is still running properly. Maybe we need listeners here to detect when a process ends.
 
     def _optimize_hyperparameters(self):
-        warnings.warn(NotImplemented, "Method not implemented.")
+        pass
 
     def _explore_basin(self):
-        warnings.warn(NotImplemented, "Method not implemented.")
+        pass
 
     def _generate_x0(self):
         x0 = []
@@ -293,10 +294,10 @@ class GloMPOManager:
         return np.array(x0)
 
     def _setup_new_optimizer(self) -> OptimizerPackage:
+        self.o_counter += 1
+
         # TODO add intelligence to pick optimizer?
         selected, init_args, call_args = self.optimizers['default']
-
-        optimizer = selected(**init_args)
 
         self.gprs[self.o_counter] = GaussianProcessRegression(kernel=ExpKernel(alpha=0.100,
                                                                                beta=5.00),
@@ -304,10 +305,11 @@ class GloMPOManager:
 
         self.signal_pipes[self.o_counter], child_pipe = mp.Pipe()
 
-        return OptimizerPackage(self.o_counter, optimizer, call_args, child_pipe)
+        optimizer = selected(**init_args, signal_pipe=child_pipe)
+
+        return OptimizerPackage(self.o_counter, optimizer, call_args)
 
     def _check_convergence(self):
+        # TODO Check convergence criterion
         warnings.warn(NotImplemented, "Method not implemented.")
-        if self.region_stability_check:
-            self._explore_basin()
         return False

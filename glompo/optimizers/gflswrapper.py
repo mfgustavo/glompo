@@ -1,6 +1,5 @@
 # Native Python
 from typing import *
-import warnings
 import numpy as np
 import os
 
@@ -66,10 +65,10 @@ class GFLSOptimizer(BaseOptimizer):
     # noinspection PyMethodOverriding
     def minimize(
         self,
-        function: Callable[Sequence[float], float],
+        function: Callable[[Sequence[float]], float],
         x0: Union[Sequence[float], Type[Logger]],
         bounds: Sequence[Tuple[float, float]],
-        callbacks: Sequence[Callable[[Type[Logger, AlgoBase, Union[str, None]]], Any]] = None,
+        callbacks: Sequence[Callable[[Logger, AlgoBase, Union[str, None]], Any]] = None,
     ) -> MinimizeResult:
 
         """
@@ -125,7 +124,7 @@ class GFLSOptimizer(BaseOptimizer):
 
         if callable(callbacks):
             callbacks = [callbacks]
-        if self.__results_queue:
+        if self._results_queue:
             callbacks = [self.message_manager, self.check_messages, *callbacks]
 
         fw = ResidualsWrapper(function.resids, vector_codec.decode)
@@ -165,13 +164,13 @@ class GFLSOptimizer(BaseOptimizer):
         i = logger.current
         x = logger.get("pars")
         fx = logger.get("func")
-        self.__results_queue.put((self.__opt_id, i, x, fx))
+        self._results_queue.put((self._opt_id, i, x, fx))
 
     def check_messages(self, logger: Logger, *args):
         conds = []
-        while self.__signal_pipe.poll():
-            code, sig_args = self.__signal_pipe.recv()
-            conds.append(self.__SIGNAL_DICT[code](logger, *sig_args))
+        while self._signal_pipe.poll():
+            code, sig_args = self._signal_pipe.recv()
+            conds.append(self._SIGNAL_DICT[code](logger, *sig_args))
         if any([cond is not None for cond in conds]):
             return True
 

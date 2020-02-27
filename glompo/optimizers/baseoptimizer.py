@@ -60,10 +60,10 @@ class BaseOptimizer(ABC):
         pass
 
     def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None):
-        self.__opt_id = opt_id
-        self.__signal_pipe = signal_pipe
-        self.__results_queue = results_queue
-        self.__SIGNAL_DICT = {0: self.save_state,
+        self._opt_id = opt_id
+        self._signal_pipe = signal_pipe
+        self._results_queue = results_queue
+        self._SIGNAL_DICT = {0: self.save_state,
                               1: self.callstop}
 
     @abstractmethod
@@ -97,9 +97,9 @@ class BaseOptimizer(ABC):
         pass
 
     def check_messages(self, *args):
-        while self.__signal_pipe.poll():
-            code, sig_args = self.__signal_pipe.recv()
-            self.__SIGNAL_DICT[code](*sig_args)
+        while self._signal_pipe.poll():
+            code, sig_args = self._signal_pipe.recv()
+            self._SIGNAL_DICT[code](*sig_args)
 
     def message_manager(self, *args):
         pass

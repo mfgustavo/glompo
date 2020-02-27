@@ -1,0 +1,11 @@
+Metadata-Version: 1.0
+Name: glompo
+Version: 0.0.0
+Summary: Globally managed parallel optimization
+Home-page: https://github.com/mfgustavo/glompo
+Author: Michael Freitas Gustavo
+Author-email: michael.freitasgustavo@ugent.be
+License: UNKNOWN
+Description: glompo is a Globally Managed Parallel Optimisation algorithm utilising Bayesian statistics and Gaussian Process Regression
+        
+Platform: UNKNOWN

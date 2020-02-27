@@ -35,18 +35,20 @@ class ParallelOptimizerScope:
             If True the plot will show the regression itself if False only the predicted mean and uncertainty on the
             mean will be shown.
         record_movie : bool
-            If True then a matplotlib.animation.FFMpegWriter instance is created to record the plot.
+            If True then a matplotlib.animation.FFMpegFileWriter instance is created to record the plot.
         writer_kwargs : Union[Dict[str, Any], None]
-            Optional dictionary of arguments to be sent to the initialisation of the matplotlib.animation.FFMpegWriter
-            class.
+            Optional dictionary of arguments to be sent to the initialisation of the
+            matplotlib.animation.FFMpegFileWriter class.
         movie_kwargs : Union[Dict[str, Any], None]
-            Optional dictionary of arguments to be sent to matplotlib.animation.FFMpegWriter.setup().
+            Optional dictionary of arguments to be sent to matplotlib.animation.FFMpegFileWriter.setup().
         """
         # TODO Set workdir
         # TODO delete all tmp pics if the program crashes
-        # TODO use the visualise variable
-        # TODO add stream to include normal termination. Possibly use '*'
+        plt.ion()
         self.fig, self.ax = plt.subplots(figsize=(12, 8))
+        self.ax.set_xlabel("Iteration")
+        self.ax.set_ylabel("Error")
+
         self.streams = [{'all_opt':    self.ax.plot([], [])[0],  # 0 Follows every optimizer iteration
                          'train_pts':  self.ax.plot([], [], ls='', marker='o')[0],  # 1 Points in training set
                          'mean':       self.ax.plot([], ls='--')[0],  # 2 Plots the mean functions
@@ -63,17 +65,17 @@ class ParallelOptimizerScope:
         # Match colors for a single optimisation
         for i, stream in enumerate(self.streams):
             colors = plt.get_cmap("tab10")
-            for j in range(len(stream)):
+            for line in stream:
                 color = colors(i)
-                if any([j == _ for _ in [1, 4, 5]]):
+                if any([line == _ for _ in ['train_pts', 'hyper_init', 'hyper_up']]):
                     color = tuple([0.75, 0.75, 0.75, 1] * np.array(color))
-                elif j == 3:
+                elif line == 'st_dev':
                     color = tuple([1, 1, 1, 0.5] * np.array(color))
-                elif j == 6:
+                elif any([line == _ for _ in ['opt_kill', 'opt_norm']]):
                     color = 'red'
-                stream[j].set_color(color)
+                stream[line].set_color(color)
         for stream in self.streams:
-            self.ax.add_patch(stream[3])
+            self.ax.add_patch(stream['st_dev'])
 
         # Create custom legend
         self.visualise_gpr = visualise_gpr
@@ -96,7 +98,11 @@ class ParallelOptimizerScope:
 
         self.record_movie = record_movie
         if record_movie:
-            self.writer = ani.FFMpegFileWriter(**writer_kwargs)
+            self.writer = ani.FFMpegFileWriter(**writer_kwargs) if writer_kwargs else ani.FFMpegFileWriter()
+            if not movie_kwargs:
+                movie_kwargs = {}
+            if 'outfile' not in movie_kwargs:
+                movie_kwargs['outfile'] = 'glomporecording.mp4'
             self.writer.setup(fig=self.fig, **movie_kwargs)
 
     def _update(self):
@@ -199,7 +205,7 @@ class ParallelOptimizerScope:
             self.writer.finish()
         else:
             print("Unable to generate movie file as data was not collected during the dynamic plotting.\n"
-                  "Rerun DynamicPlot with record_movie = True during initialisation.")
+                  "Rerun ParallelOptimizerScope with record_movie = True during initialisation.")
 
     def get_farthest_pt(self, n_stream: int):
         """ Returns the furthest evaluated point of the 'n_stream'th optimizer. """
