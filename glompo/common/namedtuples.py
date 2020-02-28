@@ -20,3 +20,8 @@ class OptimizerPackage(NamedTuple):
     opt_id: int
     optimizer: Callable
     call_kwargs: Dict[str, Any]
+
+
+class HuntingResult(NamedTuple):
+    hunt_id: int
+    victim: int

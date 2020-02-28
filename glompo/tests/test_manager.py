@@ -6,6 +6,10 @@ from glompo.core.manager import GloMPOManager
 from glompo.optimizers.baseoptimizer import BaseOptimizer
 from glompo.optimizers.cmawrapper import CMAOptimizer
 
+from glompo.generators.random import RandomGenerator
+
+from glompo.convergence.nkillsafterconv import KillsAfterConvergence
+
 
 class OptimizerTest1(BaseOptimizer):
     needscaler = False
@@ -242,16 +246,34 @@ class TestMangerInit:
                       {'default': OptimizerTest1},
                       ((0, 1), (0, 1)),
                       5,
-                      x0_criteria='rand')
+                      x0_generator=RandomGenerator(((0, 1), (0, 1))))
 
     def test_x0crit2(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             GloMPOManager(lambda x, y: x + y,
                           2,
                           {'default': OptimizerTest1},
                           ((0, 1), (0, 1)),
                           5,
-                          x0_criteria='not_allowed')
+                          x0_generator=OptimizerTest2())
+
+    def test_x0crit3(self):
+        with pytest.raises(TypeError):
+            GloMPOManager(lambda x, y: x + y,
+                          2,
+                          {'default': OptimizerTest1},
+                          ((0, 1), (0, 1)),
+                          5,
+                          x0_generator=OptimizerTest2)
+
+    def test_x0crit4(self):
+        with pytest.raises(TypeError):
+            GloMPOManager(lambda x, y: x + y,
+                          2,
+                          {'default': OptimizerTest1},
+                          ((0, 1), (0, 1)),
+                          5,
+                          x0_generator=RandomGenerator)
 
     def test_convcrit1(self):
         GloMPOManager(lambda x, y: x + y,
@@ -259,52 +281,34 @@ class TestMangerInit:
                       {'default': OptimizerTest1},
                       ((0, 1), (0, 1)),
                       5,
-                      convergence_criteria='sing_conv')
+                      convergence_checker=KillsAfterConvergence())
 
     def test_convcrit2(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             GloMPOManager(lambda x, y: x + y,
                           2,
                           {'default': OptimizerTest1},
                           ((0, 1), (0, 1)),
                           5,
-                          convergence_criteria='not_allowed')
+                          convergence_checker=OptimizerTest2())
 
-    def test_omax1(self):
-        with pytest.raises(ValueError):
+    def test_convcrit3(self):
+        with pytest.raises(TypeError):
             GloMPOManager(lambda x, y: x + y,
                           2,
                           {'default': OptimizerTest1},
                           ((0, 1), (0, 1)),
                           5,
-                          omax='x')
+                          convergence_checker=OptimizerTest2)
 
-    def test_omax2(self):
-        opt = GloMPOManager(lambda x, y: x + y,
-                            2,
-                            {'default': OptimizerTest1},
-                            ((0, 1), (0, 1)),
-                            5,
-                            omax=4.3)
-        assert opt.omax == 4
-
-    def test_omax3(self):
-        opt = GloMPOManager(lambda x, y: x + y,
-                            2,
-                            {'default': OptimizerTest1},
-                            ((0, 1), (0, 1)),
-                            5,
-                            omax=-6)
-        assert opt.omax == 1
-
-    def test_omax4(self):
-        opt = GloMPOManager(lambda x, y: x + y,
-                            2,
-                            {'default': OptimizerTest1},
-                            ((0, 1), (0, 1)),
-                            5,
-                            omax=0)
-        assert opt.omax == 1
+    def test_convcrit4(self):
+        with pytest.raises(TypeError):
+            GloMPOManager(lambda x, y: x + y,
+                          2,
+                          {'default': OptimizerTest1},
+                          ((0, 1), (0, 1)),
+                          5,
+                          convergence_checker=KillsAfterConvergence)
 
     def test_fmax1(self):
         with pytest.raises(ValueError):
@@ -430,9 +434,3 @@ class TestManagerMethods:
                               optimizers={'default': CMAOptimizer},
                               bounds=((-5, 5), (-3, 3)),
                               max_jobs=2)
-
-    def test_x0rand(self):
-        self.optimizer.x0_criteria = 'rand'
-        x0 = self.optimizer._generate_x0()
-        for i, x in enumerate(x0):
-            assert x > self.optimizer.bounds[i].min or x < self.optimizer.bounds[i].max

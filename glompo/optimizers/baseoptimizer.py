@@ -64,7 +64,7 @@ class BaseOptimizer(ABC):
         self._signal_pipe = signal_pipe
         self._results_queue = results_queue
         self._SIGNAL_DICT = {0: self.save_state,
-                              1: self.callstop}
+                             1: self.callstop}
 
     @abstractmethod
     def minimize(self,

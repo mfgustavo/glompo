@@ -44,38 +44,14 @@ class ParallelOptimizerScope:
         """
         # TODO Set workdir
         # TODO delete all tmp pics if the program crashes
+        # TODO NB DO NOT INITIALISE WITH STREAMS. CREATE ADD_STREAMS METHOD
         plt.ion()
         self.fig, self.ax = plt.subplots(figsize=(12, 8))
         self.ax.set_xlabel("Iteration")
         self.ax.set_ylabel("Error")
 
-        self.streams = [{'all_opt':    self.ax.plot([], [])[0],  # 0 Follows every optimizer iteration
-                         'train_pts':  self.ax.plot([], [], ls='', marker='o')[0],  # 1 Points in training set
-                         'mean':       self.ax.plot([], ls='--')[0],  # 2 Plots the mean functions
-                         'st_dev':     patches.Rectangle((0, 0), 0, 0, ls=':'),  # 3 Plots the uncertainty on the mean
-                         'hyper_init': self.ax.plot([], [], ls='', marker=6)[0],  # 4 New hyperparms are looked for
-                         'hyper_up':   self.ax.plot([], [], ls='', marker=7)[0],  # 5 Hyperparms are changed
-                         'opt_kill':   self.ax.plot([], [], ls='', marker='x', zorder=500)[0],  # 6 Killed optimizer
-                         'opt_norm':   self.ax.plot([], [], ls='', marker='*', zorder=500)[0],  # 7 Converged optimizer
-                         'gpr_mean':   self.ax.plot([], [], ls='-.')[0],  # 8 GPR
-                         'gpr_upper':  self.ax.plot([], [], ls='-.')[0],  # 9 GPR Upper Sigma
-                         'gpr_lower':  self.ax.plot([], [], ls='-.')[0]}  # 10 GPR Lower Sigma
-                        for _ in range(num_streams)]
-
-        # Match colors for a single optimisation
-        for i, stream in enumerate(self.streams):
-            colors = plt.get_cmap("tab10")
-            for line in stream:
-                color = colors(i)
-                if any([line == _ for _ in ['train_pts', 'hyper_init', 'hyper_up']]):
-                    color = tuple([0.75, 0.75, 0.75, 1] * np.array(color))
-                elif line == 'st_dev':
-                    color = tuple([1, 1, 1, 0.5] * np.array(color))
-                elif any([line == _ for _ in ['opt_kill', 'opt_norm']]):
-                    color = 'red'
-                stream[line].set_color(color)
-        for stream in self.streams:
-            self.ax.add_patch(stream['st_dev'])
+        self.streams = {}
+        self.n_streams = 0
 
         # Create custom legend
         self.visualise_gpr = visualise_gpr
@@ -113,88 +89,115 @@ class ParallelOptimizerScope:
         if self.record_movie:
             self.writer.grab_frame()
 
-    def update_optimizer(self, n_stream: int, pt: tuple):
-        """ Given pt tuple is used to update the 'n_stream'th optimizer plot."""
-        line = self.streams[n_stream]['all_opt']
+    def add_stream(self, opt_id):
+        self.n_streams += 1
+        self.streams[opt_id] = {'all_opt': self.ax.plot([], [])[0],  # 0 Follows every optimizer iteration
+                                'train_pts': self.ax.plot([], [], ls='', marker='o')[0],  # 1 Points in training set
+                                'mean': self.ax.plot([], ls='--')[0],  # 2 Plots the mean functions
+                                'st_dev': patches.Rectangle((0, 0), 0, 0, ls=':'),  # 3 Plots the uncertainty on mean
+                                'hyper_init': self.ax.plot([], [], ls='', marker=6)[0],  # 4 Hyperparms job start
+                                'hyper_up': self.ax.plot([], [], ls='', marker=7)[0],  # 5 Hyperparms changed
+                                'opt_kill': self.ax.plot([], [], ls='', marker='x', zorder=500)[0],  # 6 Killed opt
+                                'opt_norm': self.ax.plot([], [], ls='', marker='*', zorder=500)[0],  # 7 Converged opt
+                                'gpr_mean': self.ax.plot([], [], ls='-.')[0],  # 8 GPR
+                                'gpr_upper': self.ax.plot([], [], ls='-.')[0],  # 9 GPR Upper Sigma
+                                'gpr_lower': self.ax.plot([], [], ls='-.')[0]}  # 10 GPR Lower Sigma
+
+        # Match colors for a single optimisation
+        colors = plt.get_cmap("tab10")
+        for line in self.streams[opt_id]:
+            color = colors(self.n_streams)
+            if any([line == _ for _ in ['train_pts', 'hyper_init', 'hyper_up']]):
+                color = tuple([0.75, 0.75, 0.75, 1] * np.array(color))
+            elif line == 'st_dev':
+                color = tuple([1, 1, 1, 0.5] * np.array(color))
+            elif any([line == _ for _ in ['opt_kill', 'opt_norm']]):
+                color = 'red'
+            self.streams[opt_id][line].set_color(color)
+        self.ax.add_patch(self.streams[opt_id]['st_dev'])
+
+    def update_optimizer(self, opt_id: int, pt: tuple):
+        """ Given pt tuple is used to update the opt_id optimizer plot."""
+        line = self.streams[opt_id]['all_opt']
         line.set_xdata(np.append(line.get_xdata(), pt[0]))
         line.set_ydata(np.append(line.get_ydata(), pt[1]))
         self._update()
 
-    def update_scatter(self, n_stream: int, pt: tuple):
-        """ Given pt tuple is used to update the 'n_stream'th training data plot."""
-        line = self.streams[n_stream]['train_pts']
+    def update_scatter(self, opt_id: int, pt: tuple):
+        """ Given pt tuple is used to update the opt_id training data plot."""
+        line = self.streams[opt_id]['train_pts']
         line.set_xdata(np.append(line.get_xdata(), pt[0]))
         line.set_ydata(np.append(line.get_ydata(), pt[1]))
         self._update()
 
-    def update_mean(self, n_stream: int, mu: float, sigma: float):
-        """ Given mu and sigma is used to update the 'n_stream'th mean and uncertainty plots."""
+    def update_mean(self, opt_id: int, mu: float, sigma: float):
+        """ Given mu and sigma is used to update the opt_id mean and uncertainty plots."""
         # Mean line
-        line = self.streams[n_stream]['mean']
+        line = self.streams[opt_id]['mean']
         line.set_xdata((0, self.ax.get_xlim()[1]))
         line.set_ydata((mu, mu))
 
         # Uncertainty Rectangle
-        rec = self.streams[n_stream]['st_dev']
+        rec = self.streams[opt_id]['st_dev']
         rec.xy = (0, mu - 2 * sigma)
         rec.set_width(self.ax.get_xlim()[1])
         rec.set_height(4 * sigma)
         self._update()
 
-    def update_opt_start(self, n_stream: int, pt: tuple):
-        """ Given pt tuple is used to update the 'n_stream'th start hyperparameter optimizer plot."""
-        line = self.streams[n_stream]['hyper_init']
+    def update_opt_start(self, opt_id: int, pt: tuple):
+        """ Given pt tuple is used to update the opt_id start hyperparameter optimizer plot."""
+        line = self.streams[opt_id]['hyper_init']
         line.set_xdata(np.append(line.get_xdata(), pt[0]))
         line.set_ydata(np.append(line.get_ydata(), pt[1]))
         self._update()
 
-    def update_opt_end(self, n_stream: int, pt: tuple):
-        """ Given pt tuple is used to update the 'n_stream'th end hyperparameter optimizer plot."""
-        line = self.streams[n_stream]['hyper_up']
+    def update_opt_end(self, opt_id: int, pt: tuple):
+        """ Given pt tuple is used to update the opt_id end hyperparameter optimizer plot."""
+        line = self.streams[opt_id]['hyper_up']
         line.set_xdata(np.append(line.get_xdata(), pt[0]))
         line.set_ydata(np.append(line.get_ydata(), pt[1]))
         self._update()
 
-    def update_kill(self, n_stream: int):
-        """ The 'n_stream'th kill optimizer plot is updated at its final point. """
+    def update_kill(self, opt_id: int):
+        """ The opt_id kill optimizer plot is updated at its final point. """
         # Add dead optimizer marker
-        line = self.streams[n_stream]['opt_kill']
-        x_pt, y_pt = self.get_farthest_pt(n_stream)
+        line = self.streams[opt_id]['opt_kill']
+        x_pt, y_pt = self.get_farthest_pt(opt_id)
         line.set_xdata(x_pt)
         line.set_ydata(y_pt)
 
         # Shrink the uncertainty patch
-        rec = self.streams[n_stream]['opt_kill']
+        rec = self.streams[opt_id]['opt_kill']
         rec.set_width(y_pt)
 
         self._update()
 
-    def update_norm_terminate(self, n_stream: int):
-        """ The 'n_stream'th normal optimizer plot is updated at its final point. """
+    def update_norm_terminate(self, opt_id: int):
+        """ The opt_id normal optimizer plot is updated at its final point. """
         # Add dead optimizer marker
-        line = self.streams[n_stream]['opt_norm']
-        x_pt, y_pt = self.get_farthest_pt(n_stream)
+        line = self.streams[opt_id]['opt_norm']
+        x_pt, y_pt = self.get_farthest_pt(opt_id)
         line.set_xdata(x_pt)
         line.set_ydata(y_pt)
 
         # Shrink the uncertainty patch
-        rec = self.streams[n_stream]['opt_norm']
+        rec = self.streams[opt_id]['opt_norm']
         rec.set_width(y_pt)
 
         self._update()
 
-    def update_gpr(self, n_stream: int, x: np.ndarray, y: np.ndarray, lower_sig: np.ndarray, upper_sig: np.ndarray):
-        """ Given mu and sigma is used to update the 'n_stream'th mean and uncertainty plots."""
+    def update_gpr(self, opt_id: int, x: np.ndarray, y: np.ndarray, lower_sig: np.ndarray, upper_sig: np.ndarray):
+        """ Given mu and sigma is used to update the opt_id mean and uncertainty plots."""
         # Mean line
-        line = self.streams[n_stream]['gpr']
+        line = self.streams[opt_id]['gpr']
         line.set_xdata(x)
         line.set_ydata(y)
 
         # Uncertainty
-        line = self.streams[n_stream]['gpr_lower']
+        line = self.streams[opt_id]['gpr_lower']
         line.set_xdata(x)
         line.set_ydata(lower_sig)
-        line = self.streams[n_stream]['gpr_upper']
+        line = self.streams[opt_id]['gpr_upper']
         line.set_xdata(x)
         line.set_ydata(upper_sig)
         self._update()
@@ -207,13 +210,13 @@ class ParallelOptimizerScope:
             print("Unable to generate movie file as data was not collected during the dynamic plotting.\n"
                   "Rerun ParallelOptimizerScope with record_movie = True during initialisation.")
 
-    def get_farthest_pt(self, n_stream: int):
+    def get_farthest_pt(self, opt_id: int):
         """ Returns the furthest evaluated point of the 'n_stream'th optimizer. """
-        x_pt_all = float(self.streams[n_stream]['all_opt'].get_xdata()[-1])
-        y_pt_all = float(self.streams[n_stream]['all_opt'].get_ydata()[-1])
+        x_pt_all = float(self.streams[opt_id]['all_opt'].get_xdata()[-1])
+        y_pt_all = float(self.streams[opt_id]['all_opt'].get_ydata()[-1])
 
-        x_pt_tps = float(self.streams[n_stream]['all_opt'].get_xdata()[-1])
-        y_pt_tps = float(self.streams[n_stream]['all_opt'].get_ydata()[-1])
+        x_pt_tps = float(self.streams[opt_id]['all_opt'].get_xdata()[-1])
+        y_pt_tps = float(self.streams[opt_id]['all_opt'].get_ydata()[-1])
 
         if x_pt_all > x_pt_tps:
             x, y = x_pt_all, y_pt_all

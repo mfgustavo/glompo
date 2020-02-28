@@ -6,6 +6,10 @@ from time import time
 import multiprocessing as mp
 
 # Package imports
+from ..generators.basegenerator import BaseGenerator
+from ..generators.random import RandomGenerator
+from ..convergence.basechecker import BaseChecker
+from ..convergence.nkillsafterconv import KillsAfterConvergence
 from ..common.namedtuples import *
 from ..scope.scope import ParallelOptimizerScope
 from ..optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
@@ -24,15 +28,15 @@ class GloMPOManager:
     def __init__(self,
                  task: Callable[[Sequence[float]], float],
                  n_parms: int,
-                 optimizers: Dict[str, Union[Callable, Tuple[Callable, Dict[str, Any], Dict[str, Any]]]],
+                 optimizers: Dict[str, Union[Type[BaseOptimizer], Tuple[Type[BaseOptimizer],
+                                                                        Dict[str, Any], Dict[str, Any]]]],
                  bounds: Sequence[Tuple[float, float]],
                  max_jobs: Optional[int] = None,
                  task_args: Optional[Tuple] = None,
                  task_kwargs: Optional[Dict] = None,
-                 convergence_criteria: str = 'sing_conv',
-                 x0_criteria: str = 'rand',
+                 convergence_checker: Optional[Type[BaseChecker]] = None,
+                 x0_generator: Optional[Type[BaseGenerator]] = None,
                  tmax: Optional[float] = None,
-                 omax: Optional[int] = None,
                  fmax: Optional[int] = None,
                  region_stability_check: bool = False,
                  report_statistics: bool = False,
@@ -51,7 +55,7 @@ class GloMPOManager:
         n_parms : int
             The number of parameters to be optimized.
 
-        optimizers : Dict[str, Tuple[Callable, Dict[str, Any]]]
+        optimizers : Dict[str, Union[Type[BaseOptimizer], Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]]]]
             Dictionary of callable optimization functions (which are children of the BaseOptimizer class) with keywords
             describing their behaviour. Recognized keywords are:
                 'default': The default optimizer used if any of the below keywords are not set. This is the only
@@ -83,36 +87,20 @@ class GloMPOManager:
         task_kwargs : Optional[Dict]
             Optional keyword arguments passed to task with every call.
 
-        convergence_criteria: str
+        convergence_checker: Optional[Type[BaseChecker]]
             Criteria used for convergence. Supported arguments:
-                'omax': The mp_manager delivers the best answer obtained after initialising omax optimizers. Note that
-                    these are not guaranteed to be allowed to terminate themselves i.e. GloMPO may still kill them
-                    early.
-                'sing_conv': The mp_manager delivers the answer obtained by the first optimizer to be allowed to reach
-                    full convergence.
-                'n_conv':  The mp_manager delivers the answer obtained by the nth optimizer to be allowed to reach full
-                    convergence. Replace n with an integer value.
-                    WARNING: It is strongly recommended that this criteria is used with some early termination criteria
-                        such as omax, tmax or fmax since later optimizations may not improve on earlier runs and thus
-                        may not be allowed to converge, hence this criteria is never reached.
+                'n_kills_after_conv':  The mp_manager delivers the best answer obtained after n optimizers have been
+                    killed after at least one has been allowed to converge. Replace n with an integer value. The default
+                    value is 0_kills_after_conv which delivers the answer produced as soon as an optimizer converges.
 
-        x0_criteria : str
-            Criteria used for selection of the next starting point. Supported arguments:
-                'gp': A Guassian process regression is used to estimate areas with low error. Requires many function
-                    evaluations (i.e many optimizers started) to begin producing effective suggestions.
-                'es': Uses evolutionary strategies of crossover and mutation to generate new starting sets. More
-                    reliable and cheaper but does not learn the behaviour of the error function.
-                'es+gp': Uses 'es' for the early part of the optimization and switches to 'gp' in the late stage after
-                    sufficient information has be acquired.
-                'rand': New starting points are selected entirely randomly.
+        x0_generator : Optional[Type[BaseGenerator]]
+            An instance of a subclass of BaseGenerator which produces starting points for the optimizer. If not provided
+            a random generator is used.
 
         tmax : Optional[int]
             Maximum number of seconds the optimizer is allowed to run before exiting (gracefully) and delivering the
             best result seen up to this point.
             Note: If tmax is reached GloMPO will not run region_stability_checks.
-
-        omax : Optional[int]
-            Maximum number of optimizers (in total) that can be started by the mp_manager.
 
         fmax : Optional[int]
             Maximum number of function calls that are allowed between all optimizers.
@@ -139,6 +127,9 @@ class GloMPOManager:
         visualisation_args : Union[dict, None]
             Optional arguments to parameterize the dynamic plotting feature. See ParallelOptimizationScope.
         """
+
+        # Signal dictionary
+        self._SIGNAL_DICT = {0: "I've made some nan's"}
 
         # Save and wrap task
         def task_args_wrapper(func, *args, **kwargs):
@@ -188,31 +179,41 @@ class GloMPOManager:
             raise TypeError(f"Cannot parse max_jobs = {max_jobs}. Only positive integers are allowed.")
 
         # Save convergence criteria
-        if convergence_criteria in ['omax', 'sing_conv', 'n_conv']:
-            self.convergence_criteria = convergence_criteria
+        if convergence_checker:
+            if isinstance(convergence_checker, BaseChecker):
+                self.convergence_checker = convergence_checker
+            else:
+                raise TypeError(f"convergence_checker not an instance of a subclass of BaseChecker.")
         else:
-            raise ValueError(f"Cannot parse convergence_criteria = {convergence_criteria}. See docstring for allowed "
-                             f"values.")
+            self.convergence_checker = KillsAfterConvergence()
 
-        # Save x0 criteria
-        if x0_criteria in ['gp', 'es', 'es+gp', 'rand']:
-            self.x0_criteria = x0_criteria
+        # Save x0 generator
+        if x0_generator:
+            if isinstance(x0_generator, BaseGenerator):
+                self.x0_generator = x0_generator
+            else:
+                raise TypeError(f"x0_generator not an instance of a subclass of BaseOptimizer.")
         else:
-            raise ValueError(f"Cannot parse x0_criteria = {x0_criteria}. See docstring for allowed values.")
+            self.x0_generator = RandomGenerator(self.bounds)
 
         # Save max conditions and counters
         self.tmax = np.clip(int(tmax), 1, None) if tmax or tmax == 0 else np.inf
         self.fmax = np.clip(int(fmax), 1, None) if fmax or fmax == 0 else np.inf
-        self.omax = np.clip(int(omax), 1, None) if omax or omax == 0 else np.inf
 
-        self.t_counter = None
+        self.t_start = None
         self.o_counter = 0
         self.f_counter = 0
+        self.conv_counter = 0  # Number of converged optimizers
+        self.kill_counter = 0  # Number of killed jobs
+        self.hunt_counter = 0  # Number of hunting jobs started
+        self.hyop_counter = 0  # Number of hyperparameter optimization jobs started
+        self.hunt_victims = {}  # opt_ids of killed jobs and timestamps when the signal was sent
 
         # Save behavioural args
         self.region_stability_check = bool(region_stability_check)
         self.report_statistics = bool(report_statistics)
         self.history_logging = np.clip(int(history_logging), 0, 3)
+        self.visualisation = visualisation
         if visualisation:
             self.scope = ParallelOptimizerScope(num_streams=max_jobs, **visualisation_args)
 
@@ -236,36 +237,115 @@ class GloMPOManager:
         Parameters
         ----------
         """
-        self.t_counter = time()
-        converged = self._check_convergence()
+        self.t_start = time()
 
         for i in range(self.max_jobs):
             opt = self._setup_new_optimizer()
-            self._start_new_job()
+            self._start_new_job(*opt)
 
-        while self.tmax < time() - self.t_counter and self.o_counter < self.omax and self.f_counter < self.fmax \
-                and not converged:
-            if mp.active_children() < self.max_jobs:
-                self._start_new_job()
+        converged = self.convergence_checker.converged(self)
 
-        # TODO NB scaling needs to happen in GPR. How? Should this be kernel side or GloMPO side?
+        while self.tmax < time() - self.t_start and self.f_counter < self.fmax and not converged:
 
-    # TODO Selection of new starting points can be driven by a Gaussian Process (Probably unrealistic unless a LOT of
-    #  optimizers are started), Genetic Algorithms (Reasonable but still no feeling for the error surface) or random
-    #  (very easy to implement and possible same quality as the others given the sparse space).
+            # Check hunt_queue
 
-    def _start_new_job(self, opt_id: int, optimizer: BaseOptimizer, call_args):
-        # TODO we want processes to be daemons. A stuck optimizer somewhere that we havent cleaned up should not stop
-        #  us closing the mp_manager.
-        pass
+            if not self.hunting_queue.empty():
+                hunt = self.hunting_queue.get()
+                self._shutdown_job(hunt.victim)
 
-    def _kill_job(self, opt_id):
-        del self.gprs[opt_id]
+            #   Force kill any stragglers
+            for id in self.hunt_victims:
+                if time() - self.hunt_victims[id] > 20 * 60:
+                    self._force_shutdown_job(id)
+
+            #   Is there a space in the queue? Start new job in its place
+            count = sum([int(proc.is_alive()) for proc in self.optimizer_processes])
+            if count < self.max_jobs:
+                opt = self._setup_new_optimizer()
+                self._start_new_job(*opt)
+
+            # Check results_queue
+
+            #   When taking a point make sure the process is still alive, might be the last point
+
+            #   If results are from a killed optimizer, ignore them
+
+            #   Send results to x0_generator
+
+            #   Send results to GPRs
+
+            #   Send results to scope
+
+            # Check hyperparm queue
+
+            #   Update hyperparms
+
+            #   Ensure hyperparms aren't stupid superwide solution
+
+            # Poke processes (especially ones we havent heard from in a while)
+
+            # Every n iterations (Careful, 'n' is different for each optimizer
+
+            #   Start hyperparams job
+
+            #   Start hunting jobs
+
+            # Update counters
+
+            pass
+
+        # Check answer
+
+        # End gracefully
+
+        #   Make movie
+
+        #   Join all processes
+
+        #   Delete temp files
+
+        #   Including crash files that are not otherwise cleaned up
+
+        # Possibly check answer here (This could lead to a new loop and definitely a new end gracefully)
+
+    def _start_new_job(self, opt_id: int, optimizer: BaseOptimizer, call_kwargs):
+        task = self.task
+        x0 = self.x0_generator.generate()
+        bounds = np.array(self.bounds)
+
+        self.optimizer_processes[opt_id] = mp.Process(target=optimizer.minimize,
+                                                      args=(task, x0, bounds),
+                                                      kwargs=call_kwargs,
+                                                      daemon=True)
+        self.optimizer_processes[opt_id].start()
+        if self.visualisation:
+            if opt_id not in self.scope.streams:
+                self.scope.add_stream(opt_id)
+
+    def _shutdown_job(self, opt_id):
         # TODO The signal to end will not be read instantly unless listeners are added to the wrappers
         #  alternatively we can send the signal and if it doesnt co-operate in x time we force it to die.
         #  Optimal solution would be to have both, first solution is 'proper' and the second is an extra layer of
         #  safety.
-        warnings.warn(NotImplemented, "Method not implemented.")
+
+        self.hunt_victims[opt_id] = time()
+
+        self.signal_pipes[opt_id].send((1, None))
+
+        try:
+            del self.gprs[opt_id]
+        except KeyError:
+            warnings.warn("Repeated attempts to shutdown single optimizer. ", UserWarning)
+
+        if self.visualisation:
+            self.scope.update_kill(opt_id)
+
+    def _force_shutdown_job(self, opt_id):
+        """ Warning there is a chance that this will corrupt the results_queue. Only use this in circumstances where you
+            are sure the process is frozen.
+        """
+        if opt_id in self.optimizer_processes:
+            self.optimizer_processes[opt_id].terminate()
 
     def _start_hunt(self):
         pass
@@ -279,25 +359,11 @@ class GloMPOManager:
     def _explore_basin(self):
         pass
 
-    def _generate_x0(self):
-        x0 = []
-        if self.x0_criteria == 'gp':
-            pass
-        elif self.x0_criteria == 'es':
-            pass
-        elif self.x0_criteria == 'gp+es':
-            pass
-        else:  # rand
-            for i in range(self.n_parms):
-                bounds = self.bounds[0]
-                x0.append(bounds.min + (bounds.max - bounds.min) * np.random.rand())
-        return np.array(x0)
-
     def _setup_new_optimizer(self) -> OptimizerPackage:
         self.o_counter += 1
 
         # TODO add intelligence to pick optimizer?
-        selected, init_args, call_args = self.optimizers['default']
+        selected, init_kwargs, call_kwargs = self.optimizers['default']
 
         self.gprs[self.o_counter] = GaussianProcessRegression(kernel=ExpKernel(alpha=0.100,
                                                                                beta=5.00),
@@ -305,11 +371,6 @@ class GloMPOManager:
 
         self.signal_pipes[self.o_counter], child_pipe = mp.Pipe()
 
-        optimizer = selected(**init_args, signal_pipe=child_pipe)
+        optimizer = selected(**init_kwargs, signal_pipe=child_pipe)
 
-        return OptimizerPackage(self.o_counter, optimizer, call_args)
-
-    def _check_convergence(self):
-        # TODO Check convergence criterion
-        warnings.warn(NotImplemented, "Method not implemented.")
-        return False
+        return OptimizerPackage(self.o_counter, optimizer, call_kwargs)
