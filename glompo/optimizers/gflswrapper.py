@@ -13,6 +13,7 @@ from optsam.algo_base import AlgoBase
 
 # This Package
 from .baseoptimizer import BaseOptimizer, MinimizeResult
+from ..common.namedtuples import IterationResult
 
 
 class GFLSOptimizer(BaseOptimizer):
@@ -60,7 +61,7 @@ class GFLSOptimizer(BaseOptimizer):
         self.fmax = fmax
         self.verbose = verbose
         self.save_logger = save_logger
-        self.algorithm = GFLS(**gfls_kwargs)
+        self.algorithm = GFLS(**gfls_kwargs) if gfls_kwargs else GFLS(tr_max=1)
 
     # noinspection PyMethodOverriding
     def minimize(
@@ -94,9 +95,9 @@ class GFLSOptimizer(BaseOptimizer):
             A list of functions called after every iteration. GFLS compatible callbacks can be found at the end of this
             file.
 
-            If GFLS is being used through the GloMPO mp_manager calls to send iteration results to the mp_manager and check
-            incoming signals from it are automatically added to this list. Only send functionality you want over and
-            above this.
+            If GFLS is being used through the GloMPO mp_manager calls to send iteration results to the mp_manager and
+            check incoming signals from it are automatically added to this list. Only send functionality you want over
+            and above this.
 
             Each callback takes three arguments: ``logger``, ``algorithm`` and ``stopcond``. The ``logger`` is the same
             as the return value of optsam.driver, except that it only contains information of iterations so far.
@@ -125,7 +126,7 @@ class GFLSOptimizer(BaseOptimizer):
         if callable(callbacks):
             callbacks = [callbacks]
         if self._results_queue:
-            callbacks = [self.message_manager, self.check_messages, *callbacks]
+            callbacks = [self.push_iter_result, self.check_messages, *callbacks]
 
         fw = ResidualsWrapper(function.resids, vector_codec.decode)
         logger = driver(
@@ -160,11 +161,12 @@ class GFLSOptimizer(BaseOptimizer):
 
         return result
 
-    def message_manager(self, logger: Logger, *args):
+    def push_iter_result(self, logger: Logger, stopcond: str, *args):
         i = logger.current
         x = logger.get("pars")
         fx = logger.get("func")
-        self._results_queue.put((self._opt_id, i, x, fx))
+        fin = False if stopcond is None else True
+        self._results_queue.put(IterationResult(self._opt_id, i, x, fx, fin))
 
     def check_messages(self, logger: Logger, *args):
         conds = []

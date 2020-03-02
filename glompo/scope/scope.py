@@ -11,7 +11,7 @@ import numpy as np
 class ParallelOptimizerScope:
     """ Constructs and records the dynamic plotting of optimizers run in parallel"""
 
-    def __init__(self, num_streams: int,
+    def __init__(self,
                  x_range: Tuple[float, float] = (),
                  y_range: Tuple[float, float] = (),
                  visualise_gpr: bool = False,
@@ -23,8 +23,6 @@ class ParallelOptimizerScope:
 
         Parameters
         ----------
-        num_streams : int
-            Total number of optimizers being run in parallel.
         x_range : Tuple[float, float]
             Sets the x-axis limits of the plot, default is an empty tuple which leads the plot to automatically and
             constantly rescale the axis.
@@ -144,18 +142,20 @@ class ParallelOptimizerScope:
         rec.set_height(4 * sigma)
         self._update()
 
-    def update_opt_start(self, opt_id: int, pt: tuple):
+    def update_opt_start(self, opt_id: int):
         """ Given pt tuple is used to update the opt_id start hyperparameter optimizer plot."""
         line = self.streams[opt_id]['hyper_init']
-        line.set_xdata(np.append(line.get_xdata(), pt[0]))
-        line.set_ydata(np.append(line.get_ydata(), pt[1]))
+        x_pt, y_pt = self.get_farthest_pt(opt_id)
+        line.set_xdata(np.append(x_pt))
+        line.set_ydata(np.append(y_pt))
         self._update()
 
-    def update_opt_end(self, opt_id: int, pt: tuple):
+    def update_opt_end(self, opt_id: int):
         """ Given pt tuple is used to update the opt_id end hyperparameter optimizer plot."""
         line = self.streams[opt_id]['hyper_up']
-        line.set_xdata(np.append(line.get_xdata(), pt[0]))
-        line.set_ydata(np.append(line.get_ydata(), pt[1]))
+        x_pt, y_pt = self.get_farthest_pt(opt_id)
+        line.set_xdata(np.append(x_pt))
+        line.set_ydata(np.append(y_pt))
         self._update()
 
     def update_kill(self, opt_id: int):

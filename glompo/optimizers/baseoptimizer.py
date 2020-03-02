@@ -63,8 +63,11 @@ class BaseOptimizer(ABC):
         self._opt_id = opt_id
         self._signal_pipe = signal_pipe
         self._results_queue = results_queue
-        self._SIGNAL_DICT = {0: self.save_state,
-                             1: self.callstop}
+        self._FROM_MANAGER_SIGNAL_DICT = {0: self.save_state,
+                                          1: self.callstop}
+        self._TO_MANAGER_SIGNAL_DICT = {0: "Normal Termination",
+                                        1: "Numerical Errors Detected",
+                                        9: "Other Message (Saved to Log)"}
 
     @abstractmethod
     def minimize(self,
@@ -77,9 +80,16 @@ class BaseOptimizer(ABC):
         Minimizes a function, given an initial list of variable values `x0`, and possibly a list of `bounds` on the
         variable values. The `callbacks` argument allows for specific callbacks such as early stopping.
 
-        NB Must include a call to put every iteration in the results_queue. Messages to the mp_manager must be sent via the
-        message_manager method. Messages from the mp_manager can be read by the check_messages method. For proper GloMPO
-        functionality these must all be implemented appropriately in this method.
+        NB
+            To Ensure GloMPO Functionality:
+            - Must include a call to put every iteration in the results_queue via the push_iter_result method.
+            - Each deposit into the results queue must be an instance of the IterationResult NamedTuple.
+            - Messages to the GloMPO manager must be sent via the message_manager method. The keys for these messages
+              are detailed in the _TO_MANAGER_SIGNAL_DICT dictionary.
+            - Messages from the mp_manager can be read by the check_messages method. See the _FROM_MANAGER_SIGNAL_DICT
+              for all the methods which must be implemented to interpret GloMPO signals correctly.
+
+
 
         Example:
 
@@ -101,8 +111,11 @@ class BaseOptimizer(ABC):
             code, sig_args = self._signal_pipe.recv()
             self._SIGNAL_DICT[code](*sig_args)
 
-    def message_manager(self, *args):
+    def push_iter_result(self, *args):
         pass
+
+    def message_manager(self, key: int, message: Optional[str]):
+        self._signal_pipe.send((key, message))
 
     def callstop(self, *args):
         """

@@ -14,7 +14,7 @@ class BaseGenerator(ABC):
         """ Returns an array of parameters as a suggested starting point for an optimizer """
         pass
 
-    def update(self):
+    def update(self, x: Sequence[float], fx: float):
         """ Optional method. If implemented then the class requires feedback from the optimizers in order to generate
             new suggestions.
         """

@@ -2,6 +2,7 @@
 
 # Native Python imports
 import warnings
+from datetime import datetime
 from time import time
 import multiprocessing as mp
 
@@ -15,6 +16,7 @@ from ..scope.scope import ParallelOptimizerScope
 from ..optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from .gpr import GaussianProcessRegression
 from .expkernel import ExpKernel
+from .logger import Logger
 
 # Other Python packages
 import numpy as np
@@ -42,7 +44,8 @@ class GloMPOManager:
                  report_statistics: bool = False,
                  history_logging: int = 0,
                  visualisation: bool = False,
-                 visualisation_args: Optional[Dict[str, Any]] = None):
+                 visualisation_args: Optional[Dict[str, Any]] = None,
+                 allow_forced_terminations: bool = True):
         """
         Generates the environment for a globally managed parallel optimization job.
 
@@ -124,12 +127,18 @@ class GloMPOManager:
             If True then a dynamic plot is generated to demonstrate the performance of the optimizers. Further options
             (see visualisation_args) allow this plotting to be recorded and saved as a film.
 
-        visualisation_args : Union[dict, None]
+        visualisation_args : Optional[Dict[str, Any]]
             Optional arguments to parameterize the dynamic plotting feature. See ParallelOptimizationScope.
+
+        allow_forced_terminations : bool
+            If True GloMPO will force terminate processes that do not respond to normal kill signals in an appropriate
+            amount of time. This runs the risk of corrupting the results queue but ensures resources are not wasted on
+            hanging processes.
         """
 
         # Signal dictionary
-        self._SIGNAL_DICT = {0: "I've made some nan's"}
+        self._SIGNAL_DICT = {0: "Normal Termination (Args have reason)",
+                             1: "I have made some nan's... oopsie... >.<"}
 
         # Save and wrap task
         def task_args_wrapper(func, *args, **kwargs):
@@ -210,10 +219,12 @@ class GloMPOManager:
         self.hunt_victims = {}  # opt_ids of killed jobs and timestamps when the signal was sent
 
         # Save behavioural args
+        self.allow_forced_terminations = allow_forced_terminations
         self.region_stability_check = bool(region_stability_check)
         self.report_statistics = bool(report_statistics)
         self.history_logging = np.clip(int(history_logging), 0, 3)
         self.visualisation = visualisation
+        # TODO: Put scope into a seperate process so glompo performance is not effected
         if visualisation:
             self.scope = ParallelOptimizerScope(num_streams=max_jobs, **visualisation_args)
 
@@ -230,6 +241,7 @@ class GloMPOManager:
 
         # Setup GPRs
         self.gprs = {}
+        self.log = Logger()
 
     def start_manager(self) -> MinimizeResult:
         """ Begins the optimization routine.
@@ -247,40 +259,78 @@ class GloMPOManager:
 
         while self.tmax < time() - self.t_start and self.f_counter < self.fmax and not converged:
 
-            # Check hunt_queue
+            # Check signals
+            for opt_id in self.signal_pipes:
+                pipe = self.signal_pipes[opt_id]
+                if pipe.poll():
+                    key, message = pipe.recv()
 
+                    if key == 0:
+                        self.log.put_metadata(opt_id, "Stop Time", datetime.now())
+                        self.log.put_metadata(opt_id, "End Condition", message)
+                    elif key == 1:
+                        # TODO Deal with 1 signals
+                        pass
+                    elif key == 9:
+                        self.log.put_message(opt_id, message)
+
+            # Check hunt_queue
             if not self.hunting_queue.empty():
                 hunt = self.hunting_queue.get()
                 self._shutdown_job(hunt.victim)
 
-            #   Force kill any stragglers
-            for id in self.hunt_victims:
-                if time() - self.hunt_victims[id] > 20 * 60:
-                    self._force_shutdown_job(id)
+            # Force kill any stragglers
+            if self.allow_forced_terminations:
+                for id_num in self.hunt_victims:
+                    # TODO: This check fails in the case where optimizers are paused and then restarted
+                    if time() - self.hunt_victims[id_num] > 20 * 60 and self.optimizer_processes[id_num].is_alive():
+                        self._force_shutdown_job(id_num)
 
-            #   Is there a space in the queue? Start new job in its place
+            # Check results_queue
+            if not self.optimizer_queue.empty():
+                res = self.optimizer_queue.get()
+                if not any([res.opt_id == victim for victim in self.hunt_victims]):
+
+                    self.x0_generator.update(res.x, res.fx)
+                    self.log.put_iteration(res.opt_id, res.n_iter, res.x, res.fx)
+
+                    # Send results to GPRs
+                    trained = False
+                    # TODO Intelligent GPR training. Take n well dispersed points
+                    if res.n_iter % 10 == 0:
+                        trained = True
+                        self.gprs[res.opt_id].add_known(res.x, res.fx)
+
+                        mean = np.mean(self.log.get_history(res.opt_id, "fx"))
+                        sigma = np.std(self.log.get_history(res.opt_id, "fx"))
+
+                        self.gprs[res.opt_id].rescale((mean, sigma))
+
+                    if self.visualisation:
+                        self.scope.update_optimizer(res.opt_id, (res.x, res.fx))
+                        if trained:
+                            self.scope.update_scatter(res.opt_id, (res.x, res.fx))
+                        if res.final:
+                            self.scope.update_norm_terminate(res.opt_id)
+
+            # Start new processes if possible
             count = sum([int(proc.is_alive()) for proc in self.optimizer_processes])
+            # NOTE: is_alive joins any dead processes
             if count < self.max_jobs:
                 opt = self._setup_new_optimizer()
                 self._start_new_job(*opt)
 
-            # Check results_queue
-
-            #   When taking a point make sure the process is still alive, might be the last point
-
-            #   If results are from a killed optimizer, ignore them
-
-            #   Send results to x0_generator
-
-            #   Send results to GPRs
-
-            #   Send results to scope
-
             # Check hyperparm queue
+            # TODO Check quality of new hyperparms to stop superwide
+            if not self.hyperparm_queue.empty():
+                res = self.hyperparm_queue.get_nowait()
 
-            #   Update hyperparms
+                self.gprs[res.opt_id].kernel.alpha = res.alpha
+                self.gprs[res.opt_id].kernel.beta = res.beta
+                self.gprs[res.opt_id].sigma_noise = res.sigma
 
-            #   Ensure hyperparms aren't stupid superwide solution
+                if self.visualisation:
+                    self.scope.update_opt_end(res.opt_id)
 
             # Poke processes (especially ones we havent heard from in a while)
 
@@ -305,6 +355,8 @@ class GloMPOManager:
         #   Delete temp files
 
         #   Including crash files that are not otherwise cleaned up
+
+        #   Save log
 
         # Possibly check answer here (This could lead to a new loop and definitely a new end gracefully)
 
@@ -331,6 +383,9 @@ class GloMPOManager:
         self.hunt_victims[opt_id] = time()
 
         self.signal_pipes[opt_id].send((1, None))
+
+        self.log.put_metadata(opt_id, "Stop Time", datetime.now())
+        self.log.put_metadata(opt_id, "End Condition", "GloMPO Termination")
 
         try:
             del self.gprs[opt_id]
@@ -372,5 +427,7 @@ class GloMPOManager:
         self.signal_pipes[self.o_counter], child_pipe = mp.Pipe()
 
         optimizer = selected(**init_kwargs, signal_pipe=child_pipe)
+
+        self.log.add_optimizer(self.o_counter, type(optimizer).__name__, datetime.now())
 
         return OptimizerPackage(self.o_counter, optimizer, call_kwargs)

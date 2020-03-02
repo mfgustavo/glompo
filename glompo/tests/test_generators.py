@@ -82,6 +82,7 @@ class TestRandom:
             bounds = np.array([[-np.inf, 200], [0, 6], [-0.00001, 0.001], [-64.56, -64.56], [1e6, 2e6]])
             RandomGenerator(bounds)
 
+
 class TestPerturbation:
 
     def test_invalid_bounds1(self):

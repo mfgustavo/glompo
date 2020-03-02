@@ -1,12 +1,13 @@
 # TODO Throw away first x number of CMA evaluations, it has terrible burn-in. How to define x?
 import warnings
-
-from .baseoptimizer import MinimizeResult, BaseOptimizer
 import os
 import numpy as np
 import cma
 import pickle
 from time import time
+
+from .baseoptimizer import MinimizeResult, BaseOptimizer
+from ..common.namedtuples import IterationResult
 
 __all__ = ['CMAOptimizer']
 
@@ -74,10 +75,10 @@ class CMAOptimizer(BaseOptimizer):
             solutions = es.ask()
             es.tell(solutions, [function(x) for x in solutions])
             es.logger.add()
-            if self._results_queue:
-                self.message_manager(es.countiter, self.result.x, self.result.fx)
-                self.check_messages()
             self.result.x, self.result.fx = es.result[:2]
+            if self._results_queue:
+                self.push_iter_result(es.countiter, self.result.x, self.result.fx, False)
+                self.check_messages()
             self._customtermination(callbacks)
             print(f'At CMA Iteration: {es.countiter}. Best f(x)={es.best.f:.3e}.')
             if es.countiter % 20 == 0:
@@ -86,6 +87,9 @@ class CMAOptimizer(BaseOptimizer):
 
         self.result.success = True
         self.result.x, self.result.fx = es.result[:2]
+        if self._results_queue:
+            self.push_iter_result(es.countiter, self.result.x, self.result.fx, True)
+            self.check_messages()
         with open(self.dir+'cma_results.pkl', 'wb') as f:
             pickle.dump(es.result, f, -1)
         return self.result
@@ -116,8 +120,8 @@ class CMAOptimizer(BaseOptimizer):
         if callbacks and callbacks():
             self.callstop()
 
-    def message_manager(self, i, x, fx):
-        self._results_queue.put((self._opt_id, i, x, fx))
+    def push_iter_result(self, i, x, fx, final):
+        self._results_queue.put(IterationResult(self._opt_id, i, x, fx, final))
 
     def callstop(self, reason=None):
         if reason:

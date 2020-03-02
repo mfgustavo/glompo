@@ -1,7 +1,6 @@
 
 
 from typing import *
-from multiprocessing.connection import Connection
 
 
 class Result(NamedTuple):
@@ -25,3 +24,18 @@ class OptimizerPackage(NamedTuple):
 class HuntingResult(NamedTuple):
     hunt_id: int
     victim: int
+
+
+class IterationResult(NamedTuple):
+    opt_id: int
+    n_iter: int
+    x: Sequence[float]
+    fx: float
+    final: bool  # True if this is the final result sent to the queue by this optimizer
+
+
+class HyperparameterOptResult(NamedTuple):
+    opt_id: int
+    alpha: float
+    beta: float
+    sigma: float

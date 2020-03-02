@@ -2,9 +2,7 @@
 
 """ Base generator from which all generators must inherit to be compatible with GloMPO. """
 
-from typing import *
 from abc import ABC, abstractmethod
-import numpy as np
 
 
 class BaseChecker(ABC):
