@@ -79,6 +79,7 @@ class CMAOptimizer(BaseOptimizer):
             if self._results_queue:
                 self.push_iter_result(es.countiter, self.result.x, self.result.fx, False)
                 self.check_messages()
+                self._pause_signal.wait()
             self._customtermination(callbacks)
             print(f'At CMA Iteration: {es.countiter}. Best f(x)={es.best.f:.3e}.')
             if es.countiter % 20 == 0:

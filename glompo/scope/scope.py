@@ -6,6 +6,7 @@ import matplotlib.lines as lines
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 
 
 class ParallelOptimizerScope:
@@ -78,6 +79,7 @@ class ParallelOptimizerScope:
             if 'outfile' not in movie_kwargs:
                 movie_kwargs['outfile'] = 'glomporecording.mp4'
             self.writer.setup(fig=self.fig, **movie_kwargs)
+            os.makedirs("_tmp_movie_grabs")
 
     def _update(self):
         self.ax.relim()
@@ -85,7 +87,9 @@ class ParallelOptimizerScope:
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
         if self.record_movie:
+            os.chdir("_tmp_movie_grabs")
             self.writer.grab_frame()
+            os.chdir("..")
 
     def add_stream(self, opt_id):
         self.n_streams += 1

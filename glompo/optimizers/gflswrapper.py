@@ -186,3 +186,6 @@ class GFLSOptimizer(BaseOptimizer):
 
     def callstop(self, logger: Logger):
         return "Manager Termination"
+
+    def check_pause_flag(self):
+        self._pause_signal.wait()

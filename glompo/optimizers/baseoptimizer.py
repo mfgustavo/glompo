@@ -4,6 +4,7 @@ Base class from which all optimizers must inherit in order to be compatible with
 
 from multiprocessing.connection import Connection
 from multiprocessing import Queue
+from multiprocessing import Event
 from typing import *
 from abc import ABC, abstractmethod
 
@@ -59,10 +60,12 @@ class BaseOptimizer(ABC):
         """
         pass
 
-    def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None):
+    def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
+                 pause_flag: Event = None):
         self._opt_id = opt_id
         self._signal_pipe = signal_pipe
         self._results_queue = results_queue
+        self._pause_signal = pause_flag  # If set allow run, if cleared wait.
         self._FROM_MANAGER_SIGNAL_DICT = {0: self.save_state,
                                           1: self.callstop}
         self._TO_MANAGER_SIGNAL_DICT = {0: "Normal Termination",
@@ -75,7 +78,6 @@ class BaseOptimizer(ABC):
                  x0: Sequence[float],
                  bounds: Sequence[Tuple[float, float]],
                  callbacks: Callable = None, **kwargs) -> MinimizeResult:
-        # TODO Expand description of results_queue and signal_pipe
         """
         Minimizes a function, given an initial list of variable values `x0`, and possibly a list of `bounds` on the
         variable values. The `callbacks` argument allows for specific callbacks such as early stopping.
@@ -88,8 +90,8 @@ class BaseOptimizer(ABC):
               are detailed in the _TO_MANAGER_SIGNAL_DICT dictionary.
             - Messages from the mp_manager can be read by the check_messages method. See the _FROM_MANAGER_SIGNAL_DICT
               for all the methods which must be implemented to interpret GloMPO signals correctly.
-
-
+            - self._pause_signal.wait() must be implemented in the body of the iterative loop to allow the optimizer to
+              be paused by the manager as needed.
 
         Example:
 
@@ -125,3 +127,5 @@ class BaseOptimizer(ABC):
 
     def save_state(self, *args):
         pass
+
+

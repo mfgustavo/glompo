@@ -45,7 +45,8 @@ class GloMPOManager:
                  history_logging: int = 0,
                  visualisation: bool = False,
                  visualisation_args: Optional[Dict[str, Any]] = None,
-                 allow_forced_terminations: bool = True):
+                 allow_forced_terminations: bool = True,
+                 verbose: bool = True):
         """
         Generates the environment for a globally managed parallel optimization job.
 
@@ -134,7 +135,12 @@ class GloMPOManager:
             If True GloMPO will force terminate processes that do not respond to normal kill signals in an appropriate
             amount of time. This runs the risk of corrupting the results queue but ensures resources are not wasted on
             hanging processes.
+
+        verbose : bool
+            If True, GloMPO will print progress messages during the optimization otherwise it will be silent.
         """
+        self.verbose = verbose
+        self._optional_print("Initializing Manager ... ")
 
         # Signal dictionary
         self._SIGNAL_DICT = {0: "Normal Termination (Args have reason)",
@@ -212,6 +218,7 @@ class GloMPOManager:
         self.t_start = None
         self.o_counter = 0
         self.f_counter = 0
+        # TODO Update counters everywhere
         self.conv_counter = 0  # Number of converged optimizers
         self.kill_counter = 0  # Number of killed jobs
         self.hunt_counter = 0  # Number of hunting jobs started
@@ -226,13 +233,14 @@ class GloMPOManager:
         self.visualisation = visualisation
         # TODO: Put scope into a seperate process so glompo performance is not effected
         if visualisation:
-            self.scope = ParallelOptimizerScope(num_streams=max_jobs, **visualisation_args)
+            self.scope = ParallelOptimizerScope(**visualisation_args)
 
         # Setup multiprocessing variables
         self.optimizer_processes = {}
         self.hyperparm_processes = {}
         self.hunting_processes = {}
         self.signal_pipes = {}
+        self.pause_events = {}
 
         self.mp_manager = mp.Manager()
         self.optimizer_queue = self.mp_manager.Queue()
@@ -243,12 +251,19 @@ class GloMPOManager:
         self.gprs = {}
         self.log = Logger()
 
+        self._optional_print("Initialization Done")
+
     def start_manager(self) -> MinimizeResult:
         """ Begins the optimization routine.
 
         Parameters
         ----------
         """
+
+        self._optional_print("------------------------------------\n"
+                             "Starting GloMPO Optimization Routine\n"
+                             "------------------------------------\n")
+
         self.t_start = time()
 
         for i in range(self.max_jobs):
@@ -256,28 +271,41 @@ class GloMPOManager:
             self._start_new_job(*opt)
 
         converged = self.convergence_checker.converged(self)
+        if converged:
+            self._optional_print("!!! Convergence Reached !!!")
 
         while self.tmax < time() - self.t_start and self.f_counter < self.fmax and not converged:
 
             # Check signals
+            self._optional_print("Checking optimizer signals...")
             for opt_id in self.signal_pipes:
                 pipe = self.signal_pipes[opt_id]
                 if pipe.poll():
                     key, message = pipe.recv()
-
+                    self._optional_print(f"Signal {key} from {opt_id}.")
                     if key == 0:
                         self.log.put_metadata(opt_id, "Stop Time", datetime.now())
                         self.log.put_metadata(opt_id, "End Condition", message)
+                        # TODO More, if a optimizer is done we need to cleanup after it (remove from gprs) for example
                     elif key == 1:
                         # TODO Deal with 1 signals
                         pass
                     elif key == 9:
                         self.log.put_message(opt_id, message)
+                else:
+                    self._optional_print(f"No signals from {opt_id}.")
+            self._optional_print(f"Signal check done.")
 
             # Check hunt_queue
+            self._optional_print("Checking hunt results...")
             if not self.hunting_queue.empty():
                 hunt = self.hunting_queue.get()
+                self.hunting_processes[hunt.hunt_id].join()
+                self._optional_print(f"Manager wants to kill {hunt.victim}")
                 self._shutdown_job(hunt.victim)
+            else:
+                self._optional_print("No hunts successful.")
+            self._optional_print("Hunt check done.")
 
             # Force kill any stragglers
             if self.allow_forced_terminations:
@@ -287,6 +315,7 @@ class GloMPOManager:
                         self._force_shutdown_job(id_num)
 
             # Check results_queue
+            self._optional_print("Checking optimizer iteration results...")
             if not self.optimizer_queue.empty():
                 res = self.optimizer_queue.get()
                 if not any([res.opt_id == victim for victim in self.hunt_victims]):
@@ -299,6 +328,7 @@ class GloMPOManager:
                     # TODO Intelligent GPR training. Take n well dispersed points
                     if res.n_iter % 10 == 0:
                         trained = True
+                        self._optional_print(f"Result from {res.opt_id} sent to GPR")
                         self.gprs[res.opt_id].add_known(res.x, res.fx)
 
                         mean = np.mean(self.log.get_history(res.opt_id, "fx"))
@@ -312,18 +342,27 @@ class GloMPOManager:
                             self.scope.update_scatter(res.opt_id, (res.x, res.fx))
                         if res.final:
                             self.scope.update_norm_terminate(res.opt_id)
+            else:
+                self._optional_print("No results found.")
+            self._optional_print("Iteration results check done.")
 
             # Start new processes if possible
+            self._optional_print("Checking for available optimizer slots...")
             count = sum([int(proc.is_alive()) for proc in self.optimizer_processes])
             # NOTE: is_alive joins any dead processes
-            if count < self.max_jobs:
+            while count < self.max_jobs:
                 opt = self._setup_new_optimizer()
                 self._start_new_job(*opt)
+                count += 1
+            self._optional_print("New optimizer check done.")
 
             # Check hyperparm queue
             # TODO Check quality of new hyperparms to stop superwide
+            # TODO Join hunt and hyperparm processes
+            self._optional_print("Checking for converged hyperparameter optimizations...")
             if not self.hyperparm_queue.empty():
                 res = self.hyperparm_queue.get_nowait()
+                self._optional_print(f"New hyperparameters found for {res.opt_id}")
 
                 self.gprs[res.opt_id].kernel.alpha = res.alpha
                 self.gprs[res.opt_id].kernel.beta = res.beta
@@ -331,6 +370,9 @@ class GloMPOManager:
 
                 if self.visualisation:
                     self.scope.update_opt_end(res.opt_id)
+            else:
+                self._optional_print("No results found.")
+            self._optional_print("New hyperparameter check done.")
 
             # Poke processes (especially ones we havent heard from in a while)
 
@@ -343,6 +385,7 @@ class GloMPOManager:
             # Update counters
 
             pass
+        self._optional_print("Exiting manager loop.")
 
         # Check answer
 
@@ -359,8 +402,14 @@ class GloMPOManager:
         #   Save log
 
         # Possibly check answer here (This could lead to a new loop and definitely a new end gracefully)
+        self._optional_print("-----------------------------------\n"
+                             "GloMPO Optimization Routine... DONE\n"
+                             "-----------------------------------\n")
 
     def _start_new_job(self, opt_id: int, optimizer: BaseOptimizer, call_kwargs):
+
+        self._optional_print(f"Starting Optimizer: {opt_id}")
+
         task = self.task
         x0 = self.x0_generator.generate()
         bounds = np.array(self.bounds)
@@ -380,9 +429,12 @@ class GloMPOManager:
         #  Optimal solution would be to have both, first solution is 'proper' and the second is an extra layer of
         #  safety.
 
+        # TODO Shutdown other things like pipes, events, gprs, what is allowed to be left in optimizer_process dict
+
         self.hunt_victims[opt_id] = time()
 
         self.signal_pipes[opt_id].send((1, None))
+        self._optional_print(f"Termination signal sent to {opt_id}")
 
         self.log.put_metadata(opt_id, "Stop Time", datetime.now())
         self.log.put_metadata(opt_id, "End Condition", "GloMPO Termination")
@@ -399,8 +451,12 @@ class GloMPOManager:
         """ Warning there is a chance that this will corrupt the results_queue. Only use this in circumstances where you
             are sure the process is frozen.
         """
+
+        # TODO Shutdown other things like pipes, events, gprs, what is allowed to be left in optimizer_process dict
+
         if opt_id in self.optimizer_processes:
             self.optimizer_processes[opt_id].terminate()
+            warnings.warn(f"Forced termination signal sent to optimizer {opt_id}.", UserWarning)
 
     def _start_hunt(self):
         pass
@@ -420,14 +476,30 @@ class GloMPOManager:
         # TODO add intelligence to pick optimizer?
         selected, init_kwargs, call_kwargs = self.optimizers['default']
 
+        self._optional_print(f"Selected Optimizer:\n"
+                             f"\tOptimizer ID: {self.o_counter}\n"
+                             f"\tType: {type(selected).__name__}")
+
         self.gprs[self.o_counter] = GaussianProcessRegression(kernel=ExpKernel(alpha=0.100,
                                                                                beta=5.00),
                                                               dims=1)
 
         self.signal_pipes[self.o_counter], child_pipe = mp.Pipe()
 
-        optimizer = selected(**init_kwargs, signal_pipe=child_pipe)
+        event = self.mp_manager.Event()
+        event.set()
+        self.pause_events[self.o_counter] = event
+
+        optimizer = selected(**init_kwargs,
+                             opt_id=self.o_counter,
+                             signal_pipe=child_pipe,
+                             results_queue=self.optimizer_queue,
+                             pause_flag=event)
 
         self.log.add_optimizer(self.o_counter, type(optimizer).__name__, datetime.now())
 
         return OptimizerPackage(self.o_counter, optimizer, call_kwargs)
+
+    def _optional_print(self, message: str):
+        if self.verbose:
+            print(message)
