@@ -5,6 +5,8 @@ import numpy as np
 import cma
 import pickle
 from time import time
+from multiprocessing import Event, Queue
+from multiprocessing.connection import Connection
 
 from .baseoptimizer import MinimizeResult, BaseOptimizer
 from ..common.namedtuples import IterationResult
@@ -32,9 +34,10 @@ class CMAOptimizer(BaseOptimizer):
 
     needscaler = True
 
-    def __init__(self, opt_id=None, sigma=0.5, sampler='full', **cmasettings):
+    def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
+                 pause_flag: Event = None, sigma=0.5, sampler='full', **cmasettings):
         """ Initialize with the above parameters. """
-        super().__init__(opt_id)
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag)
         self.sigma = sigma
 
         # Sort all non-native CMA options into the custom cmaoptions key 'vv':
@@ -71,25 +74,25 @@ class CMAOptimizer(BaseOptimizer):
         self.result = MinimizeResult()
 
         t_start = time()
+        solutions = 0
         while not es.stop():
             solutions = es.ask()
             es.tell(solutions, [function(x) for x in solutions])
             es.logger.add()
             self.result.x, self.result.fx = es.result[:2]
             if self._results_queue:
-                self.push_iter_result(es.countiter, self.result.x, self.result.fx, False)
+                self.push_iter_result(es.countiter, len(solutions), self.result.x, self.result.fx, False)
                 self.check_messages()
                 self._pause_signal.wait()
             self._customtermination(callbacks)
             print(f'At CMA Iteration: {es.countiter}. Best f(x)={es.best.f:.3e}.')
             if es.countiter % 20 == 0:
                 print('[DEBUG] Avg. time per cmaes loop: {}.'.format((t_start - time())/es.countiter))
-        print()
 
         self.result.success = True
         self.result.x, self.result.fx = es.result[:2]
         if self._results_queue:
-            self.push_iter_result(es.countiter, self.result.x, self.result.fx, True)
+            self.push_iter_result(es.countiter, len(solutions), self.result.x, self.result.fx, True)
             self.check_messages()
         with open(self.dir+'cma_results.pkl', 'wb') as f:
             pickle.dump(es.result, f, -1)
@@ -121,8 +124,8 @@ class CMAOptimizer(BaseOptimizer):
         if callbacks and callbacks():
             self.callstop()
 
-    def push_iter_result(self, i, x, fx, final):
-        self._results_queue.put(IterationResult(self._opt_id, i, x, fx, final))
+    def push_iter_result(self, i, f_calls, x, fx, final):
+        self._results_queue.put(IterationResult(self._opt_id, i, f_calls, x, fx, final))
 
     def callstop(self, reason=None):
         if reason:

@@ -2,6 +2,8 @@
 from typing import *
 import numpy as np
 import os
+from multiprocessing import Event, Queue
+from multiprocessing.connection import Connection
 
 # Optsam Package
 from optsam.fwrap import ResidualsWrapper
@@ -22,7 +24,10 @@ class GFLSOptimizer(BaseOptimizer):
 
     def __init__(
         self,
-        opt_id: int,
+        opt_id: int = None,
+        signal_pipe: Connection = None,
+        results_queue: Queue = None,
+        pause_flag: Event = None,
         tmax: Optional[int] = None,
         imax: Optional[int] = None,
         fmax: Optional[int] = None,
@@ -55,7 +60,7 @@ class GFLSOptimizer(BaseOptimizer):
         gfls_kwargs
             Arguments passed to the setup of the GFLS class. See opt_gfls.py or documentation.
         """
-        super().__init__(opt_id)
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag)
         self.tmax = tmax
         self.imax = imax
         self.fmax = fmax
@@ -166,7 +171,7 @@ class GFLSOptimizer(BaseOptimizer):
         x = logger.get("pars")
         fx = logger.get("func")
         fin = False if stopcond is None else True
-        self._results_queue.put(IterationResult(self._opt_id, i, x, fx, fin))
+        self._results_queue.put(IterationResult(self._opt_id, i, 1, x, fx, fin))
 
     def check_messages(self, logger: Logger, *args):
         conds = []

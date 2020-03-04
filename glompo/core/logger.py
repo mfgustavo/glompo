@@ -40,7 +40,7 @@ class Logger:
             extract = self.storage[opt_id].history
         return extract
 
-    def save(self, name: str = None, opt_id: int = None):
+    def save(self, name: str, opt_id: int = None):
         """ Saves the contents of the logger into yaml files. If an opt_id is provided only that optimizer will be
             saved using the provided name. Else all optimizers are saved by their opt_id numbers and type in a directory
             called name. """
@@ -104,9 +104,11 @@ class OptimizerLogger:
             self.i_best = i
         try:
             iter(x)
-            self.history[i] = [float(fx), int(self.i_best), float(self.fx_best), list(x)]
+            ls = [float(num) for num in x]
+            self.history[i] = [float(fx), int(self.i_best), float(self.fx_best), ls]
         except TypeError:
-            self.history[i] = [float(fx), int(self.i_best), float(self.fx_best), list([x])]
+            ls = [float(num) for num in [x]]
+            self.history[i] = [float(fx), int(self.i_best), float(self.fx_best), ls]
 
     def append_message(self, message):
         self.messages.append(message)

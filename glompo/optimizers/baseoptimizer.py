@@ -3,10 +3,11 @@ Base class from which all optimizers must inherit in order to be compatible with
 """
 
 from multiprocessing.connection import Connection
-from multiprocessing import Queue
-from multiprocessing import Event
+from queue import Queue
+from threading import Event
 from typing import *
 from abc import ABC, abstractmethod
+import warnings
 
 
 __all__ = ['BaseOptimizer', 'MinimizeResult']
@@ -88,6 +89,7 @@ class BaseOptimizer(ABC):
             - Each deposit into the results queue must be an instance of the IterationResult NamedTuple.
             - Messages to the GloMPO manager must be sent via the message_manager method. The keys for these messages
               are detailed in the _TO_MANAGER_SIGNAL_DICT dictionary.
+            - A convergence termination message should be sent if the optimizer successfully converges.
             - Messages from the mp_manager can be read by the check_messages method. See the _FROM_MANAGER_SIGNAL_DICT
               for all the methods which must be implemented to interpret GloMPO signals correctly.
             - self._pause_signal.wait() must be implemented in the body of the iterative loop to allow the optimizer to
@@ -110,8 +112,13 @@ class BaseOptimizer(ABC):
 
     def check_messages(self, *args):
         while self._signal_pipe.poll():
-            code, sig_args = self._signal_pipe.recv()
-            self._SIGNAL_DICT[code](*sig_args)
+            message = self._signal_pipe.recv()
+            if isinstance(message, int):
+                self._FROM_MANAGER_SIGNAL_DICT[message]()
+            elif isinstance(message, tuple):
+                self._FROM_MANAGER_SIGNAL_DICT[message[0]](*message[1:])
+            else:
+                warnings.warn("Cannot parse message, ignoring", UserWarning)
 
     def push_iter_result(self, *args):
         pass
@@ -127,5 +134,3 @@ class BaseOptimizer(ABC):
 
     def save_state(self, *args):
         pass
-
-

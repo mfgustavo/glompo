@@ -7,6 +7,8 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import shutil
+import warnings
 
 
 class ParallelOptimizerScope:
@@ -17,6 +19,7 @@ class ParallelOptimizerScope:
                  y_range: Tuple[float, float] = (),
                  visualise_gpr: bool = False,
                  record_movie: bool = False,
+                 interactive_mode: bool = False,
                  writer_kwargs: Union[Dict[str, Any], None] = None,
                  movie_kwargs: Union[Dict[str, Any], None] = None):
         """
@@ -35,16 +38,17 @@ class ParallelOptimizerScope:
             mean will be shown.
         record_movie : bool
             If True then a matplotlib.animation.FFMpegFileWriter instance is created to record the plot.
+        interactive_mode : bool
+            If True the plot is visible on screen during the optimization.
         writer_kwargs : Union[Dict[str, Any], None]
             Optional dictionary of arguments to be sent to the initialisation of the
             matplotlib.animation.FFMpegFileWriter class.
         movie_kwargs : Union[Dict[str, Any], None]
             Optional dictionary of arguments to be sent to matplotlib.animation.FFMpegFileWriter.setup().
         """
-        # TODO Set workdir
-        # TODO delete all tmp pics if the program crashes
-        # TODO NB DO NOT INITIALISE WITH STREAMS. CREATE ADD_STREAMS METHOD
-        plt.ion()
+
+        plt.ion() if interactive_mode else plt.ioff()
+
         self.fig, self.ax = plt.subplots(figsize=(12, 8))
         self.ax.set_xlabel("Iteration")
         self.ax.set_ylabel("Error")
@@ -79,7 +83,7 @@ class ParallelOptimizerScope:
             if 'outfile' not in movie_kwargs:
                 movie_kwargs['outfile'] = 'glomporecording.mp4'
             self.writer.setup(fig=self.fig, **movie_kwargs)
-            os.makedirs("_tmp_movie_grabs")
+            os.makedirs("_tmp_movie_grabs", exist_ok=True)
 
     def _update(self):
         self.ax.relim()
@@ -92,6 +96,7 @@ class ParallelOptimizerScope:
             os.chdir("..")
 
     def add_stream(self, opt_id):
+        # TODO Add a way to start new stream at the x where an old one died
         self.n_streams += 1
         self.streams[opt_id] = {'all_opt': self.ax.plot([], [])[0],  # 0 Follows every optimizer iteration
                                 'train_pts': self.ax.plot([], [], ls='', marker='o')[0],  # 1 Points in training set
@@ -150,16 +155,16 @@ class ParallelOptimizerScope:
         """ Given pt tuple is used to update the opt_id start hyperparameter optimizer plot."""
         line = self.streams[opt_id]['hyper_init']
         x_pt, y_pt = self.get_farthest_pt(opt_id)
-        line.set_xdata(np.append(x_pt))
-        line.set_ydata(np.append(y_pt))
+        line.set_xdata(np.append(line.get_xdata(), x_pt))
+        line.set_ydata(np.append(line.get_ydata(), y_pt))
         self._update()
 
     def update_opt_end(self, opt_id: int):
         """ Given pt tuple is used to update the opt_id end hyperparameter optimizer plot."""
         line = self.streams[opt_id]['hyper_up']
         x_pt, y_pt = self.get_farthest_pt(opt_id)
-        line.set_xdata(np.append(x_pt))
-        line.set_ydata(np.append(y_pt))
+        line.set_xdata(np.append(line.get_xdata(), x_pt))
+        line.set_ydata(np.append(line.get_ydata(), y_pt))
         self._update()
 
     def update_kill(self, opt_id: int):
@@ -170,9 +175,9 @@ class ParallelOptimizerScope:
         line.set_xdata(x_pt)
         line.set_ydata(y_pt)
 
-        # Shrink the uncertainty patch
-        rec = self.streams[opt_id]['opt_kill']
-        rec.set_width(y_pt)
+        # # Shrink the uncertainty patch
+        # rec = self.streams[opt_id]['opt_kill']
+        # rec.set_width(y_pt)
 
         self._update()
 
@@ -184,16 +189,16 @@ class ParallelOptimizerScope:
         line.set_xdata(x_pt)
         line.set_ydata(y_pt)
 
-        # Shrink the uncertainty patch
-        rec = self.streams[opt_id]['opt_norm']
-        rec.set_width(y_pt)
+        # # Shrink the uncertainty patch
+        # rec = self.streams[opt_id]['opt_norm']
+        # rec.set_width(y_pt)
 
         self._update()
 
     def update_gpr(self, opt_id: int, x: np.ndarray, y: np.ndarray, lower_sig: np.ndarray, upper_sig: np.ndarray):
         """ Given mu and sigma is used to update the opt_id mean and uncertainty plots."""
         # Mean line
-        line = self.streams[opt_id]['gpr']
+        line = self.streams[opt_id]['gpr_mean']
         line.set_xdata(x)
         line.set_ydata(y)
 
@@ -209,10 +214,20 @@ class ParallelOptimizerScope:
     def generate_movie(self):
         """ Final call to write the saved frames into a single movie. """
         if self.record_movie:
-            self.writer.finish()
+            try:
+                os.chdir("_tmp_movie_grabs")
+                self.writer.finish()
+                files = [file for file in os.listdir(".") if ".mp4" in file]
+                for file in files:
+                    shutil.move(file, f"../{file}")
+                os.chdir("..")
+            except Exception as e:
+                warnings.warn(f"Exception caught while trying to save movie: {e}", UserWarning)
+            finally:
+                shutil.rmtree("_tmp_movie_grabs", ignore_errors=True)
         else:
-            print("Unable to generate movie file as data was not collected during the dynamic plotting.\n"
-                  "Rerun ParallelOptimizerScope with record_movie = True during initialisation.")
+            warnings.warn("Unable to generate movie file as data was not collected during the dynamic plotting.\n"
+                          "Rerun ParallelOptimizerScope with record_movie = True during initialisation.", UserWarning)
 
     def get_farthest_pt(self, opt_id: int):
         """ Returns the furthest evaluated point of the 'n_stream'th optimizer. """
