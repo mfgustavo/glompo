@@ -86,9 +86,9 @@ class TestMangerInit:
             errors.append("Not Tuple")
         if not opt.optimizers['default'][0] == OptimizerTest1:
             errors .append("First element not optimizer")
-        if opt.optimizers['default'][1] is not None:
+        if opt.optimizers['default'][1] != {}:
             errors.append("Second element not None")
-        if opt.optimizers['default'][2] is not None:
+        if opt.optimizers['default'][2] != {}:
             errors.append("Third element not None")
         assert not errors
 

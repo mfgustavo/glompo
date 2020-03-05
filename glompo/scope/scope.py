@@ -141,13 +141,13 @@ class ParallelOptimizerScope:
         """ Given mu and sigma is used to update the opt_id mean and uncertainty plots."""
         # Mean line
         line = self.streams[opt_id]['mean']
-        line.set_xdata((0, self.ax.get_xlim()[1]))
+        line.set_xdata((0, self.get_farthest_pt(opt_id)[0]))
         line.set_ydata((mu, mu))
 
         # Uncertainty Rectangle
         rec = self.streams[opt_id]['st_dev']
         rec.xy = (0, mu - 2 * sigma)
-        rec.set_width(self.ax.get_xlim()[1])
+        rec.set_width(self.get_farthest_pt(opt_id)[0])
         rec.set_height(4 * sigma)
         self._update()
 

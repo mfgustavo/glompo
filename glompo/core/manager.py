@@ -3,6 +3,7 @@
 # Native Python imports
 import warnings
 from datetime import datetime
+from functools import wraps
 from time import time
 import multiprocessing as mp
 import traceback
@@ -149,6 +150,7 @@ class GloMPOManager:
 
         # Save and wrap task
         def task_args_wrapper(func, args, kwargs):
+            @wraps(func)
             def wrapper(x):
                 return func(x, *args, **kwargs)
             return wrapper
@@ -159,7 +161,8 @@ class GloMPOManager:
             task_args = ()
         if not task_kwargs:
             task_kwargs = {}
-        self.task = task_args_wrapper(task, task_args, task_kwargs)
+        # self.task = task_args_wrapper(task, task_args, task_kwargs)
+        self.task = task
 
         # Save n_parms
         if n_parms > 0 and isinstance(n_parms, int):
@@ -467,7 +470,11 @@ class GloMPOManager:
                     self.optimizer_packs[opt_id].signal_pipe.send(1)
                     self.graveyard.add(opt_id)
                     self.log.put_metadata(opt_id, "Stop Time", datetime.now())
-                    self.log.put_metadata(opt_id, "End Condition", "GloMPO Convergence")
+                    reason = ""
+                    reason += "Conv. Crit. " if converged else ""
+                    reason += "tmax " if time() - self.t_start >= self.tmax else ""
+                    reason += "fmax " if self.f_counter >= self.fmax else ""
+                    self.log.put_metadata(opt_id, "End Condition", f"GloMPO Convergence ({reason})")
                     self.optimizer_packs[opt_id].process.join(self._TOO_LONG / 20)
 
             return result

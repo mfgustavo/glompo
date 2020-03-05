@@ -131,7 +131,10 @@ class GFLSOptimizer(BaseOptimizer):
         if callable(callbacks):
             callbacks = [callbacks]
         if self._results_queue:
-            callbacks = [self.push_iter_result, self.check_messages, *callbacks]
+            if callbacks:
+                callbacks = [self.push_iter_result, self.check_messages, *callbacks]
+            else:
+                callbacks = [self.push_iter_result, self.check_messages]
 
         fw = ResidualsWrapper(function.resids, vector_codec.decode)
         logger = driver(
@@ -166,7 +169,7 @@ class GFLSOptimizer(BaseOptimizer):
 
         return result
 
-    def push_iter_result(self, logger: Logger, stopcond: str, *args):
+    def push_iter_result(self, logger: Logger, algorithm, stopcond: str, *args):
         i = logger.current
         x = logger.get("pars")
         fx = logger.get("func")
