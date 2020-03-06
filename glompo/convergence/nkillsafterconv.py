@@ -20,9 +20,9 @@ class KillsAfterConvergence(BaseChecker):
     def converged(self, manager: 'GloMPOManager') -> bool:
         if manager.conv_counter >= self.n_converged:
             self.enough_conv = True
-            self.kill_count = manager.kill_counter
+            self.kill_count = len(manager.hunt_victims)
 
-        if self.enough_conv and manager.kill_counter - self.kill_count >= self.n_killed:
+        if self.enough_conv and len(manager.hunt_victims) - self.kill_count >= self.n_killed:
             return True
         else:
             return False

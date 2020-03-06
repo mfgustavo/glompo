@@ -9,6 +9,7 @@ import numpy as np
 import os
 import shutil
 import warnings
+from time import time
 
 
 class ParallelOptimizerScope:
@@ -20,6 +21,7 @@ class ParallelOptimizerScope:
                  visualise_gpr: bool = False,
                  record_movie: bool = False,
                  interactive_mode: bool = False,
+                 truncate_zoom: bool = False,
                  writer_kwargs: Union[Dict[str, Any], None] = None,
                  movie_kwargs: Union[Dict[str, Any], None] = None):
         """
@@ -40,6 +42,10 @@ class ParallelOptimizerScope:
             If True then a matplotlib.animation.FFMpegFileWriter instance is created to record the plot.
         interactive_mode : bool
             If True the plot is visible on screen during the optimization.
+        truncate_zoom : bool
+            If True the plot will truncate large error values as more data arrives in order to be able to discern
+            progress at higher iterations. Not compatible in conjunction with a provided y_range, this will take
+            precedence.
         writer_kwargs : Union[Dict[str, Any], None]
             Optional dictionary of arguments to be sent to the initialisation of the
             matplotlib.animation.FFMpegFileWriter class.
@@ -55,6 +61,8 @@ class ParallelOptimizerScope:
 
         self.streams = {}
         self.n_streams = 0
+        self.truncate_zoom = truncate_zoom
+        self.t_last = 0
 
         # Create custom legend
         self.visualise_gpr = visualise_gpr
@@ -86,14 +94,30 @@ class ParallelOptimizerScope:
             os.makedirs("_tmp_movie_grabs", exist_ok=True)
 
     def _update(self):
-        self.ax.relim()
-        self.ax.autoscale_view()
-        self.fig.canvas.draw()
-        self.fig.canvas.flush_events()
-        if self.record_movie:
-            os.chdir("_tmp_movie_grabs")
-            self.writer.grab_frame()
-            os.chdir("..")
+        if time() - self.t_last > 1:
+            self.t_last = time()
+            self.ax.relim()
+            self.ax.autoscale_view()
+            if self.truncate_zoom:
+                max_val = -np.inf
+                min_val = np.inf
+                for stream in self.streams.values():
+                    data = stream['all_opt'].get_ydata()
+                    if len(data) > 10:
+                        pt = data[-1]
+                        if pt > max_val:
+                            max_val = pt
+                        if pt < min_val:
+                            min_val = pt
+                if max_val != min_val and max_val > -np.inf and min_val < np.inf:
+                    self.ax.set_ylim(min_val - (max_val - min_val), max_val + (max_val - min_val))
+                    self.ax.set_autoscaley_on(False)
+            self.fig.canvas.draw()
+            self.fig.canvas.flush_events()
+            if self.record_movie:
+                os.chdir("_tmp_movie_grabs")
+                self.writer.grab_frame()
+                os.chdir("..")
 
     def add_stream(self, opt_id):
         # TODO Add a way to start new stream at the x where an old one died

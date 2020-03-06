@@ -2,6 +2,7 @@
 from typing import *
 import numpy as np
 import os
+import warnings
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
 
@@ -111,7 +112,7 @@ class GFLSOptimizer(BaseOptimizer):
             ``stopcond``. If the callback has no return value, i.e. equivalent to returning ``None``.
         """
 
-        if not callable(function.resids):
+        if not callable(function.__wrapped__.resids):
             raise NotImplementedError("GFLS requires function to include a resids() method.")
 
         gfls_bounds = []
@@ -136,7 +137,7 @@ class GFLSOptimizer(BaseOptimizer):
             else:
                 callbacks = [self.push_iter_result, self.check_messages]
 
-        fw = ResidualsWrapper(function.resids, vector_codec.decode)
+        fw = ResidualsWrapper(function.__wrapped__.resids, vector_codec.decode)
         logger = driver(
             fw,
             vector_codec.encode(x0),
@@ -176,15 +177,20 @@ class GFLSOptimizer(BaseOptimizer):
         fin = False if stopcond is None else True
         self._results_queue.put(IterationResult(self._opt_id, i, 1, x, fx, fin))
 
-    def check_messages(self, logger: Logger, *args):
+    def check_messages(self, logger: Logger, algorithm, stopcond):
         conds = []
         while self._signal_pipe.poll():
-            code, sig_args = self._signal_pipe.recv()
-            conds.append(self._SIGNAL_DICT[code](logger, *sig_args))
+            message = self._signal_pipe.recv()
+            if isinstance(message, int):
+                conds.append(self._FROM_MANAGER_SIGNAL_DICT[message](logger, algorithm, stopcond))
+            elif isinstance(message, tuple):
+                conds.append(self._FROM_MANAGER_SIGNAL_DICT[message[0]](logger, algorithm, stopcond, *message[1:]))
+            else:
+                warnings.warn("Cannot parse message, ignoring", UserWarning)
         if any([cond is not None for cond in conds]):
             return True
 
-    def save_state(self, logger: Logger, file_name: str):
+    def save_state(self, logger: Logger, algorithm, stopcond, file_name: str):
         if "/" in file_name:
             path, name = tuple(file_name.rsplit("/", 1))
             os.makedirs(path)
@@ -192,7 +198,7 @@ class GFLSOptimizer(BaseOptimizer):
             name = file_name
         logger.save(name)
 
-    def callstop(self, logger: Logger):
+    def callstop(self, logger: Logger, *args):
         return "Manager Termination"
 
     def check_pause_flag(self):

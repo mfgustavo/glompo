@@ -1,12 +1,14 @@
 
 
 # Native Python imports
+import shutil
 import warnings
 from datetime import datetime
 from functools import wraps
 from time import time
 import multiprocessing as mp
 import traceback
+import os
 
 # Package imports
 from ..generators.basegenerator import BaseGenerator
@@ -22,6 +24,7 @@ from .logger import Logger
 
 # Other Python packages
 import numpy as np
+import yaml
 
 
 class GloMPOManager:
@@ -122,8 +125,9 @@ class GloMPOManager:
         history_logging: int = 0
             Indicates the level of logging the user would like:
                 0 - No log files are saved.
-                1 - The log file of the optimizer from which the final solution was extracted is saved.
-                2 - The log file of every started optimizer is saved.
+                1 - Only the manager log is saved.
+                2 - The manager log and log file of the optimizer from which the final solution was extracted is saved.
+                3 - The manager log and the log files of every started optimizer is saved.
 
         visualisation : bool
             If True then a dynamic plot is generated to demonstrate the performance of the optimizers. Further options
@@ -161,8 +165,7 @@ class GloMPOManager:
             task_args = ()
         if not task_kwargs:
             task_kwargs = {}
-        # self.task = task_args_wrapper(task, task_args, task_kwargs)
-        self.task = task
+        self.task = task_args_wrapper(task, task_args, task_kwargs)
 
         # Save n_parms
         if n_parms > 0 and isinstance(n_parms, int):
@@ -224,11 +227,11 @@ class GloMPOManager:
         self.fmax = np.clip(int(fmax), 1, None) if fmax or fmax == 0 else np.inf
 
         self.t_start = None
+        self.dt_start = None
         self.o_counter = 0
         self.f_counter = 0
         # TODO Update counters everywhere
         self.conv_counter = 0  # Number of converged optimizers
-        self.kill_counter = 0  # Number of killed jobs
         self.hunt_counter = 0  # Number of hunting jobs started
         self.hyop_counter = 0  # Number of hyperparameter optimization jobs started
         self.hunt_victims = {}  # opt_ids of killed jobs and timestamps when the signal was sent
@@ -256,25 +259,39 @@ class GloMPOManager:
         self.hyperparm_queue = self.mp_manager.Queue()
         self.hunting_queue = self.mp_manager.Queue()
 
+        # Purge Old Results
+        files = os.listdir(".")
+        # TODO Make more user friendly after debugging
+        if any([file in files for file in ["glompo_manager_log.yml", "glompo_optimizer_logs",
+                                           "glompo_best_optimizer_log"]]):
+            print("Old results found. Deleting...")
+            shutil.rmtree("glompo_manager_log.yml", ignore_errors=True)
+            shutil.rmtree("glompo_optimizer_logs", ignore_errors=True)
+            shutil.rmtree("glompo_best_optimizer_log", ignore_errors=True)
+            self._optional_print("\tDeleted old results.")
+
         self._optional_print("Initialization Done")
 
     def start_manager(self) -> MinimizeResult:
         """ Begins the optimization routine. """
 
         best_id = 0
+        result = Result(None, None, None, None)
+        converged = False
+        reason = ""
+        caught_exception = False
+
         try:
             self._optional_print("------------------------------------\n"
                                  "Starting GloMPO Optimization Routine\n"
                                  "------------------------------------\n")
 
             self.t_start = time()
+            self.dt_start = datetime.now()
 
             for i in range(self.max_jobs):
                 opt = self._setup_new_optimizer()
                 self._start_new_job(*opt)
-
-            converged = False
-            result = Result(None, None, None, None)
 
             while time() - self.t_start < self.tmax and self.f_counter < self.fmax and not converged:
 
@@ -305,7 +322,6 @@ class GloMPOManager:
                         for victim in hunt.victims:
                             self._optional_print(f"\tManager wants to kill {victim}")
                             self._shutdown_job(victim)
-                            self.kill_counter += 1
                 else:
                     self._optional_print("\tNo hunts successful.")
                 self._optional_print("Hunt check done.")
@@ -325,10 +341,16 @@ class GloMPOManager:
 
                 # Check results_queue
                 self._optional_print("Checking optimizer iteration results...")
-                if not self.optimizer_queue.empty():
+                i_count = 0
+                while not self.optimizer_queue.empty() and i_count < 10:
                     res = self.optimizer_queue.get()
+                    # TODO Remove line
+                    print(f"\tResult {res.n_iter} from {res.opt_id}")
+                    i_count += 1
                     self.last_feedback[res.opt_id] = time()
                     self.f_counter += res.n_icalls
+                    if self.f_counter > self.fmax:
+                        break
                     if not any([res.opt_id == victim for victim in self.hunt_victims]):
 
                         self.x0_generator.update(res.x, res.fx)
@@ -345,8 +367,9 @@ class GloMPOManager:
                             self.optimizer_packs[res.opt_id].gpr.add_known(res.n_iter, res.fx)
 
                             # Start new hyperparameter optimization job
-                            if len(self.optimizer_packs[res.opt_id].gpr.training_values()) % 3 == 0:
-                                self._start_hyperparam_job(res.opt_id)
+                            # TODO Reallow hyperparam jobs
+                            # if len(self.optimizer_packs[res.opt_id].gpr.training_values()) % 3 == 0:
+                            #     self._start_hyperparam_job(res.opt_id)
 
                             mean = np.mean(self.log.get_history(res.opt_id, "fx"))
                             sigma = np.std(self.log.get_history(res.opt_id, "fx"))
@@ -380,8 +403,8 @@ class GloMPOManager:
                         exitcode = self.optimizer_packs[opt_id].process.exitcode
                         self.graveyard.add(opt_id)
                         if exitcode == 0:
-                            self.conv_counter += 1
                             self._check_signals(opt_id)
+                            self.conv_counter += 1
                             if opt_id not in self.graveyard:
                                 self.log.put_message(opt_id, "Terminated normally without sending a minimization "
                                                              "complete signal to the manager.")
@@ -451,7 +474,8 @@ class GloMPOManager:
 
                             i = self.log.get_history(opt_id, "i_best")[-1]
                             best_x = self.log.get_history(opt_id, "x")[i-1]
-                            best_origin = {"opt_id": opt_id}
+                            best_origin = {"opt_id": opt_id,
+                                           "type": self.log.storage[opt_id].metadata["Optimizer Type"]}
 
                 result = Result(best_x, best_fx, best_stats, best_origin)
 
@@ -480,20 +504,52 @@ class GloMPOManager:
             return result
 
         except Exception as e:
+            caught_exception = True
             warnings.warn(f"Optimization failed. Caught exception: {e}")
             print("".join(traceback.TracebackException.from_exception(e).format()))
         finally:
 
             # Make movie
-
-            if self.visualisation:
+            if self.visualisation and self.scope.record_movie:
                 self.scope.generate_movie()
 
             # Save log
-            if self.history_logging == 2:
-                self.log.save("glompo_optimizer_logs")
-            elif self.history_logging == 1 and best_id > 0:
-                self.log.save("glompo_best_optimizer_log", best_id)
+            if self.history_logging > 0:
+                if caught_exception:
+                    reason = "Process Crash"
+                with open("glompo_manager_log.yml", "w") as file:
+                    optimizers = {}
+                    for name in self.optimizers:
+                        optimizers[name] = {"Class": self.optimizers[name][0].__name__,
+                                            "Init Args": self.optimizers[name][1],
+                                            "Minimize Args": self.optimizers[name][2]}
+
+                    data = {
+                            "Assignment": {"Task": type(self.task.__wrapped__).__name__,
+                                           "Working Dir": os.getcwd(),
+                                           "Start Time": self.dt_start,
+                                           "Stop Time": datetime.now()},
+                            "Counters": {"Function Evaluations": self.f_counter,
+                                         "Hunts Started": self.hunt_counter,
+                                         "GPR Hyperparameter Optimisations": self.hyop_counter,
+                                         "Optimizers": {"Started": self.o_counter,
+                                                        "Killed": len(self.hunt_victims),
+                                                        "Converged": self.conv_counter}},
+                            "Solution": {"x": result.x,
+                                         "fx": result.fx,
+                                         "stats": result.stats,
+                                         "origin": result.origin,
+                                         "exit cond.": reason},
+                            "Settings": {"x0 Generator": type(self.x0_generator).__name__,
+                                         "Convergence Checker": type(self.convergence_checker).__name__,
+                                         "Optimizers Available": optimizers,
+                                         "Max Parallel Optimizers": self.max_jobs}
+                            }
+                    yaml.dump(data, file, default_flow_style=False)
+                if self.history_logging == 3:
+                    self.log.save("glompo_optimizer_logs")
+                elif self.history_logging == 2 and best_id > 0:
+                    self.log.save("glompo_best_optimizer_log", best_id)
 
             # Delete temp files or files not cleaned due to crashes
             # TODO Possible todo
@@ -625,7 +681,7 @@ class GloMPOManager:
         gpr = GaussianProcessRegression(kernel=ExpKernel(alpha=0.100,
                                                          beta=5.00),
                                         dims=1,
-                                        sigma_noise=0.001,
+                                        sigma_noise=0,
                                         mean=0)
 
         parent_pipe, child_pipe = mp.Pipe()
@@ -660,7 +716,6 @@ class GloMPOManager:
                     mean, std = gprs[gpr_id].sample_all(i+1000)
 
                     if best < mean - 2 * std:
-                        print(f"Best from {log_id} is {best} and want to kill {gpr_id} whose LCL is {mean - 2 * std}")
                         victims.add(gpr_id)
 
         result = HuntingResult(hunt_id, victims)

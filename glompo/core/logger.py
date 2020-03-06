@@ -70,16 +70,6 @@ class Logger:
                     "ITERATION_HISTORY": self.storage[opt_id].history}
             yaml.dump(data, file, default_flow_style=False)
 
-            # for item in self.storage[opt_id].metadata:
-            #     file.write(f"{item}: {self.storage[opt_id].metadata[item]}\n")
-            # file.write("--- MESSAGES ---\n")
-            # file.write("--- ITERATIONS ---\n")
-            # file.write("i fx i_best fx_best x\n")
-            # for i, entry in enumerate(self.storage[opt_id].history.values()):
-            #     str_entry = " ".join(str(item) for item in entry[:-1])
-            #     x = " ".join(str(item) for item in entry[-1])
-            #     file.write(f"{i} {str_entry} {x}\n")
-
 
 class OptimizerLogger:
     """ Stores history and meta data of a single optimzier started by GloMPO. """
