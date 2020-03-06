@@ -73,7 +73,8 @@ class ParallelOptimizerScope:
                         lines.Line2D([], [], ls='', marker='x', c='black', label='Optimizer Killed'),
                         lines.Line2D([], [], ls='', marker='*', c='black', label='Optimizer Converged')]
         if visualise_gpr:
-            leg_elements.append(lines.Line2D([], [], ls='-.', c='black', label='Regression and Uncertainty'))
+            leg_elements.append(lines.Line2D([], [], ls='-.', c='black', label='Regression'))
+            leg_elements.append(lines.Line2D([], [], ls=':', c='black', label='Regression Uncertainty'))
         else:
             leg_elements.append(lines.Line2D([], [], ls='--', c='black', label='Estimated Mean'))
             leg_elements.append(patches.Patch(fc='silver', ec='black', ls=':', label='Mean Uncertainty'))
@@ -94,45 +95,49 @@ class ParallelOptimizerScope:
             os.makedirs("_tmp_movie_grabs", exist_ok=True)
 
     def _update(self):
-        if time() - self.t_last > 1:
-            self.t_last = time()
-            self.ax.relim()
-            self.ax.autoscale_view()
-            if self.truncate_zoom:
-                max_val = -np.inf
-                min_val = np.inf
-                for stream in self.streams.values():
-                    data = stream['all_opt'].get_ydata()
-                    if len(data) > 10:
-                        pt = data[-1]
-                        if pt > max_val:
-                            max_val = pt
-                        if pt < min_val:
-                            min_val = pt
-                if max_val != min_val and max_val > -np.inf and min_val < np.inf:
-                    self.ax.set_ylim(min_val - (max_val - min_val), max_val + (max_val - min_val))
-                    self.ax.set_autoscaley_on(False)
-            self.fig.canvas.draw()
-            self.fig.canvas.flush_events()
-            if self.record_movie:
-                os.chdir("_tmp_movie_grabs")
-                self.writer.grab_frame()
-                os.chdir("..")
+        # TODO Decide on better update frequency
+        # if time() - self.t_last > 1:
+        self.t_last = time()
+        self.ax.relim()
+        self.ax.autoscale_view()
+        if self.truncate_zoom:
+            max_val = -np.inf
+            min_val = np.inf
+            for stream in self.streams.values():
+                data = stream['all_opt'].get_ydata()
+                if len(data) > 10:
+                    pt = data[-1]
+                    if pt > max_val:
+                        max_val = pt
+                    if pt < min_val:
+                        min_val = pt
+            if max_val != min_val and max_val > -np.inf and min_val < np.inf:
+                self.ax.set_ylim(min_val - (max_val - min_val), max_val + (max_val - min_val))
+                self.ax.set_autoscaley_on(False)
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
+        if self.record_movie:
+            os.chdir("_tmp_movie_grabs")
+            self.writer.grab_frame()
+            os.chdir("..")
 
     def add_stream(self, opt_id):
         # TODO Add a way to start new stream at the x where an old one died
         self.n_streams += 1
-        self.streams[opt_id] = {'all_opt': self.ax.plot([], [])[0],  # 0 Follows every optimizer iteration
-                                'train_pts': self.ax.plot([], [], ls='', marker='o')[0],  # 1 Points in training set
-                                'mean': self.ax.plot([], ls='--')[0],  # 2 Plots the mean functions
-                                'st_dev': patches.Rectangle((0, 0), 0, 0, ls=':'),  # 3 Plots the uncertainty on mean
-                                'hyper_init': self.ax.plot([], [], ls='', marker=6)[0],  # 4 Hyperparms job start
-                                'hyper_up': self.ax.plot([], [], ls='', marker=7)[0],  # 5 Hyperparms changed
-                                'opt_kill': self.ax.plot([], [], ls='', marker='x', zorder=500)[0],  # 6 Killed opt
-                                'opt_norm': self.ax.plot([], [], ls='', marker='*', zorder=500)[0],  # 7 Converged opt
-                                'gpr_mean': self.ax.plot([], [], ls='-.')[0],  # 8 GPR
-                                'gpr_upper': self.ax.plot([], [], ls='-.')[0],  # 9 GPR Upper Sigma
-                                'gpr_lower': self.ax.plot([], [], ls='-.')[0]}  # 10 GPR Lower Sigma
+        self.streams[opt_id] = {'all_opt': self.ax.plot([], [])[0],  # Follows every optimizer iteration
+                                'train_pts': self.ax.plot([], [], ls='', marker='o')[0],  # Points in training set
+                                'hyper_init': self.ax.plot([], [], ls='', marker=6)[0],  # Hyperparms job start
+                                'hyper_up': self.ax.plot([], [], ls='', marker=7)[0],  # Hyperparms changed
+                                'opt_kill': self.ax.plot([], [], ls='', marker='x', zorder=500)[0],  # Killed opt
+                                'opt_norm': self.ax.plot([], [], ls='', marker='*', zorder=500)[0]}  # Converged opt
+        if self.visualise_gpr:
+            self.streams[opt_id]['gpr_mean'] = self.ax.plot([], [], ls='-.')[0]  # GPR
+            self.streams[opt_id]['gpr_upper'] = self.ax.plot([], [], ls=':')[0]  # GPR Upper Sigma
+            self.streams[opt_id]['gpr_lower'] = self.ax.plot([], [], ls=':')[0]  # GPR Lower Sigma
+        else:
+            self.streams[opt_id]['mean'] = self.ax.plot([], ls='--')[0]  # Plots the mean functions
+            self.streams[opt_id]['st_dev'] = patches.Rectangle((0, 0), 0, 0, ls=':')  # Plots the uncertainty on mean
+            self.ax.add_patch(self.streams[opt_id]['st_dev'])
 
         # Match colors for a single optimisation
         colors = plt.get_cmap("tab10")
@@ -145,14 +150,13 @@ class ParallelOptimizerScope:
             elif any([line == _ for _ in ['opt_kill', 'opt_norm']]):
                 color = 'red'
             self.streams[opt_id][line].set_color(color)
-        self.ax.add_patch(self.streams[opt_id]['st_dev'])
 
     def update_optimizer(self, opt_id: int, pt: tuple):
         """ Given pt tuple is used to update the opt_id optimizer plot."""
         line = self.streams[opt_id]['all_opt']
         line.set_xdata(np.append(line.get_xdata(), pt[0]))
         line.set_ydata(np.append(line.get_ydata(), pt[1]))
-        self._update()
+        # self._update()
 
     def update_scatter(self, opt_id: int, pt: tuple):
         """ Given pt tuple is used to update the opt_id training data plot."""

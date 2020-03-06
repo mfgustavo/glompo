@@ -86,7 +86,7 @@ class GaussianProcessRegression:
             r_mat = np.matmul(ones_train_len, r_mat)
             r_mat = ones_test_len - r_mat
 
-            mean_estimate, mean_uncertainty = self.estimate_mean()
+            mean_estimate, mean_uncertainty = self.estimate_mean(True)
             mean_func += mean_estimate * np.transpose(r_mat)
             covar_correction = mean_uncertainty * np.matmul(np.transpose(r_mat), r_mat)
             covar_fun += covar_correction

@@ -361,7 +361,7 @@ class GloMPOManager:
                         trained = False
                         # TODO Intelligent GPR training. Take n well dispersed points
                         # TODO Better decisions on when to start hyper parm jobs
-                        if res.n_iter % 10 == 0:
+                        if res.n_iter % 3 == 0:
                             trained = True
                             self._optional_print(f"\tResult from {res.opt_id} sent to GPR")
                             self.optimizer_packs[res.opt_id].gpr.add_known(res.n_iter, res.fx)
@@ -681,8 +681,8 @@ class GloMPOManager:
         gpr = GaussianProcessRegression(kernel=ExpKernel(alpha=0.100,
                                                          beta=5.00),
                                         dims=1,
-                                        sigma_noise=0,
-                                        mean=0)
+                                        sigma_noise=0.01,
+                                        mean=None)
 
         parent_pipe, child_pipe = mp.Pipe()
         event = self.mp_manager.Event()
@@ -696,7 +696,10 @@ class GloMPOManager:
 
         self.log.add_optimizer(self.o_counter, type(optimizer).__name__, datetime.now())
 
-        return OptimizerPackage(self.o_counter, optimizer, call_kwargs, parent_pipe, event, gpr)
+        if call_kwargs:
+            return OptimizerPackage(self.o_counter, optimizer, call_kwargs, parent_pipe, event, gpr)
+        else:
+            return OptimizerPackage(self.o_counter, optimizer, {}, parent_pipe, event, gpr)
 
     def _optional_print(self, message: str):
         if self.verbose:
