@@ -8,6 +8,7 @@ from threading import Event
 from typing import *
 from abc import ABC, abstractmethod
 import warnings
+import sys
 
 
 __all__ = ['BaseOptimizer', 'MinimizeResult']
@@ -67,6 +68,7 @@ class BaseOptimizer(ABC):
         self._signal_pipe = signal_pipe
         self._results_queue = results_queue
         self._pause_signal = pause_flag  # If set allow run, if cleared wait.
+
         self._FROM_MANAGER_SIGNAL_DICT = {0: self.save_state,
                                           1: self.callstop}
         self._TO_MANAGER_SIGNAL_DICT = {0: "Normal Termination",

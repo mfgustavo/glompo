@@ -39,8 +39,8 @@ class GaussianProcessRegression:
         self.dims = dims
         self._training_pts = {}
         self.sigma_noise = sigma_noise
-        self.mean = mean
         self.normalisation_constants = normalisation_constants
+        self.mean = self._normalise(mean) if mean else mean
         # Caches for repeatedly constructed and inverted matrices
         self._cache_results = cache_results
         self._kernel_cache = {}
@@ -63,8 +63,9 @@ class GaussianProcessRegression:
         k_test_train = self._kernel_matrix(x, train_x)
         k_train_test = np.transpose(k_test_train)
         k_test_test = self._kernel_matrix(x, x)
+
         invK = self._inv_kernel_matrix(train_x, train_x,
-                                       self.sigma_noise + 1e-3)  # NB Added here for numerical stability
+                                       self.sigma_noise + 1e-4)  # NB Added here for numerical stability
 
         calc_core = np.matmul(k_test_train, invK)
 
@@ -152,7 +153,7 @@ class GaussianProcessRegression:
 
         return ans
 
-    def sample_all(self, x: np.ndarray, scaled: bool = False) -> np.ndarray:
+    def sample_all(self, x: np.ndarray, scaled: bool = False) -> Tuple[np.ndarray, np.ndarray]:
         """ Returns the current mean function and a single standard deviation confidence interval around it at the
             points in x. Returns a tuple in the order (mean, sd).
             If scaled is True then normalised values are returned otherwise they are returned in real space.
@@ -166,10 +167,11 @@ class GaussianProcessRegression:
         covar_fun = np.sqrt(np.diag(covar_fun))
 
         if not scaled:
+            lower = mean_func - covar_fun
             mean_func = self._denormalise(mean_func)
-            covar_fun = self._denormalise(covar_fun)
+            std = mean_func - self._denormalise(lower)
 
-        return mean_func, covar_fun
+        return mean_func, std
 
     def estimate_mean(self, scaled: bool = False) -> Tuple[float, float]:
         """ Returns the estimate and uncertainty of the mean for the GPR.
@@ -180,7 +182,7 @@ class GaussianProcessRegression:
         train_y = np.reshape([*self._training_pts.values()], (-1, 1))
 
         invK = self._inv_kernel_matrix(train_x, train_x,
-                                       self.sigma_noise + 1e-3)  # NB Added here for numerical stability
+                                       self.sigma_noise + 1e-4)  # NB Added here for numerical stability
 
         calc = np.matmul(ones, invK)
         calc = np.matmul(calc, np.transpose(ones))
@@ -193,8 +195,9 @@ class GaussianProcessRegression:
         mean_estimate = calc[0]
 
         if not scaled:
+            lower = mean_estimate - mean_uncertainty
             mean_estimate = self._denormalise(mean_estimate)
-            mean_uncertainty = self._denormalise(mean_uncertainty)
+            mean_uncertainty = mean_estimate - self._denormalise(lower)
 
         return mean_estimate, mean_uncertainty
 
@@ -204,6 +207,9 @@ class GaussianProcessRegression:
         parameters. If not the data is scaled by the mean and standard deviation of the data in the GPR dictionary.
         """
         mean_old, st_old = self.normalisation_constants
+        if self.mean:
+            gpr_mean = self._denormalise(self.mean)
+
         if normalisation_constants:
             mean_new, st_new = normalisation_constants
         else:
@@ -218,6 +224,8 @@ class GaussianProcessRegression:
             self._training_pts[pt] = new_space
 
         self.normalisation_constants = (mean_new, st_new)
+        if self.mean:
+            self.mean = self._normalise(gpr_mean)
 
     def _kernel_matrix(self, x1, x2) -> np.ndarray:
         vec1 = np.reshape(x1, (-1, self.dims))

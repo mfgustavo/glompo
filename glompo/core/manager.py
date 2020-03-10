@@ -2,6 +2,7 @@
 
 # Native Python imports
 import shutil
+import sys
 import warnings
 from datetime import datetime
 from functools import wraps
@@ -51,7 +52,8 @@ class GloMPOManager:
                  visualisation: bool = False,
                  visualisation_args: Optional[Dict[str, Any]] = None,
                  allow_forced_terminations: bool = True,
-                 verbose: bool = True):
+                 verbose: bool = True,
+                 split_printstreams: bool = True):
         """
         Generates the environment for a globally managed parallel optimization job.
 
@@ -143,6 +145,9 @@ class GloMPOManager:
 
         verbose : bool
             If True, GloMPO will print progress messages during the optimization otherwise it will be silent.
+
+        split_printstreams : bool
+            If True, optimizer print messages will be intercepted and saved to separate files.
         """
         self.verbose = verbose
         self._optional_print("Initializing Manager ... ")
@@ -243,6 +248,7 @@ class GloMPOManager:
         self.history_logging = np.clip(int(history_logging), 0, 3)
         self.log = Logger()
         self.visualisation = visualisation
+        self.split_printstreams = split_printstreams
         # TODO: Put scope into a seperate process so glompo performance is not effected
         if visualisation:
             self.scope = ParallelOptimizerScope(**visualisation_args)
@@ -268,6 +274,9 @@ class GloMPOManager:
             shutil.rmtree("glompo_manager_log.yml", ignore_errors=True)
             shutil.rmtree("glompo_optimizer_logs", ignore_errors=True)
             shutil.rmtree("glompo_best_optimizer_log", ignore_errors=True)
+            shutil.rmtree("glompo_optimizer_printstreams", ignore_errors=True)
+            if split_printstreams:
+                os.makedirs("glompo_optimizer_printstreams", exist_ok=True)
             self._optional_print("\tDeleted old results.")
 
         self._optional_print("Initialization Done")
@@ -275,11 +284,13 @@ class GloMPOManager:
     def start_manager(self) -> MinimizeResult:
         """ Begins the optimization routine. """
 
+        # Variables needed outside loop
         best_id = 0
         result = Result(None, None, None, None)
         converged = False
         reason = ""
         caught_exception = False
+        hunt_control = 1
 
         try:
             self._optional_print("------------------------------------\n"
@@ -320,13 +331,14 @@ class GloMPOManager:
                         self.hunting_processes[hunt.hunt_id].join()
                         del self.hunting_processes[hunt.hunt_id]
                         for victim in hunt.victims:
-                            self._optional_print(f"\tManager wants to kill {victim}")
-                            self._shutdown_job(victim)
+                            if victim not in self.graveyard:
+                                self._optional_print(f"\tManager wants to kill {victim}")
+                                self._shutdown_job(victim)
                 else:
                     self._optional_print("\tNo hunts successful.")
                 self._optional_print("Hunt check done.")
 
-                # Force kill any stragglers
+                # Force kill any zombies
                 if self.allow_forced_terminations:
                     for id_num in self.hunt_victims:
                         # TODO: This check fails in the case where optimizers are paused and then restarted
@@ -367,9 +379,8 @@ class GloMPOManager:
                             self.optimizer_packs[res.opt_id].gpr.add_known(res.n_iter, res.fx)
 
                             # Start new hyperparameter optimization job
-                            # TODO Reallow hyperparam jobs
-                            # if len(self.optimizer_packs[res.opt_id].gpr.training_values()) % 3 == 0:
-                            #     self._start_hyperparam_job(res.opt_id)
+                            if len(self.optimizer_packs[res.opt_id].gpr.training_values()) % 20 == 0:
+                                self._start_hyperparam_job(res.opt_id)
 
                             mean = np.mean(self.log.get_history(res.opt_id, "fx"))
                             sigma = np.std(self.log.get_history(res.opt_id, "fx"))
@@ -403,15 +414,16 @@ class GloMPOManager:
                         exitcode = self.optimizer_packs[opt_id].process.exitcode
                         self.graveyard.add(opt_id)
                         if exitcode == 0:
-                            self._check_signals(opt_id)
-                            self.conv_counter += 1
-                            if opt_id not in self.graveyard:
-                                self.log.put_message(opt_id, "Terminated normally without sending a minimization "
-                                                             "complete signal to the manager.")
-                                warnings.warn(f"Optimizer {opt_id} terminated normally without sending a minimization "
-                                              f"complete signal to the manager.", UserWarning)
-                                self.log.put_metadata(opt_id, "Approximate Stop Time", datetime.now())
-                                self.log.put_metadata(opt_id, "End Condition", "Normal termination (Reason unknown)")
+                            if not self._check_signals(opt_id):
+                                self.conv_counter += 1
+                                if opt_id not in self.graveyard:
+                                    self.log.put_message(opt_id, "Terminated normally without sending a minimization "
+                                                                 "complete signal to the manager.")
+                                    warnings.warn(f"Optimizer {opt_id} terminated normally without sending a "
+                                                  f"minimization complete signal to the manager.", UserWarning)
+                                    self.log.put_metadata(opt_id, "Approximate Stop Time", datetime.now())
+                                    self.log.put_metadata(opt_id, "End Condition", "Normal termination "
+                                                                                   "(Reason unknown)")
                         else:
                             self.log.put_message(opt_id, f"Terminated in error with code {-exitcode}")
                             warnings.warn(f"Optimizer {opt_id} terminated in error with code {-exitcode}", UserWarning)
@@ -420,6 +432,7 @@ class GloMPOManager:
                     if self.optimizer_packs[opt_id].process.is_alive() and time() - self.last_feedback[opt_id] > \
                             self._TOO_LONG and self.allow_forced_terminations:
                         warnings.warn(f"Optimizer {opt_id} seems to be hanging. Forcing termination.", UserWarning)
+                        self.graveyard.add(opt_id)
                         self.log.put_message(opt_id, "Force terminated due to no feedback timeout.")
                         self.log.put_metadata(opt_id, "Approximate Stop Time", datetime.now())
                         self.log.put_metadata(opt_id, "End Condition", "Forced GloMPO Termination")
@@ -448,8 +461,10 @@ class GloMPOManager:
 
                 # Start new hunting jobs
                 # TODO Better starting criteria than every 50 function calls?
-                if self.f_counter % 100 == 0 and self.f_counter > 0:
+                if self.f_counter > hunt_control * 100 and self.f_counter > 0:
                     self._start_hunt()
+                    print("New hunt started")
+                    hunt_control += 1
 
                 # Check convergence
                 converged = self.convergence_checker.converged(self)
@@ -561,21 +576,27 @@ class GloMPOManager:
     def _check_signals(self, opt_id: int):
         pipe = self.optimizer_packs[opt_id].signal_pipe
         self.last_feedback[opt_id] = time()
+        found_signal = False
         if pipe.poll():
-            key, message = pipe.recv()
-            self._optional_print(f"\tSignal {key} from {opt_id}.")
-            if key == 0:
-                self.log.put_metadata(opt_id, "Stop Time", datetime.now())
-                self.log.put_metadata(opt_id, "End Condition", message)
-                self.graveyard.add(opt_id)
-                self.conv_counter += 1
-            elif key == 1:
-                # TODO Deal with 1 signals
-                pass
-            elif key == 9:
-                self.log.put_message(opt_id, message)
+            try:
+                key, message = pipe.recv()
+                self._optional_print(f"\tSignal {key} from {opt_id}.")
+                if key == 0:
+                    self.log.put_metadata(opt_id, "Stop Time", datetime.now())
+                    self.log.put_metadata(opt_id, "End Condition", message)
+                    self.graveyard.add(opt_id)
+                    self.conv_counter += 1
+                elif key == 1:
+                    # TODO Deal with 1 signals
+                    pass
+                elif key == 9:
+                    self.log.put_message(opt_id, message)
+                found_signal = True
+            except EOFError:
+                self._optional_print(f"\tOpt{opt_id} pipe closed.")
         else:
             self._optional_print(f"\tNo signals from {opt_id}.")
+        return found_signal
 
     def _start_new_job(self, opt_id: int, optimizer: BaseOptimizer, call_kwargs: Dict[str, Any],
                        pipe: Connection, event: Event, gpr: GaussianProcessRegression):
@@ -585,8 +606,12 @@ class GloMPOManager:
         task = self.task
         x0 = self.x0_generator.generate()
         bounds = np.array(self.bounds)
+        target = optimizer.minimize
 
-        process = mp.Process(target=optimizer.minimize,
+        if self.split_printstreams:
+            target = self._redirect(opt_id, optimizer.minimize)
+
+        process = mp.Process(target=target,
                              args=(task, x0, bounds),
                              kwargs=call_kwargs,
                              daemon=True)
@@ -601,6 +626,7 @@ class GloMPOManager:
 
     def _shutdown_job(self, opt_id):
         self.hunt_victims[opt_id] = time()
+        self.graveyard.add(opt_id)
 
         self.optimizer_packs[opt_id].signal_pipe.send(1)
         self._optional_print(f"Termination signal sent to {opt_id}")
@@ -678,10 +704,10 @@ class GloMPOManager:
                              f"\tOptimizer ID: {self.o_counter}\n"
                              f"\tType: {selected.__name__}")
 
-        gpr = GaussianProcessRegression(kernel=ExpKernel(alpha=0.100,
-                                                         beta=5.00),
+        gpr = GaussianProcessRegression(kernel=ExpKernel(alpha=1.6,
+                                                         beta=100),
                                         dims=1,
-                                        sigma_noise=0.01,
+                                        sigma_noise=0.5,
                                         mean=None)
 
         parent_pipe, child_pipe = mp.Pipe()
@@ -713,13 +739,32 @@ class GloMPOManager:
                 if gpr_id != log_id:
 
                     # TODO Better selection of the 'when' to sample, currently: 1000 + furthest point so far
+                    # TODO Allow burn-in before optimizer is killed
                     history = log.get_history(log_id, "fx_best")
                     i = len(history)
-                    best = history[-1]
-                    mean, std = gprs[gpr_id].sample_all(i+1000)
+                    if i > 0 and len(gprs[gpr_id].training_coords()) > 0:
+                        best = history[-1]
+                        mean, std = gprs[gpr_id].sample_all(i+1000)
 
-                    if best < mean - 2 * std:
-                        victims.add(gpr_id)
+                        if best < mean - 2 * std:
+                            victims.add(gpr_id)
+                            print(f"{log_id} want to kill {gpr_id}\n"
+                                  f"\tbest = {best:.2E}"
+                                  f"\tmean = {float(mean):.2E}"
+                                  f"\tstd  = {float(std):.2E}"
+                                  f"\tm+s  = {float(mean - 2 * std):.2E}"
+                                  f"\tb<ms = {best < float(mean - 2 * std)}")
+                    else:
+                        continue
 
         result = HuntingResult(hunt_id, victims)
         return result
+
+    @staticmethod
+    def _redirect(opt_id, func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            sys.stdout = open(f"glompo_optimizer_printstreams/{opt_id}_printstream.out", "w")
+            sys.stderr = open(f"glompo_optimizer_printstreams/{opt_id}_printstream.err", "w")
+            func(*args, **kwargs)
+        return wrapper

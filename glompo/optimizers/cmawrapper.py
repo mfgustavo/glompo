@@ -4,6 +4,7 @@ import os
 import numpy as np
 import cma
 import pickle
+from typing import *
 from time import time
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
@@ -58,7 +59,7 @@ class CMAOptimizer(BaseOptimizer):
         self.es = None
         self.result = None
 
-    def minimize(self, function, x0, bounds, callbacks=None, **kwargs):
+    def minimize(self, function, x0, bounds, callbacks=None,  **kwargs):
         self.dir = os.path.abspath('') + os.sep + 'cmadata' + os.sep
         if not os.path.isdir(self.dir):
             os.makedirs(self.dir)
