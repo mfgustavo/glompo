@@ -158,8 +158,6 @@ class GaussianProcessRegression:
             points in x. Returns a tuple in the order (mean, sd).
             If scaled is True then normalised values are returned otherwise they are returned in real space.
         """
-        # TODO: Rewrite to deal with tuple inputs
-        # Nest x if it is one point or one dimension
         x_nest = np.reshape(x, (-1, self.dims))
         mean_func, covar_fun = self._calc_kernels(x_nest)
 
@@ -260,8 +258,6 @@ class GaussianProcessRegression:
             self._inv_kernel_cache[key] = mat
             return mat
 
-    # TODO To implement below look at Hessian update rules for matrix inversion in QM codes BUT this is not a
-    #  priority.
     # # BELOW FUNCTION DOES NOT WORK AT EVEN MODERATE DIMENSIONS :(
     # def _inv_kernel_training_matrix(self):
     #     """ Calculates the inverse of the kernel matrix of training points. This is done blockwise according to the

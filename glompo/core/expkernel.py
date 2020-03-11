@@ -42,9 +42,6 @@ class ExpKernel:
         calc /= (x1 + x2 + self.beta) ** self.alpha
         return calc
 
-    # TODO Check the eigenvalues of the final solution. If they are not all the same sign then it can indicate a
-    #  saddle point and problem with tyhe solution. Consider then forcing a restart but bounding away from the
-    #  incumbent solution.
     def optimize_hyperparameters(self,
                                  time_series: np.ndarray,
                                  loss_series: np.ndarray,

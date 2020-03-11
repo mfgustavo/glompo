@@ -11,7 +11,7 @@ from scm.params.optimizers.base import *
 from scm.params.core.parameteroptimization import Optimization
 
 # Package imports
-from glompo.scope.scope import ParallelOptimizerScope
+from glompo.scope.scope import GloMPOScope
 
 
 class ParamsGlompoOptimizer(BaseOptimizer):
@@ -69,7 +69,7 @@ class ParamsGlompoOptimizer(BaseOptimizer):
         self.hunting_queue = self.manager.Queue()
 
         if visualisation:
-            self.scope = ParallelOptimizerScope(num_streams=max_jobs, **visualisation_args)
+            self.scope = GloMPOScope(num_streams=max_jobs, **visualisation_args)
 
     # noinspection PyMethodOverriding
     def minimize(self, function: Callable, x0: Sequence[float], bounds: Sequence[Tuple[float, float]],

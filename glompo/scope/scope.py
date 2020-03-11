@@ -12,7 +12,7 @@ import warnings
 from time import time
 
 
-class ParallelOptimizerScope:
+class GloMPOScope:
     """ Constructs and records the dynamic plotting of optimizers run in parallel"""
 
     def __init__(self,
@@ -95,34 +95,32 @@ class ParallelOptimizerScope:
             os.makedirs("_tmp_movie_grabs", exist_ok=True)
 
     def _update(self):
-        # TODO Decide on better update frequency
-        # if time() - self.t_last > 1:
-        self.t_last = time()
-        self.ax.relim()
-        self.ax.autoscale_view()
-        if self.truncate_zoom:
-            max_val = -np.inf
-            min_val = np.inf
-            for stream in self.streams.values():
-                data = stream['all_opt'].get_ydata()
-                if len(data) > 10:
-                    pt = data[-1]
-                    if pt > max_val:
-                        max_val = pt
-                    if pt < min_val:
-                        min_val = pt
-            if max_val != min_val and max_val > -np.inf and min_val < np.inf:
-                self.ax.set_ylim(min_val - (max_val - min_val), max_val + (max_val - min_val))
-                self.ax.set_autoscaley_on(False)
-        self.fig.canvas.draw()
-        self.fig.canvas.flush_events()
-        if self.record_movie:
-            os.chdir("_tmp_movie_grabs")
-            self.writer.grab_frame()
-            os.chdir("..")
+        if time() - self.t_last > 1:
+            self.t_last = time()
+            self.ax.relim()
+            self.ax.autoscale_view()
+            if self.truncate_zoom:
+                max_val = -np.inf
+                min_val = np.inf
+                for stream in self.streams.values():
+                    data = stream['all_opt'].get_ydata()
+                    if len(data) > 10:
+                        pt = data[-1]
+                        if pt > max_val:
+                            max_val = pt
+                        if pt < min_val:
+                            min_val = pt
+                if max_val != min_val and max_val > -np.inf and min_val < np.inf:
+                    self.ax.set_ylim(min_val - (max_val - min_val), max_val + (max_val - min_val))
+                    self.ax.set_autoscaley_on(False)
+            self.fig.canvas.draw()
+            self.fig.canvas.flush_events()
+            if self.record_movie:
+                os.chdir("_tmp_movie_grabs")
+                self.writer.grab_frame()
+                os.chdir("..")
 
     def add_stream(self, opt_id):
-        # TODO Add a way to start new stream at the x where an old one died
         self.n_streams += 1
         self.streams[opt_id] = {'all_opt': self.ax.plot([], [])[0],  # Follows every optimizer iteration
                                 'train_pts': self.ax.plot([], [], ls='', marker='o')[0],  # Points in training set
@@ -140,9 +138,30 @@ class ParallelOptimizerScope:
             self.ax.add_patch(self.streams[opt_id]['st_dev'])
 
         # Match colors for a single optimisation
-        colors = plt.get_cmap("tab10")
+        if self.n_streams < 20:
+            colors = plt.get_cmap("tab20")
+            threshold = 0
+        elif self.n_streams < 40:
+            colors = plt.get_cmap("tab20b")
+            threshold = 20
+        elif self.n_streams < 60:
+            colors = plt.get_cmap("tab20c")
+            threshold = 40
+        elif self.n_streams < 69:
+            colors = plt.get_cmap("Set1")
+            threshold = 60
+        elif self.n_streams < 77:
+            colors = plt.get_cmap("Set2")
+            threshold = 69
+        elif self.n_streams < 89:
+            colors = plt.get_cmap("Set3")
+            threshold = 77
+        else:
+            colors = plt.get_cmap("Dark2")
+            threshold = 89
+
         for line in self.streams[opt_id]:
-            color = colors(self.n_streams)
+            color = colors(self.n_streams - threshold)
             if any([line == _ for _ in ['train_pts', 'hyper_init', 'hyper_up']]):
                 color = tuple([0.75, 0.75, 0.75, 1] * np.array(color))
             elif line == 'st_dev':
@@ -255,7 +274,7 @@ class ParallelOptimizerScope:
                 shutil.rmtree("_tmp_movie_grabs", ignore_errors=True)
         else:
             warnings.warn("Unable to generate movie file as data was not collected during the dynamic plotting.\n"
-                          "Rerun ParallelOptimizerScope with record_movie = True during initialisation.", UserWarning)
+                          "Rerun GloMPOScope with record_movie = True during initialisation.", UserWarning)
 
     def get_farthest_pt(self, opt_id: int):
         """ Returns the furthest evaluated point of the 'n_stream'th optimizer. """
