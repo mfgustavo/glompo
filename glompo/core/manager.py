@@ -403,7 +403,7 @@ class GloMPOManager:
                         if res.n_iter % 3 == 0:
                             trained = True
                             self._optional_print(f"\tResult from {res.opt_id} sent to GPR", 2)
-                            self.optimizer_packs[res.opt_id].gpr.add_known(res.n_iter, fx)
+                            self.optimizer_packs[res.opt_id].gpr.add_known(self.f_counter, fx)
 
                             # Start new hyperparameter optimization job
                             if len(self.optimizer_packs[res.opt_id].gpr.training_values()) % 20 == 0:
@@ -416,13 +416,13 @@ class GloMPOManager:
                             self.optimizer_packs[res.opt_id].gpr.rescale((mean, sigma))
 
                         if self.visualisation:
-                            self.scope.update_optimizer(res.opt_id, (res.n_iter, fx))
+                            self.scope.update_optimizer(res.opt_id, (self.f_counter, fx))
                             if trained:
-                                self.scope.update_scatter(res.opt_id, (res.n_iter, fx))
+                                self.scope.update_scatter(res.opt_id, (self.f_counter, fx))
 
-                                i_max = len(self.log.get_history(res.opt_id, "fx"))
+                                i_min, i_max = self.scope.ax.get_xlim()
                                 if self.scope.visualise_gpr:
-                                    i_range = np.linspace(0, i_max, 200)
+                                    i_range = np.linspace(i_min, i_max, 200)
                                     mu, sigma = self.optimizer_packs[res.opt_id].gpr.sample_all(i_range)
                                     self.scope.update_gpr(res.opt_id, i_range, mu, mu - 2*sigma, mu + 2*sigma)
                                 else:
