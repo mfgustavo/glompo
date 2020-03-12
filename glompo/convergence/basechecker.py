@@ -7,42 +7,57 @@ from typing import *
 class BaseChecker(ABC):
     """ Base checker from which all checkers must inherit to be compatible with GloMPO. """
 
+    def __init__(self):
+        self.converged = False
+        
     @abstractmethod
-    def converged(self, manager: 'GloMPOManager') -> bool:
+    def check_convergence(self, manager: 'GloMPOManager') -> bool:
         """ When called, this method may check any instance variables and any variables within the manager to determine
-            if GloMPO has converged and returns a bool. """
+            if GloMPO has converged and returns a bool.
+
+            Note: For proper functionality, the result of check_convergence must be saved to self.converged before
+            returning. """
         pass
 
     def __add__(self, other):
-        return AnyChecker(self, other)
+        return _AnyChecker(self, other)
 
     def __mul__(self, other):
-        return AllChecker(self, other)
+        return _AllChecker(self, other)
+    
+    def __str__(self) -> str:
+        return f"{self.__class__.__name__}: {self.converged}"
 
 
-class AnyChecker(BaseChecker):
+class _CombiChecker(BaseChecker):
+
     def __init__(self, base1: BaseChecker, base2: BaseChecker, *args: Sequence[BaseChecker]):
+        super().__init__()
         combi = [base1, base2, *args]
         for base in combi:
             if not isinstance(base, BaseChecker):
                 raise TypeError("CombinedChecker can only be initialised with instances of BaseChecker subclasses.")
         self.base_checkers = combi
+        self.converged = False
 
-    def converged(self, manager: 'GloMPOManager') -> bool:
-        """ When called, this method may check any instance variables and any variables within the manager to determine
-            if GloMPO has converged and returns a bool. """
-        return any([base.converged(manager) for base in self.base_checkers])
+    def check_convergence(self, manager: 'GloMPOManager') -> bool:
+        pass
+
+    def __str__(self):
+        mess = ""
+        for base in self.base_checkers:
+            mess += f"{base}\n"
+        mess = mess[:-1]
+        return mess
 
 
-class AllChecker(BaseChecker):
-    def __init__(self, base1: BaseChecker, base2: BaseChecker, *args: Sequence[BaseChecker]):
-        combi = [base1, base2, *args]
-        for base in combi:
-            if not isinstance(base, BaseChecker):
-                raise TypeError("CombinedChecker can only be initialised with instances of BaseChecker subclasses.")
-        self.base_checkers = combi
+class _AnyChecker(_CombiChecker):
+    def check_convergence(self, manager: 'GloMPOManager') -> bool:
+        self.converged = any([base.check_convergence(manager) for base in self.base_checkers])
+        return self.converged
 
-    def converged(self, manager: 'GloMPOManager') -> bool:
-        """ When called, this method may check any instance variables and any variables within the manager to determine
-            if GloMPO has converged and returns a bool. """
-        return all([base.converged(manager) for base in self.base_checkers])
+
+class _AllChecker(_CombiChecker):
+    def check_convergence(self, manager: 'GloMPOManager') -> bool:
+        self.converged = all([base.check_convergence(manager) for base in self.base_checkers])
+        return self.converged

@@ -12,17 +12,16 @@ class KillsAfterConvergence(BaseChecker):
         """ Convergence is reached after n_killed optimizers have been stopped by GloMPO after n_converged optimizers
             have reached normal convergence.
         """
+        super().__init__()
         self.enough_conv = False
         self.kill_count = 0
         self.n_converged = n_converged
         self.n_killed = n_killed
 
-    def converged(self, manager: 'GloMPOManager') -> bool:
+    def check_convergence(self, manager: 'GloMPOManager') -> bool:
         if manager.conv_counter >= self.n_converged:
             self.enough_conv = True
             self.kill_count = len(manager.hunt_victims)
 
-        if self.enough_conv and len(manager.hunt_victims) - self.kill_count >= self.n_killed:
-            return True
-        else:
-            return False
+        self.converged = self.enough_conv and len(manager.hunt_victims) - self.kill_count >= self.n_killed
+        return self.converged

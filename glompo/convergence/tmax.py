@@ -1,15 +1,16 @@
 
 
 from .basechecker import BaseChecker
+from time import time
 
 
-class MaxOptsStarted(BaseChecker):
+class MaxSeconds(BaseChecker):
 
-    def __init__(self, omax: int):
+    def __init__(self, tmax: int):
         """ Convergence is reached after omax optimizers have been started. """
         super().__init__()
-        self.omax = omax
+        self.tmax = tmax
 
     def check_convergence(self, manager: 'GloMPOManager') -> bool:
-        self.converged = manager.o_counter >= self.omax
+        self.converged = time() - manager.t_start >= self.tmax
         return self.converged

@@ -3,14 +3,13 @@
 from .basechecker import BaseChecker
 
 
-class NOptConvergence(BaseChecker):
+class NOptConverged(BaseChecker):
 
     def __init__(self, nconv: int):
         """ Convergence is reached after nconv optimizers have been converged normally. """
+        super().__init__()
         self.nconv = nconv
 
-    def converged(self, manager: 'GloMPOManager') -> bool:
-        if manager.conv_counter >= self.nconv:
-            return True
-        else:
-            return False
+    def check_convergence(self, manager: 'GloMPOManager') -> bool:
+        self.converged = manager.conv_counter >= self.nconv
+        return self.converged

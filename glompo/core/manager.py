@@ -15,6 +15,7 @@ import os
 from ..generators.basegenerator import BaseGenerator
 from ..generators.random import RandomGenerator
 from ..convergence.nkillsafterconv import KillsAfterConvergence
+from ..convergence.basechecker import BaseChecker
 from ..common.namedtuples import *
 from ..scope.scope import GloMPOScope
 from ..optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
@@ -44,8 +45,6 @@ class GloMPOManager:
                  task_kwargs: Optional[Dict] = None,
                  convergence_checker: Optional[BaseChecker] = None,
                  x0_generator: Optional[BaseGenerator] = None,
-                 tmax: Optional[float] = None,
-                 fmax: Optional[int] = None,
                  region_stability_check: bool = False,
                  report_statistics: bool = False,
                  enforce_elitism: bool = False,
@@ -103,22 +102,17 @@ class GloMPOManager:
             Optional keyword arguments passed to task with every call.
 
         convergence_checker: Optional[BaseChecker] = None
-            Criteria used for convergence. Supported arguments:
-                'n_kills_after_conv':  The mp_manager delivers the best answer obtained after n optimizers have been
-                    killed after at least one has been allowed to converge. Replace n with an integer value. The default
-                    value is 0_kills_after_conv which delivers the answer produced as soon as an optimizer converges.
+            Criteria used for convergence. A collection of subclasses of BaseChecker are provided, these can be used in
+            combination to tailor various exit conditions. Instances which are added together represent an 'or'
+            combination and instances which are multiplied together represent an 'and' combination.
+                E.g.: convergence_criteria = MaxFuncCalls(20000) + KillsAfterConvergence(3, 1) * MaxSeconds(60*5)
+                In this case GloMPO will run until 20 000 function evaluations OR until 3 optimizers have been killed
+                after the first convergence provided it has at least run for five minutes.
+
 
         x0_generator: Optional[BaseGenerator] = None
             An instance of a subclass of BaseGenerator which produces starting points for the optimizer. If not provided
             a random generator is used.
-
-        tmax: Optional[int] = None
-            Maximum number of seconds the optimizer is allowed to run before exiting (gracefully) and delivering the
-            best result seen up to this point.
-            Note: If tmax is reached GloMPO will not run region_stability_checks.
-
-        fmax: Optional[int] = None
-            Maximum number of function calls that are allowed between all optimizers.
 
         region_stability_check: bool = False
             If True, local optimizers are started around a candidate solution which has been selected as a final
@@ -263,9 +257,6 @@ class GloMPOManager:
             self.x0_generator = RandomGenerator(self.bounds)
 
         # Save max conditions and counters
-        self.tmax = np.clip(int(tmax), 1, None) if tmax or tmax == 0 else np.inf
-        self.fmax = np.clip(int(fmax), 1, None) if fmax or fmax == 0 else np.inf
-
         self.t_start = None
         self.dt_start = None
         self.o_counter = 0
@@ -338,13 +329,12 @@ class GloMPOManager:
                 opt = self._setup_new_optimizer()
                 self._start_new_job(*opt)
 
-            while time() - self.t_start < self.tmax and self.f_counter < self.fmax and not converged:
+            while not converged:
 
                 # Start new processes if possible
                 self._optional_print("Checking for available optimizer slots...", 2)
                 processes = [pack.process for pack in self.optimizer_packs.values()]
                 count = sum([int(proc.is_alive()) for proc in processes])
-                # NOTE: is_alive joins any dead processes
                 while count < self.max_jobs:
                     opt = self._setup_new_optimizer()
                     self._start_new_job(*opt)
@@ -375,7 +365,6 @@ class GloMPOManager:
                 # Force kill any zombies
                 if self.allow_forced_terminations:
                     for id_num in self.hunt_victims:
-                        # TODO: This check fails in the case where optimizers are paused and then restarted
                         if time() - self.hunt_victims[id_num] > self._TOO_LONG and \
                                 self.optimizer_packs[id_num].process.is_alive():
                             self.optimizer_packs[id_num].process.terminate()
@@ -393,7 +382,7 @@ class GloMPOManager:
                     i_count += 1
                     self.last_feedback[res.opt_id] = time()
                     self.f_counter += res.n_icalls
-                    if self.f_counter > self.fmax:
+                    if self.convergence_checker.check_convergence(self):
                         break
                     if not any([res.opt_id == victim for victim in self.hunt_victims]):
 
@@ -407,7 +396,7 @@ class GloMPOManager:
 
                         self.x0_generator.update(res.x, fx)
                         self.log.put_iteration(res.opt_id, res.n_iter, list(res.x), fx)
-                        self._optional_print(f"Result from {res.opt_id} @ iter {res.n_iter} fx = {fx}", 2)
+                        self._optional_print(f"\tResult from {res.opt_id} @ iter {res.n_iter} fx = {fx}", 2)
 
                         # Send results to GPRs
                         trained = False
@@ -437,7 +426,6 @@ class GloMPOManager:
                                     mu, sigma = self.optimizer_packs[res.opt_id].gpr.sample_all(i_range)
                                     self.scope.update_gpr(res.opt_id, i_range, mu, mu - 2*sigma, mu + 2*sigma)
                                 else:
-                                    # mu, sigma = self.optimizer_packs[res.opt_id].gpr.sample_all(i_max+1000)
                                     mu, sigma = self.optimizer_packs[res.opt_id].gpr.estimate_mean()
                                     self.scope.update_mean(res.opt_id, mu, sigma)
                             if res.final:
@@ -497,14 +485,14 @@ class GloMPOManager:
                 self._optional_print("New hyperparameter check done.", 2)
 
                 # Start new hunting jobs
-                if self.f_counter > hunt_control * 100 and self.f_counter > 0:
+                if self.f_counter > hunt_control * 100 and self.f_counter > 0 and not self.hunting_processes:
                     self._start_hunt()
                     hunt_control += 1
 
                 # Check convergence
-                converged = self.convergence_checker.converged(self)
+                converged = self.convergence_checker.check_convergence(self)
                 if converged:
-                    self._optional_print("!!! Convergence Reached !!!", 1)
+                    self._optional_print(f"Convergence Reached", 1)
 
                 # Setup candidate solution
                 # TODO Improve solution selection
@@ -527,11 +515,8 @@ class GloMPOManager:
 
                 result = Result(best_x, best_fx, best_stats, best_origin)
 
-            self._optional_print(f"Exiting manager loop."
-                                 f"Exit conditions met: "
-                                 f"\tConvergence check: {converged}"
-                                 f"\ttmax condition: {time() - self.t_start >= self.tmax}"
-                                 f"\tfmax condition: {self.f_counter >= self.fmax}", 1)
+            self._optional_print(f"Exiting manager loop.\n"
+                                 f"Exit conditions met: \n{self.convergence_checker}", 1)
 
             # Check answer
             # TODO Check answer
@@ -542,12 +527,12 @@ class GloMPOManager:
                     self.optimizer_packs[opt_id].signal_pipe.send(1)
                     self.graveyard.add(opt_id)
                     self.log.put_metadata(opt_id, "Stop Time", datetime.now())
-                    reason = ""
-                    reason += "Conv. Crit. " if converged else ""
-                    reason += "tmax " if time() - self.t_start >= self.tmax else ""
-                    reason += "fmax " if self.f_counter >= self.fmax else ""
-                    self.log.put_metadata(opt_id, "End Condition", f"GloMPO Convergence ({reason})")
+                    self.log.put_metadata(opt_id, "End Condition", f"GloMPO Convergence")
                     self.optimizer_packs[opt_id].process.join(self._TOO_LONG / 20)
+            for hunt in self.hunting_processes.values():
+                hunt.terminate()
+            for hypopt in self.hyperparm_processes.values():
+                hypopt.terminate()
 
             return result
 
@@ -634,7 +619,7 @@ class GloMPOManager:
     def _start_new_job(self, opt_id: int, optimizer: BaseOptimizer, call_kwargs: Dict[str, Any],
                        pipe: Connection, event: Event, gpr: GaussianProcessRegression):
 
-        self._optional_print(f"Starting Optimizer: {opt_id}", 1)
+        self._optional_print(f"Starting Optimizer: {opt_id}", 2)
 
         task = self.task
         x0 = self.x0_generator.generate()
@@ -782,7 +767,7 @@ class GloMPOManager:
 
                     history = log.get_history(log_id, "fx_best")
                     i = len(history)
-                    if i > 0 and len(gprs[gpr_id].training_coords()) > 0:
+                    if i > 0 and len(gprs[gpr_id].training_coords()) > 10:
                         best = history[-1]
                         # mean, std = gprs[gpr_id].sample_all(i+1000)
                         mean, std = gprs[gpr_id].estimate_mean()

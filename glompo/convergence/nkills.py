@@ -3,14 +3,13 @@
 from .basechecker import BaseChecker
 
 
-class KillsMaxConvergence(BaseChecker):
+class MaxKills(BaseChecker):
 
     def __init__(self, kills_max: int):
         """ Convergence is reached after kills_max optimizers have been killed. """
+        super().__init__()
         self.kills_max = kills_max
 
-    def converged(self, manager: 'GloMPOManager') -> bool:
-        if manager.kill_counter >= self.kills_max:
-            return True
-        else:
-            return False
+    def check_convergence(self, manager: 'GloMPOManager') -> bool:
+        self.converged = manager.kill_counter >= self.kills_max
+        return self.converged

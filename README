@@ -1,1 +1,7 @@
 glompo is a Globally Managed Parallel Optimisation algorithm utilising Bayesian statistics and Gaussian Process Regression
+
+Notes on dependecies: GloMPOScope is an optional feature which can be used to monitor and record GloMPO's management of
+the optimization. This uses matplotlib using a backend requiring a Qt binding to use this please ensure pyside2 is
+installed in your python environment
+
+pip install pyside2

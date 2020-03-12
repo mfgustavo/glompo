@@ -1,6 +1,7 @@
 
 
 from typing import *
+from time import time
 import matplotlib.animation as ani
 import matplotlib.lines as lines
 import matplotlib.patches as patches
@@ -9,7 +10,16 @@ import numpy as np
 import os
 import shutil
 import warnings
-from time import time
+
+
+# Overwrites a method in the matplotlib.animation.FFMpegWriter class which caused it to hang during movie generation
+
+class MyFFMpegWriter(ani.FFMpegWriter):
+    def cleanup(self):
+        """Clean-up and collect the process used to write the movie file."""
+        self._frame_sink().close()
+
+# End Error Fix Section
 
 
 class GloMPOScope:
@@ -86,7 +96,7 @@ class GloMPOScope:
 
         self.record_movie = record_movie
         if record_movie:
-            self.writer = ani.FFMpegFileWriter(**writer_kwargs) if writer_kwargs else ani.FFMpegFileWriter()
+            self.writer = MyFFMpegWriter(**writer_kwargs) if writer_kwargs else MyFFMpegWriter()
             if not movie_kwargs:
                 movie_kwargs = {}
             if 'outfile' not in movie_kwargs:
@@ -222,10 +232,6 @@ class GloMPOScope:
         line.set_xdata(x_pt)
         line.set_ydata(y_pt)
 
-        # # Shrink the uncertainty patch
-        # rec = self.streams[opt_id]['opt_kill']
-        # rec.set_width(y_pt)
-
         self._update()
 
     def update_norm_terminate(self, opt_id: int):
@@ -235,10 +241,6 @@ class GloMPOScope:
         x_pt, y_pt = self.get_farthest_pt(opt_id)
         line.set_xdata(x_pt)
         line.set_ydata(y_pt)
-
-        # # Shrink the uncertainty patch
-        # rec = self.streams[opt_id]['opt_norm']
-        # rec.set_width(y_pt)
 
         self._update()
 
