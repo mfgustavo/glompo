@@ -26,12 +26,11 @@ class GloMPOScope:
     """ Constructs and records the dynamic plotting of optimizers run in parallel"""
 
     def __init__(self,
-                 x_range: Tuple[float, float] = (),
+                 x_range: Tuple[float, float] = 100,
                  y_range: Tuple[float, float] = (),
                  visualise_gpr: bool = False,
                  record_movie: bool = False,
                  interactive_mode: bool = False,
-                 truncate_zoom: bool = False,
                  writer_kwargs: Union[Dict[str, Any], None] = None,
                  movie_kwargs: Union[Dict[str, Any], None] = None):
         """
@@ -39,9 +38,14 @@ class GloMPOScope:
 
         Parameters
         ----------
-        x_range : Tuple[float, float]
-            Sets the x-axis limits of the plot, default is an empty tuple which leads the plot to automatically and
-            constantly rescale the axis.
+        x_range : Union[Tuple[float, float], int, None]
+            If None is provided the x-axis will automatically and continuously rescale from zero as the number of
+            function evaluations increases.
+            If a tuple of the form (min, max) is provided then the x-axis will be fixed to this range.
+            If an integer is provided then the plot will only show the last x_range evaluations and discard earlier
+            points. This is useful to make differences between optimizers visible in the late stage and also keep the
+            scope operating at an adequate speed.
+            Default value is set to 100.
         y_range : Tuple[float, float]
             Sets the y-axis limits of the plot, default is an empty tuple which leads the plot to automatically and
             constantly rescale the axis.
@@ -52,10 +56,6 @@ class GloMPOScope:
             If True then a matplotlib.animation.FFMpegFileWriter instance is created to record the plot.
         interactive_mode : bool
             If True the plot is visible on screen during the optimization.
-        truncate_zoom : bool
-            If True the plot will truncate large error values as more data arrives in order to be able to discern
-            progress at higher iterations. Not compatible in conjunction with a provided y_range, this will take
-            precedence.
         writer_kwargs : Union[Dict[str, Any], None]
             Optional dictionary of arguments to be sent to the initialisation of the
             matplotlib.animation.FFMpegFileWriter class.
@@ -66,13 +66,14 @@ class GloMPOScope:
         plt.ion() if interactive_mode else plt.ioff()
 
         self.fig, self.ax = plt.subplots(figsize=(12, 8))
-        self.ax.set_xlabel("Iteration")
+        self.ax.set_title("GloMPO Scope")
+        self.ax.set_xlabel("Total Function Calls")
         self.ax.set_ylabel("Error")
 
         self.streams = {}
         self.n_streams = 0
-        self.truncate_zoom = truncate_zoom
         self.t_last = 0
+        self.x_max = 0
 
         # Create custom legend
         self.visualise_gpr = visualise_gpr
@@ -91,7 +92,22 @@ class GloMPOScope:
 
         self.ax.legend(loc='upper right', handles=leg_elements)
 
-        self.ax.set_xlim(x_range[0], x_range[1]) if x_range else self.ax.set_autoscalex_on(True)
+        # Setup axis limits
+        self.truncated = None
+        if x_range is None:
+            self.ax.set_autoscalex_on(True)
+        elif isinstance(x_range, tuple):
+            if x_range[0] >= x_range[1]:
+                raise ValueError(f"Cannot parse x_range = {x_range}. Min must be less than and not equal to max.")
+            self.ax.set_xlim(x_range[0], x_range[1])
+        elif isinstance(x_range, int):
+            if x_range < 2:
+                raise ValueError(f"Cannot parse x_range = {x_range}. Value larger than 1 required.")
+            self.truncated = x_range
+            # self.ax.set_autoscalex_on(True)
+        else:
+            raise TypeError(f"Cannot parse x_range = {x_range}. Only int, None_Type and tuple can be used.")
+
         self.ax.set_ylim(y_range[0], y_range[1]) if y_range else self.ax.set_autoscaley_on(True)
 
         self.record_movie = record_movie
@@ -104,31 +120,55 @@ class GloMPOScope:
             self.writer.setup(fig=self.fig, **movie_kwargs)
             os.makedirs("_tmp_movie_grabs", exist_ok=True)
 
-    def _update(self):
+    def _redraw_graph(self):
         if time() - self.t_last > 1:
             self.t_last = time()
+
+            # Purge old results
+            if self.truncated:
+                for axes in self.streams.values():
+                    for line in axes.values():
+                        if not isinstance(line, patches.Rectangle):
+                            x_vals = np.array(line.get_xdata())
+                            y_vals = np.array(line.get_ydata())
+
+                            if len(x_vals) > 0:
+                                min_val = self.x_max - self.truncated
+                                x_vals = x_vals[x_vals >= min_val]
+                                y_vals = y_vals[-len(x_vals):]
+
+                                line.set_xdata(x_vals)
+                                line.set_ydata(y_vals)
+                        else:
+                            line.xy = (self.x_max - self.truncated, line.xy[1])
+
             self.ax.relim()
             self.ax.autoscale_view()
-            if self.truncate_zoom:
-                max_val = -np.inf
-                min_val = np.inf
-                for stream in self.streams.values():
-                    data = stream['all_opt'].get_ydata()
-                    if len(data) > 10:
-                        pt = data[-1]
-                        if pt > max_val:
-                            max_val = pt
-                        if pt < min_val:
-                            min_val = pt
-                if max_val != min_val and max_val > -np.inf and min_val < np.inf:
-                    self.ax.set_ylim(min_val - (max_val - min_val), max_val + (max_val - min_val))
-                    self.ax.set_autoscaley_on(False)
             self.fig.canvas.draw()
             self.fig.canvas.flush_events()
             if self.record_movie:
                 os.chdir("_tmp_movie_grabs")
                 self.writer.grab_frame()
                 os.chdir("..")
+
+    def _update_point(self, opt_id: int, track: str, pt: tuple = None):
+
+        if not pt:
+            pt = self.get_farthest_pt(opt_id)
+
+        self.x_max = pt[0] if pt[0] > self.x_max else self.x_max
+
+        line = self.streams[opt_id][track]
+        x_vals = np.append(line.get_xdata(), pt[0])
+        y_vals = np.append(line.get_ydata(), pt[1])
+
+        if self.truncated:
+            min_val = np.max(x_vals) - self.truncated
+            x_vals = x_vals[x_vals >= min_val]
+            y_vals = y_vals[-len(x_vals):]
+
+        line.set_xdata(x_vals)
+        line.set_ydata(y_vals)
 
     def add_stream(self, opt_id):
         self.n_streams += 1
@@ -182,72 +222,63 @@ class GloMPOScope:
 
     def update_optimizer(self, opt_id: int, pt: tuple):
         """ Given pt tuple is used to update the opt_id optimizer plot."""
-        line = self.streams[opt_id]['all_opt']
-        line.set_xdata(np.append(line.get_xdata(), pt[0]))
-        line.set_ydata(np.append(line.get_ydata(), pt[1]))
-        # self._update()
+        self._update_point(opt_id, 'all_opt', pt)
 
     def update_scatter(self, opt_id: int, pt: tuple):
         """ Given pt tuple is used to update the opt_id training data plot."""
-        line = self.streams[opt_id]['train_pts']
-        line.set_xdata(np.append(line.get_xdata(), pt[0]))
-        line.set_ydata(np.append(line.get_ydata(), pt[1]))
-        self._update()
+        self._update_point(opt_id, 'train_pts', pt)
+        self._redraw_graph()
 
     def update_mean(self, opt_id: int, mu: float, sigma: float):
         """ Given mu and sigma is used to update the opt_id mean and uncertainty plots."""
         # Mean line
         line = self.streams[opt_id]['mean']
-        line.set_xdata((0, self.get_farthest_pt(opt_id)[0]))
+        x_max = self.get_farthest_pt(opt_id)[0]
+        self.x_max = x_max if x_max > self.x_max else self.x_max
+        x_min = np.clip(x_max - self.truncated, 0, None) if self.truncated else 0
+        line.set_xdata((x_min, x_max))
         line.set_ydata((mu, mu))
 
         # Uncertainty Rectangle
         rec = self.streams[opt_id]['st_dev']
-        rec.xy = (0, mu - 2 * sigma)
-        rec.set_width(self.get_farthest_pt(opt_id)[0])
+        rec.xy = (x_min, mu - 2 * sigma)
+        width = self.truncated if self.truncated else x_max
+        rec.set_width(width)
         rec.set_height(4 * sigma)
-        self._update()
+        self._redraw_graph()
 
     def update_opt_start(self, opt_id: int):
         """ Given pt tuple is used to update the opt_id start hyperparameter optimizer plot."""
-        line = self.streams[opt_id]['hyper_init']
-        x_pt, y_pt = self.get_farthest_pt(opt_id)
-        line.set_xdata(np.append(line.get_xdata(), x_pt))
-        line.set_ydata(np.append(line.get_ydata(), y_pt))
-        self._update()
+        self._update_point(opt_id, 'hyper_init')
+        self._redraw_graph()
 
     def update_opt_end(self, opt_id: int):
         """ Given pt tuple is used to update the opt_id end hyperparameter optimizer plot."""
-        line = self.streams[opt_id]['hyper_up']
-        x_pt, y_pt = self.get_farthest_pt(opt_id)
-        line.set_xdata(np.append(line.get_xdata(), x_pt))
-        line.set_ydata(np.append(line.get_ydata(), y_pt))
-        self._update()
+        self._update_point(opt_id, 'hyper_up')
+        self._redraw_graph()
 
     def update_kill(self, opt_id: int):
         """ The opt_id kill optimizer plot is updated at its final point. """
-        # Add dead optimizer marker
-        line = self.streams[opt_id]['opt_kill']
-        x_pt, y_pt = self.get_farthest_pt(opt_id)
-        line.set_xdata(x_pt)
-        line.set_ydata(y_pt)
-
-        self._update()
+        self._update_point(opt_id, 'opt_kill')
+        self._redraw_graph()
 
     def update_norm_terminate(self, opt_id: int):
         """ The opt_id normal optimizer plot is updated at its final point. """
-        # Add dead optimizer marker
-        line = self.streams[opt_id]['opt_norm']
-        x_pt, y_pt = self.get_farthest_pt(opt_id)
-        line.set_xdata(x_pt)
-        line.set_ydata(y_pt)
-
-        self._update()
+        self._update_point(opt_id, 'opt_norm')
+        self._redraw_graph()
 
     def update_gpr(self, opt_id: int, x: np.ndarray, y: np.ndarray, lower_sig: np.ndarray, upper_sig: np.ndarray):
         """ Given mu and sigma is used to update the opt_id mean and uncertainty plots."""
         # Mean line
         line = self.streams[opt_id]['gpr_mean']
+
+        if self.truncated:
+            min_val = np.max(x) - self.truncated
+            x = x[x >= min_val]
+            y = y[-len(x):]
+            lower_sig = lower_sig[-len(x):]
+            upper_sig = upper_sig[-len(x):]
+
         line.set_xdata(x)
         line.set_ydata(y)
 
@@ -258,7 +289,7 @@ class GloMPOScope:
         line = self.streams[opt_id]['gpr_upper']
         line.set_xdata(x)
         line.set_ydata(upper_sig)
-        self._update()
+        self._redraw_graph()
 
     def generate_movie(self):
         """ Final call to write the saved frames into a single movie. """
@@ -279,16 +310,8 @@ class GloMPOScope:
                           "Rerun GloMPOScope with record_movie = True during initialisation.", UserWarning)
 
     def get_farthest_pt(self, opt_id: int):
-        """ Returns the furthest evaluated point of the 'n_stream'th optimizer. """
-        x_pt_all = float(self.streams[opt_id]['all_opt'].get_xdata()[-1])
-        y_pt_all = float(self.streams[opt_id]['all_opt'].get_ydata()[-1])
-
-        x_pt_tps = float(self.streams[opt_id]['all_opt'].get_xdata()[-1])
-        y_pt_tps = float(self.streams[opt_id]['all_opt'].get_ydata()[-1])
-
-        if x_pt_all > x_pt_tps:
-            x, y = x_pt_all, y_pt_all
-        else:
-            x, y = x_pt_tps, y_pt_tps
+        """ Returns the furthest evaluated point of the opt_id optimizer. """
+        x = float(self.streams[opt_id]['all_opt'].get_xdata()[-1])
+        y = float(self.streams[opt_id]['all_opt'].get_ydata()[-1])
 
         return x, y
