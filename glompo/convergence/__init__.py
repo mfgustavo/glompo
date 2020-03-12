@@ -3,8 +3,16 @@
 from .basechecker import BaseChecker
 
 from .nkillsafterconv import KillsAfterConvergence
-from .omax import OMaxConvergence
-from .nkills import KillsMaxConvergence
-from .nconv import NOptConvergence
+from .fmax import MaxFuncCalls
+from .tmax import MaxSeconds
+from .omax import MaxOptsStarted
+from .nkills import MaxKills
+from .nconv import NOptConverged
 
-__all__ = ["KillsAfterConvergence", "OMaxConvergence"]
+__all__ = ["BaseChecker",
+           "KillsAfterConvergence",
+           "MaxFuncCalls",
+           "MaxSeconds",
+           "MaxKills",
+           "MaxOptsStarted",
+           "NOptConverged"]
