@@ -416,15 +416,22 @@ class GloMPOManager:
                             self.optimizer_packs[res.opt_id].gpr.rescale((mean, sigma))
 
                         if self.visualisation:
-                            self.scope.update_optimizer(res.opt_id, (res.n_iter, fx))
+                            self.scope.update_optimizer(res.opt_id, (self.f_counter, fx))
                             if trained:
-                                self.scope.update_scatter(res.opt_id, (res.n_iter, fx))
+                                self.scope.update_scatter(res.opt_id, (self.f_counter, fx))
 
-                                i_max = len(self.log.get_history(res.opt_id, "fx"))
                                 if self.scope.visualise_gpr:
-                                    i_range = np.linspace(0, i_max, 200)
+                                    # TODO URGENT GPR IN I COORDS BUT SCOPE IS IN F COORDS
+                                    # TODO GPRs cover whole trunc range not the starting point of opt_id
+                                    i_range = np.linspace(0, res.n_iter, 200)
                                     mu, sigma = self.optimizer_packs[res.opt_id].gpr.sample_all(i_range)
-                                    self.scope.update_gpr(res.opt_id, i_range, mu, mu - 2*sigma, mu + 2*sigma)
+
+                                    f_range = self.scope.streams[res.opt_id]['all_opt'].get_xdata()
+                                    f_min = np.min(f_range)
+                                    f_max = np.max(f_range)
+                                    f_range = np.linspace(f_min, f_max, 200, endpoint=True)
+
+                                    self.scope.update_gpr(res.opt_id, f_range, mu, mu - 2*sigma, mu + 2*sigma)
                                 else:
                                     mu, sigma = self.optimizer_packs[res.opt_id].gpr.estimate_mean()
                                     self.scope.update_mean(res.opt_id, mu, sigma)
