@@ -421,8 +421,6 @@ class GloMPOManager:
                                 self.scope.update_scatter(res.opt_id, (self.f_counter, fx))
 
                                 if self.scope.visualise_gpr:
-                                    # TODO URGENT GPR IN I COORDS BUT SCOPE IS IN F COORDS
-                                    # TODO GPRs cover whole trunc range not the starting point of opt_id
                                     i_range = np.linspace(0, res.n_iter, 200)
                                     mu, sigma = self.optimizer_packs[res.opt_id].gpr.sample_all(i_range)
 
