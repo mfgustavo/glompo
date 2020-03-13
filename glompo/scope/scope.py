@@ -78,20 +78,20 @@ class GloMPOScope:
 
         # Create custom legend
         self.visualise_gpr = visualise_gpr
-        leg_elements = [lines.Line2D([], [], ls='-', c='black', label='Optimizer Evaluations'),
-                        lines.Line2D([], [], ls='', marker='o', c='black', label='Point in Training Set'),
-                        lines.Line2D([], [], ls='', marker=6, c='black', label='Hyperparam. Opt. Started'),
-                        lines.Line2D([], [], ls='', marker=7, c='black', label='Hyperparam. Updated'),
-                        lines.Line2D([], [], ls='', marker='x', c='black', label='Optimizer Killed'),
-                        lines.Line2D([], [], ls='', marker='*', c='black', label='Optimizer Converged')]
+        self.leg_elements = [lines.Line2D([], [], ls='-', c='black', label='Optimizer Evaluations'),
+                             lines.Line2D([], [], ls='', marker='o', c='black', label='Point in Training Set'),
+                             lines.Line2D([], [], ls='', marker=6, c='black', label='Hyperparam. Opt. Started'),
+                             lines.Line2D([], [], ls='', marker=7, c='black', label='Hyperparam. Updated'),
+                             lines.Line2D([], [], ls='', marker='x', c='black', label='Optimizer Killed'),
+                             lines.Line2D([], [], ls='', marker='*', c='black', label='Optimizer Converged')]
         if visualise_gpr:
-            leg_elements.append(lines.Line2D([], [], ls='-.', c='black', label='Regression'))
-            leg_elements.append(lines.Line2D([], [], ls=':', c='black', label='Regression Uncertainty'))
+            self.leg_elements.append(lines.Line2D([], [], ls='-.', c='black', label='Regression'))
+            self.leg_elements.append(lines.Line2D([], [], ls=':', c='black', label='Regression Uncertainty'))
         else:
-            leg_elements.append(lines.Line2D([], [], ls='--', c='black', label='Estimated Mean'))
-            leg_elements.append(patches.Patch(fc='silver', ec='black', ls=':', label='Mean Uncertainty'))
+            self.leg_elements.append(lines.Line2D([], [], ls='--', c='black', label='Estimated Mean'))
+            self.leg_elements.append(patches.Patch(fc='silver', ec='black', ls=':', label='Mean Uncertainty'))
 
-        self.ax.legend(loc='upper right', handles=leg_elements)
+        self.ax.legend(loc='upper right', handles=self.leg_elements)
 
         # Setup axis limits
         self.truncated = None
@@ -224,6 +224,9 @@ class GloMPOScope:
             elif any([line == _ for _ in ['opt_kill', 'opt_norm']]):
                 color = 'red'
             self.streams[opt_id][line].set_color(color)
+        self.leg_elements.append(lines.Line2D([], [], ls='-', c=colors(self.n_streams - threshold),
+                                              label=f'Optimizer {opt_id}'))
+        self.ax.legend(loc='upper right', handles=self.leg_elements)
 
     def update_optimizer(self, opt_id: int, pt: tuple):
         """ Given pt tuple is used to update the opt_id optimizer plot."""
