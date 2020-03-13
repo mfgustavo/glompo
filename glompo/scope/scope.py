@@ -91,7 +91,11 @@ class GloMPOScope:
             self.leg_elements.append(lines.Line2D([], [], ls='--', c='black', label='Estimated Mean'))
             self.leg_elements.append(patches.Patch(fc='silver', ec='black', ls=':', label='Mean Uncertainty'))
 
-        self.ax.legend(loc='upper right', handles=self.leg_elements)
+        self.ax.legend(loc='upper right', handles=self.leg_elements, bbox_to_anchor=(1.35, 1))
+
+        # Setup and shrink axis position to fit legend
+        box = self.ax.get_position()
+        self.ax.set_position([0.85 * box.x0, box.y0, 0.85 * box.width, box.height])
 
         # Setup axis limits
         self.truncated = None
@@ -226,7 +230,7 @@ class GloMPOScope:
             self.streams[opt_id][line].set_color(color)
         self.leg_elements.append(lines.Line2D([], [], ls='-', c=colors(self.n_streams - threshold),
                                               label=f'Optimizer {opt_id}'))
-        self.ax.legend(loc='upper right', handles=self.leg_elements)
+        self.ax.legend(loc='upper right', handles=self.leg_elements, bbox_to_anchor=(1.35, 1))
 
     def update_optimizer(self, opt_id: int, pt: tuple):
         """ Given pt tuple is used to update the opt_id optimizer plot."""
