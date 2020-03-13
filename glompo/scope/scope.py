@@ -65,12 +65,13 @@ class GloMPOScope:
 
         plt.ion() if interactive_mode else plt.ioff()
 
-        self.fig, self.ax = plt.subplots(figsize=(12, 8))
+        self.fig, self.ax = plt.subplots(figsize=(6, 4))
         self.ax.set_title("GloMPO Scope")
         self.ax.set_xlabel("Total Function Calls")
         self.ax.set_ylabel("Error")
 
         self.streams = {}
+        self.dead_streams = set()
         self.n_streams = 0
         self.t_last = 0
         self.x_max = 0
@@ -104,7 +105,6 @@ class GloMPOScope:
             if x_range < 2:
                 raise ValueError(f"Cannot parse x_range = {x_range}. Value larger than 1 required.")
             self.truncated = x_range
-            # self.ax.set_autoscalex_on(True)
         else:
             raise TypeError(f"Cannot parse x_range = {x_range}. Only int, None_Type and tuple can be used.")
 
@@ -126,21 +126,27 @@ class GloMPOScope:
 
             # Purge old results
             if self.truncated:
-                for axes in self.streams.values():
-                    for line in axes.values():
-                        if not isinstance(line, patches.Rectangle):
-                            x_vals = np.array(line.get_xdata())
-                            y_vals = np.array(line.get_ydata())
+                for opt_id in self.streams:
+                    if opt_id not in self.dead_streams:
+                        done = []
+                        for line in self.streams[opt_id].values():
+                            if not isinstance(line, patches.Rectangle):
+                                x_vals = np.array(line.get_xdata())
+                                y_vals = np.array(line.get_ydata())
 
-                            if len(x_vals) > 0:
-                                min_val = self.x_max - self.truncated
-                                x_vals = x_vals[x_vals >= min_val]
-                                y_vals = y_vals[-len(x_vals):]
+                                if len(x_vals) > 0:
+                                    min_val = self.x_max - self.truncated
+                                    bool_arr = x_vals >= min_val
+                                    x_vals = x_vals[bool_arr]
+                                    y_vals = y_vals[bool_arr]
 
-                                line.set_xdata(x_vals)
-                                line.set_ydata(y_vals)
-                        else:
-                            line.xy = (self.x_max - self.truncated, line.xy[1])
+                                    line.set_xdata(x_vals)
+                                    line.set_ydata(y_vals)
+                                done.append(True) if len(x_vals) == 0 else done.append(False)
+                            else:
+                                line.xy = (np.clip(self.x_max - self.truncated, 0, None), line.xy[1])
+                        if all(done):
+                            self.dead_streams.add(opt_id)
 
             self.ax.relim()
             self.ax.autoscale_view()
@@ -153,22 +159,21 @@ class GloMPOScope:
 
     def _update_point(self, opt_id: int, track: str, pt: tuple = None):
 
+        if opt_id in self.dead_streams:
+            self.dead_streams.remove(opt_id)
+
         if not pt:
             pt = self.get_farthest_pt(opt_id)
 
-        self.x_max = pt[0] if pt[0] > self.x_max else self.x_max
+        if pt:
+            self.x_max = pt[0] if pt[0] > self.x_max else self.x_max
 
-        line = self.streams[opt_id][track]
-        x_vals = np.append(line.get_xdata(), pt[0])
-        y_vals = np.append(line.get_ydata(), pt[1])
+            line = self.streams[opt_id][track]
+            x_vals = np.append(line.get_xdata(), pt[0])
+            y_vals = np.append(line.get_ydata(), pt[1])
 
-        if self.truncated:
-            min_val = np.max(x_vals) - self.truncated
-            x_vals = x_vals[x_vals >= min_val]
-            y_vals = y_vals[-len(x_vals):]
-
-        line.set_xdata(x_vals)
-        line.set_ydata(y_vals)
+            line.set_xdata(x_vals)
+            line.set_ydata(y_vals)
 
     def add_stream(self, opt_id):
         self.n_streams += 1
@@ -233,16 +238,14 @@ class GloMPOScope:
         """ Given mu and sigma is used to update the opt_id mean and uncertainty plots."""
         # Mean line
         line = self.streams[opt_id]['mean']
-        x_max = self.get_farthest_pt(opt_id)[0]
-        self.x_max = x_max if x_max > self.x_max else self.x_max
-        x_min = np.clip(x_max - self.truncated, 0, None) if self.truncated else 0
-        line.set_xdata((x_min, x_max))
+        x_min = np.clip(self.x_max - self.truncated, 0, None) if self.truncated else 0
+        line.set_xdata((x_min, self.x_max))
         line.set_ydata((mu, mu))
 
         # Uncertainty Rectangle
         rec = self.streams[opt_id]['st_dev']
         rec.xy = (x_min, mu - 2 * sigma)
-        width = self.truncated if self.truncated else x_max
+        width = self.truncated if self.truncated else self.x_max
         rec.set_width(width)
         rec.set_height(4 * sigma)
         self._redraw_graph()
@@ -260,25 +263,33 @@ class GloMPOScope:
     def update_kill(self, opt_id: int):
         """ The opt_id kill optimizer plot is updated at its final point. """
         self._update_point(opt_id, 'opt_kill')
+        if not self.visualise_gpr:
+            rec = self.streams[opt_id]['st_dev']
+            rec.set_width(0)
+            rec.set_height(0)
+
+            line = self.streams[opt_id]['mean']
+            line.set_xdata([])
+            line.set_ydata([])
         self._redraw_graph()
 
     def update_norm_terminate(self, opt_id: int):
         """ The opt_id normal optimizer plot is updated at its final point. """
         self._update_point(opt_id, 'opt_norm')
+        if not self.visualise_gpr:
+            rec = self.streams[opt_id]['st_dev']
+            rec.set_width(0)
+            rec.set_height(0)
+
+            line = self.streams[opt_id]['mean']
+            line.set_xdata = []
+            line.set_ydata = []
         self._redraw_graph()
 
     def update_gpr(self, opt_id: int, x: np.ndarray, y: np.ndarray, lower_sig: np.ndarray, upper_sig: np.ndarray):
         """ Given mu and sigma is used to update the opt_id mean and uncertainty plots."""
         # Mean line
         line = self.streams[opt_id]['gpr_mean']
-
-        if self.truncated:
-            min_val = np.max(x) - self.truncated
-            x = x[x >= min_val]
-            y = y[-len(x):]
-            lower_sig = lower_sig[-len(x):]
-            upper_sig = upper_sig[-len(x):]
-
         line.set_xdata(x)
         line.set_ydata(y)
 
@@ -311,7 +322,10 @@ class GloMPOScope:
 
     def get_farthest_pt(self, opt_id: int):
         """ Returns the furthest evaluated point of the opt_id optimizer. """
-        x = float(self.streams[opt_id]['all_opt'].get_xdata()[-1])
-        y = float(self.streams[opt_id]['all_opt'].get_ydata()[-1])
+        try:
+            x = float(self.streams[opt_id]['all_opt'].get_xdata()[-1])
+            y = float(self.streams[opt_id]['all_opt'].get_ydata()[-1])
+        except IndexError:
+            return None
 
         return x, y

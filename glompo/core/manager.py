@@ -403,7 +403,7 @@ class GloMPOManager:
                         if res.n_iter % 3 == 0:
                             trained = True
                             self._optional_print(f"\tResult from {res.opt_id} sent to GPR", 2)
-                            self.optimizer_packs[res.opt_id].gpr.add_known(self.f_counter, fx)
+                            self.optimizer_packs[res.opt_id].gpr.add_known(res.n_iter, fx)
 
                             # Start new hyperparameter optimization job
                             if len(self.optimizer_packs[res.opt_id].gpr.training_values()) % 20 == 0:
@@ -420,11 +420,18 @@ class GloMPOManager:
                             if trained:
                                 self.scope.update_scatter(res.opt_id, (self.f_counter, fx))
 
-                                i_min, i_max = self.scope.ax.get_xlim()
                                 if self.scope.visualise_gpr:
-                                    i_range = np.linspace(i_min, i_max, 200)
+                                    # TODO URGENT GPR IN I COORDS BUT SCOPE IS IN F COORDS
+                                    # TODO GPRs cover whole trunc range not the starting point of opt_id
+                                    i_range = np.linspace(0, res.n_iter, 200)
                                     mu, sigma = self.optimizer_packs[res.opt_id].gpr.sample_all(i_range)
-                                    self.scope.update_gpr(res.opt_id, i_range, mu, mu - 2*sigma, mu + 2*sigma)
+
+                                    f_range = self.scope.streams[res.opt_id]['all_opt'].get_xdata()
+                                    f_min = np.min(f_range)
+                                    f_max = np.max(f_range)
+                                    f_range = np.linspace(f_min, f_max, 200, endpoint=True)
+
+                                    self.scope.update_gpr(res.opt_id, f_range, mu, mu - 2*sigma, mu + 2*sigma)
                                 else:
                                     mu, sigma = self.optimizer_packs[res.opt_id].gpr.estimate_mean()
                                     self.scope.update_mean(res.opt_id, mu, sigma)
