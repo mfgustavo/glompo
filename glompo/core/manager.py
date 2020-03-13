@@ -589,9 +589,6 @@ class GloMPOManager:
                 elif self.history_logging == 2 and best_id > 0:
                     self.log.save("glompo_best_optimizer_log", best_id)
 
-            # Delete temp files or files not cleaned due to crashes
-            # TODO Possible todo
-
             self._optional_print("-----------------------------------\n"
                                  "GloMPO Optimization Routine... DONE\n"
                                  "-----------------------------------\n", 1)
