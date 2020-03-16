@@ -13,3 +13,6 @@ class MaxFuncCalls(BaseChecker):
     def check_convergence(self, manager: 'GloMPOManager') -> bool:
         self.converged = manager.f_counter >= self.fmax
         return self.converged
+
+    def __str__(self):
+        return f"{self.__class__.__name__}()"

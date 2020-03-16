@@ -6,7 +6,7 @@ from .basechecker import BaseChecker
 class NOptConverged(BaseChecker):
 
     def __init__(self, nconv: int):
-        """ Convergence is reached after nconv optimizers have been converged normally. """
+        """ Convergence is reached after nconv optimizers have been _converged normally. """
         super().__init__()
         self.nconv = nconv
 

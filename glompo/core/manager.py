@@ -41,6 +41,7 @@ class GloMPOManager:
                                                                         Dict[str, Any], Dict[str, Any]]]],
                  bounds: Sequence[Tuple[float, float]],
                  working_dir: Optional[str] = None,
+                 overwrite_existing: bool = False,
                  max_jobs: Optional[int] = None,
                  task_args: Optional[Tuple] = None,
                  task_kwargs: Optional[Dict] = None,
@@ -92,6 +93,10 @@ class GloMPOManager:
 
         working_dir: Optional[str] = None
             If provided, GloMPO wil redirect its outputs to the given directory
+
+        overwrite_existing: bool = False
+            If True, GloMPO will overwrite existing files if any are found in the working_dir otherwise it will raise a
+            FileExistsError if these results are detected.
 
         max_jobs: int = None
             The maximum number of local optimizers run in parallel at one time. Defaults to one less than the number of
@@ -287,7 +292,7 @@ class GloMPOManager:
         self.dt_start = None
         self.o_counter = 0
         self.f_counter = 0
-        self.conv_counter = 0  # Number of converged optimizers
+        self.conv_counter = 0  # Number of _converged optimizers
         self.hunt_counter = 0  # Number of hunting jobs started
         self.hyop_counter = 0  # Number of hyperparameter optimization jobs started
         self.hunt_victims = {}  # opt_ids of killed jobs and timestamps when the signal was sent
@@ -317,16 +322,21 @@ class GloMPOManager:
 
         # Purge Old Results
         files = os.listdir(".")
-        if any([file in files for file in ["glompo_manager_log.yml", "glompo_optimizer_logs",
-                                           "glompo_best_optimizer_log"]]):
-            self._optional_print("Old results found", 1)
-            shutil.rmtree("glompo_manager_log.yml", ignore_errors=True)
-            shutil.rmtree("glompo_optimizer_logs", ignore_errors=True)
-            shutil.rmtree("glompo_best_optimizer_log", ignore_errors=True)
-            shutil.rmtree("glompo_optimizer_printstreams", ignore_errors=True)
-            if split_printstreams:
-                os.makedirs("glompo_optimizer_printstreams", exist_ok=True)
-            self._optional_print("\tDeleted old results.", 1)
+        if overwrite_existing:
+            if any([file in files for file in ["glompo_manager_log.yml", "glompo_optimizer_logs",
+                                               "glompo_best_optimizer_log"]]):
+                self._optional_print("Old results found", 1)
+                shutil.rmtree("glompo_manager_log.yml", ignore_errors=True)
+                shutil.rmtree("glompo_optimizer_logs", ignore_errors=True)
+                shutil.rmtree("glompo_best_optimizer_log", ignore_errors=True)
+                shutil.rmtree("glompo_optimizer_printstreams", ignore_errors=True)
+                self._optional_print("\tDeleted old results.", 1)
+        else:
+            raise FileExistsError("Previous results found. Remove, move or rename them. Alternatively, select another "
+                                  "working_dir or set overwrite_existing=True.")
+
+        if split_printstreams:
+            os.makedirs("glompo_optimizer_printstreams", exist_ok=True)
 
         self._optional_print("Initialization Done", 1)
 
@@ -376,6 +386,7 @@ class GloMPOManager:
                     for victim_id in self.optimizer_packs:
                         if all([opt_id not in self.graveyard for opt_id in [hunter_id, victim_id]]) and \
                            all([len(self.log.get_history(opt_id, "fx")) > 10 for opt_id in [hunter_id, victim_id]]):
+                            self.hunt_counter += 1
                             kill = self.killing_conditions.is_kill_condition_met(self.log,
                                                                                  hunter_id,
                                                                                  self.optimizer_packs[hunter_id].gpr,
@@ -495,7 +506,7 @@ class GloMPOManager:
                         self.optimizer_packs[opt_id].process.terminate()
 
                 # Check hyperparm queue
-                self._optional_print("Checking for converged hyperparameter optimizations...", 2)
+                self._optional_print("Checking for _converged hyperparameter optimizations...", 2)
                 if not self.hyperparm_queue.empty():
                     while not self.hyperparm_queue.empty():
                         res = self.hyperparm_queue.get_nowait()

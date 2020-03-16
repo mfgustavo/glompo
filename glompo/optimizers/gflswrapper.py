@@ -83,7 +83,7 @@ class GFLSOptimizer(BaseOptimizer):
 
         Parameters
         ----------
-        function : Callable[Sequence[float], Sequence[float]]
+        function : Callable[[Sequence[float]], Sequence[float]]
             Function to be minimized.
 
             NB: GFLS is a unique class of optimizer that requires the function being
@@ -112,6 +112,7 @@ class GFLSOptimizer(BaseOptimizer):
             ``stopcond``. If the callback has no return value, i.e. equivalent to returning ``None``.
         """
 
+        # noinspection PyUnresolvedReferences
         if not callable(function.__wrapped__.resids):
             raise NotImplementedError("GFLS requires function to include a resids() method.")
 
@@ -137,6 +138,7 @@ class GFLSOptimizer(BaseOptimizer):
             else:
                 callbacks = [self.push_iter_result, self.check_messages]
 
+        # noinspection PyUnresolvedReferences
         fw = ResidualsWrapper(function.__wrapped__.resids, vector_codec.decode)
         logger = driver(
             fw,
@@ -188,7 +190,7 @@ class GFLSOptimizer(BaseOptimizer):
             else:
                 warnings.warn("Cannot parse message, ignoring", UserWarning)
         if any([cond is not None for cond in conds]):
-            return True
+            return conds
 
     def save_state(self, logger: Logger, algorithm, stopcond, file_name: str):
         if "/" in file_name:
