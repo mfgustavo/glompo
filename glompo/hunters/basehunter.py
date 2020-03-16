@@ -1,6 +1,7 @@
 
 from abc import ABC, abstractmethod
 from typing import *
+import inspect
 
 from ..core.logger import Logger
 from ..core.gpr import GaussianProcessRegression
@@ -21,6 +22,17 @@ class BaseHunter(ABC):
 
     def __mul__(self, other):
         return _AllHunter(self, other)
+
+    def __str__(self) -> str:
+        lst = ""
+        signature = inspect.signature(self.__init__)
+        for parm in signature.parameters:
+            if parm in dir(self):
+                lst += f"{parm}={self.__getattribute__(parm)}, "
+            else:
+                lst += f"{parm}, "
+        lst = lst[:-2]
+        return f"{self.__class__.__name__}({lst})"
 
 
 class _CombiChecker(BaseHunter):
@@ -43,9 +55,23 @@ class _AnyHunter(_CombiChecker):
         return any([base.is_kill_condition_met(log, hunter_opt_id, hunter_gpr, victim_opt_id, victim_gpr) for base in
                     self.base_checkers])
 
+    def __str__(self):
+        mess = ""
+        for base in self.base_checkers:
+            mess += f"{base} OR \n"
+        mess = mess[:-5]
+        return mess
+
 
 class _AllHunter(_CombiChecker):
     def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, hunter_gpr: GaussianProcessRegression,
                               victim_opt_id: int, victim_gpr: GaussianProcessRegression) -> bool:
         return all([base.is_kill_condition_met(log, hunter_opt_id, hunter_gpr, victim_opt_id, victim_gpr) for base in
                     self.base_checkers])
+
+    def __str__(self):
+        mess = ""
+        for base in self.base_checkers:
+            mess += f"{base} AND \n"
+        mess = mess[:-6]
+        return mess

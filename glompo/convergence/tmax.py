@@ -12,5 +12,5 @@ class MaxSeconds(BaseChecker):
         self.tmax = tmax
 
     def check_convergence(self, manager: 'GloMPOManager') -> bool:
-        self.converged = time() - manager.t_start >= self.tmax
-        return self.converged
+        self._converged = time() - manager.t_start >= self.tmax
+        return self._converged

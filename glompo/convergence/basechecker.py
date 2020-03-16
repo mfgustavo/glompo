@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 from typing import *
+import inspect
 
 
 class BaseChecker(ABC):
@@ -26,16 +27,24 @@ class BaseChecker(ABC):
         return _AllChecker(self, other)
     
     def __str__(self) -> str:
-        vars = ""
-        attrs = [item for item in dir(self) if
-                 not item.startswith("_") and
-                 not callable(self.__getattribute__(item)) and
-                 item != "_converged"]
-        for item in attrs:
-            if item != "check_convergence":
-                vars += f"{item}={self.__getattribute__(item)}, "
-        vars = vars[:-2]
-        return f"{self.__class__.__name__}({vars})"
+        lst = ""
+        signature = inspect.signature(self.__init__)
+        for parm in signature.parameters:
+            if parm in dir(self):
+                lst += f"{parm}={self.__getattribute__(parm)}, "
+            else:
+                lst += f"{parm}, "
+        lst = lst[:-2]
+        return f"{self.__class__.__name__}({lst})"
+
+    def is_converged_str(self) -> str:
+        mess = str(self)
+        if mess.endswith(" OR"):
+            mess.replace(" OR", "")
+        elif mess.endswith(" AND"):
+            mess.replace(" AND", "")
+        mess += f" = {self._converged}"
+        return mess
 
 
 class _CombiChecker(BaseChecker):
@@ -65,6 +74,13 @@ class _AnyChecker(_CombiChecker):
         mess = mess[:-5]
         return mess
 
+    def is_converged_str(self):
+        mess = ""
+        for base in self.base_checkers:
+            mess += f"{base.is_converged_str()} OR \n"
+        mess = mess[:-5]
+        return mess
+
 
 class _AllChecker(_CombiChecker):
     def check_convergence(self, manager: 'GloMPOManager') -> bool:
@@ -75,5 +91,12 @@ class _AllChecker(_CombiChecker):
         mess = ""
         for base in self.base_checkers:
             mess += f"{base} AND \n"
-        mess = mess[:-5]
+        mess = mess[:-6]
+        return mess
+
+    def is_converged_str(self):
+        mess = ""
+        for base in self.base_checkers:
+            mess += f"{base.is_converged_str()} AND \n"
+        mess = mess[:-6]
         return mess

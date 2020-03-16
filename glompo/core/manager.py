@@ -552,7 +552,8 @@ class GloMPOManager:
                 result = Result(best_x, best_fx, best_stats, best_origin)
 
             self._optional_print(f"Exiting manager loop.\n"
-                                 f"Exit conditions met: \n{self.convergence_checker}", 1)
+                                 f"Exit conditions met: \n{self.convergence_checker.is_converged_str()}\n", 1)
+            reason = self.convergence_checker.is_converged_str().replace("\n", "")
 
             # Check answer
             # TODO Check answer
@@ -608,7 +609,8 @@ class GloMPOManager:
                                          "origin": result.origin,
                                          "exit cond.": reason},
                             "Settings": {"x0 Generator": type(self.x0_generator).__name__,
-                                         "Convergence Checker": type(self.convergence_checker).__name__,
+                                         "Convergence Checker": str(self.convergence_checker).replace("\n", ""),
+                                         "Hunt Conditions": str(self.killing_conditions).replace("\n", ""),
                                          "Optimizers Available": optimizers,
                                          "Max Parallel Optimizers": self.max_jobs}
                             }

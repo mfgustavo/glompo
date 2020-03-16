@@ -11,5 +11,5 @@ class MaxOptsStarted(BaseChecker):
         self.omax = omax
 
     def check_convergence(self, manager: 'GloMPOManager') -> bool:
-        self.converged = manager.o_counter >= self.omax
-        return self.converged
+        self._converged = manager.o_counter >= self.omax
+        return self._converged

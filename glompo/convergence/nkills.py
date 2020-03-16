@@ -11,5 +11,5 @@ class MaxKills(BaseChecker):
         self.kills_max = kills_max
 
     def check_convergence(self, manager: 'GloMPOManager') -> bool:
-        self.converged = manager.kill_counter >= self.kills_max
-        return self.converged
+        self._converged = manager.kill_counter >= self.kills_max
+        return self._converged

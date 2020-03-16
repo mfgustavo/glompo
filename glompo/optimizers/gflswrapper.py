@@ -190,7 +190,11 @@ class GFLSOptimizer(BaseOptimizer):
             else:
                 warnings.warn("Cannot parse message, ignoring", UserWarning)
         if any([cond is not None for cond in conds]):
-            return conds
+            mess = ""
+            for cond in conds:
+                mess += f"{cond} AND "
+            mess = mess[:-5]
+            return mess
 
     def save_state(self, logger: Logger, algorithm, stopcond, file_name: str):
         if "/" in file_name:
