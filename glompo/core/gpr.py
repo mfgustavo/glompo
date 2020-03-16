@@ -162,10 +162,10 @@ class GaussianProcessRegression:
         mean_func, covar_fun = self._calc_kernels(x_nest)
 
         mean_func = mean_func.flatten()
-        covar_fun = np.sqrt(np.diag(covar_fun))
+        std = np.sqrt(np.diag(covar_fun))
 
         if not scaled:
-            lower = mean_func - covar_fun
+            lower = mean_func - std
             mean_func = self._denormalise(mean_func)
             std = mean_func - self._denormalise(lower)
 
@@ -205,8 +205,7 @@ class GaussianProcessRegression:
         parameters. If not the data is scaled by the mean and standard deviation of the data in the GPR dictionary.
         """
         mean_old, st_old = self.normalisation_constants
-        if self.mean:
-            gpr_mean = self._denormalise(self.mean)
+        gpr_mean = self._denormalise(self.mean) if self.mean else None
 
         if normalisation_constants:
             mean_new, st_new = normalisation_constants
@@ -222,8 +221,7 @@ class GaussianProcessRegression:
             self._training_pts[pt] = new_space
 
         self.normalisation_constants = (mean_new, st_new)
-        if self.mean:
-            self.mean = self._normalise(gpr_mean)
+        self.mean = self._normalise(gpr_mean) if self.mean else None
 
     def _kernel_matrix(self, x1, x2) -> np.ndarray:
         vec1 = np.reshape(x1, (-1, self.dims))

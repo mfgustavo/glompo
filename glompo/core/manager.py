@@ -17,7 +17,7 @@ from ..generators.random import RandomGenerator
 from ..convergence.nkillsafterconv import KillsAfterConvergence
 from ..convergence.basechecker import BaseChecker
 from ..common.namedtuples import *
-from ..hunters import BaseHunter, ValBelowGPR, PseudoConverged, MinVictimTrainingPoints
+from ..hunters import BaseHunter, ValBelowGPR, PseudoConverged, MinVictimTrainingPoints, GPRSuitable
 from ..scope.scope import GloMPOScope
 from ..optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from .gpr import GaussianProcessRegression
@@ -277,7 +277,10 @@ class GloMPOManager:
             else:
                 raise TypeError(f"killing_conditions not an instance of a subclass of BaseHunter.")
         else:
-            self.killing_conditions = ValBelowGPR() * PseudoConverged(20) * MinVictimTrainingPoints(10)
+            self.killing_conditions = ValBelowGPR() * \
+                                      PseudoConverged(20, 0.01) * \
+                                      MinVictimTrainingPoints(10) * \
+                                      GPRSuitable()
 
         # Save max conditions and counters
         self.t_start = None
@@ -416,7 +419,7 @@ class GloMPOManager:
                                     fx = history[-1]
 
                         self.x0_generator.update(res.x, fx)
-                        self.log.put_iteration(res.opt_id, res.n_iter, list(res.x), fx)
+                        self.log.put_iteration(res.opt_id, res.n_iter, self.f_counter, list(res.x), fx)
                         self._optional_print(f"\tResult from {res.opt_id} @ iter {res.n_iter} fx = {fx}", 2)
 
                         # Send results to GPRs
@@ -427,8 +430,9 @@ class GloMPOManager:
                             self.optimizer_packs[res.opt_id].gpr.add_known(res.n_iter, fx)
 
                             # Start new hyperparameter optimization job
-                            if len(self.optimizer_packs[res.opt_id].gpr.training_values()) % 20 == 0:
-                                self._start_hyperparam_job(res.opt_id)
+                            # TODO Restart hyperparam jobs
+                            # if len(self.optimizer_packs[res.opt_id].gpr.training_values()) % 20 == 0:
+                            #     self._start_hyperparam_job(res.opt_id)
 
                             mean = np.mean(self.log.get_history(res.opt_id, "fx"))
                             sigma = np.std(self.log.get_history(res.opt_id, "fx"))
@@ -446,7 +450,7 @@ class GloMPOManager:
                                     mu, sigma = self.optimizer_packs[res.opt_id].gpr.sample_all(i_range)
 
                                     f_range = self.scope.streams[res.opt_id]['all_opt'].get_xdata()
-                                    f_min = np.min(f_range)
+                                    f_min = self.log.get_history(res.opt_id, "f_call")[0]
                                     f_max = np.max(f_range)
                                     f_range = np.linspace(f_min, f_max, 200, endpoint=True)
 
