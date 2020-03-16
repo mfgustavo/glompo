@@ -14,8 +14,8 @@ class Logger:
     def add_optimizer(self, opt_id: int, class_name: str, time_start: str):
         self.storage[opt_id] = OptimizerLogger(opt_id, class_name, time_start)
 
-    def put_iteration(self, opt_id: int, i: int, x: Sequence[float], fx: float):
-        self.storage[opt_id].append(i, x, fx)
+    def put_iteration(self, opt_id: int, i: int, f_call: int, x: Sequence[float], fx: float):
+        self.storage[opt_id].append(i, f_call, x, fx)
 
     def put_metadata(self, opt_id: int, key: str, value: str):
         self.storage[opt_id].update_metadata(key, value)
@@ -30,10 +30,11 @@ class Logger:
                                                                          Tuple[float, int, float, Sequence[float]]]]:
         extract = []
         if track:
-            track_num = {"fx": 0,
-                         "i_best": 1,
-                         "fx_best": 2,
-                         "x": 3}[track]
+            track_num = {"f_call": 0,
+                         "fx": 1,
+                         "i_best": 2,
+                         "fx_best": 3,
+                         "x": 4}[track]
             for item in self.storage[opt_id].history.values():
                 extract.append(item[track_num])
         else:
@@ -88,17 +89,17 @@ class OptimizerLogger:
         """ Appends or overwrites given key-value pair in the stored optimizer metadata. """
         self.metadata[key] = value
 
-    def append(self, i: int, x: Sequence[float], fx: float):
+    def append(self, i: int, f_call: int, x: Sequence[float], fx: float):
         if fx < self.fx_best:
             self.fx_best = fx
             self.i_best = i
         try:
             iter(x)
             ls = [float(num) for num in x]
-            self.history[i] = [float(fx), int(self.i_best), float(self.fx_best), ls]
+            self.history[i] = [int(f_call), float(fx), int(self.i_best), float(self.fx_best), ls]
         except TypeError:
             ls = [float(num) for num in [x]]
-            self.history[i] = [float(fx), int(self.i_best), float(self.fx_best), ls]
+            self.history[i] = [int(f_call), float(fx), int(self.i_best), float(self.fx_best), ls]
 
     def append_message(self, message):
         self.messages.append(message)
