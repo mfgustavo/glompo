@@ -17,6 +17,7 @@ from ..generators.random import RandomGenerator
 from ..convergence.nkillsafterconv import KillsAfterConvergence
 from ..convergence.basechecker import BaseChecker
 from ..common.namedtuples import *
+from ..hunters import BaseHunter, ValBelowGPR, PseudoConverged, MinVictimTrainingPoints
 from ..scope.scope import GloMPOScope
 from ..optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from .gpr import GaussianProcessRegression
@@ -45,6 +46,7 @@ class GloMPOManager:
                  task_kwargs: Optional[Dict] = None,
                  convergence_checker: Optional[BaseChecker] = None,
                  x0_generator: Optional[BaseGenerator] = None,
+                 killing_conditions: Optional[BaseHunter] = None,
                  region_stability_check: bool = False,
                  report_statistics: bool = False,
                  enforce_elitism: bool = False,
@@ -113,6 +115,18 @@ class GloMPOManager:
         x0_generator: Optional[BaseGenerator] = None
             An instance of a subclass of BaseGenerator which produces starting points for the optimizer. If not provided
             a random generator is used.
+
+        killing_conditions: Optional[BaseHunter] = None
+            Criteria used for killing optimizers. A collection of subclasses of BaseHunter are provided, these can be
+            used in combination to tailor various conditions. Instances which are added together represent an 'or'
+            combination and instances which are multiplied together represent an 'and' combination.
+                E.g.: killing_conditions = GPRSuitable() * ValBelowGPR() *
+                (MinVictimTrainingPoints(30) + PseudoConverged(20))
+                In this case GloMPO will only allow a hunt to terminate an optimizer if
+                    1) the GPR describing it is a good descriptor of the data,
+                    2) another optimizer has seen a value below its 95% confidence interval,
+                    3) and the optimizer has either at least 30 training points or has not changed its best value in
+                    20 iterations.
 
         region_stability_check: bool = False
             If True, local optimizers are started around a candidate solution which has been selected as a final
@@ -252,9 +266,18 @@ class GloMPOManager:
             if isinstance(x0_generator, BaseGenerator):
                 self.x0_generator = x0_generator
             else:
-                raise TypeError(f"x0_generator not an instance of a subclass of BaseOptimizer.")
+                raise TypeError(f"x0_generator not an instance of a subclass of BaseGenerator.")
         else:
             self.x0_generator = RandomGenerator(self.bounds)
+
+        # Save killing conditions
+        if killing_conditions:
+            if isinstance(killing_conditions, BaseHunter):
+                self.killing_conditions = killing_conditions
+            else:
+                raise TypeError(f"killing_conditions not an instance of a subclass of BaseHunter.")
+        else:
+            self.killing_conditions = ValBelowGPR() * PseudoConverged(20) * MinVictimTrainingPoints(10)
 
         # Save max conditions and counters
         self.t_start = None
@@ -282,14 +305,12 @@ class GloMPOManager:
         # Setup multiprocessing variables
         self.optimizer_packs = {}  # Dict[opt_id (int): ProcessPackage (NamedTuple)]
         self.hyperparm_processes = {}
-        self.hunting_processes = {}
         self.graveyard = set()  # opt_ids of known non-active optimizers
         self.last_feedback = {}
 
         self.mp_manager = mp.Manager()
         self.optimizer_queue = self.mp_manager.Queue()
         self.hyperparm_queue = self.mp_manager.Queue()
-        self.hunting_queue = self.mp_manager.Queue()
 
         # Purge Old Results
         files = os.listdir(".")
@@ -315,7 +336,6 @@ class GloMPOManager:
         converged = False
         reason = ""
         caught_exception = False
-        hunt_control = 1
 
         try:
             self._optional_print("------------------------------------\n"
@@ -347,19 +367,20 @@ class GloMPOManager:
                     self._check_signals(opt_id)
                 self._optional_print(f"Signal check done.", 2)
 
-                # Check hunt_queue
-                self._optional_print("Checking hunt results...", 2)
-                if not self.hunting_queue.empty():
-                    while not self.hunting_queue.empty():
-                        hunt = self.hunting_queue.get()
-                        self.hunting_processes[hunt.hunt_id].join()
-                        del self.hunting_processes[hunt.hunt_id]
-                        for victim in hunt.victims:
-                            if victim not in self.graveyard:
-                                self._optional_print(f"\tManager wants to kill {victim}", 1)
-                                self._shutdown_job(victim)
-                else:
-                    self._optional_print("\tNo hunts successful.", 2)
+                # Hunt optimizers
+                self._optional_print("Hunting...", 2)
+                for hunter_id in self.optimizer_packs:
+                    for victim_id in self.optimizer_packs:
+                        if all([opt_id not in self.graveyard for opt_id in [hunter_id, victim_id]]) and \
+                           all([len(self.log.get_history(opt_id, "fx")) > 10 for opt_id in [hunter_id, victim_id]]):
+                            kill = self.killing_conditions.is_kill_condition_met(self.log,
+                                                                                 hunter_id,
+                                                                                 self.optimizer_packs[hunter_id].gpr,
+                                                                                 victim_id,
+                                                                                 self.optimizer_packs[victim_id].gpr)
+                            if kill:
+                                self._optional_print(f"\tManager wants to kill {victim_id}", 1)
+                                self._shutdown_job(victim_id)
                 self._optional_print("Hunt check done.", 2)
 
                 # Force kill any zombies
@@ -489,11 +510,6 @@ class GloMPOManager:
                     self._optional_print("\tNo results found.", 2)
                 self._optional_print("New hyperparameter check done.", 2)
 
-                # Start new hunting jobs
-                if self.f_counter > hunt_control * 100 and self.f_counter > 0 and not self.hunting_processes:
-                    self._start_hunt()
-                    hunt_control += 1
-
                 # Check convergence
                 converged = self.convergence_checker.check_convergence(self)
                 if converged:
@@ -534,8 +550,6 @@ class GloMPOManager:
                     self.log.put_metadata(opt_id, "Stop Time", datetime.now())
                     self.log.put_metadata(opt_id, "End Condition", f"GloMPO Convergence")
                     self.optimizer_packs[opt_id].process.join(self._TOO_LONG / 20)
-            for hunt in self.hunting_processes.values():
-                hunt.terminate()
             for hypopt in self.hyperparm_processes.values():
                 hypopt.terminate()
 
@@ -657,30 +671,6 @@ class GloMPOManager:
         if self.visualisation:
             self.scope.update_kill(opt_id)
 
-    def _start_hunt(self):
-        self._optional_print(f"Starting hunt", 1)
-        self.hunt_counter += 1
-
-        log = self.log
-        gprs = {}
-        for opt_id in self.optimizer_packs:
-            if self.optimizer_packs[opt_id].process.is_alive():
-                gprs[opt_id] = self.optimizer_packs[opt_id].gpr
-
-        def wrapped_hunt(queue, **kwargs):
-            result = self._hunt(**kwargs)
-            queue.put(result)
-
-        process = mp.Process(target=wrapped_hunt,
-                             args=(self.hunting_queue,),
-                             kwargs={"hunt_id": self.hunt_counter,
-                                     "log": log,
-                                     "gprs": gprs},
-                             daemon=True)
-
-        self.hunting_processes[self.hunt_counter] = process
-        self.hunting_processes[self.hunt_counter].start()
-
     def _start_hyperparam_job(self, opt_id):
         self._optional_print(f"Starting hyperparameter optimization job for {opt_id}", 1)
 
@@ -759,28 +749,6 @@ class GloMPOManager:
         """
         if level <= self.verbose:
             print(message)
-
-    @staticmethod
-    def _hunt(hunt_id: int, log: Logger, gprs: Dict[int, GaussianProcessRegression]) -> HuntingResult:
-        victims = set()
-        for gpr_id in gprs:
-            for log_id in log.storage:
-                if gpr_id != log_id:
-
-                    history = log.get_history(log_id, "fx_best")
-                    i = len(history)
-                    if i > 0 and len(gprs[gpr_id].training_coords()) > 10:
-                        best = history[-1]
-                        # mean, std = gprs[gpr_id].sample_all(i+1000)
-                        mean, std = gprs[gpr_id].estimate_mean()
-
-                        if best < mean - 2 * std:
-                            victims.add(gpr_id)
-                    else:
-                        continue
-
-        result = HuntingResult(hunt_id, victims)
-        return result
 
     @staticmethod
     def _redirect(opt_id, func):

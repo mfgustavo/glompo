@@ -36,7 +36,7 @@ class _CombiChecker(BaseChecker):
         combi = [base1, base2, *args]
         for base in combi:
             if not isinstance(base, BaseChecker):
-                raise TypeError("CombinedChecker can only be initialised with instances of BaseChecker subclasses.")
+                raise TypeError("_CombiChecker can only be initialised with instances of BaseChecker subclasses.")
         self.base_checkers = combi
         self.converged = False
 
