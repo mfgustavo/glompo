@@ -29,6 +29,9 @@ import numpy as np
 import yaml
 
 
+__all__ = ("GloMPOManager",)
+
+
 class GloMPOManager:
     """ Runs given jobs in parallel and tracks their progress using Gaussian Process Regressions.
         Based on these predictions the class will update hyperparameters, kill poor performing jobs and

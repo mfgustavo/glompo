@@ -11,7 +11,7 @@ from multiprocessing.connection import Connection
 from .baseoptimizer import MinimizeResult, BaseOptimizer
 from ..common.namedtuples import IterationResult
 
-__all__ = ['CMAOptimizer']
+__all__ = ('CMAOptimizer',)
 
 
 class CMAOptimizer(BaseOptimizer):

@@ -15,9 +15,11 @@ class ValBelowGPR(BaseHunter):
     def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, hunter_gpr: GaussianProcessRegression,
                               victim_opt_id: int, victim_gpr: GaussianProcessRegression) -> bool:
 
-        val = log.get_history(hunter_opt_id, "fx_best")[-1]
+        vals = log.get_history(hunter_opt_id, "fx_best")
+        if len(vals) > 0:
+            mu, sigma = victim_gpr.estimate_mean()
+            threshold = mu - 2 * sigma
 
-        mu, sigma = victim_gpr.estimate_mean()
-        threshold = mu - 2 * sigma
-
-        return val < threshold
+            return vals[-1] < threshold
+        else:
+            return False

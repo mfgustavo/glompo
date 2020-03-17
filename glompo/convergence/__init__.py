@@ -9,10 +9,10 @@ from .omax import MaxOptsStarted
 from .nkills import MaxKills
 from .nconv import NOptConverged
 
-__all__ = ["BaseChecker",
+__all__ = ("BaseChecker",
            "KillsAfterConvergence",
            "MaxFuncCalls",
            "MaxSeconds",
            "MaxKills",
            "MaxOptsStarted",
-           "NOptConverged"]
+           "NOptConverged")

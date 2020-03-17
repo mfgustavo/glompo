@@ -7,6 +7,9 @@ from ..core.logger import Logger
 from ..core.gpr import GaussianProcessRegression
 
 
+__all__ = ("BaseHunter",)
+
+
 class BaseHunter(ABC):
     """ Base hunter from which all hunters must inherit to be compatible with GloMPO. """
 
@@ -35,7 +38,7 @@ class BaseHunter(ABC):
         return f"{self.__class__.__name__}({lst})"
 
 
-class _CombiChecker(BaseHunter):
+class _CombiHunter(BaseHunter):
 
     def __init__(self, base1: BaseHunter, base2: BaseHunter, *args: Sequence[BaseHunter]):
         combi = [base1, base2, *args]
@@ -49,7 +52,7 @@ class _CombiChecker(BaseHunter):
         pass
 
 
-class _AnyHunter(_CombiChecker):
+class _AnyHunter(_CombiHunter):
     def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, hunter_gpr: GaussianProcessRegression,
                               victim_opt_id: int, victim_gpr: GaussianProcessRegression) -> bool:
         return any([base.is_kill_condition_met(log, hunter_opt_id, hunter_gpr, victim_opt_id, victim_gpr) for base in
@@ -63,7 +66,7 @@ class _AnyHunter(_CombiChecker):
         return mess
 
 
-class _AllHunter(_CombiChecker):
+class _AllHunter(_CombiHunter):
     def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, hunter_gpr: GaussianProcessRegression,
                               victim_opt_id: int, victim_gpr: GaussianProcessRegression) -> bool:
         return all([base.is_kill_condition_met(log, hunter_opt_id, hunter_gpr, victim_opt_id, victim_gpr) for base in

@@ -11,7 +11,7 @@ import warnings
 import sys
 
 
-__all__ = ['BaseOptimizer', 'MinimizeResult']
+__all__ = ('BaseOptimizer', 'MinimizeResult')
 
 
 class MinimizeResult:
