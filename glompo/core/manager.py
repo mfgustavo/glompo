@@ -539,7 +539,7 @@ class GloMPOManager:
                 best_x = []
                 best_stats = None
                 best_origin = None
-                for opt_id in self.log.storage:
+                for opt_id in self.log._storage:
                     history = self.log.get_history(opt_id, "fx_best")
                     if len(history) > 0:
                         opt_best = history[-1]
@@ -550,7 +550,7 @@ class GloMPOManager:
                             i = self.log.get_history(opt_id, "i_best")[-1]
                             best_x = self.log.get_history(opt_id, "x")[i-1]
                             best_origin = {"opt_id": opt_id,
-                                           "type": self.log.storage[opt_id].metadata["Optimizer Type"]}
+                                           "type": self.log._storage[opt_id].metadata["Optimizer Type"]}
 
                 result = Result(best_x, best_fx, best_stats, best_origin)
 

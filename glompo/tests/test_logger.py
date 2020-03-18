@@ -37,6 +37,8 @@ class TestLogger:
     log.put_metadata(2, "Stop Time", datetime.datetime.now())
     log.put_metadata(2, "Exit Condition", "fmax condition met")
 
+    log.put_message(1, "This is a test of the logger message system")
+
     def test_save(self):
         self.log.save("outputs/success", 1)
         self.log.save("outputs/all")
@@ -52,7 +54,7 @@ class TestLogger:
         hist = self.log.get_history(0)
         assert [*hist][0] == 1
         assert isinstance([*hist.values()][4], list)
-        assert [*hist.values()][3][0] == np.exp(4)
+        assert [*hist.values()][3][1] == np.exp(4)
         assert [*hist.values()][7][-1] == [8]
 
     def test_history1(self):
@@ -75,3 +77,6 @@ class TestLogger:
     def test_history4(self):
         with pytest.raises(KeyError):
             self.log.get_history(1, "not a key")
+
+    def test_message(self):
+        assert self.log._storage[1].messages[0] == "This is a test of the logger message system"

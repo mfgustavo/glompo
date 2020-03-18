@@ -229,6 +229,12 @@ class TestGPRSuitable:
 
         assert cond.is_kill_condition_met(log, 1, gpr1, 2, gpr2) is output
 
+        if noise1 == 1 and noise2 == 0.001:
+            sigma = kernel.optimize_hyperparameters(t_short, pts)[2]
+            gpr1.sigma_noise = sigma
+
+            assert cond.is_kill_condition_met(log, 1, gpr1, 2, gpr2) is True
+
     @pytest.mark.parametrize("noise1, noise2, output", [(0.5, 0.5, True),
                                                         (0.00001, 0.00001, False)])
     def test_wild_tail(self, noise1, noise2, output):
