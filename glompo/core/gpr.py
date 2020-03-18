@@ -4,6 +4,9 @@ import numpy as np
 from typing import *
 
 
+__all__ = ("GaussianProcessRegression",)
+
+
 class GaussianProcessRegression:
     """ A class which creates and calculates a Gaussian Process Regression """
 

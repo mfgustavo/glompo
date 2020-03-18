@@ -19,6 +19,9 @@ from .baseoptimizer import BaseOptimizer, MinimizeResult
 from ..common.namedtuples import IterationResult
 
 
+__all__ = ("GFLSOptimizer",)
+
+
 class GFLSOptimizer(BaseOptimizer):
 
     needscaler = False

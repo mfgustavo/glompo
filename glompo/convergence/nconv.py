@@ -3,6 +3,9 @@
 from .basechecker import BaseChecker
 
 
+__all__ = ("NOptConverged",)
+
+
 class NOptConverged(BaseChecker):
 
     def __init__(self, nconv: int):

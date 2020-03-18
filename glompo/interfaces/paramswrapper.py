@@ -11,7 +11,10 @@ from scm.params.optimizers.base import *
 from scm.params.core.parameteroptimization import Optimization
 
 # Package imports
-from glompo.scope.scope import GloMPOScope
+from core.scope import GloMPOScope
+
+
+__all__ = ("ParamsGlompoOptimizer",)
 
 
 class ParamsGlompoOptimizer(BaseOptimizer):

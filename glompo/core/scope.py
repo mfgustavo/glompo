@@ -12,6 +12,9 @@ import shutil
 import warnings
 
 
+__all__ = ("GloMPOScope",)
+
+
 # Overwrites a method in the matplotlib.animation.FFMpegWriter class which caused it to hang during movie generation
 
 class MyFFMpegWriter(ani.FFMpegWriter):
@@ -315,7 +318,7 @@ class GloMPOScope:
             try:
                 os.chdir("_tmp_movie_grabs")
                 self.writer.finish()
-                files = [file for file in os.listdir(".") if ".mp4" in file]
+                files = [file for file in os.listdir("../scope") if ".mp4" in file]
                 for file in files:
                     shutil.move(file, f"../{file}")
                 os.chdir("..")

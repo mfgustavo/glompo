@@ -5,6 +5,9 @@ from ..core.gpr import GaussianProcessRegression
 from ..core.logger import Logger
 
 
+__all__ = ("ValBelowGPR",)
+
+
 class ValBelowGPR(BaseHunter):
 
     def __init__(self):

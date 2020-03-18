@@ -4,6 +4,9 @@ from ..core.gpr import GaussianProcessRegression
 from ..core.logger import Logger
 
 
+__all__ = ("ConfidenceWidth",)
+
+
 class ConfidenceWidth(BaseHunter):
 
     def __init__(self, threshold: float):

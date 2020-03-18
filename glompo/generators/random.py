@@ -5,6 +5,9 @@ from typing import *
 import numpy as np
 
 
+__all__ = ("RandomGenerator",)
+
+
 class RandomGenerator(BaseGenerator):
     """ Generates random starting points within given bounds. """
 

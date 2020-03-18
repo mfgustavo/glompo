@@ -3,6 +3,9 @@
 from .basechecker import BaseChecker
 
 
+__all__ = ("MaxFuncCalls",)
+
+
 class MaxFuncCalls(BaseChecker):
 
     def __init__(self, fmax: int):

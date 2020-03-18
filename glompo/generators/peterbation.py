@@ -6,6 +6,9 @@ import numpy as np
 from scipy.stats import truncnorm
 
 
+__all__ = ("PerterbationGenerator",)
+
+
 class PerterbationGenerator(BaseGenerator):
     """ Randomly generates parameter vectors by drawing from truncated normally distributed numbers centered around a
         provided vector and bound by given bounds. Good for reparameterisation efforts where a good candidate is already

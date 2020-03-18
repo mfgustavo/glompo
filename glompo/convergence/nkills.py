@@ -3,6 +3,9 @@
 from .basechecker import BaseChecker
 
 
+__all__ = ("MaxKills",)
+
+
 class MaxKills(BaseChecker):
 
     def __init__(self, kills_max: int):

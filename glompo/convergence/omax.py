@@ -3,6 +3,9 @@
 from .basechecker import BaseChecker
 
 
+__all__ = ("MaxOptsStarted",)
+
+
 class MaxOptsStarted(BaseChecker):
 
     def __init__(self, omax: int):

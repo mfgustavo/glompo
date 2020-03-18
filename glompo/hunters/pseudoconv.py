@@ -4,6 +4,9 @@ from ..core.gpr import GaussianProcessRegression
 from ..core.logger import Logger
 
 
+__all__ = ("PseudoConverged",)
+
+
 class PseudoConverged(BaseHunter):
 
     def __init__(self, iters: int, tol: float = 0):

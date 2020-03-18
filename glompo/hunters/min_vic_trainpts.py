@@ -4,6 +4,9 @@ from ..core.gpr import GaussianProcessRegression
 from ..core.logger import Logger
 
 
+__all__ = ("MinVictimTrainingPoints",)
+
+
 class MinVictimTrainingPoints(BaseHunter):
 
     def __init__(self, min_pts: int):

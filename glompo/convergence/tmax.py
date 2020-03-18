@@ -4,6 +4,9 @@ from .basechecker import BaseChecker
 from time import time
 
 
+__all__ = ("MaxSeconds",)
+
+
 class MaxSeconds(BaseChecker):
 
     def __init__(self, tmax: int):

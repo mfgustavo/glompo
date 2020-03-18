@@ -5,6 +5,8 @@ from typing import *
 import inspect
 
 
+__all__ = ("BaseChecker",)
+
 class BaseChecker(ABC):
     """ Base checker from which all checkers must inherit to be compatible with GloMPO. """
 

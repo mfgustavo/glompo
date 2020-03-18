@@ -8,6 +8,9 @@ import scipy.integrate
 import scipy.stats
 
 
+__all__ = ("GPRSuitable",)
+
+
 class GPRSuitable(BaseHunter):
 
     def __init__(self, tol: float):

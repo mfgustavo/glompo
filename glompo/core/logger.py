@@ -6,6 +6,9 @@ import os
 import yaml
 
 
+__all__ = ("Logger",)
+
+
 class Logger:
     """ Stores progress of GloMPO optimizers. """
     def __init__(self):

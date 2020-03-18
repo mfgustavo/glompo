@@ -18,11 +18,11 @@ from ..convergence.nkillsafterconv import KillsAfterConvergence
 from ..convergence.basechecker import BaseChecker
 from ..common.namedtuples import *
 from ..hunters import BaseHunter, ValBelowGPR, PseudoConverged, MinVictimTrainingPoints, GPRSuitable
-from ..scope.scope import GloMPOScope
 from ..optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from .gpr import GaussianProcessRegression
 from .expkernel import ExpKernel
 from .logger import Logger
+from .scope import GloMPOScope
 
 # Other Python packages
 import numpy as np

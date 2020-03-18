@@ -6,6 +6,15 @@ from multiprocessing.connection import Connection
 from ..core.gpr import GaussianProcessRegression
 
 
+__all__ = ("Result",
+           "Bound",
+           "OptimizerPackage",
+           "HuntingResult",
+           "IterationResult",
+           "HyperparameterOptResult",
+           "ProcessPackage")
+
+
 class Result(NamedTuple):
     x: Sequence[float]
     fx: float

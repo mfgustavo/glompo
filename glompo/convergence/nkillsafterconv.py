@@ -3,6 +3,9 @@
 from .basechecker import BaseChecker
 
 
+__all__ = ("KillsAfterConvergence",)
+
+
 class KillsAfterConvergence(BaseChecker):
     """ This class is used to determine GloMPO convergence based on the number of single optimizers _converged and the
         number of optimizers killed thereafter.

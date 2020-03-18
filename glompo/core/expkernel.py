@@ -6,7 +6,10 @@ import numpy as np
 import scipy.optimize as sciopt
 
 
-def cache(func: callable):
+__all__ = ("ExpKernel",)
+
+
+def _cache(func: callable):
     cache_dict = {}
 
     @wraps(func)
@@ -103,7 +106,7 @@ class ExpKernel:
         def dk_ds(s: float, i: int, j: int) -> float:
             return 2 * s * int(i == j)
 
-        @cache
+        @_cache
         def construct_matrix(method, *args) -> np.ndarray:
             mat = np.zeros((len_t, len_t), dtype=float)
             for i in range(len_t):
@@ -129,18 +132,18 @@ class ExpKernel:
         def dk_ds_matrix(s: float) -> np.ndarray:
             return construct_matrix(dk_ds, s)
 
-        @cache
+        @_cache
         def inv_matrix(a: float, b: float, s: float) -> np.ndarray:
             mat = kernel_matrix(a, b, s)
             mat = np.linalg.inv(mat)
             return mat
 
-        @cache
+        @_cache
         def zeta_matrix(a: float, b: float, s: float) -> np.ndarray:
             return np.matmul(inv_matrix(a, b, s), y)
 
         # Gradient of the log marginal likelihood used as the Jacobian in the maximisation
-        @cache
+        @_cache
         def d_log_marg_likelihood(a: float, b: float, s: float) -> float:
             Z = zeta_matrix(a, b, s)
             Zt = np.transpose(Z)
@@ -158,7 +161,7 @@ class ExpKernel:
                 return result[:2] * 0.5
 
         # Log marginal likelihood (function to be maximised)
-        @cache
+        @_cache
         def log_marg_likelihood(a: float, b: float, s: float) -> float:
             terms = np.zeros(3)
 
