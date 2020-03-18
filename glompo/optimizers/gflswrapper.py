@@ -191,7 +191,7 @@ class GFLSOptimizer(BaseOptimizer):
             elif isinstance(message, tuple):
                 conds.append(self._FROM_MANAGER_SIGNAL_DICT[message[0]](logger, algorithm, stopcond, *message[1:]))
             else:
-                warnings.warn("Cannot parse message, ignoring", UserWarning)
+                warnings.warn("Cannot parse message, ignoring", RuntimeWarning)
         if any([cond is not None for cond in conds]):
             mess = ""
             for cond in conds:

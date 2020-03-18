@@ -1,15 +1,13 @@
 
 
-from typing import Callable, Sequence, Tuple, Optional
+from typing import Callable, Sequence, Tuple
 from time import time, sleep
 from collections import namedtuple
 import os
 import pytest
-import warnings
 import multiprocessing as mp
 
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
-from optimizers.baseoptimizer import MinimizeResult
 
 
 class PlainOptimizer(BaseOptimizer):

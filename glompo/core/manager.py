@@ -4,12 +4,13 @@
 import shutil
 import sys
 import warnings
-from datetime import datetime
-from functools import wraps
-from time import time
 import multiprocessing as mp
 import traceback
 import os
+from datetime import datetime
+from functools import wraps
+from time import time
+from typing import *
 
 # Package imports
 from ..generators.basegenerator import BaseGenerator
@@ -187,6 +188,7 @@ class GloMPOManager:
         self._SIGNAL_DICT = {0: "Normal Termination (Args have reason)",
                              1: "I have made some nan's... oopsie... >.<"}
         warnings.simplefilter("always", UserWarning)
+        warnings.simplefilter("always", RuntimeWarning)
 
         # Setup printing
         if isinstance(verbose, int):
@@ -199,7 +201,7 @@ class GloMPOManager:
         if working_dir:
             try:
                 os.chdir(working_dir)
-            except FileNotFoundError:
+            except NotADirectoryError:
                 os.makedirs(working_dir)
 
         # Save and wrap task
@@ -410,7 +412,7 @@ class GloMPOManager:
                                                          "timeout.")
                             self.log.put_metadata(id_num, "Approximate Stop Time", datetime.now())
                             self.log.put_metadata(id_num, "End Condition", "Forced GloMPO Termination")
-                            warnings.warn(f"Forced termination signal sent to optimizer {id_num}.", UserWarning)
+                            warnings.warn(f"Forced termination signal sent to optimizer {id_num}.", RuntimeWarning)
 
                 # Check results_queue
                 self._optional_print("Checking optimizer iteration results...", 2)
@@ -489,19 +491,20 @@ class GloMPOManager:
                                 self.log.put_message(opt_id, "Terminated normally without sending a minimization "
                                                              "complete signal to the manager.")
                                 warnings.warn(f"Optimizer {opt_id} terminated normally without sending a "
-                                              f"minimization complete signal to the manager.", UserWarning)
+                                              f"minimization complete signal to the manager.", RuntimeWarning)
                                 self.log.put_metadata(opt_id, "Approximate Stop Time", datetime.now())
                                 self.log.put_metadata(opt_id, "End Condition", "Normal termination "
                                                                                "(Reason unknown)")
                         else:
                             self.graveyard.add(opt_id)
                             self.log.put_message(opt_id, f"Terminated in error with code {-exitcode}")
-                            warnings.warn(f"Optimizer {opt_id} terminated in error with code {-exitcode}", UserWarning)
+                            warnings.warn(f"Optimizer {opt_id} terminated in error with code {-exitcode}",
+                                          RuntimeWarning)
                             self.log.put_metadata(opt_id, "Approximate Stop Time", datetime.now())
                             self.log.put_metadata(opt_id, "End Condition", f"Error termination (exitcode {-exitcode}).")
                     if self.optimizer_packs[opt_id].process.is_alive() and time() - self.last_feedback[opt_id] > \
                             self._TOO_LONG and self.allow_forced_terminations:
-                        warnings.warn(f"Optimizer {opt_id} seems to be hanging. Forcing termination.", UserWarning)
+                        warnings.warn(f"Optimizer {opt_id} seems to be hanging. Forcing termination.", RuntimeWarning)
                         self.graveyard.add(opt_id)
                         self.log.put_message(opt_id, "Force terminated due to no feedback timeout.")
                         self.log.put_metadata(opt_id, "Approximate Stop Time", datetime.now())
@@ -576,7 +579,7 @@ class GloMPOManager:
 
         except Exception as e:
             caught_exception = True
-            warnings.warn(f"Optimization failed. Caught exception: {e}")
+            warnings.warn(f"Optimization failed. Caught exception: {e}", RuntimeWarning)
             print("".join(traceback.TracebackException.from_exception(e).format()))
         finally:
 
@@ -653,7 +656,7 @@ class GloMPOManager:
         return found_signal
 
     def _start_new_job(self, opt_id: int, optimizer: BaseOptimizer, call_kwargs: Dict[str, Any],
-                       pipe: Connection, event: Event, gpr: GaussianProcessRegression):
+                       pipe: mp.connection.Connection, event: mp.Event, gpr: GaussianProcessRegression):
 
         self._optional_print(f"Starting Optimizer: {opt_id}", 2)
 

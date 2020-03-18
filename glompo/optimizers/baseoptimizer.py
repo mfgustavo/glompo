@@ -120,7 +120,7 @@ class BaseOptimizer(ABC):
             elif isinstance(message, tuple):
                 self._FROM_MANAGER_SIGNAL_DICT[message[0]](*message[1:])
             else:
-                warnings.warn("Cannot parse message, ignoring", UserWarning)
+                warnings.warn("Cannot parse message, ignoring", RuntimeWarning)
 
     def push_iter_result(self, *args):
         pass

@@ -5,3 +5,6 @@ the optimization. This uses matplotlib using a backend requiring a Qt binding to
 installed in your python environment
 
 pip install pyside2
+
+When running the tests the custom --savemovie flag can be added to save the movie made by test_scope.py for visual
+inspection.

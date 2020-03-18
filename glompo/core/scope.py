@@ -7,8 +7,6 @@ import matplotlib.lines as lines
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
-import os
-import shutil
 import warnings
 
 
@@ -29,13 +27,13 @@ class GloMPOScope:
     """ Constructs and records the dynamic plotting of optimizers run in parallel"""
 
     def __init__(self,
-                 x_range: Tuple[float, float] = 100,
-                 y_range: Tuple[float, float] = (),
+                 x_range: Union[Tuple[float, float], int, None] = 300,
+                 y_range: Optional[Tuple[float, float]] = None,
                  visualise_gpr: bool = False,
                  record_movie: bool = False,
                  interactive_mode: bool = False,
-                 writer_kwargs: Union[Dict[str, Any], None] = None,
-                 movie_kwargs: Union[Dict[str, Any], None] = None):
+                 writer_kwargs: Optional[Dict[str, Any]] = None,
+                 movie_kwargs: Optional[Dict[str, Any]] = None):
         """
         Initializes the plot and movie recorder.
 
@@ -49,7 +47,7 @@ class GloMPOScope:
             points. This is useful to make differences between optimizers visible in the late stage and also keep the
             scope operating at an adequate speed.
             Default value is set to 100.
-        y_range : Tuple[float, float]
+        y_range : Optional[Tuple[float, float]]
             Sets the y-axis limits of the plot, default is an empty tuple which leads the plot to automatically and
             constantly rescale the axis.
         visualise_gpr : bool
@@ -59,16 +57,16 @@ class GloMPOScope:
             If True then a matplotlib.animation.FFMpegFileWriter instance is created to record the plot.
         interactive_mode : bool
             If True the plot is visible on screen during the optimization.
-        writer_kwargs : Union[Dict[str, Any], None]
+        writer_kwargs : Optional[Dict[str, Any]]
             Optional dictionary of arguments to be sent to the initialisation of the
             matplotlib.animation.FFMpegFileWriter class.
-        movie_kwargs : Union[Dict[str, Any], None]
+        movie_kwargs : Optional[Dict[str, Any]]
             Optional dictionary of arguments to be sent to matplotlib.animation.FFMpegFileWriter.setup().
         """
 
         plt.ion() if interactive_mode else plt.ioff()
 
-        self.fig, self.ax = plt.subplots(figsize=(6, 4))
+        self.fig, self.ax = plt.subplots(figsize=(12, 8))
         self.ax.set_title("GloMPO Scope")
         self.ax.set_xlabel("Total Function Calls")
         self.ax.set_ylabel("Error")
@@ -115,17 +113,35 @@ class GloMPOScope:
         else:
             raise TypeError(f"Cannot parse x_range = {x_range}. Only int, None_Type and tuple can be used.")
 
-        self.ax.set_ylim(y_range[0], y_range[1]) if y_range else self.ax.set_autoscaley_on(True)
+        if isinstance(y_range, tuple):
+            if y_range[0] >= y_range[1]:
+                raise ValueError(f"Cannot parse y_range = {y_range}. Min must be less than and not equal to max.")
+            self.ax.set_ylim(y_range[0], y_range[1])
+        elif y_range is None:
+            self.ax.set_autoscaley_on(True)
+        else:
+            raise TypeError(f"Cannot parse y_range = {y_range}. Only tuple can be used.")
 
         self.record_movie = record_movie
+        self.movie_name = None
         if record_movie:
-            self.writer = MyFFMpegWriter(**writer_kwargs) if writer_kwargs else MyFFMpegWriter()
+            try:
+                self.writer = MyFFMpegWriter(**writer_kwargs) if writer_kwargs else MyFFMpegWriter()
+            except TypeError:
+                warnings.warn("Unidentified key in writer_kwargs. Using default values.", UserWarning)
+                self.writer = MyFFMpegWriter()
             if not movie_kwargs:
                 movie_kwargs = {}
             if 'outfile' not in movie_kwargs:
                 movie_kwargs['outfile'] = 'glomporecording.mp4'
-            self.writer.setup(fig=self.fig, **movie_kwargs)
-            os.makedirs("_tmp_movie_grabs", exist_ok=True)
+                self.movie_name = 'glomporecording.mp4'
+            else:
+                self.movie_name = movie_kwargs['outfile']
+            try:
+                self.writer.setup(fig=self.fig, **movie_kwargs)
+            except TypeError:
+                warnings.warn("Unidentified key in writer_kwargs. Using default values.", UserWarning)
+                self.writer.setup(fig=self.fig, outfile='glomporecording.mp4')
 
     def _redraw_graph(self):
         if time() - self.t_last > 1:
@@ -142,13 +158,16 @@ class GloMPOScope:
                                 y_vals = np.array(line.get_ydata())
 
                                 if len(x_vals) > 0:
-                                    min_val = self.x_max - self.truncated
-                                    bool_arr = x_vals >= min_val
-                                    x_vals = x_vals[bool_arr]
-                                    y_vals = y_vals[bool_arr]
+                                    min_val = np.clip(self.x_max - self.truncated, 0, None)
+                                    if line is not self.streams[opt_id]['mean']:
+                                        bool_arr = x_vals >= min_val
+                                        x_vals = x_vals[bool_arr]
+                                        y_vals = y_vals[bool_arr]
 
-                                    line.set_xdata(x_vals)
-                                    line.set_ydata(y_vals)
+                                        line.set_xdata(x_vals)
+                                        line.set_ydata(y_vals)
+                                    else:
+                                        line.set_xdata((min_val, self.x_max))
                                 done.append(True) if len(x_vals) == 0 else done.append(False)
                             else:
                                 line.xy = (np.clip(self.x_max - self.truncated, 0, None), line.xy[1])
@@ -160,9 +179,7 @@ class GloMPOScope:
             self.fig.canvas.draw()
             self.fig.canvas.flush_events()
             if self.record_movie:
-                os.chdir("_tmp_movie_grabs")
                 self.writer.grab_frame()
-                os.chdir("..")
 
     def _update_point(self, opt_id: int, track: str, pt: tuple = None):
 
@@ -292,8 +309,8 @@ class GloMPOScope:
             rec.set_height(0)
 
             line = self.streams[opt_id]['mean']
-            line.set_xdata = []
-            line.set_ydata = []
+            line.set_xdata([])
+            line.set_ydata([])
         self._redraw_graph()
 
     def update_gpr(self, opt_id: int, x: np.ndarray, y: np.ndarray, lower_sig: np.ndarray, upper_sig: np.ndarray):
@@ -316,16 +333,9 @@ class GloMPOScope:
         """ Final call to write the saved frames into a single movie. """
         if self.record_movie:
             try:
-                os.chdir("_tmp_movie_grabs")
                 self.writer.finish()
-                files = [file for file in os.listdir("../scope") if ".mp4" in file]
-                for file in files:
-                    shutil.move(file, f"../{file}")
-                os.chdir("..")
             except Exception as e:
-                warnings.warn(f"Exception caught while trying to save movie: {e}", UserWarning)
-            finally:
-                shutil.rmtree("_tmp_movie_grabs", ignore_errors=True)
+                warnings.warn(f"Exception caught while trying to save movie: {e}", RuntimeWarning)
         else:
             warnings.warn("Unable to generate movie file as data was not collected during the dynamic plotting.\n"
                           "Rerun GloMPOScope with record_movie = True during initialisation.", UserWarning)

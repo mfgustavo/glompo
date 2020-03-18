@@ -134,5 +134,5 @@ class CMAOptimizer(BaseOptimizer):
         self.es.callbackstop = 1
 
     def save_state(self, *args):
-        warnings.warn("CMA save_state not yet implemented.", NotImplemented)
+        warnings.warn("CMA save_state not yet implemented.", NotImplementedError)
         pass
