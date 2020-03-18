@@ -39,10 +39,6 @@ class BaseChecker(ABC):
 
     def is_converged_str(self) -> str:
         mess = str(self)
-        if mess.endswith(" OR"):
-            mess.replace(" OR", "")
-        elif mess.endswith(" AND"):
-            mess.replace(" AND", "")
         mess += f" = {self._converged}"
         return mess
 
@@ -72,6 +68,7 @@ class _AnyChecker(_CombiChecker):
         for base in self.base_checkers:
             mess += f"{base} OR \n"
         mess = mess[:-5]
+        mess = "(" + mess + ")"
         return mess
 
     def is_converged_str(self):
@@ -79,6 +76,7 @@ class _AnyChecker(_CombiChecker):
         for base in self.base_checkers:
             mess += f"{base.is_converged_str()} OR \n"
         mess = mess[:-5]
+        mess = "(" + mess + ")"
         return mess
 
 
@@ -92,6 +90,7 @@ class _AllChecker(_CombiChecker):
         for base in self.base_checkers:
             mess += f"{base} AND \n"
         mess = mess[:-6]
+        mess = "(" + mess + ")"
         return mess
 
     def is_converged_str(self):
@@ -99,4 +98,5 @@ class _AllChecker(_CombiChecker):
         for base in self.base_checkers:
             mess += f"{base.is_converged_str()} AND \n"
         mess = mess[:-6]
+        mess = "(" + mess + ")"
         return mess
