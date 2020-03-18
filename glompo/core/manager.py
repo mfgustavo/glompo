@@ -288,7 +288,7 @@ class GloMPOManager:
             self.killing_conditions = ValBelowGPR() * \
                                       PseudoConverged(20, 0.01) * \
                                       MinVictimTrainingPoints(10) * \
-                                      GPRSuitable()
+                                      GPRSuitable(0.05)
 
         # Save max conditions and counters
         self.t_start = None

@@ -361,4 +361,5 @@ class TestManagerMethods:
                               n_parms=2,
                               optimizers={'default': CMAOptimizer},
                               bounds=((-5, 5), (-3, 3)),
-                              max_jobs=2)
+                              max_jobs=2,
+                              overwrite_existing=True)
