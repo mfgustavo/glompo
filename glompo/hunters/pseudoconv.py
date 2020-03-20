@@ -23,5 +23,5 @@ class PseudoConverged(BaseHunter):
         else:
             fbest_current = vals[-1]
             fbest_iters = vals[-self.iters]
-
-            return abs(fbest_current - fbest_iters) <= fbest_iters * self.tol
+            print(f"{victim_opt_id} pseudoconv is {abs(fbest_current - fbest_iters) <= abs(fbest_iters * self.tol)}")
+            return abs(fbest_current - fbest_iters) <= abs(fbest_iters * self.tol)

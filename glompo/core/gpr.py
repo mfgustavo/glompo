@@ -259,6 +259,44 @@ class GaussianProcessRegression:
             self._inv_kernel_cache[key] = mat
             return mat
 
+    def is_mean_suitable(self, tol: float = 0.1):
+        try:
+            vals = np.array([*self._training_pts.values()]).flatten()
+            if len(vals) < 3:
+                return False
+            mu, sigma = self.sample_all([*self._training_pts], True)
+            diffs = np.abs((vals - mu) / vals)
+
+            # Check mean matches data
+            suitable = np.mean(diffs) < tol
+
+            if not suitable:
+                return False
+
+            return True
+        except FloatingPointError:
+            return False
+
+    def is_tail_suitable(self):
+        # Check tail is flat and below current values
+        try:
+            x0 = np.array([*self._training_pts][-1])
+            x1 = x0 + 100
+            x2 = x1 + 100
+            y0, _ = self.sample_all(x0, True)
+            y1, _ = self.sample_all(x1, True)
+            y2, _ = self.sample_all(x2, True)
+            m = (y2 - y1) / (x2 - x1)
+            if np.isclose(m, 0, atol=1e-3) and y2 < y0:
+                return True
+
+            return False
+        except FloatingPointError:
+            return False
+
+    def is_suitable(self, tol: float = 0.1):
+        return self.is_mean_suitable(tol) and self.is_tail_suitable()
+
     # # BELOW FUNCTION DOES NOT WORK AT EVEN MODERATE DIMENSIONS :(
     # def _inv_kernel_training_matrix(self):
     #     """ Calculates the inverse of the kernel matrix of training points. This is done blockwise according to the

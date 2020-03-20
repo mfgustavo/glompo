@@ -151,9 +151,9 @@ class TestScope:
     @classmethod
     def teardown_class(cls):
         try:
-            if '--save-movie' not in sys.argv:
+            if '--save-outs' not in sys.argv:
                 os.remove("glomporecording.mp4")
             else:
-                shutil.move("glomporecording.mp4", "tests/glompo_test_recording.mp4")
+                shutil.move("glomporecording.mp4", "tests/outputs/glompo_test_recording.mp4")
         except FileNotFoundError:
             pass

@@ -4,8 +4,6 @@ from ..core.gpr import GaussianProcessRegression
 from ..core.logger import Logger
 
 import numpy as np
-import scipy.integrate
-import scipy.stats
 
 
 __all__ = ("GPRSuitable",)
@@ -22,24 +20,8 @@ class GPRSuitable(BaseHunter):
 
     def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, hunter_gpr: GaussianProcessRegression,
                               victim_opt_id: int, victim_gpr: GaussianProcessRegression) -> bool:
-
-        for opt_id, gpr in [(hunter_opt_id, hunter_gpr), (victim_opt_id, victim_gpr)]:
-            vals = np.array(log.get_history(opt_id, "fx"))
-            mu, sigma = gpr.sample_all(range(len(vals)))
-            diffs = np.abs(vals - mu) / vals[0]
-
-            # Check mean matches data
-            suitable = all(diffs < self.tol * vals[0])
-            if not suitable:
-                return False
-
-            # Check tail not too extreme
-            x1 = len(vals)
-            x2 = x1 + 100
-            y1, _ = gpr.sample_all(x1)
-            y2, _ = gpr.sample_all(x2)
-            m = (y2 - y1) / (x2 - x1)
-            if m > 0.02 or m < -0.02:
-                return False
-
-        return True
+        # print(f"hunter mean suitable {bool(hunter_gpr.is_mean_suitable(self.tol))}")
+        # print(f"hunter tail suitable {bool(hunter_gpr.is_tail_suitable())}")
+        # print(f"victim mean suitable {bool(victim_gpr.is_mean_suitable(self.tol))}")
+        # print(f"victim tail suitable {bool(victim_gpr.is_tail_suitable())}")
+        return hunter_gpr.is_suitable(self.tol) and victim_gpr.is_suitable(self.tol)

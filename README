@@ -6,5 +6,6 @@ installed in your python environment
 
 pip install pyside2
 
-When running the tests the custom --savemovie flag can be added to save the movie made by test_scope.py for visual
+When runnint the tests the flag --run-minimize can be used to run a test GloMPO minimisation on a MWE. The --save-outs
+flag can be added to save the outputs of this test. This flag will also save the movie by test_scope.py for visual
 inspection.

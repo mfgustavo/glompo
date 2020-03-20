@@ -51,7 +51,6 @@ class IterationResult(NamedTuple):
 
 
 class HyperparameterOptResult(NamedTuple):
-    hyper_id: int
     opt_id: int
     alpha: float
     beta: float

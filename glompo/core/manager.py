@@ -201,7 +201,7 @@ class GloMPOManager:
         if working_dir:
             try:
                 os.chdir(working_dir)
-            except NotADirectoryError:
+            except (FileNotFoundError, NotADirectoryError):
                 try:
                     os.makedirs(working_dir)
                 except TypeError:
@@ -416,6 +416,7 @@ class GloMPOManager:
                     i_count += 1
                     self.last_feedback[res.opt_id] = time()
                     self.f_counter += res.n_icalls
+                    # TODO Maybe remove conv check?
                     if self.convergence_checker.check_convergence(self):
                         break
                     if not any([res.opt_id == victim for victim in self.hunt_victims]):
@@ -439,21 +440,24 @@ class GloMPOManager:
                             self._optional_print(f"\tResult from {res.opt_id} sent to GPR", 2)
                             self.optimizer_packs[res.opt_id].gpr.add_known(res.n_iter, fx)
 
+                            # Start new hyperparameter optimization job
+                            # TODO Restart hyperparam jobs
+                            if res.opt_id not in self.hyperparm_processes and res.n_iter > 0:
+                                if not self.optimizer_packs[res.opt_id].gpr.is_suitable(0.3):
+                                    self._start_hyperparam_job(res.opt_id)
+
                             # Hunt optimizers
                             self._optional_print("Hunting...", 2)
                             for hunter_id in self.optimizer_packs:
                                 for victim_id in self.optimizer_packs:
-                                    if all([opt_id not in self.graveyard for opt_id in [hunter_id, victim_id]]):
+                                    ids = [hunter_id, victim_id]
+                                    in_graveyard = all([opt_id in self.graveyard for opt_id in ids])
+                                    in_update = all([opt_id in self.hyperparm_processes for opt_id in ids])
+                                    has_points = all([len(self.log.get_history(opt_id, "fx")) > 0 for opt_id in ids])
+                                    has_gpr = all([len(self.optimizer_packs[opt_id].gpr.training_coords()) > 0
+                                                   for opt_id in ids])
+                                    if not in_graveyard and not in_update and has_points and has_gpr:
                                         self.hunt_counter += 1
-
-                                        # Start new hyperparameter optimization job
-                                        # TODO Restart hyperparam jobs
-                                        if not GPRSuitable(0.2).is_kill_condition_met(self.log, hunter_id,
-                                                                                      self.optimizer_packs[
-                                                                                          hunter_id].gpr, victim_id,
-                                                                                      self.optimizer_packs[
-                                                                                          victim_id].gpr):
-                                            self._start_hyperparam_job(res.opt_id)
 
                                         kill = self.killing_conditions.is_kill_condition_met(self.log,
                                                                                              hunter_id,
@@ -464,7 +468,8 @@ class GloMPOManager:
                                                                                                  victim_id].gpr)
                                         if kill:
                                             self._optional_print(f"\tManager wants to kill {victim_id}", 1)
-                                            self._shutdown_job(victim_id)
+                                            if victim_id not in self.graveyard:
+                                                self._shutdown_job(victim_id)
                             self._optional_print("Hunt check done.", 2)
 
                             mean = np.mean(self.log.get_history(res.opt_id, "fx"))
@@ -533,8 +538,8 @@ class GloMPOManager:
                 if not self.hyperparm_queue.empty():
                     while not self.hyperparm_queue.empty():
                         res = self.hyperparm_queue.get_nowait()
-                        self.hyperparm_processes[res.hyper_id].join()
-                        del self.hyperparm_processes[res.hyper_id]
+                        self.hyperparm_processes[res.opt_id].join()
+                        del self.hyperparm_processes[res.opt_id]
 
                         self._optional_print(f"\tNew hyperparameters found for {res.opt_id}", 1)
 
@@ -715,27 +720,34 @@ class GloMPOManager:
         self._optional_print(f"Starting hyperparameter optimization job for {opt_id}", 1)
 
         self.hyop_counter += 1
-        gpr = self.optimizer_packs[opt_id].gpr
 
-        kernel_kwargs = {"time_series": gpr.training_coords(),
-                         "loss_series": gpr.training_values(),
-                         "noise": True,
-                         "bounds": None,
-                         "x0": None,
-                         "verbose": True}
+        def wrapped_hyperparm_job(o_id, queue: mp.Queue, gpr: GaussianProcessRegression):
 
-        def wrapped_hyperparm_job(hyper_id, o_id, queue, **kwargs):
-            a, b, g = self.optimizer_packs[o_id].gpr.kernel.optimize_hyperparameters(**kwargs)
-            result = HyperparameterOptResult(hyper_id, o_id, a, b, g)
+            a = gpr.kernel.alpha
+            b = gpr.kernel.beta
+            g = gpr.sigma_noise
+
+            while not gpr.is_tail_suitable() and gpr.sigma_noise < 0.2:
+                gpr.sigma_noise *= 1.1
+                g *= 1.1
+            if not gpr.is_mean_suitable():
+                sig_min = np.clip(0.5*g, 0.001, 0.25)
+                a, b, g = gpr.kernel.optimize_hyperparameters(time_series=gpr.training_coords(),
+                                                              loss_series=gpr.training_values(),
+                                                              noise=True,
+                                                              bounds=((0.1, 2), (1, 20), (sig_min, 0.3)),
+                                                              x0=None,
+                                                              verbose=self.verbose == 2)
+
+            result = HyperparameterOptResult(o_id, a, b, g)
             queue.put(result)
 
         process = mp.Process(target=wrapped_hyperparm_job,
-                             args=(self.hyop_counter, opt_id, self.hyperparm_queue),
-                             kwargs=kernel_kwargs,
+                             args=(opt_id, self.hyperparm_queue, self.optimizer_packs[opt_id].gpr),
                              daemon=True)
 
-        self.hyperparm_processes[self.hyop_counter] = process
-        self.hyperparm_processes[self.hyop_counter].start()
+        self.hyperparm_processes[opt_id] = process
+        self.hyperparm_processes[opt_id].start()
 
         if self.visualisation:
             self.scope.update_opt_start(opt_id)

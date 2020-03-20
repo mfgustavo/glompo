@@ -36,6 +36,8 @@ class MinimizeResult:
         self.success = False
         self.x = None
         self.fx = float('inf')
+        self.stats = None
+        self.origin = None
 
 
 class BaseOptimizer(ABC):

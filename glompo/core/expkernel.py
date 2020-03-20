@@ -213,20 +213,21 @@ class ExpKernel:
                                   options={'gtol': 1e-12,
                                            'xtol': 1e-6})
 
-            if res.success and verbose:
-                print("------------------------------------------------")
-                print("Hyperparameters Successfully Optimized")
-                print("------------------------------------------------")
-                print(f"\u03B1                = {res.x[0]:.4f} Bounds: {bnds[0]}")
-                print(f"\u03B2                = {res.x[1]:.4f} Bounds: {bnds[1]}")
-                print(f"\u03B3                = {res.x[2]:.4f} Bounds: {bnds[2]}") if noise else None
-                print("")
-                print(f"fmax             = {-res.fun}")
-                print(f"Opti. Iterations = {res.nit}")
-                print(f"Func. Evals      = {res.nfev}")
-                print(f"Jaco. Evals      = {res.njev}")
-                print(f"flag             = {res.message}")
-                print("------------------------------------------------")
+            if res.success:
+                if verbose:
+                    print("------------------------------------------------")
+                    print("Hyperparameters Successfully Optimized")
+                    print("------------------------------------------------")
+                    print(f"\u03B1                = {res.x[0]:.4f} Bounds: {bnds[0]}")
+                    print(f"\u03B2                = {res.x[1]:.4f} Bounds: {bnds[1]}")
+                    print(f"\u03B3                = {res.x[2]:.4f} Bounds: {bnds[2]}") if noise else None
+                    print("")
+                    print(f"fmax             = {-res.fun}")
+                    print(f"Opti. Iterations = {res.nit}")
+                    print(f"Func. Evals      = {res.nfev}")
+                    print(f"Jaco. Evals      = {res.njev}")
+                    print(f"flag             = {res.message}")
+                    print("------------------------------------------------")
                 self.alpha, self.beta = res.x[:2]
                 return res.x if noise else (res.x[0], res.x[1], 0)
             else:

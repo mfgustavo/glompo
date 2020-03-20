@@ -22,5 +22,5 @@ class ConfidenceWidth(BaseHunter):
                               victim_opt_id: int, victim_gpr: GaussianProcessRegression) -> bool:
 
         mu, sigma = victim_gpr.estimate_mean()
-
+        print(f"{victim_opt_id} conf width is {sigma < self.threshold * abs(mu)}")
         return sigma < self.threshold * abs(mu)

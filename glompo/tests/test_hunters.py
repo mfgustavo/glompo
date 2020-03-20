@@ -201,12 +201,13 @@ class TestPseudoConv:
 
 class TestGPRSuitable:
     @pytest.mark.parametrize("noise1, noise2, output", [(1, 1, False),
-                                                        (0.001, 0.001, True),
-                                                        (0.001, 1, False),
-                                                        (1, 0.001, False)])
+                                                        (0.005, 0.005, True),
+                                                        (0.005, 1, False),
+                                                        (1, 0.005, False)])
     def test_cond(self, noise1, noise2, output):
-        kernel = ExpKernel(alpha=1.2,
-                           beta=10)
+        np.random.seed(1)
+        kernel = ExpKernel(alpha=0.7,
+                           beta=0.1)
         log = Logger()
         log.add_optimizer(1, None, None)
         log.add_optimizer(2, None, None)
@@ -218,14 +219,14 @@ class TestGPRSuitable:
                                          sigma_noise=noise2)
 
         t_short = np.arange(0, 10)
-        pts = np.exp(-t_short)
+        pts = np.exp(-t_short) * np.random.uniform(0.5, 1.5, len(t_short)) + 0.1
         for x, y in enumerate(pts):
             gpr1.add_known(x, y)
             gpr2.add_known(x, y)
             log.put_iteration(1, x, x, x, y)
             log.put_iteration(2, x, x, x, y)
 
-        cond = GPRSuitable(0.03)
+        cond = GPRSuitable(0.1)
 
         assert cond.is_kill_condition_met(log, 1, gpr1, 2, gpr2) is output
 
