@@ -159,7 +159,11 @@ class GloMPOScope:
 
                                 if len(x_vals) > 0:
                                     min_val = np.clip(self.x_max - self.truncated, 0, None)
-                                    if line is not self.streams[opt_id]['mean']:
+                                    ismeanline = False
+                                    if not self.visualise_gpr:
+                                        if line is self.streams[opt_id]['mean']:
+                                            ismeanline = True
+                                    if not ismeanline:
                                         bool_arr = x_vals >= min_val
                                         x_vals = x_vals[bool_arr]
                                         y_vals = y_vals[bool_arr]

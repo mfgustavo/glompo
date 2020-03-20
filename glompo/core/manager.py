@@ -59,7 +59,7 @@ class GloMPOManager:
                  visualisation: bool = False,
                  visualisation_args: Optional[Dict[str, Any]] = None,
                  force_terminations_after: int = -1,
-                 verbose: bool = False,
+                 verbose: int = 0,
                  split_printstreams: bool = True):
         """
         Generates the environment for a globally managed parallel optimization job.
@@ -164,7 +164,7 @@ class GloMPOManager:
             (see visualisation_args) allow this plotting to be recorded and saved as a film.
 
         visualisation_args: Optional[Dict[str, Any]]
-            Optional arguments to parameterize the dynamic plotting feature. See ParallelOptimizationScope.
+            Optional arguments to parameterize the dynamic plotting feature. See GloMPOScope.
 
         force_terminations_after: int = -1
             If a value larger than zero is provided then GloMPO is allowed to force terminate optimizers that have
@@ -202,22 +202,25 @@ class GloMPOManager:
             try:
                 os.chdir(working_dir)
             except NotADirectoryError:
-                os.makedirs(working_dir)
+                try:
+                    os.makedirs(working_dir)
+                except TypeError:
+                    warnings.warn(f"Cannot parse working_dir = {working_dir}. str or bytes expected. Using current "
+                                  f"work directory.", UserWarning)
 
         # Save and wrap task
-        def task_args_wrapper(func, args, kwargs):
-            @wraps(func)
-            def wrapper(x):
-                return func(x, *args, **kwargs)
-            return wrapper
-
         if not callable(task):
             raise TypeError(f"{task} is not callable.")
+        if not isinstance(task_args, list) and task_args is not None:
+            raise TypeError(f"{task_args} cannot be parsed, list needed.")
+        if not isinstance(task_kwargs, dict) and task_kwargs is not None:
+            raise TypeError(f"{task_kwargs} cannot be parsed, dict needed.")
+
         if not task_args:
             task_args = ()
         if not task_kwargs:
             task_kwargs = {}
-        self.task = task_args_wrapper(task, task_args, task_kwargs)
+        self.task = self._task_args_wrapper(task, task_args, task_kwargs)
 
         # Save n_parms
         if isinstance(n_parms, int):
@@ -234,6 +237,14 @@ class GloMPOManager:
         for key in optimizers:
             if not isinstance(optimizers[key], tuple):
                 optimizers[key] = (optimizers[key], {}, {})
+            elif len(optimizers[key]) == 3 and \
+                    (isinstance(optimizers[key][1], dict) or optimizers[key][1] is None) and \
+                    (isinstance(optimizers[key][2], dict) or optimizers[key][2] is None):
+                init = {} if optimizers[key][1] is None else optimizers[key][1]
+                call = {} if optimizers[key][2] is None else optimizers[key][2]
+                optimizers[key] = (optimizers[key][0], init, call)
+            else:
+                raise ValueError(f"Cannot parse {optimizers[key]}.")
             if not issubclass(optimizers[key][0], BaseOptimizer):
                 raise TypeError(f"{optimizers[key][0]} not an instance of BaseOptimizer.")
         self.optimizers = optimizers
@@ -313,7 +324,7 @@ class GloMPOManager:
         self.visualisation = visualisation
         self.split_printstreams = split_printstreams
         if visualisation:
-            self.scope = GloMPOScope(**visualisation_args)
+            self.scope = GloMPOScope(**visualisation_args) if visualisation_args else GloMPOScope()
 
         # Setup multiprocessing variables
         self.optimizer_packs = {}  # Dict[opt_id (int): ProcessPackage (NamedTuple)]
@@ -385,23 +396,6 @@ class GloMPOManager:
                     self._check_signals(opt_id)
                 self._optional_print(f"Signal check done.", 2)
 
-                # Hunt optimizers
-                self._optional_print("Hunting...", 2)
-                for hunter_id in self.optimizer_packs:
-                    for victim_id in self.optimizer_packs:
-                        if all([opt_id not in self.graveyard for opt_id in [hunter_id, victim_id]]) and \
-                           all([len(self.log.get_history(opt_id, "fx")) > 10 for opt_id in [hunter_id, victim_id]]):
-                            self.hunt_counter += 1
-                            kill = self.killing_conditions.is_kill_condition_met(self.log,
-                                                                                 hunter_id,
-                                                                                 self.optimizer_packs[hunter_id].gpr,
-                                                                                 victim_id,
-                                                                                 self.optimizer_packs[victim_id].gpr)
-                            if kill:
-                                self._optional_print(f"\tManager wants to kill {victim_id}", 1)
-                                self._shutdown_job(victim_id)
-                self._optional_print("Hunt check done.", 2)
-
                 # Force kill any zombies
                 if self.allow_forced_terminations:
                     for id_num in self.hunt_victims:
@@ -440,15 +434,38 @@ class GloMPOManager:
 
                         # Send results to GPRs
                         trained = False
-                        if res.n_iter % 3 == 0:
+                        if res.n_iter % 10 == 0:
                             trained = True
                             self._optional_print(f"\tResult from {res.opt_id} sent to GPR", 2)
                             self.optimizer_packs[res.opt_id].gpr.add_known(res.n_iter, fx)
 
-                            # Start new hyperparameter optimization job
-                            # TODO Restart hyperparam jobs
-                            # if len(self.optimizer_packs[res.opt_id].gpr.training_values()) % 20 == 0:
-                            #     self._start_hyperparam_job(res.opt_id)
+                            # Hunt optimizers
+                            self._optional_print("Hunting...", 2)
+                            for hunter_id in self.optimizer_packs:
+                                for victim_id in self.optimizer_packs:
+                                    if all([opt_id not in self.graveyard for opt_id in [hunter_id, victim_id]]):
+                                        self.hunt_counter += 1
+
+                                        # Start new hyperparameter optimization job
+                                        # TODO Restart hyperparam jobs
+                                        if not GPRSuitable(0.2).is_kill_condition_met(self.log, hunter_id,
+                                                                                      self.optimizer_packs[
+                                                                                          hunter_id].gpr, victim_id,
+                                                                                      self.optimizer_packs[
+                                                                                          victim_id].gpr):
+                                            self._start_hyperparam_job(res.opt_id)
+
+                                        kill = self.killing_conditions.is_kill_condition_met(self.log,
+                                                                                             hunter_id,
+                                                                                             self.optimizer_packs[
+                                                                                                 hunter_id].gpr,
+                                                                                             victim_id,
+                                                                                             self.optimizer_packs[
+                                                                                                 victim_id].gpr)
+                                        if kill:
+                                            self._optional_print(f"\tManager wants to kill {victim_id}", 1)
+                                            self._shutdown_job(victim_id)
+                            self._optional_print("Hunt check done.", 2)
 
                             mean = np.mean(self.log.get_history(res.opt_id, "fx"))
                             sigma = np.std(self.log.get_history(res.opt_id, "fx"))
@@ -738,7 +755,7 @@ class GloMPOManager:
         gpr = GaussianProcessRegression(kernel=ExpKernel(alpha=1.6,
                                                          beta=100),
                                         dims=1,
-                                        sigma_noise=0.5,
+                                        sigma_noise=0.4,
                                         mean=None)
 
         parent_pipe, child_pipe = mp.Pipe()
@@ -780,4 +797,12 @@ class GloMPOManager:
             sys.stdout = open(f"glompo_optimizer_printstreams/{opt_id}_printstream.out", "w")
             sys.stderr = open(f"glompo_optimizer_printstreams/{opt_id}_printstream.err", "w")
             func(*args, **kwargs)
+        return wrapper
+
+    @staticmethod
+    def _task_args_wrapper(func, args, kwargs):
+        @wraps(func)
+        def wrapper(x):
+            return func(x, *args, **kwargs)
+
         return wrapper

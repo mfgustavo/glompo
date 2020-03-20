@@ -120,19 +120,19 @@ class BaseOptimizer(ABC):
             elif isinstance(message, tuple):
                 self._FROM_MANAGER_SIGNAL_DICT[message[0]](*message[1:])
             else:
-                warnings.warn("Cannot parse message, ignoring", RuntimeWarning)
+                        warnings.warn("Cannot parse message, ignoring", RuntimeWarning)
 
     def push_iter_result(self, *args):
-        pass
+        raise NotImplementedError
 
-    def message_manager(self, key: int, message: Optional[str]):
+    def message_manager(self, key: int, message: Optional[str] = None):
         self._signal_pipe.send((key, message))
 
     def callstop(self, *args):
         """
         Signal to terminate the :meth:`minimize` loop while still returning a result
         """
-        pass
+        raise NotImplementedError
 
     def save_state(self, *args):
-        pass
+        raise NotImplementedError

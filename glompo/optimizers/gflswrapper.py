@@ -168,6 +168,7 @@ class GFLSOptimizer(BaseOptimizer):
         index = np.where(history == fx)[0][0]
         x = logger.get("pars", index)
 
+        self.message_manager(0)
         result = MinimizeResult()
         result.success = success
         result.x = vector_codec.decode(x)

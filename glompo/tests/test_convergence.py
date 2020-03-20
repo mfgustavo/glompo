@@ -109,17 +109,41 @@ class TestOthers:
         def __init__(self):
             self.f_counter = 300
             self.conv_counter = 2
-            self.kill_counter = 6
             self.o_counter = 10
             self.t_start = 1584521316.09197
             self.hunt_victims = {1, 2, 3, 5, 6, 7}
 
     @pytest.mark.parametrize("checker, output", [(MaxSeconds(60), True),
-                                                 (KillsAfterConvergence(2, 1), False),
                                                  (MaxFuncCalls(200), True),
                                                  (NOptConverged(2), True),
                                                  (MaxKills(6), True),
-                                                 (MaxOptsStarted(10), True)])
+                                                 (MaxOptsStarted(10), True),
+                                                 (MaxSeconds(1e318), False),
+                                                 (MaxFuncCalls(900), False),
+                                                 (NOptConverged(9), False),
+                                                 (MaxKills(10), False),
+                                                 (MaxOptsStarted(20), False)
+                                                 ])
     def test_conditions(self, checker, output):
         manager = self.Manager()
         assert checker.check_convergence(manager) is output
+
+    def test_killsafterconv(self):
+        checker = KillsAfterConvergence(4, 2)
+        manager = self.Manager()
+        manager.hunt_victims = set()
+        manager.conv_counter = 0
+        for kills in range(7):
+            manager.hunt_victims.add(kills)
+            if kills % 3 == 0:
+                manager.conv_counter += 1
+            assert not checker.check_convergence(manager)
+        manager.hunt_victims.add(100)
+        assert checker.check_convergence(manager)
+        manager.hunt_victims.add(200)
+        manager.hunt_victims.add(300)
+        manager.hunt_victims.add(400)
+        manager.hunt_victims.add(500)
+        assert checker.check_convergence(manager)
+        manager.conv_counter += 4
+        assert checker.check_convergence(manager)
