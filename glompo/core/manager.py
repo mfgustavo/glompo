@@ -153,7 +153,7 @@ class GloMPOManager:
             GPRs. If enforce_elitism is True, feedback from optimizers is filtered to only accept results which
             improve upon the incumbent.
 
-        gpr_training: Tuple[Union[int, None], int] = (None, 1)
+        gpr_training: Tuple[Union[int, None], int] = (None, 10)
             Tuple of the form (max, step) which sets the maximum number of points in an optimizer GPR and step which
             controls the interval at which steps are taken. The later points are kept and earlier points are
             discarded from the regression.
@@ -479,7 +479,7 @@ class GloMPOManager:
                                                    for opt_id in ids])
                                     if not in_graveyard and not in_update and has_points and has_gpr:
                                         self.hunt_counter += 1
-
+                                        print("Hunt started")
                                         kill = self.killing_conditions.is_kill_condition_met(self.log,
                                                                                              hunter_id,
                                                                                              self.optimizer_packs[
@@ -505,12 +505,14 @@ class GloMPOManager:
                                 self.scope.update_scatter(res.opt_id, (self.f_counter, fx))
 
                                 if self.scope.visualise_gpr:
-                                    i_range = np.linspace(0, res.n_iter, 200)
-                                    mu, sigma = self.optimizer_packs[res.opt_id].gpr.sample_all(i_range)
+                                    gpr = self.optimizer_packs[res.opt_id].gpr
+                                    i_min = np.clip(res.n_iter - self.gpr_max * self.gpr_step, 1, None)
+                                    i_max = res.n_iter
+                                    i_range = np.linspace(i_min, i_max, 200)
+                                    mu, sigma = gpr.sample_all(i_range)
 
-                                    f_range = self.scope.streams[res.opt_id]['all_opt'].get_xdata()
-                                    f_min = self.log.get_history(res.opt_id, "f_call")[0]
-                                    f_max = np.max(f_range)
+                                    f_min = self.log.get_history(res.opt_id, "f_call")[i_min]
+                                    f_max = self.f_counter
                                     f_range = np.linspace(f_min, f_max, 200, endpoint=True)
 
                                     self.scope.update_gpr(res.opt_id, f_range, mu, mu - 2*sigma, mu + 2*sigma)
