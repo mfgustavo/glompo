@@ -1,6 +1,7 @@
 
 
 import numpy as np
+import warnings
 from typing import *
 
 
@@ -67,33 +68,43 @@ class GaussianProcessRegression:
         k_train_test = np.transpose(k_test_train)
         k_test_test = self._kernel_matrix(x, x)
 
-        invK = self._inv_kernel_matrix(train_x, train_x,
-                                       self.sigma_noise + 1e-4)  # NB Added here for numerical stability
+        mean_func = -1
+        covar_fun = -1
+        while True:
+            invK = self._inv_kernel_matrix(train_x, train_x,
+                                           self.sigma_noise + 1e-4)  # NB Added here for numerical stability
 
-        calc_core = np.matmul(k_test_train, invK)
+            calc_core = np.matmul(k_test_train, invK)
 
-        # Calculation of the covariance function
-        covar_fun = k_test_test - np.matmul(calc_core, k_train_test)
+            # Calculation of the covariance function
+            covar_fun = k_test_test - np.matmul(calc_core, k_train_test)
 
-        # Calculation of the mean function
-        if self.mean is not None:
-            mean_vec_test = np.full((test_count, 1), self.mean)
-            mean_vec_train = np.full((train_count, 1), self.mean)
-            mean_func = mean_vec_test + np.matmul(calc_core, train_y - mean_vec_train)
-        else:
-            mean_func = np.matmul(calc_core, train_y)
+            # Calculation of the mean function
+            if self.mean is not None:
+                mean_vec_test = np.full((test_count, 1), self.mean)
+                mean_vec_train = np.full((train_count, 1), self.mean)
+                mean_func = mean_vec_test + np.matmul(calc_core, train_y - mean_vec_train)
+            else:
+                mean_func = np.matmul(calc_core, train_y)
 
-            ones_test_len = np.ones((1, test_count))
-            ones_train_len = np.ones((1, train_count))
-            # Calculate R matrix
-            r_mat = np.matmul(invK, k_train_test)
-            r_mat = np.matmul(ones_train_len, r_mat)
-            r_mat = ones_test_len - r_mat
+                ones_test_len = np.ones((1, test_count))
+                ones_train_len = np.ones((1, train_count))
+                # Calculate R matrix
+                r_mat = np.matmul(invK, k_train_test)
+                r_mat = np.matmul(ones_train_len, r_mat)
+                r_mat = ones_test_len - r_mat
 
-            mean_estimate, mean_uncertainty = self.estimate_mean(True)
-            mean_func += mean_estimate * np.transpose(r_mat)
-            covar_correction = mean_uncertainty * np.matmul(np.transpose(r_mat), r_mat)
-            covar_fun += covar_correction
+                mean_estimate, mean_uncertainty = self.estimate_mean(True)
+                mean_func += mean_estimate * np.transpose(r_mat)
+                covar_correction = mean_uncertainty * np.matmul(np.transpose(r_mat), r_mat)
+                covar_fun += covar_correction
+
+            if np.any(np.diag(covar_fun) < 0):
+                warnings.warn("Negative variances detected. Increasing noise parameter for numerical stability.",
+                              RuntimeWarning)
+                self.sigma_noise += 0.01
+            else:
+                break
 
         return mean_func, covar_fun
 
@@ -260,39 +271,33 @@ class GaussianProcessRegression:
             return mat
 
     def is_mean_suitable(self, tol: float = 0.1):
-        try:
-            vals = np.array([*self._training_pts.values()]).flatten()
-            if len(vals) < 3:
-                return False
-            mu, sigma = self.sample_all([*self._training_pts], True)
-            diffs = np.abs((vals - mu) / vals)
-
-            # Check mean matches data
-            suitable = np.mean(diffs) < tol
-
-            if not suitable:
-                return False
-
-            return True
-        except FloatingPointError:
+        vals = np.array([*self._training_pts.values()]).flatten()
+        if len(vals) < 3:
             return False
+        mu, sigma = self.sample_all([*self._training_pts], True)
+        diffs = np.abs((vals - mu) / vals)
+
+        # Check mean matches data
+        suitable = np.mean(diffs) < tol
+
+        if not suitable:
+            return False
+
+        return True
 
     def is_tail_suitable(self):
         # Check tail is flat and below current values
-        try:
-            x0 = np.array([*self._training_pts][-1])
-            x1 = x0 + 100
-            x2 = x1 + 100
-            y0, _ = self.sample_all(x0, True)
-            y1, _ = self.sample_all(x1, True)
-            y2, _ = self.sample_all(x2, True)
-            m = (y2 - y1) / (x2 - x1)
-            if np.isclose(m, 0, atol=1e-3) and y2 < y0:
-                return True
+        x0 = np.array([*self._training_pts][-1])
+        x1 = x0 + 100
+        x2 = x1 + 100
+        y0, _ = self.sample_all(x0, True)
+        y1, _ = self.sample_all(x1, True)
+        y2, _ = self.sample_all(x2, True)
+        m = (y2 - y1) / (x2 - x1)
+        if np.isclose(m, 0, atol=1e-3) and y2 < y0:
+            return True
 
-            return False
-        except FloatingPointError:
-            return False
+        return False
 
     def is_suitable(self, tol: float = 0.1):
         return self.is_mean_suitable(tol) and self.is_tail_suitable()

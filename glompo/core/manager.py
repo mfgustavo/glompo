@@ -732,12 +732,16 @@ class GloMPOManager:
                 g *= 1.1
             if not gpr.is_mean_suitable():
                 sig_min = np.clip(0.5*g, 0.001, 0.25)
-                a, b, g = gpr.kernel.optimize_hyperparameters(time_series=gpr.training_coords(),
-                                                              loss_series=gpr.training_values(),
-                                                              noise=True,
-                                                              bounds=((0.1, 2), (1, 20), (sig_min, 0.3)),
-                                                              x0=None,
-                                                              verbose=self.verbose == 2)
+                res = gpr.kernel.optimize_hyperparameters(time_series=gpr.training_coords(),
+                                                          loss_series=gpr.training_values(),
+                                                          noise=True,
+                                                          bounds=((0.1, 2), (1, 20), (sig_min, 0.3)),
+                                                          x0=None,
+                                                          verbose=self.verbose == 2)
+                if res is not None:
+                    a = res[0]
+                    b = res[1]
+                    g = res[2]
 
             result = HyperparameterOptResult(o_id, a, b, g)
             queue.put(result)
