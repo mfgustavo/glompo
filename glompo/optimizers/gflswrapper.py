@@ -116,7 +116,7 @@ class GFLSOptimizer(BaseOptimizer):
         """
 
         # noinspection PyUnresolvedReferences
-        if not callable(function.__wrapped__.resids):
+        if not hasattr(function.__wrapped__, 'resids'):
             raise NotImplementedError("GFLS requires function to include a resids() method.")
 
         gfls_bounds = []
@@ -137,9 +137,9 @@ class GFLSOptimizer(BaseOptimizer):
             callbacks = [callbacks]
         if self._results_queue:
             if callbacks:
-                callbacks = [self.push_iter_result, self.check_messages, *callbacks]
+                callbacks = [*callbacks, self.check_pause_flag, self.check_messages, self.push_iter_result]
             else:
-                callbacks = [self.push_iter_result, self.check_messages]
+                callbacks = [self.check_pause_flag, self.check_messages, self.push_iter_result]
 
         # noinspection PyUnresolvedReferences
         fw = ResidualsWrapper(function.__wrapped__.resids, vector_codec.decode)
@@ -168,7 +168,7 @@ class GFLSOptimizer(BaseOptimizer):
         index = np.where(history == fx)[0][0]
         x = logger.get("pars", index)
 
-        self.message_manager(0)
+        self.message_manager(0, cond)
         result = MinimizeResult()
         result.success = success
         result.x = vector_codec.decode(x)
@@ -207,9 +207,10 @@ class GFLSOptimizer(BaseOptimizer):
         else:
             name = file_name
         logger.save(name)
+        return stopcond
 
     def callstop(self, logger: Logger, *args):
         return "Manager Termination"
 
-    def check_pause_flag(self):
+    def check_pause_flag(self, *args, **kwargs):
         self._pause_signal.wait()

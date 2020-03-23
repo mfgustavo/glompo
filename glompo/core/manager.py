@@ -479,7 +479,6 @@ class GloMPOManager:
                                                    for opt_id in ids])
                                     if not in_graveyard and not in_update and has_points and has_gpr:
                                         self.hunt_counter += 1
-                                        print("Hunt started")
                                         kill = self.killing_conditions.is_kill_condition_met(self.log,
                                                                                              hunter_id,
                                                                                              self.optimizer_packs[
@@ -677,11 +676,11 @@ class GloMPOManager:
 
     def _check_signals(self, opt_id: int):
         pipe = self.optimizer_packs[opt_id].signal_pipe
-        self.last_feedback[opt_id] = time()
         found_signal = False
         if opt_id not in self.graveyard and pipe.poll():
             try:
                 key, message = pipe.recv()
+                self.last_feedback[opt_id] = time()
                 self._optional_print(f"\tSignal {key} from {opt_id}.", 1)
                 if key == 0:
                     self.log.put_metadata(opt_id, "Stop Time", datetime.now())

@@ -94,7 +94,7 @@ class CMAOptimizer(BaseOptimizer):
         self.result.x, self.result.fx = es.result[:2]
         if self._results_queue:
             self.push_iter_result(es.countiter, len(solutions), self.result.x, self.result.fx, True)
-            self.message_manager(0)
+            self.message_manager(0, "Optimizer convergence")
             self.check_messages()
         with open(self.dir+'cma_results.pkl', 'wb') as f:
             pickle.dump(es.result, f, -1)

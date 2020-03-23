@@ -1,13 +1,18 @@
-
-
+from functools import wraps
 from typing import Callable, Sequence, Tuple
 from time import time, sleep
 from collections import namedtuple
 import os
+import shutil
 import pytest
 import multiprocessing as mp
 
+import numpy as np
+
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
+from glompo.optimizers.cmawrapper import CMAOptimizer
+from glompo.optimizers.gflswrapper import GFLSOptimizer
+from glompo.common.namedtuples import IterationResult
 
 
 class PlainOptimizer(BaseOptimizer):
@@ -116,3 +121,129 @@ class TestBase:
             assert lines[-1] == "End"
 
         os.remove("savestate.txt")
+
+
+class TestSubclassesGlompoCompatible:
+
+    available_classes = [CMAOptimizer, GFLSOptimizer]
+
+    package = namedtuple("package", "queue p_pipe c_pipe event")
+
+    @pytest.fixture()
+    def mp_package(self):
+        manager = mp.Manager()
+        queue = manager.Queue()
+        p_pipe, c_pipe = mp.Pipe()
+        event = manager.Event()
+        event.set()
+        return self.package(queue, p_pipe, c_pipe, event)
+
+    class MaxIter:
+        def __init__(self, max_iter: int):
+            self.max_iter = max_iter
+            self.called = 0
+
+        def __call__(self, *args, **kwrags):
+            self.called += 1
+            if self.called > self.max_iter:
+                return "MaxIter"
+            else:
+                return None
+
+    class Task:
+        def __call__(self, x):
+            return x[0] ** 2 + 3 * x[1] ** 4 - x[2] ** 0.5
+
+        def resids(self, pars, noise=True):
+            return pars
+
+    @pytest.fixture()
+    def wrapped_task(self):
+        def task_wrapper(func):
+            @wraps(func)
+            def wrapper(x):
+                return func(x)
+            return wrapper
+
+        return task_wrapper(self.Task())
+
+    @pytest.mark.parametrize("opti", available_classes)
+    def test_result_in_queue(self, opti, mp_package, wrapped_task):
+        opti = opti(results_queue=mp_package.queue,
+                    signal_pipe=mp_package.p_pipe,
+                    pause_flag=mp_package.event)
+
+        opti.minimize(function=wrapped_task,
+                      x0=(0.5, 0.5, 0.5),
+                      bounds=((0, 1), (0, 1), (0, 1)),
+                      callbacks=self.MaxIter(10))
+
+        assert not mp_package.queue.empty()
+        assert isinstance(mp_package.queue.get_nowait(), IterationResult)
+
+    @pytest.mark.parametrize("opti", available_classes)
+    def test_final(self, opti, mp_package, wrapped_task):
+        opti = opti(results_queue=mp_package.queue,
+                    signal_pipe=mp_package.c_pipe,
+                    pause_flag=mp_package.event)
+
+        opti.minimize(function=wrapped_task,
+                      x0=(0.5, 0.5, 0.5),
+                      bounds=((0, 1), (0, 1), (0, 1)),
+                      callbacks=self.MaxIter(10))
+
+        res = False
+
+        while not mp_package.queue.empty():
+            res = mp_package.queue.get_nowait()
+
+        # Make sure the final iteration is flagged as such
+        assert res.final
+
+        # Make sure a signal is sent that the optimizer is done
+        assert mp_package.p_pipe.poll()
+        assert mp_package.p_pipe.recv()[0] == 0
+
+    @pytest.mark.parametrize("opti", available_classes)
+    def test_callstop(self, opti, mp_package, wrapped_task):
+        opti = opti(results_queue=mp_package.queue,
+                    signal_pipe=mp_package.c_pipe,
+                    pause_flag=mp_package.event)
+
+        mp_package.p_pipe.send(1)
+        opti.minimize(function=wrapped_task,
+                      x0=(0.5, 0.5, 0.5),
+                      bounds=((0, 1), (0, 1), (0, 1)),
+                      callbacks=self.MaxIter(10))
+
+        res = False
+        while not mp_package.queue.empty():
+            assert mp_package.queue.get_nowait().n_iter < 10
+
+    @pytest.mark.parametrize("opti", available_classes)
+    def test_pause(self, opti, mp_package, wrapped_task):
+        opti = opti(results_queue=mp_package.queue,
+                    signal_pipe=mp_package.c_pipe,
+                    pause_flag=mp_package.event)
+
+        p = mp.Process(target=opti.minimize,
+                       kwargs={'function': wrapped_task,
+                               'x0': (0.5, 0.5, 0.5),
+                               'bounds': ((0, 1), (0, 1), (0, 1)),
+                               'callbacks': self.MaxIter(10)})
+        p.start()
+        mp_package.event.clear()
+        sleep(0.5)
+        assert p.is_alive()
+
+        mp_package.event.set()
+        sleep(0.1)
+        assert not p.is_alive()
+
+    @classmethod
+    def teardown_class(cls):
+        try:
+            shutil.rmtree("cmadata", ignore_errors=True)
+            shutil.rmtree("tests/cmadata", ignore_errors=True)
+        except FileNotFoundError:
+            pass

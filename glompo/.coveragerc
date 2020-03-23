@@ -1,8 +1,6 @@
 [run]
 omit =
        */tests*
-       */optimizers/cmawrapper.py*
-       */optimizers/gflswrapper.py*
 
 [report]
 exclude_lines=
