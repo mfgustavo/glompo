@@ -276,8 +276,10 @@ class GaussianProcessRegression:
         if len(vals) < 3:
             return False
         mu, sigma = self.sample_all([*self._training_pts], True)
-        assert all([val != 0 for val in vals])
-        diffs = np.abs((vals - mu) / vals)
+        try:
+            diffs = np.abs((vals - mu) / vals)
+        except FloatingPointError:
+            return False
 
         # Check mean matches data
         suitable = np.mean(diffs) < tol

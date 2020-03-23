@@ -74,6 +74,7 @@ class Logger:
         with open(f"{filename}.yml", 'w') as file:
             data = {"DETAILS": self._storage[opt_id].metadata,
                     "MESSAGES": self._storage[opt_id].messages,
+                    "ITERATION_FORMAT": {'i': ['f_call', 'fx', 'i_best', 'fx_best', 'x']},
                     "ITERATION_HISTORY": self._storage[opt_id].history}
             yaml.dump(data, file, default_flow_style=False)
 
