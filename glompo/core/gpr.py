@@ -68,8 +68,6 @@ class GaussianProcessRegression:
         k_train_test = np.transpose(k_test_train)
         k_test_test = self._kernel_matrix(x, x)
 
-        mean_func = -1
-        covar_fun = -1
         while True:
             invK = self._inv_kernel_matrix(train_x, train_x,
                                            self.sigma_noise + 1e-4)  # NB Added here for numerical stability
@@ -116,6 +114,9 @@ class GaussianProcessRegression:
 
         for i, pt in enumerate(x_nest):
             self._training_pts[tuple(pt)] = f_nest[i]
+
+    def remove(self, x: np.ndarray):
+        del self._training_pts[tuple(x)]
 
     def training_coords(self) -> np.ndarray:
         """ Returns all the coordinates of the points passed to the GP formatted as a numpy array. """

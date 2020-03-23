@@ -58,7 +58,8 @@ class TestManger:
                                         {'killing_conditions': OptimizerTest1()},
                                         {'killing_conditions': OptimizerTest1},
                                         {'task_args': 564},
-                                        {'task_kwargs': 66}
+                                        {'task_kwargs': 66},
+                                        {'gpr_training': 200}
                                         ])
     def test_init_typeerr(self, kwargs):
         with pytest.raises(TypeError):

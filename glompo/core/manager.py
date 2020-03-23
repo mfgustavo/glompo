@@ -55,6 +55,7 @@ class GloMPOManager:
                  region_stability_check: bool = False,
                  report_statistics: bool = False,
                  enforce_elitism: bool = False,
+                 gpr_training: Tuple[Union[int, None], int] = (None, 1),
                  history_logging: int = 0,
                  visualisation: bool = False,
                  visualisation_args: Optional[Dict[str, Any]] = None,
@@ -151,6 +152,11 @@ class GloMPOManager:
             of the error or trajectories which tend upward. This, in turn, can lead to poor predictive ability of the
             GPRs. If enforce_elitism is True, feedback from optimizers is filtered to only accept results which
             improve upon the incumbent.
+
+        gpr_training: Tuple[Union[int, None], int] = (None, 1)
+            Tuple of the form (max, step) which sets the maximum number of points in an optimizer GPR and step which
+            controls the interval at which steps are taken. The later points are kept and earlier points are
+            discarded from the regression.
 
         history_logging: int = 0
             Indicates the level of logging the user would like:
@@ -303,6 +309,13 @@ class GloMPOManager:
                                       MinVictimTrainingPoints(10) * \
                                       GPRSuitable(0.05)
 
+        # Save GPR control
+        if not isinstance(gpr_training, tuple):
+            raise TypeError(f"Cannot parse gpr_training, Tuple[int, int] required.")
+        else:
+            self.gpr_max = int(gpr_training[0]) if gpr_training[0] is not None else np.inf
+            self.gpr_step = int(gpr_training[1])
+
         # Save max conditions and counters
         self.t_start = None
         self.dt_start = None
@@ -435,15 +448,23 @@ class GloMPOManager:
 
                         # Send results to GPRs
                         trained = False
-                        if res.n_iter % 10 == 0:
+                        if res.n_iter % self.gpr_step == 0:
                             trained = True
                             self._optional_print(f"\tResult from {res.opt_id} sent to GPR", 2)
-                            self.optimizer_packs[res.opt_id].gpr.add_known(res.n_iter, fx)
+
+                            gpr = self.optimizer_packs[res.opt_id].gpr
+                            gpr.add_known(res.n_iter, fx)
+                            while len(gpr.training_coords()) > self.gpr_max:
+                                gpr.remove(gpr.training_coords()[0])
+                            if self.visualisation:
+                                x = np.transpose(self.scope.streams[res.opt_id]['train_pts'].get_data())
+                                while len(x) > self.gpr_max:
+                                    x = np.delete(x, 0, axis=0)
+                                self.scope.streams[res.opt_id]['train_pts'].set_data(np.transpose(x))
 
                             # Start new hyperparameter optimization job
-                            # TODO Restart hyperparam jobs
                             if res.opt_id not in self.hyperparm_processes and res.n_iter > 0:
-                                if not self.optimizer_packs[res.opt_id].gpr.is_suitable(0.3):
+                                if not self.optimizer_packs[res.opt_id].gpr.is_suitable():
                                     self._start_hyperparam_job(res.opt_id)
 
                             # Hunt optimizers
@@ -451,8 +472,8 @@ class GloMPOManager:
                             for hunter_id in self.optimizer_packs:
                                 for victim_id in self.optimizer_packs:
                                     ids = [hunter_id, victim_id]
-                                    in_graveyard = all([opt_id in self.graveyard for opt_id in ids])
-                                    in_update = all([opt_id in self.hyperparm_processes for opt_id in ids])
+                                    in_graveyard = any([opt_id in self.graveyard for opt_id in ids])
+                                    in_update = any([opt_id in self.hyperparm_processes for opt_id in ids])
                                     has_points = all([len(self.log.get_history(opt_id, "fx")) > 0 for opt_id in ids])
                                     has_gpr = all([len(self.optimizer_packs[opt_id].gpr.training_coords()) > 0
                                                    for opt_id in ids])
@@ -564,7 +585,7 @@ class GloMPOManager:
                 best_x = []
                 best_stats = None
                 best_origin = None
-                for opt_id in self.log._storage:
+                for opt_id in self.optimizer_packs:
                     history = self.log.get_history(opt_id, "fx_best")
                     if len(history) > 0:
                         opt_best = history[-1]
@@ -575,7 +596,7 @@ class GloMPOManager:
                             i = self.log.get_history(opt_id, "i_best")[-1]
                             best_x = self.log.get_history(opt_id, "x")[i-1]
                             best_origin = {"opt_id": opt_id,
-                                           "type": self.log._storage[opt_id].metadata["Optimizer Type"]}
+                                           "type": self.log.get_metadata(opt_id, "Optimizer Type")}
 
                 result = Result(best_x, best_fx, best_stats, best_origin)
 

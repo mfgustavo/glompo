@@ -44,6 +44,9 @@ class Logger:
             extract = self._storage[opt_id].history
         return extract
 
+    def get_metadata(self, opt_id, track: str) -> Any:
+        return self._storage[opt_id].metadata[track]
+
     def save(self, name: str, opt_id: int = None):
         """ Saves the contents of the logger into yaml files. If an opt_id is provided only that optimizer will be
             saved using the provided name. Else all optimizers are saved by their opt_id numbers and type in a directory
