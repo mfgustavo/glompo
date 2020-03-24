@@ -137,6 +137,8 @@ class GFLSOptimizer(BaseOptimizer):
 
         if callable(callbacks):
             callbacks = [callbacks]
+        elif callbacks is None:
+            callbacks = []
         if self._results_queue:
             callbacks = callbacks + [self.check_pause_flag, self.check_messages, self.push_iter_result]
 

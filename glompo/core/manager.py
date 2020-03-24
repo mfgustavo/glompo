@@ -462,6 +462,13 @@ class GloMPOManager:
                                     x = np.delete(x, 0, axis=0)
                                 self.scope.streams[res.opt_id]['train_pts'].set_data(np.transpose(x))
 
+                            cut = self.gpr_max * self.gpr_step if self.gpr_max != np.inf else 0
+                            mean = np.mean(self.log.get_history(res.opt_id, "fx")[-cut:])
+                            sigma = np.std(self.log.get_history(res.opt_id, "fx")[-cut:])
+                            sigma = 1 if sigma == 0 else sigma
+
+                            self.optimizer_packs[res.opt_id].gpr.rescale((mean, sigma))
+
                             # Start new hyperparameter optimization job
                             if res.opt_id not in self.hyperparm_processes and res.n_iter > 0:
                                 if not self.optimizer_packs[res.opt_id].gpr.is_suitable():
@@ -492,12 +499,6 @@ class GloMPOManager:
                                                 self._shutdown_job(victim_id)
                             self._optional_print("Hunt check done.", 2)
 
-                            mean = np.mean(self.log.get_history(res.opt_id, "fx"))
-                            sigma = np.std(self.log.get_history(res.opt_id, "fx"))
-                            sigma = 1 if sigma == 0 else sigma
-
-                            self.optimizer_packs[res.opt_id].gpr.rescale((mean, sigma))
-
                         if self.visualisation:
                             self.scope.update_optimizer(res.opt_id, (self.f_counter, fx))
                             if trained:
@@ -506,12 +507,12 @@ class GloMPOManager:
                                 if self.scope.visualise_gpr:
                                     gpr = self.optimizer_packs[res.opt_id].gpr
                                     i_min = np.clip(res.n_iter - self.gpr_max * self.gpr_step, 1, None)
-                                    i_max = res.n_iter
+                                    i_max = res.n_iter + 100
                                     i_range = np.linspace(i_min, i_max, 200)
                                     mu, sigma = gpr.sample_all(i_range)
 
                                     f_min = self.log.get_history(res.opt_id, "f_call")[i_min]
-                                    f_max = self.f_counter
+                                    f_max = self.f_counter + self.max_jobs * 100
                                     f_range = np.linspace(f_min, f_max, 200, endpoint=True)
 
                                     self.scope.update_gpr(res.opt_id, f_range, mu, mu - 2*sigma, mu + 2*sigma)
