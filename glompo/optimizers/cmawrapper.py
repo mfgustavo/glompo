@@ -59,7 +59,11 @@ class CMAOptimizer(BaseOptimizer):
         self.es = None
         self.result = None
 
-    def minimize(self, function, x0, bounds, callbacks=None,  **kwargs):
+    def minimize(self,
+                 function: Callable,
+                 x0: Sequence[float],
+                 bounds: Sequence[Tuple[float, float]],
+                 callbacks: Callable = None, **kwargs) -> MinimizeResult:
         self.dir = os.path.abspath('') + os.sep + 'cmadata' + os.sep
         if not os.path.isdir(self.dir):
             os.makedirs(self.dir)

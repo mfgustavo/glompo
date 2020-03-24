@@ -11,7 +11,8 @@ class PseudoConverged(BaseHunter):
 
     def __init__(self, iters: int, tol: float = 0):
         """ Returns True if the victim's best value has not changed by more than tol fraction in the last iters
-        iterations where tol is a fraction between 0 and 1. """
+            iterations where tol is a fraction between 0 and 1.
+        """
         self.iters = iters
         self.tol = tol
 

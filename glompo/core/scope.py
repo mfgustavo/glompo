@@ -347,7 +347,7 @@ class GloMPOScope:
             warnings.warn("Unable to generate movie file as data was not collected during the dynamic plotting.\n"
                           "Rerun GloMPOScope with record_movie = True during initialisation.", UserWarning)
 
-    def get_farthest_pt(self, opt_id: int):
+    def get_farthest_pt(self, opt_id: int) -> Tuple[float, float]:
         """ Returns the furthest evaluated point of the opt_id optimizer. """
         try:
             x = float(self.streams[opt_id]['all_opt'].get_xdata()[-1])

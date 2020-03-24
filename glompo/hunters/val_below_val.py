@@ -10,8 +10,9 @@ __all__ = ("ValBelowVal",)
 class ValBelowVal(BaseHunter):
 
     def __init__(self):
-        """ Returns True if the current best value seen by the hunter falls below the 95% confidence threshold of the
-        victim. """
+        """ Returns True if the current best value seen by the hunter falls below the current best value of the
+            victim.
+        """
         pass
 
     def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, hunter_gpr: GaussianProcessRegression,
