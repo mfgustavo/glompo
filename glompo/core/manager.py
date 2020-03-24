@@ -210,6 +210,7 @@ class GloMPOManager:
             except (FileNotFoundError, NotADirectoryError):
                 try:
                     os.makedirs(working_dir)
+                    os.chdir(working_dir)
                 except TypeError:
                     warnings.warn(f"Cannot parse working_dir = {working_dir}. str or bytes expected. Using current "
                                   f"work directory.", UserWarning)
