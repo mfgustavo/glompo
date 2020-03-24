@@ -1,0 +1,4 @@
+/glompo/.coverage
+_tmp
+.pytest_cache
+glompo.egg-info
