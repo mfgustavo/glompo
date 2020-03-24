@@ -10,7 +10,7 @@ import os
 from glompo.core.manager import GloMPOManager
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from glompo.generators.random import RandomGenerator
-from glompo.convergence import KillsAfterConvergence, MaxOptsStarted, MaxFuncCalls, MaxSeconds
+from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxOptsStarted, MaxFuncCalls, MaxSeconds
 from glompo.hunters import BaseHunter, MinVictimTrainingPoints, GPRSuitable, ValBelowGPR
 from glompo.common.namedtuples import *
 from glompo.generators.basegenerator import BaseGenerator
@@ -123,6 +123,24 @@ class HangOnEndOptimizer(BaseOptimizer):
         pass
 
 
+class ErrorOptimizer(BaseOptimizer):
+
+    needscaler = False
+
+    def minimize(self, function: Callable, x0: Sequence[float], bounds: Sequence[Tuple[float, float]],
+                 callbacks: Callable = None, **kwargs) -> MinimizeResult:
+        raise RuntimeError("This is a test of the GloMPO error handling service")
+
+    def push_iter_result(self, ir):
+        pass
+
+    def callstop(self, *args):
+        pass
+
+    def save_state(self, *args):
+        pass
+
+
 class TrueHunter(BaseHunter):
     def __init__(self, target: int):
         self.target = target
@@ -132,12 +150,18 @@ class TrueHunter(BaseHunter):
         return True if victim_opt_id == self.target else False
 
 
+class ErrorChecker(BaseChecker):
+    def check_convergence(self, manager: 'GloMPOManager') -> bool:
+        raise RuntimeError("This is a test of the GloMPO error management system.")
+
+
 class TestManager:
 
     base_wd = os.getcwd()
 
     def setup_method(self, method):
         os.chdir(self.base_wd)
+        shutil.rmtree("tests/temp_outputs", ignore_errors=True)
 
     @pytest.mark.parametrize("kwargs", [{'task': None},
                                         {'optimizers': {'default': OptimizerTest2}},
@@ -187,6 +211,14 @@ class TestManager:
                        'overwrite_existing': True},
                     **kwargs}
             GloMPOManager(**keys)
+
+    def test_init_filexerr(self):
+        with pytest.raises(FileExistsError):
+            GloMPOManager(task=lambda x, y: x + y,
+                          optimizers={'default': OptimizerTest1},
+                          n_parms=2,
+                          bounds=((0, 1), (0, 1)),
+                          overwrite_existing=False)
 
     @pytest.mark.parametrize("kwargs", [{},
                                         {'optimizers': {'default': (OptimizerTest1, None, None)}},
@@ -338,6 +370,7 @@ class TestManager:
                                 working_dir="tests/temp_outputs",
                                 overwrite_existing=True,
                                 max_jobs=2,
+                                enforce_elitism=True,
                                 history_logging=3,
                                 convergence_checker=MaxOptsStarted(3),
                                 killing_conditions=TrueHunter(1),
@@ -352,6 +385,51 @@ class TestManager:
             assert data['DETAILS']['End Condition'] == "Forced GloMPO Termination"
             assert "Force terminated due to no feedback after kill signal timeout." in data['MESSAGES']
 
+            sleep(0.1)  # Delay for process cleanup
+
+    def test_opt_error(self):
+        manager = GloMPOManager(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,
+                                n_parms=3,
+                                optimizers={'default': ErrorOptimizer},
+                                bounds=((0, 1), (0, 1), (0, 1)),
+                                working_dir="tests/temp_outputs",
+                                overwrite_existing=True,
+                                max_jobs=1,
+                                history_logging=3,
+                                convergence_checker=MaxOptsStarted(2),
+                                force_terminations_after=1)
+
+        with pytest.warns(RuntimeWarning, match="terminated in error"):
+            manager.start_manager()
+
+        with open("glompo_optimizer_logs/1_ErrorOptimizer.yml", 'r') as stream:
+            data = yaml.safe_load(stream)
+            assert "Approximate Stop Time" in data['DETAILS']
+            assert "Error termination (exitcode" in data['DETAILS']['End Condition']
+            assert any(["Terminated in error with code" in message for message in data['MESSAGES']])
+
+            sleep(0.1)  # Delay for process cleanup
+
+    def test_manager_error(self):
+        manager = GloMPOManager(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,
+                                n_parms=3,
+                                optimizers={'default': HangOnEndOptimizer},
+                                bounds=((0, 1), (0, 1), (0, 1)),
+                                working_dir="tests/temp_outputs",
+                                overwrite_existing=True,
+                                max_jobs=1,
+                                history_logging=1,
+                                convergence_checker=ErrorChecker(),
+                                force_terminations_after=1)
+        with pytest.warns(RuntimeWarning, match="Optimization failed. Caught exception: "
+                                                "This is a test of the GloMPO error management system."):
+            manager.start_manager()
+
+        with open("glompo_manager_log.yml", "r") as stream:
+            data = yaml.safe_load(stream)
+            assert data['Solution']['exit cond.'] == 'Process Crash'
+
+            sleep(0.1)  # Delay for process cleanup
 
     @pytest.mark.mini
     def test_mwe(self):

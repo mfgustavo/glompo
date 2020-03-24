@@ -78,7 +78,8 @@ class GFLSOptimizer(BaseOptimizer):
         function: Callable[[Sequence[float]], float],
         x0: Union[Sequence[float], Type[Logger]],
         bounds: Sequence[Tuple[float, float]],
-        callbacks: Sequence[Callable[[Logger, AlgoBase, Union[str, None]], Any]] = None,
+        callbacks: Union[Sequence[Callable[[Logger, AlgoBase, Union[str, None]], Any]],
+                         Callable[[Logger, AlgoBase, Union[str, None]], Any]] = None,
     ) -> MinimizeResult:
 
         """
@@ -100,7 +101,8 @@ class GFLSOptimizer(BaseOptimizer):
             iteration.
         bounds : Sequence[Tuple[float, float]]
             Sequence of tuples of the form (min, max) which bound the parameters.
-        callbacks : Sequence[Callable[[Type[Logger, AlgoBase, Union[str, None]]], Any]]
+        callbacks : Union[Sequence[Callable[[Type[Logger, AlgoBase, Union[str, None]]], Any]],
+                          Callable[[Logger, AlgoBase, Union[str, None]], Any]]
             A list of functions called after every iteration. GFLS compatible callbacks can be found at the end of this
             file.
 
@@ -136,10 +138,7 @@ class GFLSOptimizer(BaseOptimizer):
         if callable(callbacks):
             callbacks = [callbacks]
         if self._results_queue:
-            if callbacks:
-                callbacks = [*callbacks, self.check_pause_flag, self.check_messages, self.push_iter_result]
-            else:
-                callbacks = [self.check_pause_flag, self.check_messages, self.push_iter_result]
+            callbacks = callbacks + [self.check_pause_flag, self.check_messages, self.push_iter_result]
 
         # noinspection PyUnresolvedReferences
         fw = ResidualsWrapper(function.__wrapped__.resids, vector_codec.decode)
@@ -168,7 +167,8 @@ class GFLSOptimizer(BaseOptimizer):
         index = np.where(history == fx)[0][0]
         x = logger.get("pars", index)
 
-        self.message_manager(0, cond)
+        if self._signal_pipe:
+            self.message_manager(0, cond)
         result = MinimizeResult()
         result.success = success
         result.x = vector_codec.decode(x)
