@@ -5,12 +5,13 @@ from time import sleep
 import pytest
 import shutil
 import sys
+import os
 
 from glompo.core.manager import GloMPOManager
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from glompo.generators.random import RandomGenerator
-from glompo.convergence import KillsAfterConvergence, MaxSeconds, MaxFuncCalls
-from glompo.hunters import MinVictimTrainingPoints, GPRSuitable, ValBelowGPR
+from glompo.convergence import KillsAfterConvergence, MaxOptsStarted, MaxFuncCalls, MaxSeconds
+from glompo.hunters import BaseHunter, MinVictimTrainingPoints, GPRSuitable, ValBelowGPR
 from glompo.common.namedtuples import *
 from glompo.generators.basegenerator import BaseGenerator
 
@@ -41,7 +42,102 @@ class OptimizerTest2:
     pass
 
 
-class TestManger:
+class MessagingOptimizer(BaseOptimizer):
+
+    needscaler = False
+
+    def minimize(self, function: Callable, x0: Sequence[float], bounds: Sequence[Tuple[float, float]],
+                 callbacks: Callable = None, **kwargs) -> MinimizeResult:
+        self.message_manager(9, "This is a tets of the GloMPO signalling system")
+        self.message_manager(0)
+        sleep(1)
+
+    def push_iter_result(self, *args):
+        pass
+
+    def callstop(self, *args):
+        pass
+
+    def save_state(self, *args):
+        pass
+
+
+class SilentOptimizer(BaseOptimizer):
+
+    needscaler = False
+
+    def minimize(self, function: Callable, x0: Sequence[float], bounds: Sequence[Tuple[float, float]],
+                 callbacks: Callable = None, **kwargs) -> MinimizeResult:
+        sleep(1)
+
+    def push_iter_result(self, *args):
+        pass
+
+    def callstop(self, *args):
+        pass
+
+    def save_state(self, *args):
+        pass
+
+
+class HangingOptimizer(BaseOptimizer):
+
+    needscaler = False
+
+    def minimize(self, function: Callable, x0: Sequence[float], bounds: Sequence[Tuple[float, float]],
+                 callbacks: Callable = None, **kwargs) -> MinimizeResult:
+        while True:
+            pass
+
+    def push_iter_result(self, *args):
+        pass
+
+    def callstop(self, *args):
+        pass
+
+    def save_state(self, *args):
+        pass
+
+
+class HangOnEndOptimizer(BaseOptimizer):
+
+    needscaler = False
+
+    def minimize(self, function: Callable, x0: Sequence[float], bounds: Sequence[Tuple[float, float]],
+                 callbacks: Callable = None, **kwargs) -> MinimizeResult:
+        i = 0
+        while True:
+            i += 1
+            self.check_messages()
+            sleep(0.1)
+            self.push_iter_result(IterationResult(self._opt_id, i, 1, [i], np.sin(i/(2*np.pi)), False))
+
+    def push_iter_result(self, ir):
+        self._results_queue.put(ir)
+
+    def callstop(self, *args):
+        while True:
+            pass
+
+    def save_state(self, *args):
+        pass
+
+
+class TrueHunter(BaseHunter):
+    def __init__(self, target: int):
+        self.target = target
+
+    def is_kill_condition_met(self, log, hunter_opt_id, hunter_gpr,
+                              victim_opt_id, victim_gpr) -> bool:
+        return True if victim_opt_id == self.target else False
+
+
+class TestManager:
+
+    base_wd = os.getcwd()
+
+    def setup_method(self, method):
+        os.chdir(self.base_wd)
 
     @pytest.mark.parametrize("kwargs", [{'task': None},
                                         {'optimizers': {'default': OptimizerTest2}},
@@ -168,6 +264,94 @@ class TestManger:
 
         with open("glompo_optimizer_printstreams/1_printstream.err", "r") as file:
             assert any(["redirect_test_error" in line for line in file.readlines()])
+
+    def test_no_messaging(self):
+        manager = GloMPOManager(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,
+                                n_parms=3,
+                                optimizers={'default': SilentOptimizer},
+                                bounds=((0, 1), (0, 1), (0, 1)),
+                                working_dir="tests/temp_outputs",
+                                overwrite_existing=True,
+                                max_jobs=1,
+                                history_logging=3,
+                                convergence_checker=MaxOptsStarted(2))
+        with pytest.warns(RuntimeWarning, match="terminated normally without sending a"):
+            manager.start_manager()
+
+        with open("glompo_optimizer_logs/1_SilentOptimizer.yml", 'r') as stream:
+            data = yaml.safe_load(stream)
+            assert "Approximate Stop Time" in data['DETAILS']
+            assert data['DETAILS']['End Condition'] == "Normal termination (Reason unknown)"
+
+        sleep(0.1)  # Delay for process cleanup
+
+    def test_messaging(self):
+        manager = GloMPOManager(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,
+                                n_parms=3,
+                                optimizers={'default': MessagingOptimizer},
+                                bounds=((0, 1), (0, 1), (0, 1)),
+                                working_dir="tests/temp_outputs",
+                                overwrite_existing=True,
+                                max_jobs=1,
+                                history_logging=3,
+                                convergence_checker=MaxOptsStarted(2))
+        with pytest.warns(None) as warns:
+            manager.start_manager()
+            for record in warns:
+                assert "terminated normally without sending a" not in record.message
+
+        with open("glompo_optimizer_logs/1_MessagingOptimizer.yml", 'r') as stream:
+            data = yaml.safe_load(stream)
+            assert "Approximate Stop Time" not in data['DETAILS']
+            assert "Stop Time" in data['DETAILS']
+            assert data['DETAILS']['End Condition'] != "Normal termination (Reason unknown)"
+            assert "This is a tets of the GloMPO signalling system" in data['MESSAGES']
+
+        sleep(0.1)  # Delay for process cleanup
+
+    def test_too_long_hangingopt(self):
+        manager = GloMPOManager(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,
+                                n_parms=3,
+                                optimizers={'default': HangingOptimizer},
+                                bounds=((0, 1), (0, 1), (0, 1)),
+                                working_dir="tests/temp_outputs",
+                                overwrite_existing=True,
+                                max_jobs=1,
+                                history_logging=3,
+                                convergence_checker=MaxOptsStarted(2),
+                                force_terminations_after=1)
+
+        with pytest.warns(RuntimeWarning, match="seems to be hanging. Forcing termination."):
+            manager.start_manager()
+
+        with open("glompo_optimizer_logs/1_HangingOptimizer.yml", 'r') as stream:
+            data = yaml.safe_load(stream)
+            assert "Approximate Stop Time" in data['DETAILS']
+            assert data['DETAILS']['End Condition'] == "Forced GloMPO Termination"
+            assert "Force terminated due to no feedback timeout." in data['MESSAGES']
+
+    def test_too_long_hangingterm(self):
+        manager = GloMPOManager(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,
+                                n_parms=3,
+                                optimizers={'default': HangOnEndOptimizer},
+                                bounds=((0, 1), (0, 1), (0, 1)),
+                                working_dir="tests/temp_outputs",
+                                overwrite_existing=True,
+                                max_jobs=2,
+                                history_logging=3,
+                                convergence_checker=MaxOptsStarted(3),
+                                killing_conditions=TrueHunter(1),
+                                force_terminations_after=1)
+
+        with pytest.warns(RuntimeWarning, match="Forced termination signal sent to optimizer"):
+            manager.start_manager()
+
+        with open("glompo_optimizer_logs/1_HangOnEndOptimizer.yml", 'r') as stream:
+            data = yaml.safe_load(stream)
+            assert "Approximate Stop Time" in data['DETAILS']
+            assert data['DETAILS']['End Condition'] == "Forced GloMPO Termination"
+            assert "Force terminated due to no feedback after kill signal timeout." in data['MESSAGES']
+
 
     @pytest.mark.mini
     def test_mwe(self):
@@ -297,7 +481,9 @@ class TestManger:
 
     @classmethod
     def teardown_class(cls):
+        os.chdir(cls.base_wd)
         try:
+            shutil.rmtree("tests/temp_outputs", ignore_errors=True)
             shutil.rmtree("glompo_optimizer_printstreams", ignore_errors=True)
             is_save = '--save-outs' in sys.argv
             is_mini = '--run-minimize' in sys.argv

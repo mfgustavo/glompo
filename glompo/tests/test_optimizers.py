@@ -125,6 +125,7 @@ class TestBase:
 
 class TestSubclassesGlompoCompatible:
 
+    # Append new optimizer class names to this list to run tests for GloMPO compatibility
     available_classes = [CMAOptimizer, GFLSOptimizer]
 
     package = namedtuple("package", "queue p_pipe c_pipe event")
@@ -237,7 +238,7 @@ class TestSubclassesGlompoCompatible:
         assert p.is_alive()
 
         mp_package.event.set()
-        sleep(0.1)
+        sleep(0.5)
         assert not p.is_alive()
 
     @classmethod

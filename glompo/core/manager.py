@@ -415,6 +415,7 @@ class GloMPOManager:
                         if time() - self.hunt_victims[id_num] > self._TOO_LONG and \
                                 self.optimizer_packs[id_num].process.is_alive():
                             self.optimizer_packs[id_num].process.terminate()
+                            self.optimizer_packs[id_num].process.join()
                             self.log.put_message(id_num, "Force terminated due to no feedback after kill signal "
                                                          "timeout.")
                             self.log.put_metadata(id_num, "Approximate Stop Time", datetime.now())
@@ -429,9 +430,7 @@ class GloMPOManager:
                     i_count += 1
                     self.last_feedback[res.opt_id] = time()
                     self.f_counter += res.n_icalls
-                    # TODO Maybe remove conv check?
-                    if self.convergence_checker.check_convergence(self):
-                        break
+
                     if not any([res.opt_id == victim for victim in self.hunt_victims]):
 
                         # Apply elitism
@@ -547,7 +546,7 @@ class GloMPOManager:
                             self.log.put_metadata(opt_id, "Approximate Stop Time", datetime.now())
                             self.log.put_metadata(opt_id, "End Condition", f"Error termination (exitcode {-exitcode}).")
                     if self.optimizer_packs[opt_id].process.is_alive() and time() - self.last_feedback[opt_id] > \
-                            self._TOO_LONG and self.allow_forced_terminations:
+                            self._TOO_LONG and self.allow_forced_terminations and opt_id not in self.hunt_victims:
                         warnings.warn(f"Optimizer {opt_id} seems to be hanging. Forcing termination.", RuntimeWarning)
                         self.graveyard.add(opt_id)
                         self.log.put_message(opt_id, "Force terminated due to no feedback timeout.")
