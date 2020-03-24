@@ -7,7 +7,7 @@ __all__ = ("KillsAfterConvergence",)
 
 
 class KillsAfterConvergence(BaseChecker):
-    """ This class is used to determine GloMPO convergence based on the number of single optimizers _converged and the
+    """ This class is used to determine GloMPO convergence based on the number of single optimizers converged and the
         number of optimizers killed thereafter.
     """
 
@@ -25,8 +25,6 @@ class KillsAfterConvergence(BaseChecker):
         if manager.conv_counter >= self.n_converged and not self.enough_conv:
             self.enough_conv = True
             self.kill_count = len(manager.hunt_victims)
-            print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!ENOUGH"
-                  "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
         self._converged = self.enough_conv and len(manager.hunt_victims) - self.kill_count >= self.n_killed
         return self._converged

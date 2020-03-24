@@ -39,29 +39,28 @@ class GloMPOScope:
 
         Parameters
         ----------
-        x_range : Union[Tuple[float, float], int, None]
+        x_range : Union[Tuple[float, float], int, None] = 300
             If None is provided the x-axis will automatically and continuously rescale from zero as the number of
             function evaluations increases.
             If a tuple of the form (min, max) is provided then the x-axis will be fixed to this range.
             If an integer is provided then the plot will only show the last x_range evaluations and discard earlier
             points. This is useful to make differences between optimizers visible in the late stage and also keep the
             scope operating at an adequate speed.
-            Default value is set to 100.
-        y_range : Optional[Tuple[float, float]]
+        y_range : Optional[Tuple[float, float]] = None
             Sets the y-axis limits of the plot, default is an empty tuple which leads the plot to automatically and
             constantly rescale the axis.
-        visualise_gpr : bool
+        visualise_gpr : bool = False
             If True the plot will show the regression itself if False only the predicted mean and uncertainty on the
             mean will be shown.
-        record_movie : bool
-            If True then a matplotlib.animation.FFMpegFileWriter instance is created to record the plot.
-        interactive_mode : bool
+        record_movie : bool = False
+            If True then a matplotlib.animation.FFMpegWriter instance is created to record the plot.
+        interactive_mode : bool = False
             If True the plot is visible on screen during the optimization.
-        writer_kwargs : Optional[Dict[str, Any]]
-            Optional dictionary of arguments to be sent to the initialisation of the
-            matplotlib.animation.FFMpegFileWriter class.
-        movie_kwargs : Optional[Dict[str, Any]]
-            Optional dictionary of arguments to be sent to matplotlib.animation.FFMpegFileWriter.setup().
+        writer_kwargs : Optional[Dict[str, Any]] = None
+            Optional dictionary of arguments to be sent to the initialisation of the matplotlib.animation.FFMpegWriter
+            class.
+        movie_kwargs : Optional[Dict[str, Any]] = None
+            Optional dictionary of arguments to be sent to matplotlib.animation.FFMpegWriter.setup().
         """
 
         plt.ion() if interactive_mode else plt.ioff()
@@ -144,6 +143,7 @@ class GloMPOScope:
                 self.writer.setup(fig=self.fig, outfile='glomporecording.mp4')
 
     def _redraw_graph(self):
+        """ Redraws the figure after new data has been added. Grabs a frame if a movie is being recorded. """
         if time() - self.t_last > 1:
             self.t_last = time()
 
@@ -186,6 +186,7 @@ class GloMPOScope:
                 self.writer.grab_frame()
 
     def _update_point(self, opt_id: int, track: str, pt: tuple = None):
+        """ General method to add a point to a track for a specific optimizer. """
 
         if opt_id in self.dead_streams:
             self.dead_streams.remove(opt_id)
@@ -204,6 +205,8 @@ class GloMPOScope:
             line.set_ydata(y_vals)
 
     def add_stream(self, opt_id):
+        """ Registers and sets up a new optimizer in the scope. """
+
         self.n_streams += 1
         self.streams[opt_id] = {'all_opt': self.ax.plot([], [])[0],  # Follows every optimizer iteration
                                 'train_pts': self.ax.plot([], [], ls='', marker='o')[0],  # Points in training set
@@ -318,7 +321,7 @@ class GloMPOScope:
         self._redraw_graph()
 
     def update_gpr(self, opt_id: int, x: np.ndarray, y: np.ndarray, lower_sig: np.ndarray, upper_sig: np.ndarray):
-        """ Given mu and sigma is used to update the opt_id mean and uncertainty plots."""
+        """ Given mu and sigma is used to update the opt_id mean and uncertainty regressions."""
         # Mean line
         line = self.streams[opt_id]['gpr_mean']
         line.set_xdata(x)

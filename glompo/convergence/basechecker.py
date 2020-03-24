@@ -7,6 +7,7 @@ import inspect
 
 __all__ = ("BaseChecker",)
 
+
 class BaseChecker(ABC):
     """ Base checker from which all checkers must inherit to be compatible with GloMPO. """
 
@@ -16,16 +17,16 @@ class BaseChecker(ABC):
     @abstractmethod
     def check_convergence(self, manager: 'GloMPOManager') -> bool:
         """ When called, this method may check any instance variables and any variables within the manager to determine
-            if GloMPO has _converged and returns a bool.
+            if GloMPO has converged and returns a bool.
 
             Note: For proper functionality, the result of check_convergence must be saved to self._converged before
             returning. """
         pass
 
-    def __add__(self, other):
+    def __add__(self, other: 'BaseChecker') -> '_AnyChecker':
         return _AnyChecker(self, other)
 
-    def __mul__(self, other):
+    def __mul__(self, other: 'BaseChecker') -> '_AllChecker':
         return _AllChecker(self, other)
     
     def __str__(self) -> str:
@@ -40,6 +41,7 @@ class BaseChecker(ABC):
         return f"{self.__class__.__name__}({lst})"
 
     def is_converged_str(self) -> str:
+        """ String representation of the object with its convergence result. """
         mess = str(self)
         mess += f" = {self._converged}"
         return mess
@@ -65,7 +67,7 @@ class _AnyChecker(_CombiChecker):
         self.converged = any([base.check_convergence(manager) for base in self.base_checkers])
         return self.converged
 
-    def __str__(self):
+    def __str__(self) -> str:
         mess = ""
         for base in self.base_checkers:
             mess += f"{base} OR \n"
@@ -73,7 +75,7 @@ class _AnyChecker(_CombiChecker):
         mess = "(" + mess + ")"
         return mess
 
-    def is_converged_str(self):
+    def is_converged_str(self) -> str:
         mess = ""
         for base in self.base_checkers:
             mess += f"{base.is_converged_str()} OR \n"
@@ -87,7 +89,7 @@ class _AllChecker(_CombiChecker):
         self.converged = all([base.check_convergence(manager) for base in self.base_checkers])
         return self.converged
 
-    def __str__(self):
+    def __str__(self) -> str:
         mess = ""
         for base in self.base_checkers:
             mess += f"{base} AND \n"
@@ -95,7 +97,7 @@ class _AllChecker(_CombiChecker):
         mess = "(" + mess + ")"
         return mess
 
-    def is_converged_str(self):
+    def is_converged_str(self) -> str:
         mess = ""
         for base in self.base_checkers:
             mess += f"{base.is_converged_str()} AND \n"

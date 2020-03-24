@@ -14,10 +14,10 @@ class GaussianProcessRegression:
     def __init__(self,
                  kernel: Callable[[float, float], float],
                  dims: int,
-                 sigma_noise: Optional[float] = 0,
+                 sigma_noise: float = 0,
                  mean: Optional[float] = None,
-                 cache_results: Optional[bool] = True,
-                 normalisation_constants: Optional[Tuple[float, float]] = (0, 1)):
+                 cache_results: bool = True,
+                 normalisation_constants: Tuple[float, float] = (0, 1)):
         """ Sets up the Gaussian Process Regression with its kernel.
 
             Parameters:
@@ -26,16 +26,16 @@ class GaussianProcessRegression:
                 A function which return the covariance between two points.
             dims : int
                 The number of dimensions in the input space.
-            sigma_noise : Optional[float]
+            sigma_noise : float = 0
                 The standard deviation of noise in the known points.
-            mean : Optional[float]
-                The value to which the process defaults. Can accept a float value (defaulting to zero) or None.
+            mean : Optional[float] = None
+                The value to which the process defaults. Can accept a float value or None.
                 If None the mean function is assumed to be an unknown and independent of x. It is calculated as a
                 free parameter in the regression with a totally uninformed prior.
-            cache_results : Optional[bool]
+            cache_results : bool = True
                 If True the results of some matrix constructions and inversions are cached. This can increase speed
                 but requires more memory.
-            normalisation_constants : Optional[Tuple[float, float]]
+            normalisation_constants : Tuple[float, float] = (0, 1)
                 Data fed into the GPR is automatically normalised using the tuple provided in the form of (mean, stdev).
                 Data will remain unchanged if the default (0, 1) is used.
         """
@@ -116,6 +116,7 @@ class GaussianProcessRegression:
             self._training_pts[tuple(pt)] = f_nest[i]
 
     def remove(self, x: np.ndarray):
+        """ Removes a known point from the regression. """
         del self._training_pts[tuple(x)]
 
     def training_coords(self) -> np.ndarray:
@@ -272,6 +273,7 @@ class GaussianProcessRegression:
             return mat
 
     def is_mean_suitable(self, tol: float = 0.1):
+        """ Returns True if the mean is within tol% of known values where tol is a float between 0 and 1. """
         vals = np.array([*self._training_pts.values()]).flatten()
         if len(vals) < 3:
             return False
@@ -290,7 +292,7 @@ class GaussianProcessRegression:
         return True
 
     def is_tail_suitable(self):
-        # Check tail is flat and below current values
+        """ Returns True if the tail is flat and below current values. """
         x0 = np.array([*self._training_pts][-1])
         x1 = x0 + 100
         x2 = x1 + 100

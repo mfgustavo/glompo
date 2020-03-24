@@ -33,9 +33,9 @@ class ExpKernel:
             Parameters:
             -----------
             alpha : float
-                Shape parameter.
-            beta : float
                 Rate parameter.
+            beta : float
+                Shape parameter.
         """
         self.alpha = alpha
         self.beta = beta
@@ -48,10 +48,10 @@ class ExpKernel:
     def optimize_hyperparameters(self,
                                  time_series: np.ndarray,
                                  loss_series: np.ndarray,
-                                 noise: Optional[bool] = True,
+                                 noise: bool = True,
                                  bounds: Optional[Sequence[Tuple[float, float]]] = None,
                                  x0: Optional[Sequence[float]] = None,
-                                 verbose: Optional[bool] = True) -> Union[Tuple[float, float, float], None]:
+                                 verbose: bool = True) -> Union[Tuple[float, float, float], None]:
         """ Maximises the log-marginal likelihood of the kernel with respect to the hyperparameters alpha, beta and
         sigma. Alpha and beta are updated in place and alpha, beta and sigma are all returned.
 
@@ -61,24 +61,24 @@ class ExpKernel:
             Independent training variables used for the optimisation.
         loss_series : np.ndarray
             Dependent training variables used for the optimisation.
-        noise : Optional[bool]
+        noise : bool = True
             If True the method also optimises for sigma, the standard deviation of the measurement error.
-        bounds : Optional[Sequence[Tuple[float, float]]]
+        bounds : Optional[Sequence[Tuple[float, float]]] = None
             Bounds on the optimized hyperparameters of shape (n, 2) where n is two or three depending on the number of
             hyperparameters being optimzed i.e. with or without noise. Each individual tuple takes the form
             (xmin, xmax).
-        x0 : Optional[Sequence[float]]
+        x0 : Optional[Sequence[float]] = None
             Tuple of shape n representing the first starting point of the optimization. Restart values are chosen
-            randomly based on bounds.
-        verbose : Optional[bool]
-            If True prints status messages during the optimization, prints nothing otherwise
+            randomly based on bounds. Values are also chosen randomly if x0 is None.
+        verbose : bool = True
+            If True prints status messages during the optimization, prints nothing otherwise.
 
         Returns
         -------
         alpha : float
-            Shape parameter of the covariance function.
-        beta : float
             Rate parameter of the covariance function.
+        beta : float
+            Shape parameter of the covariance function.
         sigma : float
             Noise parameter of the covariance function.
         """
