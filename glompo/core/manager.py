@@ -393,7 +393,7 @@ class GloMPOManager:
         result = Result(None, None, None, None)
         converged = False
         reason = ""
-        caught_exception = False
+        caught_exception = None
 
         try:
             self._optional_print("------------------------------------\n"
@@ -637,20 +637,26 @@ class GloMPOManager:
 
             return result
 
+        except KeyboardInterrupt:
+            caught_exception = "User Interrupt"
+            self._cleanup_crash("User Interrupt")
+
         except Exception as e:
-            caught_exception = True
+            caught_exception = "".join(traceback.TracebackException.from_exception(e).format())
             warnings.warn(f"Optimization failed. Caught exception: {e}", RuntimeWarning)
-            print("".join(traceback.TracebackException.from_exception(e).format()))
+            print(caught_exception)
+            self._cleanup_crash("GloMPO Crash")
+
         finally:
 
             # Make movie
-            if self.visualisation and self.scope.record_movie:
+            if self.visualisation and self.scope.record_movie and not caught_exception:
                 self.scope.generate_movie()
 
             # Save log
             if self.history_logging > 0:
                 if caught_exception:
-                    reason = "Process Crash"
+                    reason = f"Process Crash: {caught_exception}"
                 with open("glompo_manager_log.yml", "w") as file:
                     optimizers = {}
                     for name in self.optimizers:
@@ -692,6 +698,17 @@ class GloMPOManager:
 
             return result
 
+    def _cleanup_crash(self, opt_reason: str):
+        for opt_id in self.optimizer_packs:
+            self.graveyard.add(opt_id)
+            self.log.put_metadata(opt_id, "Stop Time", datetime.now())
+            self.log.put_metadata(opt_id, "End Condition", opt_reason)
+            self.optimizer_packs[opt_id].process.join(1)
+            if self.optimizer_packs[opt_id].process.is_alive():
+                self.optimizer_packs[opt_id].process.terminate()
+            if self.hyperparm_processes[opt_id].process.is_alive():
+                self.hyperparm_processes[opt_id].process.terminate()
+
     def _check_signals(self, opt_id: int) -> bool:
         """ Checks for signals from optimizer opt_id and processes it.
             Returns a bool indicating whether a signal was found.
@@ -731,7 +748,7 @@ class GloMPOManager:
         task = self.task
         x0 = self.x0_generator.generate()
         bounds = np.array(self.bounds)
-        target = optimizer.minimize
+        target = self._catch_interrupt_wrapper(optimizer.minimize)
 
         if self.split_printstreams:
             target = self._redirect(opt_id, optimizer.minimize)
@@ -794,7 +811,7 @@ class GloMPOManager:
             result = HyperparameterOptResult(o_id, a, b, g)
             queue.put(result)
 
-        process = mp.Process(target=wrapped_hyperparm_job,
+        process = mp.Process(target=self._catch_interrupt_wrapper(wrapped_hyperparm_job),
                              args=(opt_id, self.hyperparm_queue, self.optimizer_packs[opt_id].gpr),
                              daemon=True)
 
@@ -872,5 +889,17 @@ class GloMPOManager:
         @wraps(func)
         def wrapper(x):
             return func(x, *args, **kwargs)
+
+        return wrapper
+
+    @staticmethod
+    def _catch_interrupt_wrapper(func):
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except KeyboardInterrupt:
+                print("Interrupt signal received. Child process stopping.")
 
         return wrapper

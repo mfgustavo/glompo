@@ -2,12 +2,14 @@
 
 from typing import *
 from time import time
+from functools import wraps
 import matplotlib.animation as ani
 import matplotlib.lines as lines
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 import warnings
+import inspect
 
 
 __all__ = ("GloMPOScope",)
@@ -20,9 +22,31 @@ class MyFFMpegWriter(ani.FFMpegWriter):
         """Clean-up and collect the process used to write the movie file."""
         self._frame_sink().close()
 
-# End Error Fix Section
+
+# Wrappers to handle graceful GloMPO exit
+
+def _catch_interrupt(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except KeyboardInterrupt:
+            print("Interrupt signal received. Scope stopping.")
+    return wrapper
 
 
+def decorate_all_methods(decorator):
+    def apply_decorator(cls):
+        for k, f in cls.__dict__.items():
+            if inspect.isfunction(f):
+                setattr(cls, k, decorator(f))
+        return cls
+    return apply_decorator
+
+# End prelude
+
+
+@decorate_all_methods(_catch_interrupt)
 class GloMPOScope:
     """ Constructs and records the dynamic plotting of optimizers run in parallel"""
 
