@@ -1,5 +1,8 @@
 
 
+""" Abstract checker classes used to construct the convergence criteria. """
+
+
 from abc import ABC, abstractmethod
 from typing import *
 import inspect
@@ -13,7 +16,7 @@ class BaseChecker(ABC):
 
     def __init__(self):
         self._converged = False
-        
+
     @abstractmethod
     def check_convergence(self, manager: 'GloMPOManager') -> bool:
         """ When called, this method may check any instance variables and any variables within the manager to determine
@@ -21,14 +24,13 @@ class BaseChecker(ABC):
 
             Note: For proper functionality, the result of check_convergence must be saved to self._converged before
             returning. """
-        pass
 
     def __or__(self, other: 'BaseChecker') -> '_AnyChecker':
         return _AnyChecker(self, other)
 
     def __and__(self, other: 'BaseChecker') -> '_AllChecker':
         return _AllChecker(self, other)
-    
+
     def __str__(self) -> str:
         lst = ""
         signature = inspect.signature(self.__init__)

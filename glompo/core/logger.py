@@ -1,5 +1,8 @@
 
 
+""" Contains classes which save log information for GloMPO and its optimizers. """
+
+
 from typing import *
 from math import inf
 import os
@@ -15,12 +18,15 @@ class Logger:
         self._storage = {}
 
     def add_optimizer(self, opt_id: int, class_name: str, time_start: str):
-        self._storage[opt_id] = OptimizerLogger(opt_id, class_name, time_start)
+        """ Adds a new optimizer data stream to the log. """
+        self._storage[opt_id] = _OptimizerLogger(opt_id, class_name, time_start)
 
     def put_iteration(self, opt_id: int, i: int, f_call: int, x: Sequence[float], fx: float):
+        """ Adds an iteration result to an optimizer data stream. """
         self._storage[opt_id].append(i, f_call, x, fx)
 
     def put_metadata(self, opt_id: int, key: str, value: str):
+        """ Adds metadata about an optimizer. """
         self._storage[opt_id].update_metadata(key, value)
 
     def put_message(self, opt_id: int, message: str):
@@ -31,6 +37,9 @@ class Logger:
 
     def get_history(self, opt_id, track: str = None) -> Union[List, Dict[int,
                                                                          Tuple[float, int, float, Sequence[float]]]]:
+        """ Returns a list of values for a given optimizer and track or returns the entire dictionary of all tracks
+            if None.
+        """
         extract = []
         if track:
             track_num = {"f_call": 0,
@@ -44,8 +53,9 @@ class Logger:
             extract = self._storage[opt_id].history
         return extract
 
-    def get_metadata(self, opt_id, track: str) -> Any:
-        return self._storage[opt_id].metadata[track]
+    def get_metadata(self, opt_id, key: str) -> Any:
+        """ Returns metadata of a given optimizer and key. """
+        return self._storage[opt_id].metadata[key]
 
     def save(self, name: str, opt_id: int = None):
         """ Saves the contents of the logger into yaml files. If an opt_id is provided only that optimizer will be
@@ -79,7 +89,7 @@ class Logger:
             yaml.dump(data, file, default_flow_style=False, sort_keys=False)
 
 
-class OptimizerLogger:
+class _OptimizerLogger:
     """ Stores history and meta data of a single optimzier started by GloMPO. """
     def __init__(self, opt_id: int, class_name: str, time_start: str):
         self.metadata = {"Optimizer ID": str(opt_id),
@@ -97,6 +107,7 @@ class OptimizerLogger:
         self.metadata[key] = value
 
     def append(self, i: int, f_call: int, x: Sequence[float], fx: float):
+        """ Adds an optimizer iteration to the optimizer log. """
         if fx < self.fx_best:
             self.fx_best = fx
             self.i_best = i
@@ -109,4 +120,5 @@ class OptimizerLogger:
             self.history[i] = [int(f_call), float(fx), int(self.i_best), float(self.fx_best), ls]
 
     def append_message(self, message):
+        """ Adds message to the optimizer history. """
         self.messages.append(message)

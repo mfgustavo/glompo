@@ -1,8 +1,11 @@
 
 
-import numpy as np
+""" Class used to calculate a Gaussian process regression given a kernel and data. """
+
+
 import warnings
 from typing import *
+import numpy as np
 
 
 __all__ = ("GaussianProcessRegression",)
@@ -133,8 +136,8 @@ class GaussianProcessRegression:
         vals = np.array([*self._training_pts.values()]).flatten()
         if scaled:
             return vals
-        else:
-            return self._denormalise(vals)
+
+        return self._denormalise(vals)
 
     def training_dict(self, scaled: bool = False) -> Dict[np.ndarray, np.ndarray]:
         """ Returns all the point and values passed to the GP as a dictionary.
@@ -146,11 +149,11 @@ class GaussianProcessRegression:
 
         if scaled:
             return self._training_pts
-        else:
-            training_pts = dict(self._training_pts)
-            for x in training_pts:
-                training_pts[x] = self._denormalise(self._training_pts[x])
-            return training_pts
+
+        training_pts = dict(self._training_pts)
+        for x in training_pts:
+            training_pts[x] = self._denormalise(self._training_pts[x])
+        return training_pts
 
     def sample(self, x: np.ndarray, scaled: bool = False) -> np.ndarray:
         """ Return a sample of the Gaussian Process at the point/s in x.
@@ -250,34 +253,34 @@ class GaussianProcessRegression:
             key = tuple(map(tuple, vec1))
             if key in self._kernel_cache and self._cache_results:
                 return self._kernel_cache[key]
-            else:
-                for i in range(len(vec1)):
-                    for j in range(i, len(vec1)):
-                        mat[i, j] = self.kernel(vec1[i], vec2[j])
-                        mat[j, i] = mat[i, j]
-                self._kernel_cache[key] = mat
-        else:
+
             for i in range(len(vec1)):
-                for j in range(len(vec2)):
+                for j in range(i, len(vec1)):
                     mat[i, j] = self.kernel(vec1[i], vec2[j])
+                    mat[j, i] = mat[i, j]
+            self._kernel_cache[key] = mat
+        else:
+            for i, a in enumerate(vec1):
+                for j, b in enumerate(vec2):
+                    mat[i, j] = self.kernel(a, b)
         return mat
 
     def _inv_kernel_matrix(self, x1, x2, sigma) -> np.ndarray:
         key = tuple(map(tuple, x1)), sigma
         if key in self._inv_kernel_cache and self._cache_results:
             return self._inv_kernel_cache[key]
-        else:
-            mat = self._kernel_matrix(x1, x2) + sigma ** 2 * np.identity(len(x1))
-            mat = np.linalg.inv(mat)
-            self._inv_kernel_cache[key] = mat
-            return mat
+
+        mat = self._kernel_matrix(x1, x2) + sigma ** 2 * np.identity(len(x1))
+        mat = np.linalg.inv(mat)
+        self._inv_kernel_cache[key] = mat
+        return mat
 
     def is_mean_suitable(self, tol: float = 0.1):
         """ Returns True if the mean is within tol% of known values where tol is a float between 0 and 1. """
         vals = np.array([*self._training_pts.values()]).flatten()
         if len(vals) < 3:
             return False
-        mu, sigma = self.sample_all([*self._training_pts], True)
+        mu, _ = self.sample_all([*self._training_pts], True)
         try:
             diffs = np.abs((vals - mu) / vals)
         except FloatingPointError:
@@ -306,6 +309,7 @@ class GaussianProcessRegression:
         return False
 
     def is_suitable(self, tol: float = 0.1):
+        """ Returns True if both is_mean_suitable and is_tail_suitable return True. """
         return self.is_mean_suitable(tol) and self.is_tail_suitable()
 
     # # BELOW FUNCTION DOES NOT WORK AT EVEN MODERATE DIMENSIONS :(

@@ -1,10 +1,13 @@
+
+
 # Native Python
 from typing import *
-import numpy as np
 import os
 import warnings
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
+
+import numpy as np
 
 # Optsam Package
 from optsam.fwrap import ResidualsWrapper
@@ -26,19 +29,17 @@ class GFLSOptimizer(BaseOptimizer):
 
     needscaler = False
 
-    def __init__(
-        self,
-        opt_id: int = None,
-        signal_pipe: Connection = None,
-        results_queue: Queue = None,
-        pause_flag: Event = None,
-        tmax: Optional[int] = None,
-        imax: Optional[int] = None,
-        fmax: Optional[int] = None,
-        verbose: int = 30,
-        save_logger: Optional[str] = None,
-        gfls_kwargs: Optional[dict] = None,
-    ):
+    def __init__(self,
+                 opt_id: int = None,
+                 signal_pipe: Connection = None,
+                 results_queue: Queue = None,
+                 pause_flag: Event = None,
+                 tmax: Optional[int] = None,
+                 imax: Optional[int] = None,
+                 fmax: Optional[int] = None,
+                 verbose: int = 30,
+                 save_logger: Optional[str] = None,
+                 gfls_kwargs: Optional[dict] = None):
         """ Instance of the GFLS optimizer that can be used through GloMPO.
 
         Parameters
@@ -73,15 +74,12 @@ class GFLSOptimizer(BaseOptimizer):
         self.algorithm = GFLS(**gfls_kwargs) if gfls_kwargs else GFLS(tr_max=1)
 
     # noinspection PyMethodOverriding
-    def minimize(
-        self,
-        function: Callable[[Sequence[float]], float],
-        x0: Union[Sequence[float], Type[Logger]],
-        bounds: Sequence[Tuple[float, float]],
-        callbacks: Union[Sequence[Callable[[Logger, AlgoBase, Union[str, None]], Any]],
-                         Callable[[Logger, AlgoBase, Union[str, None]], Any]] = None,
-    ) -> MinimizeResult:
-
+    def minimize(self,
+                 function: Callable[[Sequence[float]], float],
+                 x0: Union[Sequence[float], Type[Logger]],
+                 bounds: Sequence[Tuple[float, float]],
+                 callbacks: Union[Sequence[Callable[[Logger, AlgoBase, Union[str, None]], Any]],
+                                  Callable[[Logger, AlgoBase, Union[str, None]], Any]] = None) -> MinimizeResult:
         """
         Executes the task of minimizing a function with GFLS.
 
@@ -126,8 +124,7 @@ class GFLSOptimizer(BaseOptimizer):
             if bnd[0] == bnd[1]:
                 raise ValueError("Min and Max bounds cannot be equal. Rather fix the value and set the variable"
                                  "inactive through the interface.")
-            else:
-                gfls_bounds.append(BoxTanh(bnd[0], bnd[1]))
+            gfls_bounds.append(BoxTanh(bnd[0], bnd[1]))
         vector_codec = VectorCodec(gfls_bounds)
 
         if not isinstance(x0, Logger):
@@ -163,7 +160,7 @@ class GFLSOptimizer(BaseOptimizer):
             logger.save(name)
 
         cond = logger.aux["stopcond"]
-        success = True if any(cond == k for k in ["xtol", "tr_min"]) else False
+        success = any(cond == k for k in ["xtol", "tr_min"])
         fx = logger.get("func_best", -1)
         history = logger.get_tracks("func")[0]
         index = np.where(history == fx)[0][0]

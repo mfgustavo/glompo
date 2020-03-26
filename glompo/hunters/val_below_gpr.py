@@ -14,7 +14,6 @@ class ValBelowGPR(BaseHunter):
         """ Returns True if the current best value seen by the hunter falls below the 95% confidence threshold of the
             victim.
         """
-        pass
 
     def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, hunter_gpr: GaussianProcessRegression,
                               victim_opt_id: int, victim_gpr: GaussianProcessRegression) -> bool:
@@ -25,5 +24,5 @@ class ValBelowGPR(BaseHunter):
             threshold = mu - 2 * sigma
 
             return vals[-1] < threshold
-        else:
-            return False
+
+        return False

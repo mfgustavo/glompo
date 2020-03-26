@@ -1,5 +1,8 @@
 
 
+""" Named tuples used throughout the package to make code clearer. """
+
+
 from typing import *
 from multiprocessing import Process, Event
 from multiprocessing.connection import Connection
@@ -9,13 +12,13 @@ from ..core.gpr import GaussianProcessRegression
 __all__ = ("Result",
            "Bound",
            "OptimizerPackage",
-           "HuntingResult",
            "IterationResult",
            "HyperparameterOptResult",
            "ProcessPackage")
 
 
 class Result(NamedTuple):
+    """ Final result delivered by GloMPOManager. """
     x: Sequence[float]
     fx: float
     stats: Dict[str, Any]
@@ -23,11 +26,13 @@ class Result(NamedTuple):
 
 
 class Bound(NamedTuple):
+    """ Class of parameter bounds. """
     min: float
     max: float
 
 
 class OptimizerPackage(NamedTuple):
+    """ Package of an initialized optimizer, its unique identifier and multiprocessing variables. """
     opt_id: int
     optimizer: Callable
     call_kwargs: Dict[str, Any]
@@ -36,12 +41,8 @@ class OptimizerPackage(NamedTuple):
     gpr: GaussianProcessRegression
 
 
-class HuntingResult(NamedTuple):
-    hunt_id: int
-    victims: Sequence[int]
-
-
 class IterationResult(NamedTuple):
+    """ Return type of each optimizer iteration. """
     opt_id: int
     n_iter: int
     n_icalls: int  # Number of functions calls in iteration *not* cumulative calls
@@ -51,6 +52,7 @@ class IterationResult(NamedTuple):
 
 
 class HyperparameterOptResult(NamedTuple):
+    """ Return type of a hyperparameter optimization job. """
     opt_id: int
     alpha: float
     beta: float
@@ -58,6 +60,7 @@ class HyperparameterOptResult(NamedTuple):
 
 
 class ProcessPackage(NamedTuple):
+    """ Package of a running process, its communication channels and GPR. """
     process: Process
     signal_pipe: Connection
     allow_run_event: Event

@@ -1,8 +1,8 @@
 
 
-from glompo.generators.basegenerator import BaseGenerator
 from typing import *
 import numpy as np
+from glompo.generators.basegenerator import BaseGenerator
 
 
 __all__ = ("RandomGenerator",)

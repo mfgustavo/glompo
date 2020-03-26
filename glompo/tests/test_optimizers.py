@@ -1,13 +1,14 @@
+
+
 from functools import wraps
 from typing import Callable, Sequence, Tuple
 from time import time, sleep
 from collections import namedtuple
 import os
 import shutil
-import pytest
 import multiprocessing as mp
 
-import numpy as np
+import pytest
 
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from glompo.optimizers.cmawrapper import CMAOptimizer
@@ -148,8 +149,8 @@ class TestSubclassesGlompoCompatible:
             self.called += 1
             if self.called > self.max_iter:
                 return "MaxIter"
-            else:
-                return None
+
+            return None
 
     class Task:
         def __call__(self, x):
@@ -217,7 +218,6 @@ class TestSubclassesGlompoCompatible:
                       bounds=((0, 1), (0, 1), (0, 1)),
                       callbacks=self.MaxIter(10))
 
-        res = False
         while not mp_package.queue.empty():
             assert mp_package.queue.get_nowait().n_iter < 10
 

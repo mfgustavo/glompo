@@ -1,12 +1,15 @@
+
+
 import warnings
 import os
-import numpy as np
 import cma
 import pickle
 from typing import *
 from time import time
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
+
+import numpy as np
 
 from .baseoptimizer import MinimizeResult, BaseOptimizer
 from ..common.namedtuples import IterationResult
@@ -42,7 +45,7 @@ class CMAOptimizer(BaseOptimizer):
         self.sigma = sigma
 
         # Sort all non-native CMA options into the custom cmaoptions key 'vv':
-        customkeys = [i for i in cmasettings.keys() if i not in cma.CMAOptions().keys()]
+        customkeys = [i for i in cmasettings if i not in cma.CMAOptions().keys()]
         customopts = {i: cmasettings[i] for i in customkeys}
         cmasettings = {k: v for k, v in cmasettings.items() if not any(k == i for i in customkeys)}
         cmasettings['vv'] = customopts
@@ -140,4 +143,3 @@ class CMAOptimizer(BaseOptimizer):
 
     def save_state(self, *args):
         warnings.warn("CMA save_state not yet implemented.", NotImplementedError)
-        pass

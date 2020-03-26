@@ -13,7 +13,6 @@ class ValBelowVal(BaseHunter):
         """ Returns True if the current best value seen by the hunter falls below the current best value of the
             victim.
         """
-        pass
 
     def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, hunter_gpr: GaussianProcessRegression,
                               victim_opt_id: int, victim_gpr: GaussianProcessRegression) -> bool:
@@ -22,5 +21,5 @@ class ValBelowVal(BaseHunter):
         vic_vals = log.get_history(victim_opt_id, "fx_best")
         if all([len(vals) > 0 for vals in [hunt_vals, vic_vals]]):
             return min(hunt_vals) < min(vic_vals)
-        else:
-            return False
+
+        return False

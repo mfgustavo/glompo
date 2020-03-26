@@ -1,5 +1,8 @@
 
 
+""" Contains ExpKernel which is the specially designed kernel function to model optimizer progression. """
+
+
 from typing import *
 from functools import wraps
 import numpy as np
@@ -16,10 +19,9 @@ def _cache(func: callable):
     def wrapper(*args):
         if args in cache_dict:
             return cache_dict[args]
-        else:
-            result = func(*args)
-            cache_dict[args] = result
-            return result
+        result = func(*args)
+        cache_dict[args] = result
+        return result
 
     return wrapper
 
@@ -157,8 +159,8 @@ class ExpKernel:
             if noise:
                 result[2] = np.trace(np.matmul(calc, dk_ds_matrix(s)))
                 return result * 0.5
-            else:
-                return result[:2] * 0.5
+
+            return result[:2] * 0.5
 
         # Log marginal likelihood (function to be maximised)
         @_cache
@@ -230,9 +232,9 @@ class ExpKernel:
                     print("------------------------------------------------")
                 self.alpha, self.beta = res.x[:2]
                 return res.x if noise else (res.x[0], res.x[1], 0)
+
+            if attempt < 9 and verbose:
+                print(f"Optimization Failed. Starting {attempt + 1} of 10.")
             else:
-                if attempt < 9 and verbose:
-                    print(f"Optimization Failed. Starting {attempt + 1} of 10.")
-                else:
-                    print(f"Optimization Failed. Aborting. Parameters unchanged.") if verbose else None
-                    return None
+                print(f"Optimization Failed. Aborting. Parameters unchanged.") if verbose else None
+                return None

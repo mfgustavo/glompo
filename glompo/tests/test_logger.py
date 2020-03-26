@@ -1,13 +1,15 @@
 
 
+import datetime
+import shutil
+
+import pytest
+import numpy as np
+
 from glompo.core.logger import Logger
 from glompo.optimizers.gflswrapper import GFLSOptimizer
 from glompo.optimizers.cmawrapper import CMAOptimizer
 from glompo.optimizers.baseoptimizer import BaseOptimizer
-import datetime
-import pytest
-import numpy as np
-import shutil
 
 
 class TestLogger:

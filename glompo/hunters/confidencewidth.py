@@ -13,7 +13,7 @@ class ConfidenceWidth(BaseHunter):
         """ Returns True if the standard deviation of the victim's GPR is less than a percentage of the mean.
             The fraction is given by threshold as a value between 0 and 1.
         """
-        if (isinstance(threshold, float) or isinstance(threshold, int)) and threshold > 0:
+        if isinstance(threshold, (float, int)) and threshold > 0:
             self.threshold = threshold
         else:
             raise ValueError("threshold should be a positive float.")

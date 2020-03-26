@@ -1,7 +1,7 @@
 
 
-from .basechecker import BaseChecker
 from time import time
+from .basechecker import BaseChecker
 
 
 __all__ = ("MaxSeconds",)
@@ -10,7 +10,7 @@ __all__ = ("MaxSeconds",)
 class MaxSeconds(BaseChecker):
 
     def __init__(self, tmax: int):
-        """ Convergence is reached after omax optimizers have been started. """
+        """ Convergence is reached after tmax seconds have elapsed. """
         super().__init__()
         self.tmax = tmax
 

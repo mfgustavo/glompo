@@ -2,10 +2,14 @@
 
 from typing import *
 from time import sleep
-import pytest
 import shutil
 import sys
 import os
+import multiprocessing as mp
+
+import numpy as np
+import yaml
+import pytest
 
 from glompo.core.manager import GloMPOManager
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
@@ -14,10 +18,8 @@ from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxOptsStarte
 from glompo.hunters import BaseHunter, MinVictimTrainingPoints, GPRSuitable, ValBelowGPR
 from glompo.common.namedtuples import *
 from glompo.common.customwarnings import *
+from glompo.common.wrappers import redirect, task_args_wrapper
 from glompo.generators.basegenerator import BaseGenerator
-
-import numpy as np
-import yaml
 
 
 class OptimizerTest1(BaseOptimizer):
@@ -148,7 +150,7 @@ class TrueHunter(BaseHunter):
 
     def is_kill_condition_met(self, log, hunter_opt_id, hunter_gpr,
                               victim_opt_id, victim_gpr) -> bool:
-        return True if victim_opt_id == self.target else False
+        return victim_opt_id == self.target
 
 
 class ErrorChecker(BaseChecker):
@@ -275,20 +277,19 @@ class TestManager:
         def task(x, *args, calculate=False):
             if calculate:
                 return sum([*args]) ** x
+            return None
 
-        wrapped_task = GloMPOManager._task_args_wrapper(task, (1, 2, 3, 4), {'calculate': True})
+        wrapped_task = task_args_wrapper(task, (1, 2, 3, 4), {'calculate': True})
 
         for i in range(5):
             assert wrapped_task(i) == 10 ** i
 
     def test_redirect(self):
-        import multiprocessing as mp
-
         def func():
             print("redirect_test")
             raise RuntimeError("redirect_test_error")
 
-        wrapped_func = GloMPOManager._redirect(1, func)
+        wrapped_func = redirect(1, func)
         p = mp.Process(target=wrapped_func)
         p.start()
         p.join()
@@ -468,7 +469,7 @@ class TestManager:
                                                               1,
                                                               self.current_x,
                                                               fx,
-                                                              False if it <= self.max_iters else True))
+                                                              it > self.max_iters))
                     print(f"Iter {it}: x = {self.current_x}, fx = {fx}")
                     grad = np.array([dx, dy])
                     next_x = self.current_x - self.gamma * grad
@@ -511,7 +512,7 @@ class TestManager:
             return calc, df_dx(pt), df_dy(pt)
 
         def df_dx(pt):
-            x, y = pt
+            x, _ = pt
             calc = np.exp(-x ** 2 / 5000)
             calc *= x * np.cos(0.2 * x)
             calc /= 125000 * np.sqrt(2 * np.pi)
@@ -519,7 +520,7 @@ class TestManager:
             return calc
 
         def df_dy(pt):
-            x, y = pt
+            _, y = pt
             calc = 2e-6 * y
             return calc
 

@@ -1,18 +1,17 @@
 
 
+import pytest
+import numpy as np
+
 from glompo.hunters.basehunter import BaseHunter, _AllHunter, _AnyHunter, _CombiHunter
 from glompo.hunters.confidencewidth import ConfidenceWidth
 from glompo.hunters.min_vic_trainpts import MinVictimTrainingPoints
 from glompo.hunters.val_below_gpr import ValBelowGPR
 from glompo.hunters.pseudoconv import PseudoConverged
 from glompo.hunters.gprsuitable import GPRSuitable
-
 from glompo.core.gpr import GaussianProcessRegression
 from glompo.core.logger import Logger
 from glompo.core.expkernel import ExpKernel
-
-import pytest
-import numpy as np
 
 
 class PlainHunter(BaseHunter):
@@ -124,7 +123,7 @@ class TestMinTraningPoints:
         cond = MinVictimTrainingPoints(5)
         vic_gpr = GaussianProcessRegression(kernel=None,
                                             dims=1)
-        for i in range(n_pts):
+        for _ in range(n_pts):
             vic_gpr.add_known(np.random.rand(1), np.random.rand(1))
         assert cond.is_kill_condition_met(None, None, None, None, vic_gpr) == output
 
@@ -236,9 +235,7 @@ class TestGPRSuitable:
 
             assert cond.is_kill_condition_met(log, 1, gpr1, 2, gpr2) is True
 
-    @pytest.mark.parametrize("noise1, noise2, output", [(0.5, 0.5, True),
-                                                        (0.00001, 0.00001, False)])
-    def test_wild_tail(self, noise1, noise2, output):
+    def test_wild_tail(self):
         kernel = ExpKernel(alpha=1.2,
                            beta=10)
         gpr = GaussianProcessRegression(kernel=kernel,

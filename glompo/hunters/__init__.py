@@ -1,5 +1,10 @@
 
 
+""" Subpackage containing the BaseHunter and several subclasses which are used to determine how optimizers are
+    stopped.
+"""
+
+
 from .basehunter import BaseHunter
 from .confidencewidth import ConfidenceWidth
 from .gprsuitable import GPRSuitable

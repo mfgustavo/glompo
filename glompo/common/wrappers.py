@@ -1,0 +1,55 @@
+
+
+""" Decorators and wrappers used throughout GloMPO. """
+
+
+from functools import wraps
+import sys
+import inspect
+
+
+def redirect(opt_id, func):
+    """ Wrapper to redirect a process' output to a designated text file. """
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        sys.stdout = open(f"glompo_optimizer_printstreams/{opt_id}_printstream.out", "w")
+        sys.stderr = open(f"glompo_optimizer_printstreams/{opt_id}_printstream.err", "w")
+        func(*args, **kwargs)
+
+    return wrapper
+
+
+def task_args_wrapper(func, args, kwargs):
+    """ Wraps a task's args and kwargs into it so that it becomes only a function of one variable (the vector
+        of parameter values).
+    """
+
+    @wraps(func)
+    def wrapper(x):
+        return func(x, *args, **kwargs)
+
+    return wrapper
+
+
+def catch_user_interrupt(func):
+    """ Catches a user interrupt signal and exits gracefully. """
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except KeyboardInterrupt:
+            print("Interrupt signal received. Process stopping.")
+
+    return wrapper
+
+
+def decorate_all_methods(decorator):
+    """ Applys a decorator to every method in a class. """
+    def apply_decorator(cls):
+        for k, f in cls.__dict__.items():
+            if inspect.isfunction(f):
+                setattr(cls, k, decorator(f))
+        return cls
+    return apply_decorator

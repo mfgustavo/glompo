@@ -1,7 +1,7 @@
 
 
-from glompo.core.expkernel import ExpKernel
 import numpy as np
+from glompo.core.expkernel import ExpKernel
 
 
 class TestExpKernel:

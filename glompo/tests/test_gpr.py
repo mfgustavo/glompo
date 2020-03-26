@@ -1,9 +1,9 @@
 
 
-from glompo.core.manager import GaussianProcessRegression
-from glompo.core.expkernel import ExpKernel
-
 import numpy as np
+
+from glompo.core.gpr import GaussianProcessRegression
+from glompo.core.expkernel import ExpKernel
 
 
 class _SEKernel:

@@ -1,9 +1,11 @@
 
 
-from .basegenerator import BaseGenerator
 from typing import *
+
 import numpy as np
 from scipy.stats import truncnorm
+
+from .basegenerator import BaseGenerator
 
 
 __all__ = ("PerterbationGenerator",)

@@ -1,17 +1,21 @@
 
+""" Contains GloMPOManager class which is the main user interface for GloMPO. """
+
 
 # Native Python imports
 import shutil
-import sys
 import warnings
 import multiprocessing as mp
 import traceback
 import os
 import socket
 from datetime import datetime
-from functools import wraps
 from time import time
 from typing import *
+
+# Other Python packages
+import numpy as np
+import yaml
 
 # Package imports
 from ..generators.basegenerator import BaseGenerator
@@ -20,16 +24,13 @@ from ..convergence.nkillsafterconv import KillsAfterConvergence
 from ..convergence.basechecker import BaseChecker
 from ..common.namedtuples import *
 from ..common.customwarnings import *
+from ..common.wrappers import redirect, task_args_wrapper, catch_user_interrupt
 from ..hunters import BaseHunter, ValBelowGPR, PseudoConverged, MinVictimTrainingPoints, GPRSuitable
 from ..optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from .gpr import GaussianProcessRegression
 from .expkernel import ExpKernel
 from .logger import Logger
 from .scope import GloMPOScope
-
-# Other Python packages
-import numpy as np
-import yaml
 
 
 __all__ = ("GloMPOManager",)
@@ -232,7 +233,7 @@ class GloMPOManager:
             task_args = ()
         if not task_kwargs:
             task_kwargs = {}
-        self.task = self._task_args_wrapper(task, task_args, task_kwargs)
+        self.task = task_args_wrapper(task, task_args, task_kwargs)
 
         # Save n_parms
         if isinstance(n_parms, int):
@@ -322,9 +323,8 @@ class GloMPOManager:
         # Save GPR control
         if not isinstance(gpr_training, tuple):
             raise TypeError(f"Cannot parse gpr_training, Tuple[int, int] required.")
-        else:
-            self.gpr_max = int(gpr_training[0]) if gpr_training[0] is not None else np.inf
-            self.gpr_step = int(gpr_training[1])
+        self.gpr_max = int(gpr_training[0]) if gpr_training[0] is not None else np.inf
+        self.gpr_step = int(gpr_training[1])
 
         # Save max conditions and counters
         self.t_start = None
@@ -536,8 +536,8 @@ class GloMPOManager:
                                     self.scope.update_mean(res.opt_id, mu, sigma)
                             if res.final:
                                 self.scope.update_norm_terminate(res.opt_id)
-                else:
-                    self._optional_print("\tNo results found.", 2)
+                    else:
+                        self._optional_print("\tNo results found.", 2)
                 self._optional_print("Iteration results check done.", 2)
 
                 # Check processes' statuses
@@ -664,8 +664,7 @@ class GloMPOManager:
                                             "Init Args": self.optimizers[name][1],
                                             "Minimize Args": self.optimizers[name][2]}
 
-                    data = {
-                            "Assignment": {"Task": type(self.task.__wrapped__).__name__,
+                    data = {"Assignment": {"Task": type(self.task.__wrapped__).__name__,
                                            "Working Dir": os.getcwd(),
                                            "Username": os.getlogin(),
                                            "Hostname": socket.gethostname(),
@@ -750,10 +749,10 @@ class GloMPOManager:
         task = self.task
         x0 = self.x0_generator.generate()
         bounds = np.array(self.bounds)
-        target = self._catch_interrupt_wrapper(optimizer.minimize)
+        target = catch_user_interrupt(optimizer.minimize)
 
         if self.split_printstreams:
-            target = self._redirect(opt_id, optimizer.minimize)
+            target = redirect(opt_id, optimizer.minimize)
 
         process = mp.Process(target=target,
                              args=(task, x0, bounds),
@@ -813,7 +812,7 @@ class GloMPOManager:
             result = HyperparameterOptResult(o_id, a, b, g)
             queue.put(result)
 
-        process = mp.Process(target=self._catch_interrupt_wrapper(wrapped_hyperparm_job),
+        process = mp.Process(target=catch_user_interrupt(wrapped_hyperparm_job),
                              args=(opt_id, self.hyperparm_queue, self.optimizer_packs[opt_id].gpr),
                              daemon=True)
 
@@ -855,8 +854,7 @@ class GloMPOManager:
 
         if call_kwargs:
             return OptimizerPackage(self.o_counter, optimizer, call_kwargs, parent_pipe, event, gpr)
-        else:
-            return OptimizerPackage(self.o_counter, optimizer, {}, parent_pipe, event, gpr)
+        return OptimizerPackage(self.o_counter, optimizer, {}, parent_pipe, event, gpr)
 
     def _optional_print(self, message: str, level: int):
         """ Controls printing of messages according to the user's choice using the verbose setting.
@@ -872,36 +870,3 @@ class GloMPOManager:
         """
         if level <= self.verbose:
             print(message)
-
-    @staticmethod
-    def _redirect(opt_id, func):
-        """ Wrapper to redirect a process' output to a designated text file. """
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            sys.stdout = open(f"glompo_optimizer_printstreams/{opt_id}_printstream.out", "w")
-            sys.stderr = open(f"glompo_optimizer_printstreams/{opt_id}_printstream.err", "w")
-            func(*args, **kwargs)
-        return wrapper
-
-    @staticmethod
-    def _task_args_wrapper(func, args, kwargs):
-        """ Wraps a task's args and kwargs into it so that it becomes only a function of one variable (the vector
-            of parameter values).
-        """
-        @wraps(func)
-        def wrapper(x):
-            return func(x, *args, **kwargs)
-
-        return wrapper
-
-    @staticmethod
-    def _catch_interrupt_wrapper(func):
-
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            try:
-                return func(*args, **kwargs)
-            except KeyboardInterrupt:
-                print("Interrupt signal received. Child process stopping.")
-
-        return wrapper

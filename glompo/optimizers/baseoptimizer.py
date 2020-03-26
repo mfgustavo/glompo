@@ -1,6 +1,9 @@
+
+
 """
 Base class from which all optimizers must inherit in order to be compatible with GloMPO.
 """
+
 
 from multiprocessing.connection import Connection
 from queue import Queue
@@ -8,7 +11,6 @@ from threading import Event
 from typing import *
 from abc import ABC, abstractmethod
 import warnings
-import sys
 
 
 __all__ = ('BaseOptimizer', 'MinimizeResult')
@@ -62,7 +64,6 @@ class BaseOptimizer(ABC):
         """
         Force class variable 'needscaler'. To be set to True or False
         """
-        pass
 
     def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
                  pause_flag: Event = None):
@@ -115,7 +116,6 @@ class BaseOptimizer(ABC):
         :Returns: An instance of |MinimizeResult|
 
         """
-        pass
 
     def check_messages(self, *args):
         while self._signal_pipe.poll():
@@ -128,6 +128,7 @@ class BaseOptimizer(ABC):
                 warnings.warn("Cannot parse message, ignoring", RuntimeWarning)
 
     def push_iter_result(self, *args):
+        """ Put an iteration result into _results_queue. """
         raise NotImplementedError
 
     def message_manager(self, key: int, message: Optional[str] = None):
@@ -140,4 +141,5 @@ class BaseOptimizer(ABC):
         raise NotImplementedError
 
     def save_state(self, *args):
+        """ Save current state, suitable for restarting. """
         raise NotImplementedError

@@ -1,4 +1,8 @@
 
+
+""" Abstract hunter classes used to construct the convergence criteria. """
+
+
 from abc import ABC, abstractmethod
 from typing import *
 import inspect
@@ -18,7 +22,6 @@ class BaseHunter(ABC):
                               victim_opt_id: int, victim_gpr: GaussianProcessRegression) -> bool:
         """ When called, this method may check any values within the logs or GPRs of both hunter or the victim
         and return a bool if the desired condition is met. """
-        pass
 
     def __or__(self, other: 'BaseHunter') -> '_AnyHunter':
         return _AnyHunter(self, other)

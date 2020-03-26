@@ -21,7 +21,7 @@ class PseudoConverged(BaseHunter):
         vals = log.get_history(victim_opt_id, "fx_best")
         if len(vals) < self.iters:
             return False
-        else:
-            fbest_current = vals[-1]
-            fbest_iters = vals[-self.iters]
-            return abs(fbest_current - fbest_iters) <= abs(fbest_iters * self.tol)
+
+        fbest_current = vals[-1]
+        fbest_iters = vals[-self.iters]
+        return abs(fbest_current - fbest_iters) <= abs(fbest_iters * self.tol)

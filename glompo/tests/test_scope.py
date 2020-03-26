@@ -1,10 +1,14 @@
 
-from glompo.core.scope import GloMPOScope
 
-import pytest
 import os
 import shutil
 import sys
+
+import pytest
+import numpy as np
+import matplotlib.pyplot as plt
+
+from glompo.core.scope import GloMPOScope
 
 
 class TestScope:
@@ -43,7 +47,6 @@ class TestScope:
 
     @pytest.mark.parametrize("i, palette", [(10, 1), (35, 2), (53, 3), (67, 4), (73, 5), (88, 6), (200, 7)])
     def test_colors(self, i, palette, scope):
-        import matplotlib.pyplot as plt
 
         if i < 20:
             colors = plt.get_cmap("tab20")
@@ -120,8 +123,6 @@ class TestScope:
 
     @pytest.mark.filterwarnings("ignore:More than 20 figures")
     def test_generate_movie(self):
-        import numpy as np
-
         scope = GloMPOScope(record_movie=True)
         scope.add_stream(1)
         scope.add_stream(2)

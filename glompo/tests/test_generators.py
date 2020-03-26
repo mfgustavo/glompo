@@ -1,10 +1,11 @@
 
 
+import numpy as np
+import pytest
+
 from ..generators.random import RandomGenerator
 from ..generators.peterbation import PerterbationGenerator
 from ..common.namedtuples import Bound
-import numpy as np
-import pytest
 
 
 class TestRandom:
@@ -20,7 +21,7 @@ class TestRandom:
         np.random.seed(1)
         gen = RandomGenerator(bounds)
 
-        for i in range(50):
+        for _ in range(50):
             call = gen.generate()
             assert len(call) == len(bounds)
             for j, x in enumerate(call):
@@ -56,7 +57,7 @@ class TestPerturbation:
                               ([0.01, -5, 954.54, 6.23e6, -3.45], [[0, 1], [-100, 100], [950, 1000], [0, np.inf],
                                                                    [-10, 0]], [1, 25, 2, 1e1, 5]),
                               ([0.01, -5, 954.54, 6.23e6], [[0, 1], [-100, 100], [950, 1000], [0, np.inf],
-                                                                   [-10, 0]], [1, 25, 2, 1e1, 5])
+                                                            [-10, 0]], [1, 25, 2, 1e1, 5])
                               ])
     def test_invalid_bounds(self, x0, bounds, scale):
         with pytest.raises(ValueError):
@@ -70,7 +71,7 @@ class TestPerturbation:
         scale = [1, 25, 2, 1e6, 5]
         gen = PerterbationGenerator(x0, bounds, scale)
 
-        for i in range(50):
+        for _ in range(50):
             call = gen.generate()
             assert len(call) == len(bounds)
             for j, x in enumerate(call):
@@ -86,7 +87,7 @@ class TestPerturbation:
         gen = PerterbationGenerator(x0, bounds, scale)
 
         calls = []
-        for i in range(5000):
+        for _ in range(5000):
             calls.append(gen.generate())
 
         assert np.all(np.isclose(np.mean(calls, 0) / x0, 1, rtol=0.1))

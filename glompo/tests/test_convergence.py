@@ -1,5 +1,7 @@
 
 
+import pytest
+
 from glompo.convergence.basechecker import BaseChecker, _AnyChecker, _AllChecker, _CombiChecker
 from glompo.convergence.tmax import MaxSeconds
 from glompo.convergence.fmax import MaxFuncCalls
@@ -8,13 +10,11 @@ from glompo.convergence.nkills import MaxKills
 from glompo.convergence.omax import MaxOptsStarted
 from glompo.convergence.nkillsafterconv import KillsAfterConvergence
 
-import pytest
-
 
 class PlainChecker(BaseChecker):
     def __init__(self):
         super().__init__()
-    
+
     def check_convergence(self, manager) -> bool:
         pass
 
