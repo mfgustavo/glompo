@@ -20,10 +20,10 @@ class BaseHunter(ABC):
         and return a bool if the desired condition is met. """
         pass
 
-    def __add__(self, other: 'BaseHunter') -> '_AnyHunter':
+    def __or__(self, other: 'BaseHunter') -> '_AnyHunter':
         return _AnyHunter(self, other)
 
-    def __mul__(self, other: 'BaseHunter') -> '_AllHunter':
+    def __and__(self, other: 'BaseHunter') -> '_AllHunter':
         return _AllHunter(self, other)
 
     def __str__(self) -> str:

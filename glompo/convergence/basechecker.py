@@ -23,10 +23,10 @@ class BaseChecker(ABC):
             returning. """
         pass
 
-    def __add__(self, other: 'BaseChecker') -> '_AnyChecker':
+    def __or__(self, other: 'BaseChecker') -> '_AnyChecker':
         return _AnyChecker(self, other)
 
-    def __mul__(self, other: 'BaseChecker') -> '_AllChecker':
+    def __and__(self, other: 'BaseChecker') -> '_AllChecker':
         return _AllChecker(self, other)
     
     def __str__(self) -> str:

@@ -18,6 +18,7 @@ from ..generators.random import RandomGenerator
 from ..convergence.nkillsafterconv import KillsAfterConvergence
 from ..convergence.basechecker import BaseChecker
 from ..common.namedtuples import *
+from ..common.customwarnings import *
 from ..hunters import BaseHunter, ValBelowGPR, PseudoConverged, MinVictimTrainingPoints, GPRSuitable
 from ..optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from .gpr import GaussianProcessRegression
@@ -116,10 +117,9 @@ class GloMPOManager:
             Optional keyword arguments passed to task with every call.
 
         convergence_checker: Optional[BaseChecker] = None
-            Criteria used for convergence. A collection of subclasses of BaseChecker are provided, these can be used in
-            combination to tailor various exit conditions. Instances which are added together represent an 'or'
-            combination and instances which are multiplied together represent an 'and' combination.
-                E.g.: convergence_criteria = MaxFuncCalls(20000) + KillsAfterConvergence(3, 1) * MaxSeconds(60*5)
+            Criteria used for convergence. A collection of subclasses of BaseChecker are provided, tthese can be
+            used in combinations of and (&) and or (|) to tailor various conditions.
+                E.g.: convergence_criteria = MaxFuncCalls(20000) | KillsAfterConvergence(3, 1) & MaxSeconds(60*5)
                 In this case GloMPO will run until 20 000 function evaluations OR until 3 optimizers have been killed
                 after the first convergence provided it has at least run for five minutes.
             Default: KillsAfterConvergence(0, 1) i.e. GloMPO terminates as soon as any optimizer converges.
@@ -131,16 +131,15 @@ class GloMPOManager:
 
         killing_conditions: Optional[BaseHunter] = None
             Criteria used for killing optimizers. A collection of subclasses of BaseHunter are provided, these can be
-            used in combination to tailor various conditions. Instances which are added together represent an 'or'
-            combination and instances which are multiplied together represent an 'and' combination.
-                E.g.: killing_conditions = GPRSuitable() * ValBelowGPR() *
-                (MinVictimTrainingPoints(30) + PseudoConverged(20))
+            used in combinations of and (&) and or (|) to tailor various conditions.
+                E.g.: killing_conditions = GPRSuitable() & ValBelowGPR() &
+                (MinVictimTrainingPoints(30) & PseudoConverged(20))
                 In this case GloMPO will only allow a hunt to terminate an optimizer if
                     1) the GPR describing it is a good descriptor of the data,
                     2) another optimizer has seen a value below its 95% confidence interval,
                     3) and the optimizer has either at least 30 training points or has not changed its best value in
                     20 iterations.
-                Default: ValBelowGPR() * PseudoConverged(20, 0.01) * MinVictimTrainingPoints(10) * GPRSuitable(0.1)
+                Default: ValBelowGPR() & PseudoConverged(20, 0.01) & MinVictimTrainingPoints(10) & GPRSuitable(0.1)
 
         region_stability_check: bool = False
             If True, local optimizers are started around a candidate solution which has been selected as a final
@@ -199,7 +198,7 @@ class GloMPOManager:
                              1: "I have made some nan's... oopsie... >.<"}
         warnings.simplefilter("always", UserWarning)
         warnings.simplefilter("always", RuntimeWarning)
-        warnings.simplefilter("always", NotImplementedError)
+        warnings.simplefilter("always", NotImplementedWarning)
 
         # Setup printing
         if isinstance(verbose, int):
@@ -263,7 +262,7 @@ class GloMPOManager:
         # TODO Implement
         if any([key in optimizers for key in ['noisy', 'late', 'early']]):
             warnings.warn("Optimizer keys other than 'default' are not currently supported and will be ignored.",
-                          NotImplementedError)
+                          NotImplementedWarning)
 
         # Save bounds
         self.bounds = []
@@ -314,9 +313,9 @@ class GloMPOManager:
             else:
                 raise TypeError(f"killing_conditions not an instance of a subclass of BaseHunter.")
         else:
-            self.killing_conditions = ValBelowGPR() * \
-                                      PseudoConverged(20, 0.01) * \
-                                      MinVictimTrainingPoints(10) * \
+            self.killing_conditions = ValBelowGPR() & \
+                                      PseudoConverged(20, 0.01) & \
+                                      MinVictimTrainingPoints(10) & \
                                       GPRSuitable(0.2)
 
         # Save GPR control
@@ -350,10 +349,10 @@ class GloMPOManager:
             self.scope = GloMPOScope(**visualisation_args) if visualisation_args else GloMPOScope()
         # TODO Implement
         if region_stability_check:
-            warnings.warn("region_stbility_check not implemented. Ignoring.", NotImplementedError)
+            warnings.warn("region_stbility_check not implemented. Ignoring.", NotImplementedWarning)
         # TODO Implement
         if report_statistics:
-            warnings.warn("report_statistics not implemented. Ignoring.", NotImplementedError)
+            warnings.warn("report_statistics not implemented. Ignoring.", NotImplementedWarning)
 
         # Setup multiprocessing variables
         self.optimizer_packs = {}  # Dict[opt_id (int): ProcessPackage (NamedTuple)]
@@ -795,12 +794,12 @@ class GloMPOManager:
             while not gpr.is_tail_suitable() and gpr.sigma_noise < 0.2:
                 gpr.sigma_noise *= 1.1
                 g *= 1.1
-            if not gpr.is_mean_suitable():
+            if not gpr.is_mean_suitable(0.3):
                 sig_min = np.clip(0.5*g, 0.001, 0.25)
                 res = gpr.kernel.optimize_hyperparameters(time_series=gpr.training_coords(),
                                                           loss_series=gpr.training_values(),
                                                           noise=True,
-                                                          bounds=((0.1, 2), (1, 20), (sig_min, 0.3)),
+                                                          bounds=((0.5, 1.5), (10, 50), (sig_min, 0.3)),
                                                           x0=None,
                                                           verbose=self.verbose == 2)
                 if res is not None:

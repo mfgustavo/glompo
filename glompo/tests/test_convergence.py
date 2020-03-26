@@ -9,7 +9,6 @@ from glompo.convergence.omax import MaxOptsStarted
 from glompo.convergence.nkillsafterconv import KillsAfterConvergence
 
 import pytest
-import numpy as np
 
 
 class PlainChecker(BaseChecker):
@@ -59,8 +58,8 @@ class TestBase:
                                               (PlainChecker(), all_checker()),
                                               (all_checker(), PlainChecker()),
                                               (any_checker(), all_checker())])
-    def test_additions(self, base1, base2):
-        assert (base1 + base2).__class__.__name__ == "_AnyChecker"
+    def test_or(self, base1, base2):
+        assert (base1 | base2).__class__.__name__ == "_AnyChecker"
 
     @pytest.mark.parametrize("base1, base2", [(PlainChecker(), PlainChecker()),
                                               (PlainChecker(), any_checker()),
@@ -68,13 +67,13 @@ class TestBase:
                                               (PlainChecker(), all_checker()),
                                               (all_checker(), PlainChecker()),
                                               (any_checker(), all_checker())])
-    def test_multiplications(self, base1, base2):
-        assert (base1 * base2).__class__.__name__ == "_AllChecker"
+    def test_and(self, base1, base2):
+        assert (base1 & base2).__class__.__name__ == "_AllChecker"
 
     @pytest.mark.parametrize("checker, output", [(PlainChecker(), "PlainChecker()"),
-                                                (any_checker(), "(PlainChecker() OR \nPlainChecker())"),
-                                                (all_checker(), "(PlainChecker() AND \nPlainChecker())"),
-                                                (FancyChecker(1, 2, 3), "FancyChecker(a=1, b=5, c)")])
+                                                 (any_checker(), "(PlainChecker() OR \nPlainChecker())"),
+                                                 (all_checker(), "(PlainChecker() AND \nPlainChecker())"),
+                                                 (FancyChecker(1, 2, 3), "FancyChecker(a=1, b=5, c)")])
     def test_str(self, checker, output):
         assert str(checker) == output
 
@@ -85,8 +84,8 @@ class TestBase:
                                                  (all_checker(), "(PlainChecker() = False AND \nPlainChecker() = "
                                                                  "False)"),
                                                  (FancyChecker(1, 2, 3), "FancyChecker(a=1, b=5, c) = False"),
-                                                 (FalseChecker() + FalseChecker() * TrueChecker() + TrueChecker() *
-                                                  (TrueChecker() + FalseChecker()), "((FalseChecker() = False OR \n"
+                                                 (FalseChecker() | FalseChecker() & TrueChecker() | TrueChecker() &
+                                                  (TrueChecker() | FalseChecker()), "((FalseChecker() = False OR \n"
                                                                                     "(FalseChecker() = False AND \n"
                                                                                     "TrueChecker() = True)) OR \n"
                                                                                     "(TrueChecker() = True AND \n"
@@ -100,7 +99,7 @@ class TestBase:
             _CombiChecker(1, 2, 3)
 
     def test_convergence(self):
-        checker = FalseChecker() + FalseChecker() * TrueChecker() + TrueChecker() * (TrueChecker() + FalseChecker())
+        checker = FalseChecker() | FalseChecker() & TrueChecker() | TrueChecker() & (TrueChecker() | FalseChecker())
         assert checker.check_convergence(None) is True
 
 

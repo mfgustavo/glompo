@@ -13,6 +13,7 @@ from glompo.generators.random import RandomGenerator
 from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxOptsStarted, MaxFuncCalls, MaxSeconds
 from glompo.hunters import BaseHunter, MinVictimTrainingPoints, GPRSuitable, ValBelowGPR
 from glompo.common.namedtuples import *
+from glompo.common.customwarnings import *
 from glompo.generators.basegenerator import BaseGenerator
 
 import numpy as np
@@ -246,19 +247,20 @@ class TestManager:
         assert opt.history_logging == int(np.clip(int(history_logging), 0, 3))
 
     def test_init_optimizer_setup(self):
-        manager = GloMPOManager(lambda x, y: x + y,
-                                2,
-                                {'default': OptimizerTest1,
-                                 'early': (OptimizerTest1, None, None),
-                                 'late': (OptimizerTest1, {'kwarg': 9}, None),
-                                 'noisy': (OptimizerTest1, None, {'kwarg': 1923})},
-                                ((0, 1), (0, 1)),
-                                overwrite_existing=True)
-        for opt in manager.optimizers.values():
-            assert isinstance(opt, tuple)
-            assert issubclass(opt[0], BaseOptimizer)
-            assert isinstance(opt[1], dict)
-            assert isinstance(opt[2], dict)
+        with pytest.warns(NotImplementedWarning):
+            manager = GloMPOManager(lambda x, y: x + y,
+                                    2,
+                                    {'default': OptimizerTest1,
+                                     'early': (OptimizerTest1, None, None),
+                                     'late': (OptimizerTest1, {'kwarg': 9}, None),
+                                     'noisy': (OptimizerTest1, None, {'kwarg': 1923})},
+                                    ((0, 1), (0, 1)),
+                                    overwrite_existing=True)
+            for opt in manager.optimizers.values():
+                assert isinstance(opt, tuple)
+                assert issubclass(opt[0], BaseOptimizer)
+                assert isinstance(opt[1], dict)
+                assert isinstance(opt[2], dict)
 
     def test_init_workingdir(self):
         with pytest.warns(UserWarning, match="Cannot parse working_dir"):
@@ -427,8 +429,7 @@ class TestManager:
 
         with open("glompo_manager_log.yml", "r") as stream:
             data = yaml.safe_load(stream)
-            assert data['Solution']['exit cond.'] == 'Process Crash'
-
+            assert "Process Crash" in data['Solution']['exit cond.']
             sleep(0.1)  # Delay for process cleanup
 
     @pytest.mark.mini
@@ -543,10 +544,10 @@ class TestManager:
                                 overwrite_existing=True,
                                 max_jobs=3,
                                 task_kwargs={'delay': 0.1},
-                                convergence_checker=KillsAfterConvergence(2, 1) + MaxFuncCalls(10000) + MaxSeconds(
+                                convergence_checker=KillsAfterConvergence(2, 1) | MaxFuncCalls(10000) | MaxSeconds(
                                     5 * 60),
                                 x0_generator=IntervalGenerator(),
-                                killing_conditions=GPRSuitable(0.1) * MinVictimTrainingPoints(10) * ValBelowGPR(),
+                                killing_conditions=GPRSuitable(0.1) & MinVictimTrainingPoints(10) & ValBelowGPR(),
                                 history_logging=3,
                                 visualisation=False,
                                 visualisation_args=None,

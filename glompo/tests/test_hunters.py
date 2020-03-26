@@ -61,8 +61,8 @@ class TestBase:
                                               (PlainHunter(), all_hunter()),
                                               (all_hunter(), PlainHunter()),
                                               (any_hunter(), all_hunter())])
-    def test_additions(self, base1, base2):
-        assert (base1 + base2).__class__.__name__ == "_AnyHunter"
+    def test_or(self, base1, base2):
+        assert (base1 | base2).__class__.__name__ == "_AnyHunter"
 
     @pytest.mark.parametrize("base1, base2", [(PlainHunter(), PlainHunter()),
                                               (PlainHunter(), any_hunter()),
@@ -70,8 +70,8 @@ class TestBase:
                                               (PlainHunter(), all_hunter()),
                                               (all_hunter(), PlainHunter()),
                                               (any_hunter(), all_hunter())])
-    def test_multiplications(self, base1, base2):
-        assert (base1 * base2).__class__.__name__ == "_AllHunter"
+    def test_and(self, base1, base2):
+        assert (base1 & base2).__class__.__name__ == "_AllHunter"
 
     @pytest.mark.parametrize("hunter, output", [(PlainHunter(), "PlainHunter()"),
                                                 (any_hunter(), "PlainHunter() OR \nPlainHunter()"),
@@ -85,7 +85,7 @@ class TestBase:
             _CombiHunter(1, 2, 3)
 
     def test_kill_condition(self):
-        hunter = FalseHunter() + FalseHunter() * TrueHunter() + TrueHunter() * (TrueHunter() + FalseHunter())
+        hunter = FalseHunter() | FalseHunter() & TrueHunter() | TrueHunter() & (TrueHunter() | FalseHunter())
         assert hunter.is_kill_condition_met(*(None,) * 5) is True
 
 
