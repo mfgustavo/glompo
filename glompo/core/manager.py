@@ -7,6 +7,7 @@ import warnings
 import multiprocessing as mp
 import traceback
 import os
+import socket
 from datetime import datetime
 from functools import wraps
 from time import time
@@ -666,8 +667,15 @@ class GloMPOManager:
                     data = {
                             "Assignment": {"Task": type(self.task.__wrapped__).__name__,
                                            "Working Dir": os.getcwd(),
+                                           "Username": os.getlogin(),
+                                           "Hostname": socket.gethostname(),
                                            "Start Time": self.dt_start,
                                            "Stop Time": datetime.now()},
+                            "Settings": {"x0 Generator": type(self.x0_generator).__name__,
+                                         "Convergence Checker": str(self.convergence_checker).replace("\n", ""),
+                                         "Hunt Conditions": str(self.killing_conditions).replace("\n", ""),
+                                         "Optimizers Available": optimizers,
+                                         "Max Parallel Optimizers": self.max_jobs},
                             "Counters": {"Function Evaluations": self.f_counter,
                                          "Hunts Started": self.hunt_counter,
                                          "GPR Hyperparameter Optimisations": self.hyop_counter,
@@ -679,13 +687,8 @@ class GloMPOManager:
                                          "stats": result.stats,
                                          "origin": result.origin,
                                          "exit cond.": reason},
-                            "Settings": {"x0 Generator": type(self.x0_generator).__name__,
-                                         "Convergence Checker": str(self.convergence_checker).replace("\n", ""),
-                                         "Hunt Conditions": str(self.killing_conditions).replace("\n", ""),
-                                         "Optimizers Available": optimizers,
-                                         "Max Parallel Optimizers": self.max_jobs}
                             }
-                    yaml.dump(data, file, default_flow_style=False)
+                    yaml.dump(data, file, default_flow_style=False, sort_keys=False)
                 if self.history_logging == 3:
                     self.log.save("glompo_optimizer_logs")
                 elif self.history_logging == 2 and best_id > 0:
