@@ -1,6 +1,5 @@
 
 from .basehunter import BaseHunter
-from ..core.gpr import GaussianProcessRegression
 from ..core.logger import Logger
 
 
@@ -18,9 +17,7 @@ class ConfidenceWidth(BaseHunter):
         else:
             raise ValueError("threshold should be a positive float.")
 
-    def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, hunter_gpr: GaussianProcessRegression,
-                              victim_opt_id: int, victim_gpr: GaussianProcessRegression) -> bool:
-
+    def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, victim_opt_id: int) -> bool:
         mu, sigma = victim_gpr.estimate_mean()
         print(f"{victim_opt_id} conf width is {sigma < self.threshold * abs(mu)}")
         return sigma < self.threshold * abs(mu)

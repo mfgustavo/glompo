@@ -1,6 +1,5 @@
 
 from .basehunter import BaseHunter
-from ..core.gpr import GaussianProcessRegression
 from ..core.logger import Logger
 
 
@@ -16,8 +15,7 @@ class PseudoConverged(BaseHunter):
         self.iters = iters
         self.tol = tol
 
-    def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, hunter_gpr: GaussianProcessRegression,
-                              victim_opt_id: int, victim_gpr: GaussianProcessRegression) -> bool:
+    def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, victim_opt_id: int) -> bool:
         vals = log.get_history(victim_opt_id, "fx_best")
         if len(vals) < self.iters:
             return False

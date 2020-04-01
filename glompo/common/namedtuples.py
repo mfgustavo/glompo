@@ -6,14 +6,12 @@
 from typing import *
 from multiprocessing import Process, Event
 from multiprocessing.connection import Connection
-from ..core.gpr import GaussianProcessRegression
 
 
 __all__ = ("Result",
            "Bound",
            "OptimizerPackage",
            "IterationResult",
-           "HyperparameterOptResult",
            "ProcessPackage")
 
 
@@ -38,7 +36,6 @@ class OptimizerPackage(NamedTuple):
     call_kwargs: Dict[str, Any]
     signal_pipe: Connection
     allow_run_event: Event
-    gpr: GaussianProcessRegression
 
 
 class IterationResult(NamedTuple):
@@ -51,17 +48,8 @@ class IterationResult(NamedTuple):
     final: bool  # True if this is the final result sent to the queue by this optimizer
 
 
-class HyperparameterOptResult(NamedTuple):
-    """ Return type of a hyperparameter optimization job. """
-    opt_id: int
-    alpha: float
-    beta: float
-    sigma: float
-
-
 class ProcessPackage(NamedTuple):
-    """ Package of a running process, its communication channels and GPR. """
+    """ Package of a running process and its communication channels. """
     process: Process
     signal_pipe: Connection
     allow_run_event: Event
-    gpr: GaussianProcessRegression

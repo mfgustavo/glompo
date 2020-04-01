@@ -148,8 +148,7 @@ class TrueHunter(BaseHunter):
     def __init__(self, target: int):
         self.target = target
 
-    def is_kill_condition_met(self, log, hunter_opt_id, hunter_gpr,
-                              victim_opt_id, victim_gpr) -> bool:
+    def is_kill_condition_met(self, log, hunter_opt_id, victim_opt_id) -> bool:
         return victim_opt_id == self.target
 
 

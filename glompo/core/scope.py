@@ -268,6 +268,7 @@ class GloMPOScope:
     def update_optimizer(self, opt_id: int, pt: tuple):
         """ Given pt tuple is used to update the opt_id optimizer plot."""
         self._update_point(opt_id, 'all_opt', pt)
+        # self._redraw_graph()
 
     def update_scatter(self, opt_id: int, pt: tuple):
         """ Given pt tuple is used to update the opt_id training data plot."""

@@ -8,7 +8,6 @@ from typing import *
 import inspect
 
 from ..core.logger import Logger
-from ..core.gpr import GaussianProcessRegression
 
 
 __all__ = ("BaseHunter",)
@@ -18,8 +17,7 @@ class BaseHunter(ABC):
     """ Base hunter from which all hunters must inherit to be compatible with GloMPO. """
 
     @abstractmethod
-    def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, hunter_gpr: GaussianProcessRegression,
-                              victim_opt_id: int, victim_gpr: GaussianProcessRegression) -> bool:
+    def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, victim_opt_id: int) -> bool:
         """ When called, this method may check any values within the logs or GPRs of both hunter or the victim
         and return a bool if the desired condition is met. """
 
@@ -50,15 +48,13 @@ class _CombiHunter(BaseHunter):
                 raise TypeError("_CombiHunter can only be initialised with instances of BaseChecker subclasses.")
         self.base_checkers = combi
 
-    def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, hunter_gpr: GaussianProcessRegression,
-                              victim_opt_id: int, victim_gpr: GaussianProcessRegression) -> bool:
+    def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, victim_opt_id: int) -> bool:
         pass
 
 
 class _AnyHunter(_CombiHunter):
-    def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, hunter_gpr: GaussianProcessRegression,
-                              victim_opt_id: int, victim_gpr: GaussianProcessRegression) -> bool:
-        return any([base.is_kill_condition_met(log, hunter_opt_id, hunter_gpr, victim_opt_id, victim_gpr) for base in
+    def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, victim_opt_id: int) -> bool:
+        return any([base.is_kill_condition_met(log, hunter_opt_id, victim_opt_id) for base in
                     self.base_checkers])
 
     def __str__(self):
@@ -70,9 +66,8 @@ class _AnyHunter(_CombiHunter):
 
 
 class _AllHunter(_CombiHunter):
-    def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, hunter_gpr: GaussianProcessRegression,
-                              victim_opt_id: int, victim_gpr: GaussianProcessRegression) -> bool:
-        return all([base.is_kill_condition_met(log, hunter_opt_id, hunter_gpr, victim_opt_id, victim_gpr) for base in
+    def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, victim_opt_id: int) -> bool:
+        return all([base.is_kill_condition_met(log, hunter_opt_id, victim_opt_id) for base in
                     self.base_checkers])
 
     def __str__(self):
