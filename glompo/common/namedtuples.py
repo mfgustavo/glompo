@@ -12,7 +12,8 @@ __all__ = ("Result",
            "Bound",
            "OptimizerPackage",
            "IterationResult",
-           "ProcessPackage")
+           "ProcessPackage",
+           "RegressorCacheItem")
 
 
 class Result(NamedTuple):
@@ -53,3 +54,9 @@ class ProcessPackage(NamedTuple):
     process: Process
     signal_pipe: Connection
     allow_run_event: Event
+
+
+class RegressorCacheItem(NamedTuple):
+    hash: int
+    mle: Tuple[float, float, float]
+    posterior: Sequence[Tuple[float, float, float]]

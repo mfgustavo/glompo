@@ -6,7 +6,7 @@ import numpy as np
 from glompo.hunters.basehunter import BaseHunter, _AllHunter, _AnyHunter, _CombiHunter
 from glompo.hunters.confidencewidth import ConfidenceWidth
 from glompo.hunters.min_vic_trainpts import MinVictimTrainingPoints
-from glompo.hunters.val_below_gpr import ValBelowGPR
+from glompo.hunters.val_below_asymptote import ValBelowGPR
 from glompo.hunters.pseudoconv import PseudoConverged
 from glompo.core.logger import Logger
 

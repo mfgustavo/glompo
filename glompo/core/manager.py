@@ -25,7 +25,7 @@ from ..convergence.basechecker import BaseChecker
 from ..common.namedtuples import *
 from ..common.customwarnings import *
 from ..common.wrappers import redirect, task_args_wrapper, catch_user_interrupt
-from ..hunters import BaseHunter, ValBelowVal, PseudoConverged
+from ..hunters import BaseHunter, ValBelowAsymptote
 from ..optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from .logger import Logger
 from .scope import GloMPOScope
@@ -307,7 +307,7 @@ class GloMPOManager:
             else:
                 raise TypeError(f"killing_conditions not an instance of a subclass of BaseHunter.")
         else:
-            self.killing_conditions = ValBelowVal() & PseudoConverged(20, 0.05)
+            self.killing_conditions = ValBelowAsymptote()
 
         # Save max conditions and counters
         self.t_start = None

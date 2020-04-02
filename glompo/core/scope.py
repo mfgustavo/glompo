@@ -35,7 +35,6 @@ class GloMPOScope:
     def __init__(self,
                  x_range: Union[Tuple[float, float], int, None] = 300,
                  y_range: Optional[Tuple[float, float]] = None,
-                 visualise_gpr: bool = False,
                  record_movie: bool = False,
                  interactive_mode: bool = False,
                  writer_kwargs: Optional[Dict[str, Any]] = None,
@@ -55,9 +54,6 @@ class GloMPOScope:
         y_range : Optional[Tuple[float, float]] = None
             Sets the y-axis limits of the plot, default is an empty tuple which leads the plot to automatically and
             constantly rescale the axis.
-        visualise_gpr : bool = False
-            If True the plot will show the regression itself if False only the predicted mean and uncertainty on the
-            mean will be shown.
         record_movie : bool = False
             If True then a matplotlib.animation.FFMpegWriter instance is created to record the plot.
         interactive_mode : bool = False
@@ -83,19 +79,14 @@ class GloMPOScope:
         self.x_max = 0
 
         # Create custom legend
-        self.visualise_gpr = visualise_gpr
         self.leg_elements = [lines.Line2D([], [], ls='-', c='black', label='Optimizer Evaluations'),
                              lines.Line2D([], [], ls='', marker='o', c='black', label='Point in Training Set'),
                              lines.Line2D([], [], ls='', marker=6, c='black', label='Hyperparam. Opt. Started'),
                              lines.Line2D([], [], ls='', marker=7, c='black', label='Hyperparam. Updated'),
                              lines.Line2D([], [], ls='', marker='x', c='black', label='Optimizer Killed'),
-                             lines.Line2D([], [], ls='', marker='*', c='black', label='Optimizer Converged')]
-        if visualise_gpr:
-            self.leg_elements.append(lines.Line2D([], [], ls='-.', c='black', label='Regression'))
-            self.leg_elements.append(lines.Line2D([], [], ls=':', c='black', label='Regression Uncertainty'))
-        else:
-            self.leg_elements.append(lines.Line2D([], [], ls='--', c='black', label='Estimated Mean'))
-            self.leg_elements.append(patches.Patch(fc='silver', ec='black', ls=':', label='Mean Uncertainty'))
+                             lines.Line2D([], [], ls='', marker='*', c='black', label='Optimizer Converged'),
+                             lines.Line2D([], [], ls='-.', c='black', label='Asymptote'),
+                             lines.Line2D([], [], ls=':', c='black', label='Asymptote Uncertainty')]
 
         self.ax.legend(loc='upper right', handles=self.leg_elements, bbox_to_anchor=(1.35, 1))
 
@@ -165,11 +156,7 @@ class GloMPOScope:
 
                                 if len(x_vals) > 0:
                                     min_val = np.clip(self.x_max - self.truncated, 0, None)
-                                    ismeanline = False
-                                    if not self.visualise_gpr:
-                                        if line is self.streams[opt_id]['mean']:
-                                            ismeanline = True
-                                    if not ismeanline:
+                                    if line is not self.streams[opt_id]['mean']:
                                         bool_arr = x_vals >= min_val
                                         x_vals = x_vals[bool_arr]
                                         y_vals = y_vals[bool_arr]
@@ -216,18 +203,11 @@ class GloMPOScope:
         self.n_streams += 1
         self.streams[opt_id] = {'all_opt': self.ax.plot([], [])[0],  # Follows every optimizer iteration
                                 'train_pts': self.ax.plot([], [], ls='', marker='o')[0],  # Points in training set
-                                'hyper_init': self.ax.plot([], [], ls='', marker=6)[0],  # Hyperparms job start
-                                'hyper_up': self.ax.plot([], [], ls='', marker=7)[0],  # Hyperparms changed
                                 'opt_kill': self.ax.plot([], [], ls='', marker='x', zorder=500)[0],  # Killed opt
-                                'opt_norm': self.ax.plot([], [], ls='', marker='*', zorder=500)[0]}  # Converged opt
-        if self.visualise_gpr:
-            self.streams[opt_id]['gpr_mean'] = self.ax.plot([], [], ls='-.')[0]  # GPR
-            self.streams[opt_id]['gpr_upper'] = self.ax.plot([], [], ls=':')[0]  # GPR Upper Sigma
-            self.streams[opt_id]['gpr_lower'] = self.ax.plot([], [], ls=':')[0]  # GPR Lower Sigma
-        else:
-            self.streams[opt_id]['mean'] = self.ax.plot([], ls='--')[0]  # Plots the mean functions
-            self.streams[opt_id]['st_dev'] = patches.Rectangle((0, 0), 0, 0, ls=':')  # Plots the uncertainty on mean
-            self.ax.add_patch(self.streams[opt_id]['st_dev'])
+                                'opt_norm': self.ax.plot([], [], ls='', marker='*', zorder=500)[0],  # Converged opt
+                                'mean': self.ax.plot([], ls='--')[0],  # Plots the mean functions
+                                'st_dev': patches.Rectangle((0, 0), 0, 0, ls=':')}  # Plots the uncertainty on mean
+        self.ax.add_patch(self.streams[opt_id]['st_dev'])
 
         # Match colors for a single optimisation
         if self.n_streams < 20:
@@ -291,56 +271,32 @@ class GloMPOScope:
         rec.set_height(4 * sigma)
         self._redraw_graph()
 
-    def update_opt_start(self, opt_id: int):
-        """ Given pt tuple is used to update the opt_id start hyperparameter optimizer plot."""
-        self._update_point(opt_id, 'hyper_init')
-        self._redraw_graph()
-
-    def update_opt_end(self, opt_id: int):
-        """ Given pt tuple is used to update the opt_id end hyperparameter optimizer plot."""
-        self._update_point(opt_id, 'hyper_up')
-        self._redraw_graph()
-
     def update_kill(self, opt_id: int):
         """ The opt_id kill optimizer plot is updated at its final point. """
         self._update_point(opt_id, 'opt_kill')
-        if not self.visualise_gpr:
-            rec = self.streams[opt_id]['st_dev']
-            rec.set_width(0)
-            rec.set_height(0)
 
-            line = self.streams[opt_id]['mean']
-            line.set_xdata([])
-            line.set_ydata([])
+        rec = self.streams[opt_id]['st_dev']
+        rec.set_width(0)
+        rec.set_height(0)
+
+        line = self.streams[opt_id]['mean']
+        line.set_xdata([])
+        line.set_ydata([])
+
         self._redraw_graph()
 
     def update_norm_terminate(self, opt_id: int):
         """ The opt_id normal optimizer plot is updated at its final point. """
         self._update_point(opt_id, 'opt_norm')
-        if not self.visualise_gpr:
-            rec = self.streams[opt_id]['st_dev']
-            rec.set_width(0)
-            rec.set_height(0)
 
-            line = self.streams[opt_id]['mean']
-            line.set_xdata([])
-            line.set_ydata([])
-        self._redraw_graph()
+        rec = self.streams[opt_id]['st_dev']
+        rec.set_width(0)
+        rec.set_height(0)
 
-    def update_gpr(self, opt_id: int, x: np.ndarray, y: np.ndarray, lower_sig: np.ndarray, upper_sig: np.ndarray):
-        """ Given mu and sigma is used to update the opt_id mean and uncertainty regressions."""
-        # Mean line
-        line = self.streams[opt_id]['gpr_mean']
-        line.set_xdata(x)
-        line.set_ydata(y)
+        line = self.streams[opt_id]['mean']
+        line.set_xdata([])
+        line.set_ydata([])
 
-        # Uncertainty
-        line = self.streams[opt_id]['gpr_lower']
-        line.set_xdata(x)
-        line.set_ydata(lower_sig)
-        line = self.streams[opt_id]['gpr_upper']
-        line.set_xdata(x)
-        line.set_ydata(upper_sig)
         self._redraw_graph()
 
     def generate_movie(self):
