@@ -133,27 +133,36 @@ class LogPriorB(BaseLogProbability):
     """
 
     @staticmethod
-    def calc(theta, t, y):
+    def calc(theta, *args):
         b = theta[0]
-        return - 2 * b
+        if b > 0:
+            return -2 * b
+        return -np.inf
 
     @staticmethod
-    def db(*args):
-        return -2
+    def db(theta, *args):
+        b = theta[0]
+        if b > 0:
+            return -2
+        return 0
 
 
 class LogPriorC(BaseLogProbability):
-    """ c is the value of the asymptote to which the exponential decays. An improper uniform prior is placed on this
-        parameter limiting it to any value below y0.
+    """ c is the value of the asymptote to which the exponential decays. A normal distribution centered at zero with
+        a standard deviation of y0 is placed on this parameter.
     """
 
     @staticmethod
     def calc(theta, t, y):
         c = theta[1]
         y0 = y[0]
-        if -np.inf < c < y0:
-            return 0
-        return -np.inf
+        return -0.5 * (c / y0) ** 2
+
+    @staticmethod
+    def dc(theta, t, y):
+        c = theta[1]
+        y0 = y[0]
+        return - y0 ** -2 * c
 
 
 class LogPriorS(BaseLogProbability):

@@ -68,11 +68,16 @@ class DataRegressor:
         if cache_key and cache_key in self.cache and hash_key == self.cache[cache_key].hash:
             return self.cache[cache_key].mle
 
-        quick_fit = np.polyfit(t, np.log(y - np.min(y) + 0.01), 1)
+        try:
+            quick_fit = np.polyfit(t, np.log(y - np.min(y) + 0.01), 1)
 
-        b_est = np.clip(-quick_fit[0], 0.0001, 4.999)
-        c_est = np.clip(y[-1], None, y[0]-0.001)
-        s_est = np.clip(np.mean(np.abs(y - np.exp(quick_fit[1] + quick_fit[0] * t)) / y[0]), 0.0001, 0.4999)
+            b_est = np.clip(-quick_fit[0], 0.0001, 4.999)
+            c_est = np.clip(y[-1], None, y[0] - 0.001)
+            s_est = np.clip(np.mean(np.abs(y - np.exp(quick_fit[1] + quick_fit[0] * t)) / y[0]), 0.0001, 0.4999)
+        except ValueError:
+            b_est = 0.001
+            c_est = y[0] - 0.001
+            s_est = 0.001
 
         # Loop for retries in the case the maximisation fails
         for i in range(10):
@@ -95,8 +100,8 @@ class DataRegressor:
                     self.cache[cache_key] = RegressorCacheItem(hash_key, mle.x, None)
                 return mle.x
 
-        warnings.warn(RuntimeWarning, "Multiple attempts to find the MLE failed. Returning rough estimates. These "
-                                      "numbers are unreliable.")
+        warnings.warn("Multiple attempts to find the MLE failed. Returning rough estimates. These numbers are"
+                      " unreliable.", RuntimeWarning)
         if cache_key:
             self.cache[cache_key] = RegressorCacheItem(hash_key, (b_est, c_est, s_est), None)
         return b_est, c_est, s_est
@@ -153,7 +158,20 @@ class DataRegressor:
                                         log_prob_fn=self.log_post,
                                         args=(t, y))
 
-        sampler.run_mcmc(starting_pos, nsteps)
+        try:
+            print("Starting run...")
+            sampler.run_mcmc(starting_pos, nsteps)
+            print("Done")
+        except ValueError:
+            warnings.warn("MCMC run failed. Returning MLE estimate.", RuntimeWarning)
+            if parms == 'decay':
+                return b_mle, None
+            elif parms == 'asymptote':
+                return c_mle, None
+            elif parms == 'noise':
+                return s_mle, None
+            else:
+                return (b_mle, None), (c_mle, None), (s_mle, None)
 
         samples = sampler.get_chain(discard=1000, flat=True)
 

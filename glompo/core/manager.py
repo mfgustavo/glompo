@@ -641,7 +641,7 @@ class GloMPOManager:
             for victim_id in self.optimizer_packs:
                 in_graveyard = victim_id in self.graveyard
                 has_points = len(self.log.get_history(victim_id, "fx")) > 0
-                if not in_graveyard and has_points:
+                if not in_graveyard and has_points and victim_id != h_id:
                     kill = self.killing_conditions.is_kill_condition_met(self.log, h_id, victim_id)
                     if kill:
                         self._optional_print(f"Optimizer {h_id} wants to kill Optimizer {victim_id}", 1)
