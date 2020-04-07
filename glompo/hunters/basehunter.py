@@ -4,7 +4,6 @@
 
 
 from abc import ABC, abstractmethod
-from typing import *
 import inspect
 
 from ..core.logger import Logger
@@ -41,12 +40,12 @@ class BaseHunter(ABC):
 
 class _CombiHunter(BaseHunter):
 
-    def __init__(self, base1: BaseHunter, base2: BaseHunter, *args: Sequence[BaseHunter]):
-        combi = [base1, base2, *args]
-        for base in combi:
+    def __init__(self, base1: BaseHunter, base2: BaseHunter):
+        for base in [base1, base2]:
             if not isinstance(base, BaseHunter):
-                raise TypeError("_CombiHunter can only be initialised with instances of BaseChecker subclasses.")
-        self.base_checkers = combi
+                raise TypeError("_CombiHunter can only be initialised with instances of BaseHunter subclasses.")
+        self.base1 = base1
+        self.base2 = base2
 
     def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, victim_opt_id: int) -> bool:
         pass
@@ -54,12 +53,12 @@ class _CombiHunter(BaseHunter):
 
 class _AnyHunter(_CombiHunter):
     def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, victim_opt_id: int) -> bool:
-        return any([base.is_kill_condition_met(log, hunter_opt_id, victim_opt_id) for base in
-                    self.base_checkers])
+        return self.base1.is_kill_condition_met(log, hunter_opt_id, victim_opt_id) or \
+               self.base2.is_kill_condition_met(log, hunter_opt_id, victim_opt_id)
 
     def __str__(self):
         mess = ""
-        for base in self.base_checkers:
+        for base in [self.base1, self.base2]:
             mess += f"{base} OR \n"
         mess = mess[:-5]
         return mess
@@ -67,12 +66,12 @@ class _AnyHunter(_CombiHunter):
 
 class _AllHunter(_CombiHunter):
     def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, victim_opt_id: int) -> bool:
-        return all([base.is_kill_condition_met(log, hunter_opt_id, victim_opt_id) for base in
-                    self.base_checkers])
+        return self.base1.is_kill_condition_met(log, hunter_opt_id, victim_opt_id) and \
+               self.base2.is_kill_condition_met(log, hunter_opt_id, victim_opt_id)
 
     def __str__(self):
         mess = ""
-        for base in self.base_checkers:
+        for base in [self.base1, self.base2]:
             mess += f"{base} AND \n"
         mess = mess[:-6]
         return mess

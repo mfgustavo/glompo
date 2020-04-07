@@ -35,6 +35,7 @@ class GloMPOScope:
     def __init__(self,
                  x_range: Union[Tuple[float, float], int, None] = 300,
                  y_range: Optional[Tuple[float, float]] = None,
+                 log_scale: bool = False,
                  record_movie: bool = False,
                  interactive_mode: bool = False,
                  writer_kwargs: Optional[Dict[str, Any]] = None,
@@ -54,6 +55,9 @@ class GloMPOScope:
         y_range : Optional[Tuple[float, float]] = None
             Sets the y-axis limits of the plot, default is an empty tuple which leads the plot to automatically and
             constantly rescale the axis.
+        log_scale: bool = False
+            If True, the base 10 logarithm of y values are displayed on the scope. This can be used in conjunction
+            with the y_range option and will be interpretted in the log-scale.
         record_movie : bool = False
             If True then a matplotlib.animation.FFMpegWriter instance is created to record the plot.
         interactive_mode : bool = False
@@ -65,24 +69,28 @@ class GloMPOScope:
             Optional dictionary of arguments to be sent to matplotlib.animation.FFMpegWriter.setup().
         """
 
-        plt.ion() if interactive_mode else plt.ioff()
-
-        self.fig, self.ax = plt.subplots(figsize=(12, 8))
-        self.ax.set_title("GloMPO Scope")
-        self.ax.set_xlabel("Total Function Calls")
-        self.ax.set_ylabel("Error")
-
         self.streams = {}
         self.dead_streams = set()
         self.n_streams = 0
         self.t_last = 0
         self.x_max = 0
+        self.log_scale = log_scale
+
+        plt.ion() if interactive_mode else plt.ioff()
+
+        self.fig, self.ax = plt.subplots(figsize=(12, 8))
+        self.ax.set_title("GloMPO Scope")
+        self.ax.set_xlabel("Total Function Calls")
+        if self.log_scale:
+            self.ax.set_ylabel("Log10(Error)")
+        else:
+            self.ax.set_ylabel("Error")
 
         # Create custom legend
         self.leg_elements = [lines.Line2D([], [], ls='-', c='black', label='Optimizer Evaluations'),
                              lines.Line2D([], [], ls='', marker='o', c='black', label='Point in Training Set'),
-                             lines.Line2D([], [], ls='', marker=6, c='black', label='Hyperparam. Opt. Started'),
-                             lines.Line2D([], [], ls='', marker=7, c='black', label='Hyperparam. Updated'),
+                             lines.Line2D([], [], ls='', marker=6, c='black', label='Hunt Started'),
+                             lines.Line2D([], [], ls='', marker=7, c='black', label='Hunt Result'),
                              lines.Line2D([], [], ls='', marker='x', c='black', label='Optimizer Killed'),
                              lines.Line2D([], [], ls='', marker='*', c='black', label='Optimizer Converged'),
                              lines.Line2D([], [], ls='-.', c='black', label='Asymptote'),
@@ -181,18 +189,23 @@ class GloMPOScope:
     def _update_point(self, opt_id: int, track: str, pt: tuple = None):
         """ General method to add a point to a track for a specific optimizer. """
 
+        pt_given = bool(pt)
+        pt = self.get_farthest_pt(opt_id) if not pt_given else pt
+
         if opt_id in self.dead_streams:
             self.dead_streams.remove(opt_id)
 
-        if not pt:
-            pt = self.get_farthest_pt(opt_id)
-
         if pt:
-            self.x_max = pt[0] if pt[0] > self.x_max else self.x_max
+            x, y = pt
+
+            if pt_given and self.log_scale:
+                y = np.log10(y)
+
+            self.x_max = x if x > self.x_max else self.x_max
 
             line = self.streams[opt_id][track]
-            x_vals = np.append(line.get_xdata(), pt[0])
-            y_vals = np.append(line.get_ydata(), pt[1])
+            x_vals = np.append(line.get_xdata(), x)
+            y_vals = np.append(line.get_ydata(), y)
 
             line.set_xdata(x_vals)
             line.set_ydata(y_vals)
@@ -203,6 +216,8 @@ class GloMPOScope:
         self.n_streams += 1
         self.streams[opt_id] = {'all_opt': self.ax.plot([], [])[0],  # Follows every optimizer iteration
                                 'train_pts': self.ax.plot([], [], ls='', marker='o')[0],  # Points in training set
+                                'hunt_init': self.ax.plot([], [], ls='', marker=6)[0],  # Hunt start
+                                'hunt_up': self.ax.plot([], [], ls='', marker=7)[0],  # Hunt result
                                 'opt_kill': self.ax.plot([], [], ls='', marker='x', zorder=500)[0],  # Killed opt
                                 'opt_norm': self.ax.plot([], [], ls='', marker='*', zorder=500)[0],  # Converged opt
                                 'mean': self.ax.plot([], ls='--')[0],  # Plots the mean functions
@@ -248,7 +263,7 @@ class GloMPOScope:
     def update_optimizer(self, opt_id: int, pt: tuple):
         """ Given pt tuple is used to update the opt_id optimizer plot."""
         self._update_point(opt_id, 'all_opt', pt)
-        # self._redraw_graph()
+        self._redraw_graph()
 
     def update_scatter(self, opt_id: int, pt: tuple):
         """ Given pt tuple is used to update the opt_id training data plot."""
@@ -259,6 +274,12 @@ class GloMPOScope:
         """ Given median, lower and upper confidence levels are used to update the opt_id asymptote and uncertainty
             plots.
         """
+
+        if self.log_scale:
+            median = np.log10(median)
+            lower = np.log10(lower)
+            upper = np.log10(upper)
+
         # Mean line
         line = self.streams[opt_id]['mean']
         x_min = np.clip(self.x_max - self.truncated, 0, None) if self.truncated else 0
@@ -271,6 +292,16 @@ class GloMPOScope:
         width = self.truncated if self.truncated else self.x_max
         rec.set_width(width)
         rec.set_height(upper - lower)
+        self._redraw_graph()
+
+    def update_hunt_start(self, opt_id: int):
+        """ Given pt tuple is used to update the opt_id start hunt plot."""
+        self._update_point(opt_id, 'hunt_init')
+        self._redraw_graph()
+
+    def update_hunt_end(self, opt_id: int):
+        """ Given pt tuple is used to update the opt_id end hunt plot."""
+        self._update_point(opt_id, 'hunt_up')
         self._redraw_graph()
 
     def update_kill(self, opt_id: int):

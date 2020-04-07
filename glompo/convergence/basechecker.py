@@ -4,7 +4,6 @@
 
 
 from abc import ABC, abstractmethod
-from typing import *
 import inspect
 
 
@@ -51,14 +50,13 @@ class BaseChecker(ABC):
 
 class _CombiChecker(BaseChecker):
 
-    def __init__(self, base1: BaseChecker, base2: BaseChecker, *args: Sequence[BaseChecker]):
+    def __init__(self, base1: BaseChecker, base2: BaseChecker):
         super().__init__()
-        combi = [base1, base2, *args]
-        for base in combi:
+        for base in [base1, base2]:
             if not isinstance(base, BaseChecker):
                 raise TypeError("_CombiChecker can only be initialised with instances of BaseChecker subclasses.")
-        self.base_checkers = combi
-        self.converged = False
+        self.base1 = base1
+        self.base2 = base2
 
     def check_convergence(self, manager: 'GloMPOManager') -> bool:
         pass
@@ -66,12 +64,12 @@ class _CombiChecker(BaseChecker):
 
 class _AnyChecker(_CombiChecker):
     def check_convergence(self, manager: 'GloMPOManager') -> bool:
-        self.converged = any([base.check_convergence(manager) for base in self.base_checkers])
-        return self.converged
+        self._converged = self.base1.check_convergence(manager) or self.base2.check_convergence(manager)
+        return self._converged
 
     def __str__(self) -> str:
         mess = ""
-        for base in self.base_checkers:
+        for base in [self.base1, self.base2]:
             mess += f"{base} OR \n"
         mess = mess[:-5]
         mess = "(" + mess + ")"
@@ -79,7 +77,7 @@ class _AnyChecker(_CombiChecker):
 
     def is_converged_str(self) -> str:
         mess = ""
-        for base in self.base_checkers:
+        for base in [self.base1, self.base2]:
             mess += f"{base.is_converged_str()} OR \n"
         mess = mess[:-5]
         mess = "(" + mess + ")"
@@ -88,12 +86,12 @@ class _AnyChecker(_CombiChecker):
 
 class _AllChecker(_CombiChecker):
     def check_convergence(self, manager: 'GloMPOManager') -> bool:
-        self.converged = all([base.check_convergence(manager) for base in self.base_checkers])
-        return self.converged
+        self._converged = self.base1.check_convergence(manager) and self.base2.check_convergence(manager)
+        return self._converged
 
     def __str__(self) -> str:
         mess = ""
-        for base in self.base_checkers:
+        for base in [self.base1, self.base2]:
             mess += f"{base} AND \n"
         mess = mess[:-6]
         mess = "(" + mess + ")"
@@ -101,7 +99,7 @@ class _AllChecker(_CombiChecker):
 
     def is_converged_str(self) -> str:
         mess = ""
-        for base in self.base_checkers:
+        for base in [self.base1, self.base2]:
             mess += f"{base.is_converged_str()} AND \n"
         mess = mess[:-6]
         mess = "(" + mess + ")"

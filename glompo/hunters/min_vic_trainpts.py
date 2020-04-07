@@ -16,4 +16,5 @@ class MinVictimTrainingPoints(BaseHunter):
             raise ValueError("min_pts must be a positive integer.")
 
     def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, victim_opt_id: int) -> bool:
-        return len(victim_gpr.training_coords()) >= self.min_pts
+        items = len(log.get_history(victim_opt_id))
+        return items >= self.min_pts

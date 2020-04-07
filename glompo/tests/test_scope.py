@@ -17,7 +17,6 @@ class TestScope:
     def scope(self):
         return GloMPOScope(x_range=None,
                            y_range=None,
-                           visualise_gpr=False,
                            record_movie=False,
                            interactive_mode=False)
 
@@ -39,7 +38,6 @@ class TestScope:
     def test_init_keyerr(self, kwargs):
         with pytest.warns(UserWarning):
             scope = GloMPOScope(record_movie=True,
-                                visualise_gpr=True,
                                 x_range=(0, 1000),
                                 y_range=(0, 1000),
                                 **kwargs)
@@ -106,6 +104,7 @@ class TestScope:
     @pytest.mark.filterwarnings("ignore:More than 20 figures")
     @pytest.mark.parametrize("max_val", [0, 100, 200, 300])
     def test_deletion(self, max_val, scope):
+        # TODO: Test now fails because redraw_graph is called from within update_optimizer
         scope.truncated = 300
         scope.add_stream(1)
         scope.add_stream(2)
@@ -134,14 +133,14 @@ class TestScope:
                 scope.t_last = 0
                 scope.update_scatter(1, (i, np.sin(i)))
                 scope.update_scatter(2, (i, np.cos(i)))
-                scope.update_mean(1, 0, i/100)
-                scope.update_mean(2, 1, i/100)
+                scope.update_mean(1, 0, 0-i/100, 0+i/100)
+                scope.update_mean(2, 1, 1-i/100, 1+i/100)
             if i == 50:
                 scope.t_last = 0
-                scope.update_opt_start(1)
+                scope.update_hunt_start(1)
             if i == 90:
                 scope.t_last = 0
-                scope.update_opt_end(1)
+                scope.update_hunt_end(1)
                 scope.update_norm_terminate(1)
                 scope.update_kill(2)
 

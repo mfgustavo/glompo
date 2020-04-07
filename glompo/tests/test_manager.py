@@ -15,7 +15,7 @@ from glompo.core.manager import GloMPOManager
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from glompo.generators.random import RandomGenerator
 from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxOptsStarted, MaxFuncCalls, MaxSeconds
-from glompo.hunters import BaseHunter, MinVictimTrainingPoints, GPRSuitable, ValBelowGPR
+from glompo.hunters import BaseHunter, MinVictimTrainingPoints, GPRSuitable, ValBelowAsymptote
 from glompo.common.namedtuples import *
 from glompo.common.customwarnings import *
 from glompo.common.wrappers import redirect, task_args_wrapper
@@ -547,7 +547,7 @@ class TestManager:
                                 convergence_checker=KillsAfterConvergence(2, 1) | MaxFuncCalls(10000) | MaxSeconds(
                                     5 * 60),
                                 x0_generator=IntervalGenerator(),
-                                killing_conditions=GPRSuitable(0.1) & MinVictimTrainingPoints(10) & ValBelowGPR(),
+                                killing_conditions=GPRSuitable(0.1) & MinVictimTrainingPoints(10) & ValBelowAsymptote(),
                                 history_logging=3,
                                 visualisation=False,
                                 visualisation_args=None,

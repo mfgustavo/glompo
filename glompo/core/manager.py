@@ -138,8 +138,10 @@ class GloMPOManager:
                     2) another optimizer has seen a value below its 95% confidence interval,
                     3) and the optimizer has either at least 30 training points or has not changed its best value in
                     20 iterations.
-                Default: ValBelowGPR() & PseudoConverged(20, 0.01) & MinVictimTrainingPoints(10) & GPRSuitable(0.1)
-            TODO: Rewrite
+                Default: ValBelowAsymptote()
+            Note that for performance and to allow conditionality between hunters conditions are evaluated 'lazily' i.e.
+            x or y will return if x is True without evaluating y. x and y will return False if x is False without evaluating y.
+                TODO: Rewrite
 
         region_stability_check: bool = False
             If True, local optimizers are started around a candidate solution which has been selected as a final
@@ -300,15 +302,6 @@ class GloMPOManager:
         else:
             self.x0_generator = RandomGenerator(self.bounds)
 
-        # Save killing conditions
-        if killing_conditions:
-            if isinstance(killing_conditions, BaseHunter):
-                self.killing_conditions = killing_conditions
-            else:
-                raise TypeError(f"killing_conditions not an instance of a subclass of BaseHunter.")
-        else:
-            self.killing_conditions = ValBelowAsymptote()
-
         # Save max conditions and counters
         self.t_start = None
         self.dt_start = None
@@ -334,6 +327,15 @@ class GloMPOManager:
             warnings.warn("region_stbility_check not implemented. Ignoring.", NotImplementedWarning)
         if report_statistics:
             warnings.warn("report_statistics not implemented. Ignoring.", NotImplementedWarning)
+
+        # Save killing conditions
+        if killing_conditions:
+            if isinstance(killing_conditions, BaseHunter):
+                self.killing_conditions = killing_conditions
+            else:
+                raise TypeError(f"killing_conditions not an instance of a subclass of BaseHunter.")
+        else:
+            self.killing_conditions = ValBelowAsymptote()
 
         # Setup multiprocessing variables
         self.optimizer_packs = {}  # Dict[opt_id (int): ProcessPackage (NamedTuple)]
@@ -434,6 +436,8 @@ class GloMPOManager:
             self._cleanup_crash("GloMPO Crash")
 
         finally:
+
+            self._optional_print("Cleaning up and closing GloMPO. Please wait...", 1)
 
             if self.visualisation and self.scope.record_movie and not caught_exception:
                 self.scope.generate_movie()
@@ -645,7 +649,7 @@ class GloMPOManager:
                     kill = self.killing_conditions.is_kill_condition_met(self.log, h_id, victim_id)
                     if kill:
                         self._optional_print(f"Optimizer {h_id} wants to kill Optimizer {victim_id}", 1)
-                        self.hunting_queue.put(victim_id)
+                        self.hunting_queue.put((h_id, victim_id))
 
         in_hunts = hunter_id in self.hunting_processes
         is_alive = self.hunting_processes[hunter_id].is_alive() if in_hunts else False
@@ -659,12 +663,19 @@ class GloMPOManager:
             self.hunting_processes[hunter_id].start()
             self._optional_print(f"Optimizer {hunter_id} as hunter started.", 1)
 
+            if self.visualisation:
+                self.scope.update_hunt_start(hunter_id)
+
     def _process_hunt_results(self):
         """ Checks and processes results sent by hunting processes. """
 
         while not self.hunting_queue.empty():
-            victim_id = self.hunting_queue.get()
-            self._shutdown_job(victim_id)
+            hunter_id, victim_id = self.hunting_queue.get()
+            if victim_id not in self.graveyard:
+                self._shutdown_job(victim_id)
+
+            if self.visualisation:
+                self.scope.update_hunt_end(hunter_id)
 
     def _shutdown_job(self, opt_id):
         """ Sends a stop signal to optimizer opt_id and updates variables around its termination. """

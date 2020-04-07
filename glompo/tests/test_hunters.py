@@ -6,7 +6,7 @@ import numpy as np
 from glompo.hunters.basehunter import BaseHunter, _AllHunter, _AnyHunter, _CombiHunter
 from glompo.hunters.confidencewidth import ConfidenceWidth
 from glompo.hunters.min_vic_trainpts import MinVictimTrainingPoints
-from glompo.hunters.val_below_asymptote import ValBelowGPR
+from glompo.hunters.val_below_asymptote import ValBelowAsymptote
 from glompo.hunters.pseudoconv import PseudoConverged
 from glompo.core.logger import Logger
 
@@ -74,7 +74,7 @@ class TestBase:
 
     def test_combi_init(self):
         with pytest.raises(TypeError):
-            _CombiHunter(1, 2, 3)
+            _CombiHunter(1, 2)
 
     def test_kill_condition(self):
         hunter = FalseHunter() | FalseHunter() & TrueHunter() | TrueHunter() & (TrueHunter() | FalseHunter())

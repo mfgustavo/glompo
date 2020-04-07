@@ -46,7 +46,7 @@ class DataRegressor:
     """
 
     def __init__(self):
-        self.log_post = LogPosterior(0, 0.1)
+        self.log_post = LogPosterior()
         self.log_like = LogLikelihood()
         self.mle_cache = {}
         self.mcc_cache = {}
@@ -155,6 +155,8 @@ class DataRegressor:
             upper_quantile:
                 The 95% percentile value sampled by the MCMC sampler.
         """
+
+        np.seterr(all='ignore')
 
         param_dict = {'decay': 0,
                       'asymptote': 1,
