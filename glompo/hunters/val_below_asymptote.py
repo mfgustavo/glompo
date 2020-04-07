@@ -32,18 +32,14 @@ class ValBelowAsymptote(BaseHunter):
         hunter_vals = log.get_history(hunter_opt_id, "fx_best")
         victim_y = log.get_history(victim_opt_id, "fx")
         victim_t = np.array(range(len(victim_y)))
-        print(hunter_vals)
-        print(victim_y)
-        print(victim_t)
 
         if len(hunter_vals) > 0:
-            mu, sigma = self.regressor.estimate_parameters(victim_t, victim_y,
-                                                           parms='asymptote',
-                                                           cache_key=victim_opt_id)
+            med, low, upp = victim_y[-1] * self.regressor.estimate_parameters(victim_t, victim_y,
+                                                                              parms='asymptote',
+                                                                              cache_key=victim_opt_id)
             if self.scope:
-                self.scope.update_mean(victim_opt_id, mu, sigma)
-            threshold = mu - 2 * sigma
+                self.scope.update_mean(victim_opt_id, med, low, upp)
 
-            return hunter_vals[-1] < threshold
+            return hunter_vals[-1] < low
 
         return False

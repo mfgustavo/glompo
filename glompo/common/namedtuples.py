@@ -58,5 +58,4 @@ class ProcessPackage(NamedTuple):
 
 class RegressorCacheItem(NamedTuple):
     hash: int
-    mle: Tuple[float, float, float]
-    posterior: Sequence[Tuple[float, float, float]]
+    result: Union[Tuple[float, float, float], Sequence[Tuple[float, float, float]]]

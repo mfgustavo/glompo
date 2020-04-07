@@ -1,10 +1,14 @@
 
 
+""" Contains the DataRegressor used to perform inference and model fitting on provided data. Used to infer the final
+    value of a given optimizer.
+"""
+
 from typing import *
+import warnings
 
 import numpy as np
 import emcee
-import warnings
 from scipy.optimize import minimize
 
 from .logprob import LogPosterior, LogLikelihood
@@ -15,7 +19,7 @@ __all__ = ("DataRegressor",)
 
 
 class DataRegressor:
-    """ Provides a class of methods to regress optimizer data against the function (y0-c)exp(-bt) + c using both
+    """ Provides a class of methods to regress optimizer data against the function (y0-c*yn)exp(-bt) + c*yn using both
         frequentist and Bayesian techniques.
 
         Attributes
@@ -24,20 +28,28 @@ class DataRegressor:
             Function which returns the log-posterior.
         log_like: Callable
             Function returning the value of the log-likelihood.
-        cache: Dict[Int, RegressorCacheItem]
-            Saves previous runs of the ensemble sampler.
+        mle_cache: Dict[Int, RegressorCacheItem]
+            Saves previous runs of the MLE optimization.
             The dictionary keys are optimizer IDs.
             The values are a NamedTuple of:
-                1) A hash key of the data used in the last run. Only if the hash of the new data matches the previous
-                   run can the answers in the cache be accessed.
-                2) The MLE for each parameter.
-                3) Tuple of means and standard deviations for each parameter posterior distribution.
+                1) hash: A hash key of the data used in the last run. Only if the hash of the new data matches the
+                         previous run can the answers in the cache be accessed.
+                2) result: Tuple of the MLE for the three parameters.
+        mcc_cache: Dict[Int, RegressorCacheItem]
+            Saves summary results of the MCMC sampling.
+            The dictionary keys are optimizer IDs.
+            The values are a NamedTuple of:
+                1) hash: A hash key of the data used in the last run. Only if the hash of the new data matches the
+                         previous run can the answers in the cache be accessed.
+                2) result: Sequence of 3 item tuples of sample medians, 5% quantile and 95% quantile value for the
+                           three parameters.
     """
 
     def __init__(self):
-        self.log_post = LogPosterior()
+        self.log_post = LogPosterior(0, 0.1)
         self.log_like = LogLikelihood()
-        self.cache = {}
+        self.mle_cache = {}
+        self.mcc_cache = {}
 
     def estimate_mle(self, t: np.ndarray, y: np.ndarray, cache_key: int = None) -> Tuple[float, float, float]:
         """ Returns the Maximum Likelihood Estimation of the exponential function through the given data.
@@ -65,24 +77,22 @@ class DataRegressor:
                 Estimate for the noise parameter.
         """
         hash_key = hash((tuple(t), tuple(y)))
-        if cache_key and cache_key in self.cache and hash_key == self.cache[cache_key].hash:
-            return self.cache[cache_key].mle
+        if cache_key and cache_key in self.mle_cache and hash_key == self.mle_cache[cache_key].hash:
+            return self.mle_cache[cache_key].result
 
         try:
             quick_fit = np.polyfit(t, np.log(y - np.min(y) + 0.01), 1)
 
             b_est = np.clip(-quick_fit[0], 0.0001, 4.999)
-            c_est = np.clip(y[-1], None, y[0] - 0.001)
+            c_est = 1
             s_est = np.clip(np.mean(np.abs(y - np.exp(quick_fit[1] + quick_fit[0] * t)) / y[0]), 0.0001, 0.4999)
         except ValueError:
             b_est = 0.001
             c_est = y[0] - 0.001
             s_est = 0.001
 
-        # Loop for retries in the case the maximisation fails
         for i in range(10):
 
-            # Permute the starting point if the optimization failed.
             if i > 0:
                 b_est, c_est, s_est = np.array([b_est, c_est, s_est]) * np.random.uniform(0.75, 1.25, 3)
 
@@ -93,22 +103,22 @@ class DataRegressor:
                            jac=lambda *args: np.array([-self.log_like.db(*args),
                                                        -self.log_like.dc(*args),
                                                        -self.log_like.ds(*args)]),
-                           bounds=((0, 5), (-np.inf, y[0]), (0.0001, 0.5)))
+                           bounds=((0, 5), (0, 1), (0.0001, 0.5)))
 
             if mle.success:
                 if cache_key:
-                    self.cache[cache_key] = RegressorCacheItem(hash_key, mle.x, None)
+                    self.mle_cache[cache_key] = RegressorCacheItem(hash_key, mle.x)
                 return mle.x
 
         warnings.warn("Multiple attempts to find the MLE failed. Returning rough estimates. These numbers are"
                       " unreliable.", RuntimeWarning)
         if cache_key:
-            self.cache[cache_key] = RegressorCacheItem(hash_key, (b_est, c_est, s_est), None)
+            self.mle_cache[cache_key] = RegressorCacheItem(hash_key, (b_est, c_est, s_est))
         return b_est, c_est, s_est
 
     def estimate_parameters(self, t: np.ndarray, y: np.ndarray, parms: Optional[str] = None, nwalkers: int = 32,
-                            nsteps: int = 5000, cache_key: Any = None) -> Union[Tuple[Tuple[float, float], ...],
-                                                                                Tuple[float, float]]:
+                            nsteps: int = 5000, cache_key: Any = None) -> Union[Tuple[Tuple[float, float, float], ...],
+                                                                                Tuple[float, float, float]]:
         """ Runs the sampler on the log-posterior given the data. Returns an estimate and uncertainty on each
             parameter. The data is saved in the cache if a cache_key is provided.
 
@@ -133,6 +143,17 @@ class DataRegressor:
                 If provided the regressor will first check in its cache for the answer. The cache-key is usually the
                 optimizer opt_id. If the data used for the previous calculation and this one do not match then the
                 calculation is rerun and the data in the cache is updated.
+
+            Returns
+            -------
+            Depending on the params parameter provided, returns a result tuple for one parameter or a tuple of all
+            parameter result tuples. Each result tuples takes the form:
+            median:
+                The median value sampled by the MCMC sampler.
+            lower_quantile:
+                The 5% percentile value sampled by the MCMC sampler.
+            upper_quantile:
+                The 95% percentile value sampled by the MCMC sampler.
         """
 
         param_dict = {'decay': 0,
@@ -140,18 +161,17 @@ class DataRegressor:
                       'noise': 2}
 
         hash_key = hash((tuple(t), tuple(y)))
-        if cache_key and cache_key in self.cache and hash_key == self.cache[cache_key].hash:
-            posterior = self.cache[cache_key].posterior
+        if cache_key and cache_key in self.mcc_cache and hash_key == self.mcc_cache[cache_key].hash:
+            posterior = self.mcc_cache[cache_key].result
             if posterior:
                 if parms in param_dict:
                     param_key = param_dict[parms]
                     return posterior[param_key]
                 return posterior
 
-        b_mle, c_mle, s_mle = self.estimate_mle(t, y, cache_key=cache_key)
-
-        starting_pos = np.array([b_mle, c_mle, s_mle]) * np.random.uniform([0.9, 0.5, 0.8], [1.1, 1.5, 1.2],
-                                                                           (nwalkers, 3))
+        starting_pos = np.transpose([np.random.uniform(0, 4, nwalkers),
+                                     np.random.uniform(0, 1, nwalkers),
+                                     np.random.uniform(0, 1, nwalkers)])
 
         sampler = emcee.EnsembleSampler(nwalkers=nwalkers,
                                         ndim=3,
@@ -164,26 +184,29 @@ class DataRegressor:
             print("Done")
         except ValueError:
             warnings.warn("MCMC run failed. Returning MLE estimate.", RuntimeWarning)
+
+            b_mle, c_mle, s_mle = self.estimate_mle(t, y, cache_key)
             if parms == 'decay':
                 return b_mle, None
-            elif parms == 'asymptote':
+            if parms == 'asymptote':
                 return c_mle, None
-            elif parms == 'noise':
+            if parms == 'noise':
                 return s_mle, None
-            else:
-                return (b_mle, None), (c_mle, None), (s_mle, None)
+            return (b_mle, None), (c_mle, None), (s_mle, None)
 
         samples = sampler.get_chain(discard=1000, flat=True)
 
-        means = np.mean(samples, axis=0)
-        std = np.std(samples, axis=0)
+        median = np.median(samples, axis=0)
+        quan_l = np.quantile(samples, 0.05, axis=0)
+        quan_u = np.quantile(samples, 0.95, axis=0)
+
+        result = tuple(tuple(set_) for set_ in np.transpose([median, quan_l, quan_u]))
 
         if cache_key:
-            self.cache[cache_key] = RegressorCacheItem(hash_key, (b_mle, c_mle, s_mle),
-                                                       tuple(tuple(pair) for pair in np.transpose([means, std])))
+            self.mcc_cache[cache_key] = RegressorCacheItem(hash_key, result)
 
         if parms in param_dict:
             key = param_dict[parms]
-            return means[key], std[key]
-        else:
-            return map(tuple, np.transpose([means, std]))
+            return median[key], quan_l[key], quan_u[key]
+
+        return result

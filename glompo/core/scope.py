@@ -255,20 +255,22 @@ class GloMPOScope:
         self._update_point(opt_id, 'train_pts', pt)
         self._redraw_graph()
 
-    def update_mean(self, opt_id: int, mu: float, sigma: float):
-        """ Given mu and sigma is used to update the opt_id mean and uncertainty plots."""
+    def update_mean(self, opt_id: int, median: float, lower: float, upper: float):
+        """ Given median, lower and upper confidence levels are used to update the opt_id asymptote and uncertainty
+            plots.
+        """
         # Mean line
         line = self.streams[opt_id]['mean']
         x_min = np.clip(self.x_max - self.truncated, 0, None) if self.truncated else 0
         line.set_xdata((x_min, self.x_max))
-        line.set_ydata((mu, mu))
+        line.set_ydata((median, median))
 
         # Uncertainty Rectangle
         rec = self.streams[opt_id]['st_dev']
-        rec.xy = (x_min, mu - 2 * sigma)
+        rec.xy = (x_min, lower)
         width = self.truncated if self.truncated else self.x_max
         rec.set_width(width)
-        rec.set_height(4 * sigma)
+        rec.set_height(upper - lower)
         self._redraw_graph()
 
     def update_kill(self, opt_id: int):

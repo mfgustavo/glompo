@@ -6,7 +6,6 @@
 """
 
 
-from typing import *
 from abc import abstractmethod
 import numpy as np
 
@@ -18,7 +17,7 @@ __all__ = ('LogPosterior',
 class BaseLogProbability:
     """ Abstract class used to setup the form of the log-likelihoods and log-priors. """
 
-    def __call__(self, *args, derivative=''):
+    def __call__(self, *args, derivative: str = '') -> float:
         """ Returns the function or derivative value for the calculation if provided. """
 
         derivative_map = {'': self.calc,
@@ -30,23 +29,19 @@ class BaseLogProbability:
 
         return method_to_call(*args)
 
-    @staticmethod
     @abstractmethod
-    def calc(*args):
+    def calc(self, *args) -> float:
         """ Returns the log-probability. """
 
-    @staticmethod
-    def db(*args):
+    def db(self, *args) -> float:
         """ Returns the first derivative with respect to b. """
         return 0
 
-    @staticmethod
-    def dc(*args):
+    def dc(self, *args) -> float:
         """ Returns the first derivative with respect to c. """
         return 0
 
-    @staticmethod
-    def ds(*args):
+    def ds(self, *args) -> float:
         """ Returns the first derivative with respect to s. """
         return 0
 
@@ -54,11 +49,13 @@ class BaseLogProbability:
 class LogPosterior:
     """ Calculates the log-posterior given its likelihood and prior contributions. """
 
-    def __init__(self):
-        """ Setups the class with a list of each contribution to the calculation. """
-        self.contributions = [LogLikelihood(), LogPriorB(), LogPriorC(), LogPriorS()]
+    def __init__(self, c_scale: float = 0, c_shift: float = 0.01):
+        """ Setups the class with a list of each contribution to the calculation.
+            Accepts hyperparameter values for the combined prior on b and c (see LogPriorBC for their description).
+        """
+        self.contributions = [LogLikelihood(), LogPriorBC(c_scale, c_shift), LogPriorS()]
 
-    def __call__(self, *args, derivative=''):
+    def __call__(self, *args, derivative='') -> float:
         """ Returns the function or derivative value for the calculation if provided. """
 
         total = 0
@@ -74,95 +71,55 @@ class LogLikelihood(BaseLogProbability):
         by y0 * s for ease of interpretation since s becomes a unitless measure.
     """
 
-    @staticmethod
-    def calc(theta, t, y):
+    def calc(self, theta: np.ndarray, t: np.ndarray, y: np.ndarray) -> float:
         b, c, s = theta
 
         n = len(t)
         y0 = y[0]
-        model = (y0 - c) * np.exp(-b * t) + c
+        yn = y[-1]
+        model = (y0 - c * yn) * np.exp(-b * t) + c * yn
 
         calc = -n * np.log(y0 * s)
-        calc -= 0.5 / ((y0 * s) ** 2) * np.sum((y - model) ** 2)
+        calc -= 0.5 * (y0 * s) ** -2 * np.sum((y - model) ** 2)
 
         if np.isnan(calc):
             return -np.inf
 
         return calc
 
-    @staticmethod
-    def db(theta, t, y):
+    def db(self, theta: np.ndarray, t: np.ndarray, y: np.ndarray) -> float:
         b, c, s = theta
         y0 = y[0]
+        yn = y[-1]
 
         exp = np.exp(b * t)
         calc = - 0.5 * (s * y0) ** -2
-        calc *= np.sum(2 * exp ** -2 * t * (c - y0) * (y0 - c + exp * (c - y)))
+        calc *= np.sum(-2 * exp ** -2 * t * (y0 - c * yn) * (y0 - c * yn + exp * (c * yn - y)))
 
         return calc
 
-    @staticmethod
-    def dc(theta, t, y):
+    def dc(self, theta: np.ndarray, t: np.ndarray, y: np.ndarray) -> float:
         b, c, s = theta
         y0 = y[0]
+        yn = y[-1]
 
         exp = np.exp(b * t)
         calc = - 0.5 * (s * y0) ** -2
-        calc *= np.sum(2 * exp ** -2 * (exp - 1) * (y0 - c + exp * (c - y)))
+        calc *= np.sum(2 * exp ** -2 * (exp - 1) * yn * (y0 - c * yn + exp * (c * yn - y)))
 
         return calc
 
-    @staticmethod
-    def ds(theta, t, y):
+    def ds(self, theta: np.ndarray, t: np.ndarray, y: np.ndarray) -> float:
         b, c, s = theta
         n = len(t)
         y0 = y[0]
+        yn = y[-1]
 
         term1 = -n / s
         term2 = s ** -3 * y0 ** -2
-        term2 *= np.sum((y - c - np.exp(-b * t) * (y0 - c)) ** 2)
+        term2 *= np.sum((y - c * yn - np.exp(-b * t) * (y0 - c * yn)) ** 2)
 
         return term1 + term2
-
-
-class LogPriorB(BaseLogProbability):
-    """ b is the rate parameter of the exponential decay. An exponential prior is selected for this parameter. This
-        enforces that only positive values are allowed (the exponential will only decay not increase). A scale value
-        of 2 is chosen for this prior, this puts most of the mass density at lower values of b below 1 since values
-        larger than 1 are extremely steep and become difficult to differentiate.
-    """
-
-    @staticmethod
-    def calc(theta, *args):
-        b = theta[0]
-        if b > 0:
-            return -2 * b
-        return -np.inf
-
-    @staticmethod
-    def db(theta, *args):
-        b = theta[0]
-        if b > 0:
-            return -2
-        return 0
-
-
-class LogPriorC(BaseLogProbability):
-    """ c is the value of the asymptote to which the exponential decays. A normal distribution centered at zero with
-        a standard deviation of y0 is placed on this parameter.
-    """
-
-    @staticmethod
-    def calc(theta, t, y):
-        c = theta[1]
-        y0 = y[0]
-        return -0.5 * (c / y0) ** 2
-
-    @staticmethod
-    def dc(theta, t, y):
-        c = theta[1]
-        y0 = y[0]
-        return - y0 ** -2 * c
 
 
 class LogPriorS(BaseLogProbability):
@@ -170,16 +127,68 @@ class LogPriorS(BaseLogProbability):
         1/(s**2)) is selected for this parameter provided s>0.
     """
 
-    @staticmethod
-    def calc(theta, t, y):
+    def calc(self, theta: np.ndarray, t: np.ndarray, y: np.ndarray) -> float:
         s = theta[2]
         if s > 0:
             return -2 * np.log(s)
         return -np.inf
 
-    @staticmethod
-    def ds(theta, t, y):
+    def ds(self, theta: np.ndarray, t: np.ndarray, y: np.ndarray) -> float:
         s = theta[2]
         if s > 0:
             return - 2 / s
         return 0
+
+
+class LogPriorBC(BaseLogProbability):
+    """ Combined custom prior on B and C. This priors combines an exponential distribution on b to (bias for lower
+        values) and a beta distribution on c (to swing density from high to low values depending on the value of b).
+    """
+
+    def __init__(self, c_scale: float = 0, c_shift: float = 0.01):
+        """ Initialises the prior with its hyperparameters.
+
+            Parameters
+            ----------
+            c_scale: float = 0
+                Larger values of c_scale move density on the b and c prior to along the axes of the distribution near
+                c=0 and b=0 . Defaults to zero, acceptable values are in the range [0, 10].
+            c_shift: float = 0.01
+                Lower values of c_shift sharpen the prior on b and c to add more density to the extremes of the
+                distribution: low c / high b and high c / low b. Higher values eventually increase the probability of
+                all c values at low b and removes the low c / high b peak. Defaults to 0.01, the range [0, 4].
+        """
+        self.c_scale = c_scale
+        self.c_shift = c_shift
+
+    def calc(self, theta: np.ndarray, t: np.ndarray, y: np.ndarray) -> float:
+        b, c, _ = theta
+
+        if b < 0 or c < 0 or c > 1:
+            return -np.inf
+
+        calc = -b * (self.c_scale * c + self.c_shift)
+        calc += np.log(b)
+        calc += (b - 1) * np.log(1 - c)
+        calc += np.log(self.c_scale * c + self.c_shift)
+
+        return calc
+
+    def db(self, theta: np.ndarray, t: np.ndarray, y: np.ndarray) -> float:
+        b, c, _ = theta
+
+        calc = 1/b
+        calc -= self.c_shift
+        calc -= self.c_scale * c
+        calc += np.log(1 - c)
+
+        return calc
+
+    def dc(self, theta: np.ndarray, t: np.ndarray, y: np.ndarray) -> float:
+        b, c, _ = theta
+
+        calc = (1 - b) / (1 - c)
+        calc -= b * self.c_scale
+        calc += self.c_scale / (self.c_shift + c * self.c_scale)
+
+        return calc
