@@ -1,6 +1,7 @@
 
 from .basehunter import BaseHunter
 from ..core.logger import Logger
+from ..core.regression import DataRegressor
 
 
 __all__ = ("GPRSuitable",)
@@ -15,5 +16,9 @@ class GPRSuitable(BaseHunter):
         """
         self.tol = tol
 
-    def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, victim_opt_id: int) -> bool:
+    def is_kill_condition_met(self,
+                              log: Logger,
+                              regressor: DataRegressor,
+                              hunter_opt_id: int,
+                              victim_opt_id: int) -> bool:
         return hunter_gpr.is_suitable(self.tol) and victim_gpr.is_suitable(self.tol)

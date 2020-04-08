@@ -1,6 +1,7 @@
 
 from .basehunter import BaseHunter
 from ..core.logger import Logger
+from ..core.regression import DataRegressor
 
 
 __all__ = ("PseudoConverged",)
@@ -15,7 +16,11 @@ class PseudoConverged(BaseHunter):
         self.iters = iters
         self.tol = tol
 
-    def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, victim_opt_id: int) -> bool:
+    def is_kill_condition_met(self,
+                              log: Logger,
+                              regressor: DataRegressor,
+                              hunter_opt_id: int,
+                              victim_opt_id: int) -> bool:
         vals = log.get_history(victim_opt_id, "fx_best")
         if len(vals) < self.iters:
             return False

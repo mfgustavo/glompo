@@ -1,6 +1,7 @@
 
 from .basehunter import BaseHunter
 from ..core.logger import Logger
+from ..core.regression import DataRegressor
 
 
 __all__ = ("MinVictimTrainingPoints",)
@@ -15,6 +16,10 @@ class MinVictimTrainingPoints(BaseHunter):
         else:
             raise ValueError("min_pts must be a positive integer.")
 
-    def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, victim_opt_id: int) -> bool:
+    def is_kill_condition_met(self,
+                              log: Logger,
+                              regressor: DataRegressor,
+                              hunter_opt_id: int,
+                              victim_opt_id: int) -> bool:
         items = len(log.get_history(victim_opt_id))
         return items >= self.min_pts

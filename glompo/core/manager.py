@@ -29,6 +29,7 @@ from ..hunters import BaseHunter, ValBelowAsymptote
 from ..optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from .logger import Logger
 from .scope import GloMPOScope
+from .regression import DataRegressor
 
 
 __all__ = ("GloMPOManager",)
@@ -140,7 +141,8 @@ class GloMPOManager:
                     20 iterations.
                 Default: ValBelowAsymptote()
             Note that for performance and to allow conditionality between hunters conditions are evaluated 'lazily' i.e.
-            x or y will return if x is True without evaluating y. x and y will return False if x is False without evaluating y.
+            x or y will return if x is True without evaluating y. x and y will return False if x is False without
+            evaluating y.
                 TODO: Rewrite
 
         region_stability_check: bool = False
@@ -307,6 +309,7 @@ class GloMPOManager:
         self.dt_start = None
         self.o_counter = 0
         self.f_counter = 0
+        self.last_hunt = 0
         self.conv_counter = 0  # Number of _converged optimizers
         self.hunt_counter = 0  # Number of hunting jobs started
         self.hunt_victims = {}  # opt_ids of killed jobs and timestamps when the signal was sent
@@ -318,9 +321,12 @@ class GloMPOManager:
         self.report_statistics = bool(report_statistics)
         self.enforce_elitism = bool(enforce_elitism)
         self.history_logging = np.clip(int(history_logging), 0, 3)
-        self.log = Logger()
-        self.visualisation = visualisation
         self.split_printstreams = split_printstreams
+        self.visualisation = visualisation
+
+        # Initialise support classes
+        self.log = Logger()
+        self.regressor = DataRegressor()
         if visualisation:
             self.scope = GloMPOScope(**visualisation_args) if visualisation_args else GloMPOScope()
         if region_stability_check:
@@ -410,6 +416,15 @@ class GloMPOManager:
                 self._optional_print("Checking hunt results", 2)
                 self._process_hunt_results()
                 self._optional_print("Hunt results check done.", 2)
+
+                if self.visualisation:
+                    for opt_id in self.optimizer_packs:
+                        if self.optimizer_packs[opt_id].process.is_alive():
+                            cache = self.regressor.get_mcmc_results(opt_id, 'asymptote')
+                            if cache:
+                                yn = self.log.get_history(opt_id, "fx")[-1]
+                                median, lower, upper = tuple(yn*i for i in cache)
+                                self.scope.update_mean(opt_id, median, lower, upper)
 
                 self._inspect_children()
 
@@ -646,7 +661,18 @@ class GloMPOManager:
                 in_graveyard = victim_id in self.graveyard
                 has_points = len(self.log.get_history(victim_id, "fx")) > 0
                 if not in_graveyard and has_points and victim_id != h_id:
-                    kill = self.killing_conditions.is_kill_condition_met(self.log, h_id, victim_id)
+
+                    # Freeze optimizers
+                    for pack in self.optimizer_packs.values():
+                        pack.allow_run_event.clear()
+
+                    self._optional_print(f"Optimizer {h_id} -> Optimizer {victim_id} hunt started.", 1)
+                    kill = self.killing_conditions.is_kill_condition_met(self.log, self.regressor, h_id, victim_id)
+
+                    # Release optimizers
+                    for pack in self.optimizer_packs.values():
+                        pack.allow_run_event.set()
+
                     if kill:
                         self._optional_print(f"Optimizer {h_id} wants to kill Optimizer {victim_id}", 1)
                         self.hunting_queue.put((h_id, victim_id))
@@ -654,14 +680,18 @@ class GloMPOManager:
         in_hunts = hunter_id in self.hunting_processes
         is_alive = self.hunting_processes[hunter_id].is_alive() if in_hunts else False
 
-        if not in_hunts or not is_alive:
+        if (not in_hunts or not is_alive) and self.f_counter - self.last_hunt > 100:
             self.hunt_counter += 1
-            process = mp.Process(target=wrapped_hunting_job,
-                                 args=(hunter_id,),
-                                 daemon=True)
-            self.hunting_processes[hunter_id] = process
-            self.hunting_processes[hunter_id].start()
-            self._optional_print(f"Optimizer {hunter_id} as hunter started.", 1)
+            self.last_hunt = self.f_counter
+
+            # Run hunt
+            wrapped_hunting_job(hunter_id)
+
+            # process = mp.Process(target=wrapped_hunting_job,
+            #                      args=(hunter_id,),
+            #                      daemon=True)
+            # self.hunting_processes[hunter_id] = process
+            # self.hunting_processes[hunter_id].start()
 
             if self.visualisation:
                 self.scope.update_hunt_start(hunter_id)

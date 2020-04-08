@@ -5,6 +5,7 @@
 """
 
 from typing import *
+from time import time
 import warnings
 
 import numpy as np
@@ -116,8 +117,8 @@ class DataRegressor:
             self.mle_cache[cache_key] = RegressorCacheItem(hash_key, (b_est, c_est, s_est))
         return b_est, c_est, s_est
 
-    def estimate_parameters(self, t: np.ndarray, y: np.ndarray, parms: Optional[str] = None, nwalkers: int = 32,
-                            nsteps: int = 5000, cache_key: Any = None) -> Union[Tuple[Tuple[float, float, float], ...],
+    def estimate_posterior(self, t: np.ndarray, y: np.ndarray, parms: Optional[str] = None, nwalkers: int = 32,
+                           nsteps: int = 5000, cache_key: Any = None) -> Union[Tuple[Tuple[float, float, float], ...],
                                                                                 Tuple[float, float, float]]:
         """ Runs the sampler on the log-posterior given the data. Returns an estimate and uncertainty on each
             parameter. The data is saved in the cache if a cache_key is provided.
@@ -182,8 +183,9 @@ class DataRegressor:
 
         try:
             print("Starting run...")
+            start = time()
             sampler.run_mcmc(starting_pos, nsteps)
-            print("Done")
+            print(f"Done in {time()-start}s")
         except ValueError:
             warnings.warn("MCMC run failed. Returning MLE estimate.", RuntimeWarning)
 
@@ -210,5 +212,63 @@ class DataRegressor:
         if parms in param_dict:
             key = param_dict[parms]
             return median[key], quan_l[key], quan_u[key]
+
+        return result
+
+    def get_mle_results(self, cache_key: int) -> Tuple[float, float, float]:
+        """ Will look for previous results in the mle_cache and return them if found; None is returned if not.
+
+            Parameters
+            ----------
+            cache_key: int = None
+                Optimizer ID used as the cache key value.
+
+            Returns
+            -------
+            b_est: float
+                Estimate for the decay parameter.
+            c_est: float
+                Estimate for the asymptote parameter.
+            s_est: float
+                Estimate for the noise parameter.
+        """
+        if cache_key in self.mle_cache:
+            return self.mle_cache[cache_key].result
+
+    def get_mcmc_results(self, cache_key: int, parms: str = 'all') -> Tuple[float, float, float]:
+        """ Will look for previous results in the mcc_cache and return them if found; None is returned if not.
+
+            Parameters
+            ----------
+            cache_key: int = None
+                Optimizer ID used as the cache key value.
+            parms: str = 'all'
+                The parameter/s and their uncertainties to be returned. Accepts values 'decay', 'noise' and 'asymptote'.
+                Returns all if the key is not provided.
+
+            Returns
+            -------
+            Depending on the parms parameter provided, returns a result tuple for one parameter or a tuple of all
+            parameter result tuples. Each result tuples takes the form:
+            median:
+                The median value sampled by the MCMC sampler.
+            lower_quantile:
+                The 5% percentile value sampled by the MCMC sampler.
+            upper_quantile:
+                The 95% percentile value sampled by the MCMC sampler.
+        """
+
+        param_dict = {'decay': 0,
+                      'asymptote': 1,
+                      'noise': 2}
+
+        result = None
+
+        if cache_key in self.mcc_cache:
+            result = self.mcc_cache[cache_key].result
+
+        if result and parms in param_dict:
+            key = param_dict[parms]
+            return result[key]
 
         return result

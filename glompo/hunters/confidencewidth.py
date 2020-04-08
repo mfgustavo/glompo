@@ -1,6 +1,7 @@
 
 from .basehunter import BaseHunter
 from ..core.logger import Logger
+from ..core.regression import DataRegressor
 
 
 __all__ = ("ConfidenceWidth",)
@@ -17,7 +18,11 @@ class ConfidenceWidth(BaseHunter):
         else:
             raise ValueError("threshold should be a positive float.")
 
-    def is_kill_condition_met(self, log: Logger, hunter_opt_id: int, victim_opt_id: int) -> bool:
+    def is_kill_condition_met(self,
+                              log: Logger,
+                              regressor: DataRegressor,
+                              hunter_opt_id: int,
+                              victim_opt_id: int) -> bool:
         mu, sigma = victim_gpr.estimate_mean()
         print(f"{victim_opt_id} conf width is {sigma < self.threshold * abs(mu)}")
         return sigma < self.threshold * abs(mu)
