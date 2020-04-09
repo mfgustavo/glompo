@@ -292,6 +292,7 @@ class GloMPOScope:
         width = self.truncated if self.truncated else self.x_max
         rec.set_width(width)
         rec.set_height(upper - lower)
+
         self._redraw_graph()
 
     def update_hunt_start(self, opt_id: int):

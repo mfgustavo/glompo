@@ -198,7 +198,7 @@ class DataRegressor:
                 return s_mle, None
             return (b_mle, None), (c_mle, None), (s_mle, None)
 
-        samples = sampler.get_chain(discard=1000, flat=True)
+        samples = sampler.get_chain(discard=500, flat=True)
 
         median = np.median(samples, axis=0)
         quan_l = np.quantile(samples, 0.05, axis=0)

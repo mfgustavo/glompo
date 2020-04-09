@@ -54,6 +54,7 @@ class GloMPOManager:
                  convergence_checker: Optional[BaseChecker] = None,
                  x0_generator: Optional[BaseGenerator] = None,
                  killing_conditions: Optional[BaseHunter] = None,
+                 hunt_frequency: int = 100,
                  region_stability_check: bool = False,
                  report_statistics: bool = False,
                  enforce_elitism: bool = False,
@@ -144,6 +145,10 @@ class GloMPOManager:
             x or y will return if x is True without evaluating y. x and y will return False if x is False without
             evaluating y.
                 TODO: Rewrite
+
+        hunt_frequency: int = 100
+            The number of function calls between successive attempts to evaluate optimizer performance and determine
+            if they should be terminated.
 
         region_stability_check: bool = False
             If True, local optimizers are started around a candidate solution which has been selected as a final
@@ -323,6 +328,7 @@ class GloMPOManager:
         self.history_logging = np.clip(int(history_logging), 0, 3)
         self.split_printstreams = split_printstreams
         self.visualisation = visualisation
+        self.hunt_frequency = hunt_frequency
 
         # Initialise support classes
         self.log = Logger()
@@ -419,7 +425,7 @@ class GloMPOManager:
 
                 if self.visualisation:
                     for opt_id in self.optimizer_packs:
-                        if self.optimizer_packs[opt_id].process.is_alive():
+                        if opt_id not in self.graveyard:
                             cache = self.regressor.get_mcmc_results(opt_id, 'asymptote')
                             if cache:
                                 yn = self.log.get_history(opt_id, "fx")[-1]
@@ -509,7 +515,7 @@ class GloMPOManager:
         """
         self.o_counter += 1
 
-        selected, init_kwargs, call_kwargs = self.optimizers['default']
+        selected, init_kwargs, call_kwargs = self.optimizers[np.random.choice([*self.optimizers])]
 
         self._optional_print(f"Selected Optimizer:\n"
                              f"\tOptimizer ID: {self.o_counter}\n"
@@ -680,7 +686,7 @@ class GloMPOManager:
         in_hunts = hunter_id in self.hunting_processes
         is_alive = self.hunting_processes[hunter_id].is_alive() if in_hunts else False
 
-        if (not in_hunts or not is_alive) and self.f_counter - self.last_hunt > 100:
+        if (not in_hunts or not is_alive) and self.f_counter - self.last_hunt > self.hunt_frequency:
             self.hunt_counter += 1
             self.last_hunt = self.f_counter
 

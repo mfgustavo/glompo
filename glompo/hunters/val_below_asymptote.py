@@ -24,7 +24,7 @@ class ValBelowAsymptote(BaseHunter):
         if len(hunter_vals) > 0:
             result = regressor.estimate_posterior(victim_t, victim_y,
                                                   parms='asymptote',
-                                                  nsteps=2000,
+                                                  nsteps=3000,
                                                   nwalkers=10,
                                                   cache_key=victim_opt_id)
 

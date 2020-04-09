@@ -12,6 +12,7 @@ from .min_vic_trainpts import MinVictimTrainingPoints
 from .pseudoconv import PseudoConverged
 from .val_below_asymptote import ValBelowAsymptote
 from .val_below_val import ValBelowVal
+from .timeannealing import TimeAnnealing
 
 __all__ = ("BaseHunter",
            "ConfidenceWidth",
@@ -19,4 +20,5 @@ __all__ = ("BaseHunter",
            "MinVictimTrainingPoints",
            "PseudoConverged",
            "ValBelowAsymptote",
-           "ValBelowVal")
+           "ValBelowVal",
+           "TimeAnnealing")
