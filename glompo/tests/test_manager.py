@@ -102,9 +102,14 @@ class HangingOptimizer(BaseOptimizer):
         pass
 
 
+
 class HangOnEndOptimizer(BaseOptimizer):
 
     needscaler = False
+
+    def __init__(self, opt_id: int = None, signal_pipe=None, results_queue=None, pause_flag=None):
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag)
+        self.constant = opt_id
 
     def minimize(self, function: Callable, x0: Sequence[float], bounds: Sequence[Tuple[float, float]],
                  callbacks: Callable = None, **kwargs) -> MinimizeResult:
@@ -113,12 +118,13 @@ class HangOnEndOptimizer(BaseOptimizer):
             i += 1
             self.check_messages()
             sleep(0.1)
-            self.push_iter_result(IterationResult(self._opt_id, i, 1, [i], np.sin(i/(2*np.pi)), False))
+            self.push_iter_result(IterationResult(self._opt_id, i, 1, [i], np.sin(i/(2*np.pi))+self.constant, False))
 
     def push_iter_result(self, ir):
         self._results_queue.put(ir)
 
     def callstop(self, *args):
+        print("Hanging Callstop Activated")
         while True:
             pass
 
@@ -148,7 +154,7 @@ class TrueHunter(BaseHunter):
     def __init__(self, target: int):
         self.target = target
 
-    def is_kill_condition_met(self, log, hunter_opt_id, victim_opt_id) -> bool:
+    def is_kill_condition_met(self, log, regressor, hunter_opt_id, victim_opt_id) -> bool:
         return victim_opt_id == self.target
 
 
@@ -364,6 +370,9 @@ class TestManager:
             assert data['DETAILS']['End Condition'] == "Forced GloMPO Termination"
             assert "Force terminated due to no feedback timeout." in data['MESSAGES']
 
+        sleep(0.1)  # Delay for process cleanup
+
+
     def test_too_long_hangingterm(self):
         manager = GloMPOManager(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,
                                 n_parms=3,
@@ -375,13 +384,15 @@ class TestManager:
                                 enforce_elitism=True,
                                 history_logging=3,
                                 convergence_checker=MaxOptsStarted(3),
-                                killing_conditions=TrueHunter(1),
-                                force_terminations_after=1)
+                                killing_conditions=TrueHunter(2),
+                                verbose=1,
+                                force_terminations_after=1,
+                                split_printstreams=False)
 
         with pytest.warns(RuntimeWarning, match="Forced termination signal sent to optimizer"):
             manager.start_manager()
 
-        with open("glompo_optimizer_logs/1_HangOnEndOptimizer.yml", 'r') as stream:
+        with open("glompo_optimizer_logs/2_HangOnEndOptimizer.yml", 'r') as stream:
             data = yaml.safe_load(stream)
             assert "Approximate Stop Time" in data['DETAILS']
             assert data['DETAILS']['End Condition'] == "Forced GloMPO Termination"

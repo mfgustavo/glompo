@@ -15,17 +15,17 @@ class PlainHunter(BaseHunter):
     def __init__(self):
         pass
 
-    def is_kill_condition_met(self, log, hunter_opt_id, victim_opt_id) -> bool:
+    def is_kill_condition_met(self, log, regressor, hunter_opt_id, victim_opt_id) -> bool:
         pass
 
 
 class TrueHunter(BaseHunter):
-    def is_kill_condition_met(self, log, hunter_opt_id, victim_opt_id) -> bool:
+    def is_kill_condition_met(self, log, regressor, hunter_opt_id, victim_opt_id) -> bool:
         return True
 
 
 class FalseHunter(BaseHunter):
-    def is_kill_condition_met(self, log, hunter_opt_id, victim_opt_id) -> bool:
+    def is_kill_condition_met(self, log, regressor, hunter_opt_id, victim_opt_id) -> bool:
         return False
 
 
@@ -34,7 +34,7 @@ class FancyHunter(BaseHunter):
         self.a = a
         self.b = b + c
 
-    def is_kill_condition_met(self, log, hunter_opt_id, victim_opt_id) -> bool:
+    def is_kill_condition_met(self, log, regressor, hunter_opt_id, victim_opt_id) -> bool:
         pass
 
 
@@ -78,7 +78,7 @@ class TestBase:
 
     def test_kill_condition(self):
         hunter = FalseHunter() | FalseHunter() & TrueHunter() | TrueHunter() & (TrueHunter() | FalseHunter())
-        assert hunter.is_kill_condition_met(*(None,) * 3) is True
+        assert hunter.is_kill_condition_met(*(None,) * 4) is True
 
 
 # class TestConfidenceWidth:
@@ -184,7 +184,7 @@ class TestPseudoConv:
                                                     (25, 0.91, True)])
     def test_condition(self, iters, tol, output, log):
         cond = PseudoConverged(iters, tol)
-        assert cond.is_kill_condition_met(log, None, 1) is output
+        assert cond.is_kill_condition_met(log, None, None, 1) is output
 
 
 # class TestGPRSuitable:
