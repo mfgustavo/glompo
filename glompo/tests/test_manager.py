@@ -15,7 +15,7 @@ from glompo.core.manager import GloMPOManager
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from glompo.generators.random import RandomGenerator
 from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxOptsStarted, MaxFuncCalls, MaxSeconds
-from glompo.hunters import BaseHunter, MinVictimTrainingPoints, GPRSuitable, ValBelowAsymptote
+from glompo.hunters import BaseHunter, MinIterations, GPRSuitable, ValBelowAsymptote
 from glompo.common.namedtuples import *
 from glompo.common.customwarnings import *
 from glompo.common.wrappers import redirect, task_args_wrapper
@@ -182,7 +182,7 @@ class TestManager:
                                         {'x0_generator': RandomGenerator},
                                         {'convergence_checker': KillsAfterConvergence},
                                         {'convergence_checker': OptimizerTest1()},
-                                        {'killing_conditions': MinVictimTrainingPoints},
+                                        {'killing_conditions': MinIterations},
                                         {'killing_conditions': OptimizerTest1()},
                                         {'killing_conditions': OptimizerTest1},
                                         {'task_args': 564},
@@ -233,7 +233,7 @@ class TestManager:
                                         {'x0_generator': RandomGenerator(((0, 1), (0, 1)))},
                                         {'convergence_checker': KillsAfterConvergence()},
                                         {'max_jobs': 3},
-                                        {'killing_conditions': MinVictimTrainingPoints(10)}])
+                                        {'killing_conditions': MinIterations(10)}])
     def test_init(self, kwargs):
         kwargs = {**{'task': lambda x, y: x + y,
                      'optimizers': {'default': OptimizerTest1},
@@ -558,7 +558,7 @@ class TestManager:
                                 convergence_checker=KillsAfterConvergence(2, 1) | MaxFuncCalls(10000) | MaxSeconds(
                                     5 * 60),
                                 x0_generator=IntervalGenerator(),
-                                killing_conditions=GPRSuitable(0.1) & MinVictimTrainingPoints(10) & ValBelowAsymptote(),
+                                killing_conditions=GPRSuitable(0.1) & MinIterations(10) & ValBelowAsymptote(),
                                 history_logging=3,
                                 visualisation=False,
                                 visualisation_args=None,

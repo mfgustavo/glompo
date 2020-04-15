@@ -4,13 +4,16 @@ from ..core.logger import Logger
 from ..core.regression import DataRegressor
 
 
-__all__ = ("MinVictimTrainingPoints",)
+__all__ = ("MinIterations",)
 
 
-class MinVictimTrainingPoints(BaseHunter):
+class MinIterations(BaseHunter):
 
     def __init__(self, min_pts: int):
-        """ Returns True if the victim has more than min_pts in its GPR. """
+        """ Returns True if the victim has iterated at least min_pts times. Use cautiously in conjunction with
+            multiple optimizer types since iterations are often defined very differently and do not necessarily
+            equal one function call.
+        """
         if min_pts > 0 and isinstance(min_pts, int):
             self.min_pts = min_pts
         else:

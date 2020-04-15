@@ -134,7 +134,7 @@ class GloMPOManager:
             Criteria used for killing optimizers. A collection of subclasses of BaseHunter are provided, these can be
             used in combinations of and (&) and or (|) to tailor various conditions.
                 E.g.: killing_conditions = GPRSuitable() & ValBelowGPR() &
-                (MinVictimTrainingPoints(30) & PseudoConverged(20))
+                (MinIterations(30) & PseudoConverged(20))
                 In this case GloMPO will only allow a hunt to terminate an optimizer if
                     1) the GPR describing it is a good descriptor of the data,
                     2) another optimizer has seen a value below its 95% confidence interval,

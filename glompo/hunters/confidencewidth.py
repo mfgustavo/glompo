@@ -10,8 +10,8 @@ __all__ = ("ConfidenceWidth",)
 class ConfidenceWidth(BaseHunter):
 
     def __init__(self, threshold: float):
-        """ Returns True if the standard deviation of the victim's GPR is less than a percentage of the mean.
-            The fraction is given by threshold as a value between 0 and 1.
+        """ Returns True if the standard deviation of the victim's asymptote uncertainty is less than a percentage of
+            the mean. The fraction is given by threshold as a value between 0 and 1.
         """
         if isinstance(threshold, (float, int)) and threshold > 0:
             self.threshold = threshold
@@ -23,6 +23,5 @@ class ConfidenceWidth(BaseHunter):
                               regressor: DataRegressor,
                               hunter_opt_id: int,
                               victim_opt_id: int) -> bool:
-        mu, sigma = victim_gpr.estimate_mean()
-        print(f"{victim_opt_id} conf width is {sigma < self.threshold * abs(mu)}")
-        return sigma < self.threshold * abs(mu)
+        med, lower, upper = regressor.get_mcmc_results(victim_opt_id, 'Asymptote')
+        return (upper - lower) < self.threshold * abs(med)
