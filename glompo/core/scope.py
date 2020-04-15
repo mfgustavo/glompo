@@ -210,7 +210,7 @@ class GloMPOScope:
             line.set_xdata(x_vals)
             line.set_ydata(y_vals)
 
-    def add_stream(self, opt_id):
+    def add_stream(self, opt_id: int, type: Optional[str] = None):
         """ Registers and sets up a new optimizer in the scope. """
 
         self.n_streams += 1
@@ -256,8 +256,14 @@ class GloMPOScope:
             elif any([line == _ for _ in ['opt_kill', 'opt_norm']]):
                 color = 'red'
             self.streams[opt_id][line].set_color(color)
+
+        if type:
+            label = f"{opt_id}: {type}"
+        else:
+            label = f"Optimizer {opt_id}"
+
         self.leg_elements.append(lines.Line2D([], [], ls='-', c=colors(self.n_streams - threshold),
-                                              label=f'Optimizer {opt_id}'))
+                                              label=label))
         self.ax.legend(loc='upper right', handles=self.leg_elements, bbox_to_anchor=(1.35, 1))
 
     def update_optimizer(self, opt_id: int, pt: tuple):
