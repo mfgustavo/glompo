@@ -25,7 +25,7 @@ from ..convergence.basechecker import BaseChecker
 from ..common.namedtuples import *
 from ..common.customwarnings import *
 from ..common.wrappers import redirect, task_args_wrapper, catch_user_interrupt
-from ..hunters import BaseHunter, ValBelowAsymptote
+from ..hunters import BaseHunter, PseudoConverged
 from ..optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from .logger import Logger
 from .scope import GloMPOScope
@@ -347,7 +347,7 @@ class GloMPOManager:
             else:
                 raise TypeError(f"killing_conditions not an instance of a subclass of BaseHunter.")
         else:
-            self.killing_conditions = ValBelowAsymptote()
+            self.killing_conditions = PseudoConverged(100, 0.01)
 
         # Setup multiprocessing variables
         self.optimizer_packs = {}  # Dict[opt_id (int): ProcessPackage (NamedTuple)]
@@ -507,7 +507,7 @@ class GloMPOManager:
 
         if self.visualisation:
             if opt_id not in self.scope.streams:
-                self.scope.add_stream(opt_id)
+                self.scope.add_stream(opt_id, type(optimizer).__name__)
 
     def _setup_new_optimizer(self) -> OptimizerPackage:
         """ Selects and initializes new optimizer and multiprocessing variables. Returns an OptimizerPackage which
@@ -607,17 +607,17 @@ class GloMPOManager:
 
             # Force kill zombies
             if opt_id in self.hunt_victims and \
-                    self.allow_forced_terminations and \
-                    self.optimizer_packs[opt_id].process.is_alive():
+               self.allow_forced_terminations and \
+               self.optimizer_packs[opt_id].process.is_alive() and \
+               time() - self.hunt_victims[opt_id] > self._TOO_LONG:
+                self.optimizer_packs[opt_id].process.terminate()
+                self.optimizer_packs[opt_id].process.join(3)
+                self.log.put_message(opt_id, "Force terminated due to no feedback after kill signal "
+                                            "timeout.")
+                self.log.put_metadata(opt_id, "Approximate Stop Time", datetime.now())
+                self.log.put_metadata(opt_id, "End Condition", "Forced GloMPO Termination")
+                warnings.warn(f"Forced termination signal sent to optimizer {opt_id}.", RuntimeWarning)
 
-                if time() - self.hunt_victims[opt_id] > self._TOO_LONG:
-                    self.optimizer_packs[opt_id].process.terminate()
-                    self.optimizer_packs[opt_id].process.join()
-                    self.log.put_message(opt_id, "Force terminated due to no feedback after kill signal "
-                                                 "timeout.")
-                    self.log.put_metadata(opt_id, "Approximate Stop Time", datetime.now())
-                    self.log.put_metadata(opt_id, "End Condition", "Forced GloMPO Termination")
-                    warnings.warn(f"Forced termination signal sent to optimizer {opt_id}.", RuntimeWarning)
 
         # Find hanging hunting processes
         for opt_id in self.hunting_processes:
@@ -667,17 +667,8 @@ class GloMPOManager:
                 in_graveyard = victim_id in self.graveyard
                 has_points = len(self.log.get_history(victim_id, "fx")) > 0
                 if not in_graveyard and has_points and victim_id != h_id:
-
-                    # Freeze optimizers
-                    for pack in self.optimizer_packs.values():
-                        pack.allow_run_event.clear()
-
                     self._optional_print(f"Optimizer {h_id} -> Optimizer {victim_id} hunt started.", 1)
                     kill = self.killing_conditions.is_kill_condition_met(self.log, self.regressor, h_id, victim_id)
-
-                    # Release optimizers
-                    for pack in self.optimizer_packs.values():
-                        pack.allow_run_event.set()
 
                     if kill:
                         self._optional_print(f"Optimizer {h_id} wants to kill Optimizer {victim_id}", 1)
@@ -691,13 +682,11 @@ class GloMPOManager:
             self.last_hunt = self.f_counter
 
             # Run hunt
-            wrapped_hunting_job(hunter_id)
-
-            # process = mp.Process(target=wrapped_hunting_job,
-            #                      args=(hunter_id,),
-            #                      daemon=True)
-            # self.hunting_processes[hunter_id] = process
-            # self.hunting_processes[hunter_id].start()
+            process = mp.Process(target=wrapped_hunting_job,
+                                 args=(hunter_id,),
+                                 daemon=True)
+            self.hunting_processes[hunter_id] = process
+            self.hunting_processes[hunter_id].start()
 
             if self.visualisation:
                 self.scope.update_hunt_start(hunter_id)
