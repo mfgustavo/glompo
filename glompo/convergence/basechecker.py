@@ -61,27 +61,24 @@ class _CombiChecker(BaseChecker):
     def check_convergence(self, manager: 'GloMPOManager') -> bool:
         pass
 
+    def _combi_string_maker(self, keyword: str):
+        return f"[{self.base1} {keyword} \n{self.base2}]"
+
+    def _combi_isconverged_maker(self, keyword: str):
+        return f"[{self.base1.is_converged_str()} {keyword} \n" \
+               f"{self.base2.is_converged_str()}]"
+
 
 class _AnyChecker(_CombiChecker):
     def check_convergence(self, manager: 'GloMPOManager') -> bool:
         self._converged = self.base1.check_convergence(manager) or self.base2.check_convergence(manager)
         return self._converged
 
-    def __str__(self) -> str:
-        mess = ""
-        for base in [self.base1, self.base2]:
-            mess += f"{base} OR \n"
-        mess = mess[:-5]
-        mess = "(" + mess + ")"
-        return mess
+    def __str__(self):
+        return self._combi_string_maker("OR")
 
     def is_converged_str(self) -> str:
-        mess = ""
-        for base in [self.base1, self.base2]:
-            mess += f"{base.is_converged_str()} OR \n"
-        mess = mess[:-5]
-        mess = "(" + mess + ")"
-        return mess
+        return self._combi_isconverged_maker("OR")
 
 
 class _AllChecker(_CombiChecker):
@@ -89,18 +86,8 @@ class _AllChecker(_CombiChecker):
         self._converged = self.base1.check_convergence(manager) and self.base2.check_convergence(manager)
         return self._converged
 
-    def __str__(self) -> str:
-        mess = ""
-        for base in [self.base1, self.base2]:
-            mess += f"{base} AND \n"
-        mess = mess[:-6]
-        mess = "(" + mess + ")"
-        return mess
+    def __str__(self):
+        return self._combi_string_maker("AND")
 
     def is_converged_str(self) -> str:
-        mess = ""
-        for base in [self.base1, self.base2]:
-            mess += f"{base.is_converged_str()} AND \n"
-        mess = mess[:-6]
-        mess = "(" + mess + ")"
-        return mess
+        return self._combi_isconverged_maker("AND")

@@ -73,6 +73,9 @@ class _CombiHunter(BaseHunter):
                               victim_opt_id: int) -> bool:
         pass
 
+    def _combi_string_maker(self, keyword: str):
+        return f"[{self.base1} {keyword} \n{self.base2}]"
+
 
 class _AnyHunter(_CombiHunter):
     def is_kill_condition_met(self,
@@ -84,11 +87,7 @@ class _AnyHunter(_CombiHunter):
                self.base2.is_kill_condition_met(log, regressor, hunter_opt_id, victim_opt_id)
 
     def __str__(self):
-        mess = ""
-        for base in [self.base1, self.base2]:
-            mess += f"{base} OR \n"
-        mess = mess[:-5]
-        return mess
+        return self._combi_string_maker("OR")
 
 
 class _AllHunter(_CombiHunter):
@@ -101,8 +100,4 @@ class _AllHunter(_CombiHunter):
                self.base2.is_kill_condition_met(log, regressor, hunter_opt_id, victim_opt_id)
 
     def __str__(self):
-        mess = ""
-        for base in [self.base1, self.base2]:
-            mess += f"{base} AND \n"
-        mess = mess[:-6]
-        return mess
+        return self._combi_string_maker("AND")
