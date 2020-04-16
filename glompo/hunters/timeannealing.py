@@ -1,6 +1,6 @@
 
 
-import numpy as np
+import random
 
 from .basehunter import BaseHunter
 from ..core.logger import Logger
@@ -39,7 +39,7 @@ class TimeAnnealing(BaseHunter):
         n_victim = len(log.get_history(victim_opt_id, "fx"))
 
         ratio = n_hunter / n_victim
-        test_num = np.random.uniform(0, self.crit_ratio)
+        test_num = random.uniform(0, self.crit_ratio)
 
         print(f"Ratio is {ratio:.2f}. Test is {test_num:.2f}. Kill is {test_num > ratio}")
 

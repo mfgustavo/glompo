@@ -137,26 +137,29 @@ class TestMinTraningPoints:
 
 
 class TestPseudoConv:
-    @pytest.fixture()
-    def log(self):
+    @pytest.fixture
+    def log(self, request):
         log = Logger()
         log.add_optimizer(1, None, None)
+        calls_per_iter = request.param
         for i in range(10):
-            log.put_iteration(1, i, i, i, 10)
+            log.put_iteration(1, i, calls_per_iter*i, i, 10)
         for i in range(10, 20):
-            log.put_iteration(1, i, i, i, 1)
+            log.put_iteration(1, i, calls_per_iter*i, i, 1)
         for i in range(20, 30):
-            log.put_iteration(1, i, i, i, 0.9)
+            log.put_iteration(1, i, calls_per_iter*i, i, 0.9)
         return log
 
-    @pytest.mark.parametrize("iters, tol, output", [(10, 0, True),
-                                                    (8, 0, True),
-                                                    (11, 0, False),
-                                                    (11, 0.1, True),
-                                                    (20, 0.1, True),
-                                                    (60, 0, False),
-                                                    (60, 0.90, False),
-                                                    (25, 0.91, True)])
+    @pytest.mark.parametrize("iters, tol, output, log", [(10, 0, False, 1),
+                                                         (8, 0, True, 1),
+                                                         (11, 0, False, 1),
+                                                         (11, 0.1, True, 1),
+                                                         (20, 0.1, False, 1),
+                                                         (60, 0, False, 1),
+                                                         (60, 0.90, False, 1),
+                                                         (25, 0.91, True, 1),
+                                                         (30, 0, False, 3),
+                                                         (125, 0.91, True, 5)], indirect=("log",))
     def test_condition(self, iters, tol, output, log):
         cond = PseudoConverged(iters, tol)
         assert cond.is_kill_condition_met(log, None, None, 1) is output

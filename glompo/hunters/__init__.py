@@ -11,10 +11,14 @@ from .min_iterations import MinIterations
 from .pseudoconv import PseudoConverged
 from .val_below_asymptote import ValBelowAsymptote
 from .timeannealing import TimeAnnealing
+from .valueannealing import ValueAnnealing
+from .parameterdistance import ParameterDistance
 
 __all__ = ("BaseHunter",
            "ConfidenceWidth",
            "MinIterations",
            "PseudoConverged",
            "ValBelowAsymptote",
-           "TimeAnnealing")
+           "ValueAnnealing",
+           "TimeAnnealing",
+           "ParameterDistance")
