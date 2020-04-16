@@ -117,9 +117,15 @@ class DataRegressor:
             self.mle_cache[cache_key] = RegressorCacheItem(hash_key, (b_est, c_est, s_est))
         return b_est, c_est, s_est
 
-    def estimate_posterior(self, t: np.ndarray, y: np.ndarray, parms: Optional[str] = None, nwalkers: int = 32,
-                           nsteps: int = 5000, cache_key: Any = None) -> Union[Tuple[Tuple[float, float, float], ...],
-                                                                                Tuple[float, float, float]]:
+    def estimate_posterior(self,
+                           t: np.ndarray,
+                           y: np.ndarray,
+                           parms: Optional[str] = None,
+                           nwalkers: int = 32,
+                           nsteps: int = 5000,
+                           significance: float = 0.90,
+                           cache_key: Any = None) -> Union[Tuple[Tuple[float, float, float], ...],
+                                                           Tuple[float, float, float]]:
         """ Runs the sampler on the log-posterior given the data. Returns an estimate and uncertainty on each
             parameter. The data is saved in the cache if a cache_key is provided.
 
@@ -140,6 +146,8 @@ class DataRegressor:
                 Number of ensemble samplers to be used in a single MCMC walk
             nsteps: int = 5000
                 Number of iterations for the sampler.
+            significance: float = 0.90
+                Width of the confidence interval returned by the regression, accepts values between (0, 1).
             cache_key: Any
                 If provided the regressor will first check in its cache for the answer. The cache-key is usually the
                 optimizer opt_id. If the data used for the previous calculation and this one do not match then the
@@ -152,9 +160,9 @@ class DataRegressor:
             median:
                 The median value sampled by the MCMC sampler.
             lower_quantile:
-                The 5% percentile value sampled by the MCMC sampler.
+                The lower percentile value sampled by the MCMC sampler.
             upper_quantile:
-                The 95% percentile value sampled by the MCMC sampler.
+                The upper percentile value sampled by the MCMC sampler.
         """
 
         np.seterr(all='ignore')
@@ -200,9 +208,10 @@ class DataRegressor:
 
         samples = sampler.get_chain(discard=500, flat=True)
 
+        alpha = (1 - significance) / 2
         median = np.median(samples, axis=0)
-        quan_l = np.quantile(samples, 0.05, axis=0)
-        quan_u = np.quantile(samples, 0.95, axis=0)
+        quan_l = np.quantile(samples, alpha, axis=0)
+        quan_u = np.quantile(samples, 1 - alpha, axis=0)
 
         result = tuple(tuple(set_) for set_ in np.transpose([median, quan_l, quan_u]))
 
@@ -216,7 +225,8 @@ class DataRegressor:
         return result
 
     def get_mle_results(self, cache_key: int) -> Tuple[float, float, float]:
-        """ Will look for previous results in the mle_cache and return them if found; None is returned if not.
+        """ Will look for previous results in the mle_cache and return them if found; None is returned if not. Note
+            that the hash value of the data used to generate the result is not returned or validated against anything.
 
             Parameters
             ----------
@@ -236,7 +246,8 @@ class DataRegressor:
             return self.mle_cache[cache_key].result
 
     def get_mcmc_results(self, cache_key: int, parms: str = 'all') -> Tuple[float, float, float]:
-        """ Will look for previous results in the mcc_cache and return them if found; None is returned if not.
+        """ Will look for previous results in the mcc_cache and return them if found; None is returned if not. Note
+            that the hash value of the data used to generate the result is not returned or validated against anything.
 
             Parameters
             ----------
@@ -253,9 +264,11 @@ class DataRegressor:
             median:
                 The median value sampled by the MCMC sampler.
             lower_quantile:
-                The 5% percentile value sampled by the MCMC sampler.
+                The lower percentile value sampled by the MCMC sampler. The specific percentile chosen is set in the
+                estimate_posterior method and is not accessible here.
             upper_quantile:
-                The 95% percentile value sampled by the MCMC sampler.
+                The upper percentile value sampled by the MCMC sampler. The specific percentile chosen is set in the
+                estimate_posterior method and is not accessible here.
         """
 
         param_dict = {'decay': 0,

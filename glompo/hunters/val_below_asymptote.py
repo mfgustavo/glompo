@@ -12,6 +12,26 @@ __all__ = ("ValBelowAsymptote",)
 
 class ValBelowAsymptote(BaseHunter):
 
+    """ Performs a non-linear Bayesian regression on the victim's iteration history. Returns True if the hunter has
+        calculated values below the confidence interval projection of the victim. The significance of this confidence
+        interval is set by during initialisation.
+    """
+
+    def __init__(self, significance: int, nwalkers: int = 20, nsteps: int = 5000):
+        """ Parameters
+            ----------
+            significance: int
+                Confidence value of the interval returned by the Bayesian regression. Must be in the interval (0, 1)
+                exclusive.
+            nwalkers: int
+                Number of MCMC chains run in parallel by the sampler.
+            nsteps: int
+                Number of samples taken by each walker.
+        """
+        self.significance = significance
+        self.nwalkers = nwalkers
+        self.nsteps = nsteps
+
     def is_kill_condition_met(self,
                               log: Logger,
                               regressor: DataRegressor,
@@ -24,8 +44,9 @@ class ValBelowAsymptote(BaseHunter):
         if len(hunter_vals) > 0:
             result = regressor.estimate_posterior(victim_t, victim_y,
                                                   parms='asymptote',
-                                                  nsteps=3000,
-                                                  nwalkers=10,
+                                                  nsteps=self.nsteps,
+                                                  nwalkers=self.nwalkers,
+                                                  significance=self.significance,
                                                   cache_key=victim_opt_id)
 
             if len(result) == 3:
