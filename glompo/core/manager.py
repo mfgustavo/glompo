@@ -24,8 +24,9 @@ from ..convergence.nkillsafterconv import KillsAfterConvergence
 from ..convergence.basechecker import BaseChecker
 from ..common.namedtuples import *
 from ..common.customwarnings import *
+from ..common.helpers import *
 from ..common.wrappers import redirect, task_args_wrapper, catch_user_interrupt
-from ..hunters import BaseHunter, PseudoConverged
+from ..hunters import BaseHunter, PseudoConverged, TimeAnnealing, ValueAnnealing, ParameterDistance
 from ..optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from .logger import Logger
 from .scope import GloMPOScope
@@ -133,18 +134,18 @@ class GloMPOManager:
         killing_conditions: Optional[BaseHunter] = None
             Criteria used for killing optimizers. A collection of subclasses of BaseHunter are provided, these can be
             used in combinations of and (&) and or (|) to tailor various conditions.
-                E.g.: killing_conditions = GPRSuitable() & ValBelowGPR() &
-                (MinIterations(30) & PseudoConverged(20))
+                E.g.: killing_conditions = (PseudoConverged(100, 0.01) & TimeAnnealing(2) & ValueAnnealing()) |
+                                           ParameterDistance(0.1)
                 In this case GloMPO will only allow a hunt to terminate an optimizer if
-                    1) the GPR describing it is a good descriptor of the data,
-                    2) another optimizer has seen a value below its 95% confidence interval,
-                    3) and the optimizer has either at least 30 training points or has not changed its best value in
-                    20 iterations.
-                Default: ValBelowAsymptote()
-            Note that for performance and to allow conditionality between hunters conditions are evaluated 'lazily' i.e.
+                    1) an optimizer's best value has not improved by more than 1% in 100 function calls,
+                    2) and it fails an annealing type test based on how many iterations it has run,
+                    3) and if fails an annealing type test based on how far the victim's value is from the best
+                    optimizer's best value,
+                    4) or the two optimizers are iterating very close to one another in parameter space
+                Default: (PseudoConverged(100, 0.01) & TimeAnnealing(2) & ValueAnnealing()) | ParameterDistance(0.1)
+            Note, for performance and to allow conditionality between hunters conditions are evaluated 'lazily' i.e.
             x or y will return if x is True without evaluating y. x and y will return False if x is False without
             evaluating y.
-                TODO: Rewrite
 
         hunt_frequency: int = 100
             The number of function calls between successive attempts to evaluate optimizer performance and determine
@@ -347,17 +348,16 @@ class GloMPOManager:
             else:
                 raise TypeError(f"killing_conditions not an instance of a subclass of BaseHunter.")
         else:
-            self.killing_conditions = PseudoConverged(100, 0.01)
+            self.killing_conditions = PseudoConverged(100, 0.01) & TimeAnnealing(2) & ValueAnnealing() | \
+                                      ParameterDistance(0.1)
 
         # Setup multiprocessing variables
         self.optimizer_packs = {}  # Dict[opt_id (int): ProcessPackage (NamedTuple)]
-        self.hunting_processes = {}  # Dict[opt_id(int): multiprocessing.Process]
         self.graveyard = set()  # opt_ids of known non-active optimizers
         self.last_feedback = {}
 
         self.mp_manager = mp.Manager()
         self.optimizer_queue = self.mp_manager.Queue()
-        self.hunting_queue = self.mp_manager.Queue()
 
         # Purge Old Results
         files = os.listdir(".")
@@ -419,10 +419,6 @@ class GloMPOManager:
                 if best_id > 0:
                     self._start_hunt(best_id)
 
-                self._optional_print("Checking hunt results", 2)
-                self._process_hunt_results()
-                self._optional_print("Hunt results check done.", 2)
-
                 if self.visualisation:
                     for opt_id in self.optimizer_packs:
                         if opt_id not in self.graveyard:
@@ -439,7 +435,8 @@ class GloMPOManager:
                     self._optional_print(f"Convergence Reached", 1)
 
             self._optional_print(f"Exiting manager loop.\n"
-                                 f"Exit conditions met: \n{self.convergence_checker.is_converged_str()}\n", 1)
+                                 f"Exit conditions met: \n"
+                                 f"{nested_string_formatting(self.convergence_checker.is_converged_str())}\n", 1)
             reason = self.convergence_checker.is_converged_str().replace("\n", "")
 
             self._stop_all_children()
@@ -613,19 +610,10 @@ class GloMPOManager:
                 self.optimizer_packs[opt_id].process.terminate()
                 self.optimizer_packs[opt_id].process.join(3)
                 self.log.put_message(opt_id, "Force terminated due to no feedback after kill signal "
-                                            "timeout.")
+                                             "timeout.")
                 self.log.put_metadata(opt_id, "Approximate Stop Time", datetime.now())
                 self.log.put_metadata(opt_id, "End Condition", "Forced GloMPO Termination")
                 warnings.warn(f"Forced termination signal sent to optimizer {opt_id}.", RuntimeWarning)
-
-
-        # Find hanging hunting processes
-        for opt_id in self.hunting_processes:
-            if self.hunting_processes[opt_id].is_alive() and \
-                    time() - self.last_feedback[opt_id] > self._TOO_LONG and \
-                    self.allow_forced_terminations:
-                warnings.warn(f"Force terminating hanging hunt.", RuntimeWarning)
-                self.hunting_processes[opt_id].process.terminate()
 
     def _process_results(self):
         """ Retrieve results from the queue and process them into the log. """
@@ -662,45 +650,28 @@ class GloMPOManager:
             the other active optimizers according to the provided killing_conditions.
         """
 
-        def wrapped_hunting_job(h_id):
-            for victim_id in self.optimizer_packs:
-                in_graveyard = victim_id in self.graveyard
-                has_points = len(self.log.get_history(victim_id, "fx")) > 0
-                if not in_graveyard and has_points and victim_id != h_id:
-                    self._optional_print(f"Optimizer {h_id} -> Optimizer {victim_id} hunt started.", 1)
-                    kill = self.killing_conditions.is_kill_condition_met(self.log, self.regressor, h_id, victim_id)
-
-                    if kill:
-                        self._optional_print(f"Optimizer {h_id} wants to kill Optimizer {victim_id}", 1)
-                        self.hunting_queue.put((h_id, victim_id))
-
-        in_hunts = hunter_id in self.hunting_processes
-        is_alive = self.hunting_processes[hunter_id].is_alive() if in_hunts else False
-
-        if (not in_hunts or not is_alive) and self.f_counter - self.last_hunt > self.hunt_frequency:
+        if self.f_counter - self.last_hunt > self.hunt_frequency:
             self.hunt_counter += 1
             self.last_hunt = self.f_counter
-
-            # Run hunt
-            process = mp.Process(target=wrapped_hunting_job,
-                                 args=(hunter_id,),
-                                 daemon=True)
-            self.hunting_processes[hunter_id] = process
-            self.hunting_processes[hunter_id].start()
 
             if self.visualisation:
                 self.scope.update_hunt_start(hunter_id)
 
-    def _process_hunt_results(self):
-        """ Checks and processes results sent by hunting processes. """
+            for victim_id in self.optimizer_packs:
+                in_graveyard = victim_id in self.graveyard
+                has_points = len(self.log.get_history(victim_id, "fx")) > 0
+                if not in_graveyard and has_points and victim_id != hunter_id:
+                    self._optional_print(f"Optimizer {hunter_id} -> Optimizer {victim_id} hunt started.", 1)
+                    kill = self.killing_conditions.is_kill_condition_met(self.log, self.regressor, hunter_id, victim_id)
 
-        while not self.hunting_queue.empty():
-            hunter_id, victim_id = self.hunting_queue.get()
-            if victim_id not in self.graveyard:
-                self._shutdown_job(victim_id)
+                    if kill:
+                        self._optional_print(f"Optimizer {hunter_id} wants to kill Optimizer {victim_id}", 1)
 
-            if self.visualisation:
-                self.scope.update_hunt_end(hunter_id)
+                        if victim_id not in self.graveyard:
+                            self._shutdown_job(victim_id)
+
+                        if self.visualisation:
+                            self.scope.update_hunt_end(hunter_id)
 
     def _shutdown_job(self, opt_id):
         """ Sends a stop signal to optimizer opt_id and updates variables around its termination. """
@@ -744,8 +715,6 @@ class GloMPOManager:
                 self.log.put_metadata(opt_id, "Stop Time", datetime.now())
                 self.log.put_metadata(opt_id, "End Condition", f"GloMPO Convergence")
                 self.optimizer_packs[opt_id].process.join(self._TOO_LONG / 20)
-        for hunt in self.hunting_processes.values():
-            hunt.terminate()
 
     def _save_log(self, best_id: int, result: Result, reason: str, caught_exception: bool):
         if self.history_logging > 0:
@@ -765,8 +734,8 @@ class GloMPOManager:
                                        "Start Time": self.dt_start,
                                        "Stop Time": datetime.now()},
                         "Settings": {"x0 Generator": type(self.x0_generator).__name__,
-                                     "Convergence Checker": str(self.convergence_checker).replace("\n", ""),
-                                     "Hunt Conditions": str(self.killing_conditions).replace("\n", ""),
+                                     "Convergence Checker": nested_string_formatting(str(self.convergence_checker)),
+                                     "Hunt Conditions": nested_string_formatting(str(self.killing_conditions)),
                                      "Optimizers Available": optimizers,
                                      "Max Parallel Optimizers": self.max_jobs},
                         "Counters": {"Function Evaluations": self.f_counter,
@@ -795,8 +764,6 @@ class GloMPOManager:
             self.optimizer_packs[opt_id].process.join(1)
             if self.optimizer_packs[opt_id].process.is_alive():
                 self.optimizer_packs[opt_id].process.terminate()
-            if self.hunting_processes[opt_id].is_alive():
-                self.hunting_processes[opt_id].terminate()
 
     def _optional_print(self, message: str, level: int):
         """ Controls printing of messages according to the user's choice using the verbose setting.
