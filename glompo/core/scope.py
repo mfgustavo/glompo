@@ -210,7 +210,7 @@ class GloMPOScope:
             line.set_xdata(x_vals)
             line.set_ydata(y_vals)
 
-    def add_stream(self, opt_id: int, type: Optional[str] = None):
+    def add_stream(self, opt_id: int, opt_type: Optional[str] = None):
         """ Registers and sets up a new optimizer in the scope. """
 
         self.n_streams += 1
@@ -257,8 +257,8 @@ class GloMPOScope:
                 color = 'red'
             self.streams[opt_id][line].set_color(color)
 
-        if type:
-            label = f"{opt_id}: {type}"
+        if opt_type:
+            label = f"{opt_id}: {opt_type}"
         else:
             label = f"Optimizer {opt_id}"
 

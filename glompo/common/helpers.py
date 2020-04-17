@@ -7,6 +7,10 @@ __all__ = ("nested_string_formatting",)
 
 
 def nested_string_formatting(nested_str: str):
+    """ Reformats strings produced by the _CombiCore class (used by hunter and checkers) by indenting each level
+        depending on its nested level.
+    """
+
     # Strip first and last parenthesis if there
     if nested_str[0] == '[':
         nested_str = nested_str[1:]
@@ -27,7 +31,7 @@ def nested_string_formatting(nested_str: str):
             lines[i] = f"{' ' * level_count}{line}"
             level_count += 1
             continue
-        elif ']' in line:
+        if ']' in line:
             level_count -= 1
         lines[i] = f"{' ' * level_count}{line}"
 

@@ -244,6 +244,7 @@ class DataRegressor:
         """
         if cache_key in self.mle_cache:
             return self.mle_cache[cache_key].result
+        return None
 
     def get_mcmc_results(self, cache_key: int, parms: str = 'all') -> Tuple[float, float, float]:
         """ Will look for previous results in the mcc_cache and return them if found; None is returned if not. Note

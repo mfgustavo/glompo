@@ -57,5 +57,6 @@ class ProcessPackage(NamedTuple):
 
 
 class RegressorCacheItem(NamedTuple):
+    """ Results obtained by the DataRegressor and a hash of the data used to get the result. """
     hash: int
     result: Union[Tuple[float, float, float], Sequence[Tuple[float, float, float]]]

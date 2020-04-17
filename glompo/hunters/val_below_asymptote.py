@@ -51,7 +51,7 @@ class ValBelowAsymptote(BaseHunter):
                                                   cache_key=victim_opt_id)
 
             if len(result) == 3:
-                med, low, upp = tuple(victim_y[-1] * val for val in result)
+                _, low, _ = tuple(victim_y[-1] * val for val in result)
                 self._last_result = hunter_vals[-1] < low
                 return self._last_result
 
