@@ -17,10 +17,10 @@ class ValBelowAsymptote(BaseHunter):
         interval is set by during initialisation.
     """
 
-    def __init__(self, significance: int, nwalkers: int = 20, nsteps: int = 5000):
+    def __init__(self, significance: int = 0.95, nwalkers: int = 20, nsteps: int = 5000):
         """ Parameters
             ----------
-            significance: int
+            significance: int = 0.95
                 Confidence value of the interval returned by the Bayesian regression. Must be in the interval (0, 1)
                 exclusive.
             nwalkers: int

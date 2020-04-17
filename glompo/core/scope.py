@@ -266,10 +266,11 @@ class GloMPOScope:
                                               label=label))
         self.ax.legend(loc='upper right', handles=self.leg_elements, bbox_to_anchor=(1.35, 1))
 
-    def update_optimizer(self, opt_id: int, pt: tuple):
+    def update_optimizer(self, opt_id: int, pt: tuple, redraw_graph: bool = True):
         """ Given pt tuple is used to update the opt_id optimizer plot."""
         self._update_point(opt_id, 'all_opt', pt)
-        self._redraw_graph()
+        if redraw_graph:
+            self._redraw_graph()
 
     def update_scatter(self, opt_id: int, pt: tuple):
         """ Given pt tuple is used to update the opt_id training data plot."""

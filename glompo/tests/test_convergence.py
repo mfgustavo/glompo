@@ -49,6 +49,11 @@ class FancyChecker(BaseChecker):
         pass
 
 
+class LazinessChecker(BaseChecker):
+    def __call__(self, manager) -> bool:
+        raise NotImplementedError
+
+
 def any_checker():
     return _OrCore(PlainChecker(), PlainChecker())
 
@@ -75,6 +80,11 @@ class TestBase:
                                               (any_checker(), all_checker())])
     def test_and(self, base1, base2):
         assert (base1 & base2).__class__.__name__ == "_AndCore"
+
+    @pytest.mark.parametrize("checker, output", [(TrueChecker() | LazinessChecker(), True),
+                                                 (FalseChecker() & LazinessChecker(), False)])
+    def test_laziness(self, checker, output):
+        assert checker(None) == output
 
     @pytest.mark.parametrize("checker, output", [(PlainChecker(), "PlainChecker()"),
                                                  (any_checker(), "[PlainChecker() OR \nPlainChecker()]"),

@@ -8,6 +8,10 @@ from glompo.hunters.basehunter import BaseHunter
 from glompo.hunters.confidencewidth import ConfidenceWidth
 from glompo.hunters.min_iterations import MinIterations
 from glompo.hunters.pseudoconv import PseudoConverged
+from glompo.hunters.parameterdistance import ParameterDistance
+from glompo.hunters.timeannealing import TimeAnnealing
+from glompo.hunters.valueannealing import ValueAnnealing
+from glompo.hunters.val_below_asymptote import ValBelowAsymptote
 from glompo.core.logger import Logger
 
 
@@ -42,6 +46,14 @@ def any_hunter():
 
 def all_hunter():
     return _AndCore(PlainHunter(), PlainHunter())
+
+
+class FakeLog:
+    def __init__(self, path1, path2):
+        self.path = [path1, path2]
+
+    def get_history(self, opt_id, *args):
+        return self.path[opt_id - 1]
 
 
 class TestBase:
@@ -161,3 +173,96 @@ class TestPseudoConv:
     def test_condition(self, iters, tol, output, log):
         cond = PseudoConverged(iters, tol)
         assert cond(log, None, None, 1) is output
+
+
+class TestParameterDistance:
+
+    @pytest.mark.parametrize("path1, path2, rel_dist, output", [([[0, 0], [0, 1], [0, 2]],
+                                                                 [[1, 0], [1, 1], [1, 2]], 0.1, False),
+                                                                ([[0, 0], [0, 1], [0, 2]],
+                                                                 [[1, 0], [1, 1], [1, 2]], 0.5, True),
+                                                                ([[0, 0], [0, 1], [1, 2]],
+                                                                 [[1, 0], [1, 1], [1, 2]], 0.1, True),
+                                                                ([[0, 0], [10, 10], [20, 20]],
+                                                                 [[20, 18], [20, 19], [20, 21]], 0.1, True),
+                                                                ([[0, 0], [0, 0.1], [0, 0.2]],
+                                                                 [[0, 0], [10, 10], [0, 0.25]], 0.1, False),
+                                                                ([[0, 0], [100, 100], [0, 1]],
+                                                                 [[1, 0], [1, 1], [0, 1.1]], 0.11, True)
+                                                                ])
+    def test_condition(self, path1, path2, rel_dist, output):
+        cond = ParameterDistance(rel_dist)
+        log = FakeLog(path1, path2)
+        assert cond(log, None, 1, 2) == output
+
+    @pytest.mark.parametrize("rel_dist", [-5, -5.0, 0])
+    def test_init_crash(self, rel_dist):
+        with pytest.raises(ValueError):
+            ParameterDistance(rel_dist)
+
+    @pytest.mark.parametrize("rel_dist", [5, 2, 0.2])
+    def test_init_pass(self, rel_dist):
+        ParameterDistance(rel_dist)
+
+
+class TestTimeAnnealing:
+
+    @pytest.mark.parametrize("path1, path2, crit_ratio, output", [(np.zeros(10), np.zeros(99), 0.1, False),
+                                                                  (np.zeros(10), np.zeros(49), 0.2, False),
+                                                                  (np.zeros(10), np.zeros(19), 0.5, False),
+                                                                  (np.zeros(10), np.zeros(10), 1.0, False),
+                                                                  (np.zeros(10), np.zeros(4), 2.0, False),
+                                                                  (np.zeros(10), np.zeros(1), 5.0, False)
+                                                                  ])
+    def test_condition(self, path1, path2, crit_ratio, output):
+        np.random.seed(1825)
+        cond = TimeAnnealing(crit_ratio)
+        log = FakeLog(path1, path2)
+        assert cond(log, None, 1, 2) == output
+
+    @pytest.mark.parametrize("rel_dist", [-5, -5.0, 0])
+    def test_init_crash(self, rel_dist):
+        with pytest.raises(ValueError):
+            TimeAnnealing(rel_dist)
+
+    @pytest.mark.parametrize("rel_dist", [5, 2, 0.2])
+    def test_init_pass(self, rel_dist):
+        TimeAnnealing(rel_dist)
+
+
+class TestValueAnnealing:
+
+    @pytest.mark.parametrize("path1, path2, output", [([1000], [1], False),
+                                                      ([1000], [10], False),
+                                                      ([1000], [100], False),
+                                                      ([1000], [500], False),
+                                                      ([1000], [999], False)
+                                                      ])
+    def test_condition(self, path1, path2, output):
+        cond = ValueAnnealing()
+        log = FakeLog(path1, path2)
+        assert cond(log, None, 1, 2) == output
+
+
+class TestValBelowAsymptote:
+
+    class FakeRegressor:
+        def __init__(self, result):
+            self.result = result
+
+        def estimate_posterior(self, *args, **kwargs):
+            return self.result
+
+    @pytest.mark.parametrize("path1, path2, result, output", [(np.full(10, 100), np.ones(10), (105, 97, 120), False),
+                                                              (np.full(10, 100), np.ones(10), (99, 99, 101), False),
+                                                              (np.full(10, 100), np.ones(10), (5, 2, 5.5), False),
+                                                              (np.full(10, 100), np.ones(10), (5,), False),
+                                                              (np.full(0, 100),  np.ones(10), (5, 2, 5.5), False),
+                                                              (np.full(10, 100), np.ones(10), (101, 100.1, 101), True),
+                                                              (np.full(10, 100), np.ones(10), (200, 170, 200), True)
+                                                              ])
+    def test_condition(self, path1, path2, result, output):
+        cond = ValBelowAsymptote()
+        log = FakeLog(path1, path2)
+        reg = self.FakeRegressor(result)
+        assert cond(log, reg, 1, 2) == output

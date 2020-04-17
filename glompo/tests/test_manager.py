@@ -15,7 +15,7 @@ from glompo.core.manager import GloMPOManager
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from glompo.generators.random import RandomGenerator
 from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxOptsStarted, MaxFuncCalls, MaxSeconds
-from glompo.hunters import BaseHunter, MinIterations, ValBelowAsymptote
+from glompo.hunters import BaseHunter, MinIterations
 from glompo.common.namedtuples import *
 from glompo.common.customwarnings import *
 from glompo.common.wrappers import redirect, task_args_wrapper

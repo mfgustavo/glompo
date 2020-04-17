@@ -108,8 +108,8 @@ class DataRegressor:
 
             if mle.success:
                 if cache_key:
-                    self.mle_cache[cache_key] = RegressorCacheItem(hash_key, mle.x)
-                return mle.x
+                    self.mle_cache[cache_key] = RegressorCacheItem(hash_key, tuple(mle.x))
+                return tuple(mle.x)
 
         warnings.warn("Multiple attempts to find the MLE failed. Returning rough estimates. These numbers are"
                       " unreliable.", RuntimeWarning)
@@ -193,7 +193,7 @@ class DataRegressor:
             print("Starting run...")
             start = time()
             sampler.run_mcmc(starting_pos, nsteps)
-            print(f"Done in {time()-start}s")
+            print(f"Sampling done in {time()-start}s")
         except ValueError:
             warnings.warn("MCMC run failed. Returning MLE estimate.", RuntimeWarning)
 
