@@ -28,6 +28,7 @@ class ValBelowAsymptote(BaseHunter):
             nsteps: int
                 Number of samples taken by each walker.
         """
+        super().__init__()
         self.significance = significance
         self.nwalkers = nwalkers
         self.nsteps = nsteps
@@ -51,6 +52,8 @@ class ValBelowAsymptote(BaseHunter):
 
             if len(result) == 3:
                 med, low, upp = tuple(victim_y[-1] * val for val in result)
-                return hunter_vals[-1] < low
+                self._kill_result = hunter_vals[-1] < low
+                return self._kill_result
 
-        return False
+        self._kill_result = False
+        return self._kill_result

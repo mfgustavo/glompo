@@ -15,7 +15,7 @@ from glompo.core.manager import GloMPOManager
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from glompo.generators.random import RandomGenerator
 from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxOptsStarted, MaxFuncCalls, MaxSeconds
-from glompo.hunters import BaseHunter, MinIterations, GPRSuitable, ValBelowAsymptote
+from glompo.hunters import BaseHunter, MinIterations, ValBelowAsymptote
 from glompo.common.namedtuples import *
 from glompo.common.customwarnings import *
 from glompo.common.wrappers import redirect, task_args_wrapper
@@ -102,7 +102,6 @@ class HangingOptimizer(BaseOptimizer):
         pass
 
 
-
 class HangOnEndOptimizer(BaseOptimizer):
 
     needscaler = False
@@ -152,6 +151,7 @@ class ErrorOptimizer(BaseOptimizer):
 
 class TrueHunter(BaseHunter):
     def __init__(self, target: int):
+        super().__init__()
         self.target = target
 
     def is_kill_condition_met(self, log, regressor, hunter_opt_id, victim_opt_id) -> bool:
@@ -372,7 +372,6 @@ class TestManager:
 
         sleep(0.1)  # Delay for process cleanup
 
-
     def test_too_long_hangingterm(self):
         manager = GloMPOManager(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,
                                 n_parms=3,
@@ -558,7 +557,7 @@ class TestManager:
                                 convergence_checker=KillsAfterConvergence(2, 1) | MaxFuncCalls(10000) | MaxSeconds(
                                     5 * 60),
                                 x0_generator=IntervalGenerator(),
-                                killing_conditions=GPRSuitable(0.1) & MinIterations(10) & ValBelowAsymptote(),
+                                killing_conditions=None,
                                 history_logging=3,
                                 visualisation=False,
                                 visualisation_args=None,

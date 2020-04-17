@@ -26,4 +26,5 @@ class ValueAnnealing(BaseHunter):
         ratio = f_hunter / f_victim
         test_num = random.uniform(0, 1)
 
-        return test_num > ratio
+        self._kill_result = test_num > ratio
+        return self._kill_result

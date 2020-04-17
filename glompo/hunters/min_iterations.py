@@ -14,6 +14,7 @@ class MinIterations(BaseHunter):
             multiple optimizer types since iterations are often defined very differently and do not necessarily
             equal one function call.
         """
+        super().__init__()
         if min_pts > 0 and isinstance(min_pts, int):
             self.min_pts = min_pts
         else:
@@ -25,4 +26,6 @@ class MinIterations(BaseHunter):
                               hunter_opt_id: int,
                               victim_opt_id: int) -> bool:
         items = len(log.get_history(victim_opt_id))
-        return items >= self.min_pts
+
+        self._kill_result = items >= self.min_pts
+        return self._kill_result

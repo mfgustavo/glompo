@@ -16,6 +16,9 @@ __all__ = ("BaseHunter",)
 class BaseHunter(ABC):
     """ Base hunter from which all hunters must inherit to be compatible with GloMPO. """
 
+    def __init__(self):
+        self._kill_result = False
+
     @abstractmethod
     def is_kill_condition_met(self,
                               log: Logger,
@@ -24,6 +27,9 @@ class BaseHunter(ABC):
                               victim_opt_id: int) -> bool:
         """ When called, this method may check any values within the logs or GPRs of both hunter or the victim
         and return a bool if the desired condition is met.
+
+        Note: For proper functionality, the result of is_kill_condition_met must be saved to self._kill_result before
+            returning.
 
         Parameters
         ----------
@@ -56,10 +62,18 @@ class BaseHunter(ABC):
         lst = lst[:-2]
         return f"{self.__class__.__name__}({lst})"
 
+    def is_killcond_str(self) -> str:
+        """ String representation of the object with its convergence result. """
+        mess = str(self)
+        mess += f" = {self._kill_result}"
+        return mess
+
 
 class _CombiHunter(BaseHunter):
 
     def __init__(self, base1: BaseHunter, base2: BaseHunter):
+        super().__init__()
+        # Call super and only keep explicit check
         for base in [base1, base2]:
             if not isinstance(base, BaseHunter):
                 raise TypeError("_CombiHunter can only be initialised with instances of BaseHunter subclasses.")
@@ -76,6 +90,10 @@ class _CombiHunter(BaseHunter):
     def _combi_string_maker(self, keyword: str):
         return f"[{self.base1} {keyword} \n{self.base2}]"
 
+    def _combi_iskilled_maker(self, keyword: str):
+        return f"[{self.base1.is_killcond_str()} {keyword} \n" \
+               f"{self.base2.is_killcond_str()}]"
+
 
 class _AnyHunter(_CombiHunter):
     def is_kill_condition_met(self,
@@ -89,6 +107,9 @@ class _AnyHunter(_CombiHunter):
     def __str__(self):
         return self._combi_string_maker("OR")
 
+    def is_killcond_str(self) -> str:
+        return self._combi_iskilled_maker("OR")
+
 
 class _AllHunter(_CombiHunter):
     def is_kill_condition_met(self,
@@ -101,3 +122,6 @@ class _AllHunter(_CombiHunter):
 
     def __str__(self):
         return self._combi_string_maker("AND")
+
+    def is_killcond_str(self) -> str:
+        return self._combi_iskilled_maker("AND")

@@ -646,7 +646,7 @@ class GloMPOManager:
                 self._optional_print("No results found.", 2)
 
     def _start_hunt(self, hunter_id: int):
-        """ Creates a new hunt process with the provided hunter_id as the 'best' optimizer looking to terminate
+        """ Creates a new hunt with the provided hunter_id as the 'best' optimizer looking to terminate
             the other active optimizers according to the provided killing_conditions.
         """
 
@@ -665,7 +665,9 @@ class GloMPOManager:
                     kill = self.killing_conditions.is_kill_condition_met(self.log, self.regressor, hunter_id, victim_id)
 
                     if kill:
-                        self._optional_print(f"Optimizer {hunter_id} wants to kill Optimizer {victim_id}", 1)
+                        self._optional_print(f"Optimizer {hunter_id} wants to kill Optimizer {victim_id}:\n"
+                                             f"{nested_string_formatting(self.killing_conditions.is_killcond_str())}",
+                                             1)
 
                         if victim_id not in self.graveyard:
                             self._shutdown_job(victim_id)
@@ -734,8 +736,8 @@ class GloMPOManager:
                                        "Start Time": self.dt_start,
                                        "Stop Time": datetime.now()},
                         "Settings": {"x0 Generator": type(self.x0_generator).__name__,
-                                     "Convergence Checker": nested_string_formatting(str(self.convergence_checker)),
-                                     "Hunt Conditions": nested_string_formatting(str(self.killing_conditions)),
+                                     "Convergence Checker": str(self.convergence_checker).replace('\n', ''),
+                                     "Hunt Conditions": str(self.killing_conditions).replace('\n', ''),
                                      "Optimizers Available": optimizers,
                                      "Max Parallel Optimizers": self.max_jobs},
                         "Counters": {"Function Evaluations": self.f_counter,
@@ -743,11 +745,11 @@ class GloMPOManager:
                                      "Optimizers": {"Started": self.o_counter,
                                                     "Killed": len(self.hunt_victims),
                                                     "Converged": self.conv_counter}},
-                        "Solution": {"x": result.x,
-                                     "fx": result.fx,
+                        "Solution": {"fx": result.fx,
                                      "stats": result.stats,
                                      "origin": result.origin,
-                                     "exit cond.": reason},
+                                     "exit cond.": reason,
+                                     "x": result.x},
                         }
                 yaml.dump(data, file, default_flow_style=False, sort_keys=False)
 

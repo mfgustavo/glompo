@@ -22,7 +22,8 @@ class BaseChecker(ABC):
             if GloMPO has converged and returns a bool.
 
             Note: For proper functionality, the result of check_convergence must be saved to self._converged before
-            returning. """
+            returning.
+        """
 
     def __or__(self, other: 'BaseChecker') -> '_AnyChecker':
         return _AnyChecker(self, other)

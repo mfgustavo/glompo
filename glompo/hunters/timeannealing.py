@@ -25,6 +25,7 @@ class TimeAnnealing(BaseHunter):
                 longer than the hunter. Values higher than one are stricter and may kill the victim even if it has
                 iterated fewer times than the hunter.
         """
+        super().__init__()
         if isinstance(crit_ratio, (float, int)) and crit_ratio > 0:
             self.crit_ratio = crit_ratio
         else:
@@ -41,6 +42,5 @@ class TimeAnnealing(BaseHunter):
         ratio = n_hunter / n_victim
         test_num = random.uniform(0, self.crit_ratio)
 
-        print(f"Ratio is {ratio:.2f}. Test is {test_num:.2f}. Kill is {test_num > ratio}")
-
-        return test_num > ratio
+        self._kill_result = test_num > ratio
+        return self._kill_result

@@ -13,6 +13,7 @@ class ConfidenceWidth(BaseHunter):
         """ Returns True if the standard deviation of the victim's asymptote uncertainty is less than a percentage of
             the mean. The fraction is given by threshold as a value between 0 and 1.
         """
+        super().__init__()
         if isinstance(threshold, (float, int)) and threshold > 0:
             self.threshold = threshold
         else:
@@ -24,4 +25,6 @@ class ConfidenceWidth(BaseHunter):
                               hunter_opt_id: int,
                               victim_opt_id: int) -> bool:
         med, lower, upper = regressor.get_mcmc_results(victim_opt_id, 'Asymptote')
-        return (upper - lower) < self.threshold * abs(med)
+
+        self._kill_result = (upper - lower) < self.threshold * abs(med)
+        return self._kill_result

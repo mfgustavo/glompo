@@ -66,8 +66,8 @@ class TestBase:
         assert (base1 & base2).__class__.__name__ == "_AllHunter"
 
     @pytest.mark.parametrize("hunter, output", [(PlainHunter(), "PlainHunter()"),
-                                                (any_hunter(), "PlainHunter() OR \nPlainHunter()"),
-                                                (all_hunter(), "PlainHunter() AND \nPlainHunter()"),
+                                                (any_hunter(), "[PlainHunter() OR \nPlainHunter()]"),
+                                                (all_hunter(), "[PlainHunter() AND \nPlainHunter()]"),
                                                 (FancyHunter(1, 2, 3), "FancyHunter(a=1, b=5, c)")])
     def test_str(self, hunter, output):
         assert str(hunter) == output

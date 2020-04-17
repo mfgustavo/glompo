@@ -19,7 +19,7 @@ class ParameterDistance(BaseHunter):
     """
 
     def __init__(self, relative_distance: float):
-
+        super().__init__()
         if isinstance(relative_distance, (float, int)) and relative_distance > 0:
             self.relative_distance = relative_distance
         else:
@@ -30,12 +30,13 @@ class ParameterDistance(BaseHunter):
                               regressor: DataRegressor,
                               hunter_opt_id: int,
                               victim_opt_id: int) -> bool:
-        h0 = log.get_history(hunter_opt_id, 'x')[0]
-        h1 = log.get_history(hunter_opt_id, 'x')[-1]
-        v1 = log.get_history(victim_opt_id, 'x')[-1]
+        h0 = np.array(log.get_history(hunter_opt_id, 'x')[0])
+        h1 = np.array(log.get_history(hunter_opt_id, 'x')[-1])
+        v1 = np.array(log.get_history(victim_opt_id, 'x')[-1])
 
-        traj_length = np.sqrt((h0 - h1) ** 2)
-        opt_dist = np.sqrt((v1 - h1) ** 2)
+        traj_length = np.sqrt(np.sum((h0 - h1) ** 2))
+        opt_dist = np.sqrt(np.sum((v1 - h1) ** 2))
         ratio = opt_dist / traj_length
 
-        return ratio <= self.relative_distance
+        self._kill_result = ratio <= self.relative_distance
+        return self._kill_result

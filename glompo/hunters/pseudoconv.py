@@ -13,6 +13,7 @@ class PseudoConverged(BaseHunter):
         """ Returns True if the victim's best value has not changed by more than tol fraction in the last calls
             function evaluations where tol is a fraction between 0 and 1.
         """
+        super().__init__()
         self.calls = calls
         self.tol = tol
 
@@ -37,4 +38,6 @@ class PseudoConverged(BaseHunter):
         i += 2
 
         fbest_calls = vals[-i]
-        return abs(fbest_current - fbest_calls) <= abs(fbest_calls * self.tol)
+
+        self._kill_result = abs(fbest_current - fbest_calls) <= abs(fbest_calls * self.tol)
+        return self._kill_result

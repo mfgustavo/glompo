@@ -71,32 +71,32 @@ class TestBase:
         assert (base1 & base2).__class__.__name__ == "_AllChecker"
 
     @pytest.mark.parametrize("checker, output", [(PlainChecker(), "PlainChecker()"),
-                                                 (any_checker(), "(PlainChecker() OR \nPlainChecker())"),
-                                                 (all_checker(), "(PlainChecker() AND \nPlainChecker())"),
+                                                 (any_checker(), "[PlainChecker() OR \nPlainChecker()]"),
+                                                 (all_checker(), "[PlainChecker() AND \nPlainChecker()]"),
                                                  (FancyChecker(1, 2, 3), "FancyChecker(a=1, b=5, c)")])
     def test_str(self, checker, output):
         assert str(checker) == output
 
     @pytest.mark.parametrize("checker, output", [(PlainChecker(), "PlainChecker() = False"),
                                                  (TrueChecker(), "TrueChecker() = True"),
-                                                 (any_checker(), "(PlainChecker() = False OR \nPlainChecker() = "
-                                                                 "False)"),
-                                                 (all_checker(), "(PlainChecker() = False AND \nPlainChecker() = "
-                                                                 "False)"),
+                                                 (any_checker(), "[PlainChecker() = False OR \nPlainChecker() = "
+                                                                 "False]"),
+                                                 (all_checker(), "[PlainChecker() = False AND \nPlainChecker() = "
+                                                                 "False]"),
                                                  (FancyChecker(1, 2, 3), "FancyChecker(a=1, b=5, c) = False"),
                                                  (FalseChecker() | FalseChecker() & TrueChecker() | TrueChecker() &
-                                                  (TrueChecker() | FalseChecker()), "((FalseChecker() = False OR \n"
-                                                                                    "(FalseChecker() = False AND \n"
-                                                                                    "TrueChecker() = True)) OR \n"
-                                                                                    "(TrueChecker() = True AND \n"
-                                                                                    "(TrueChecker() = True OR \n"
-                                                                                    "FalseChecker() = False)))")])
+                                                  (TrueChecker() | FalseChecker()), "[[FalseChecker() = False OR \n"
+                                                                                    "[FalseChecker() = False AND \n"
+                                                                                    "TrueChecker() = True]] OR \n"
+                                                                                    "[TrueChecker() = True AND \n"
+                                                                                    "[TrueChecker() = True OR \n"
+                                                                                    "FalseChecker() = False]]]")])
     def test_conv_str(self, checker, output):
         assert checker.is_converged_str() == output
 
     def test_combi_init(self):
         with pytest.raises(TypeError):
-            _CombiChecker(1, 2, 3)
+            _CombiChecker(1, 2)
 
     def test_convergence(self):
         checker = FalseChecker() | FalseChecker() & TrueChecker() | TrueChecker() & (TrueChecker() | FalseChecker())
