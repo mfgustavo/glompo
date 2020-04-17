@@ -17,11 +17,11 @@ class PseudoConverged(BaseHunter):
         self.calls = calls
         self.tol = tol
 
-    def is_kill_condition_met(self,
-                              log: Logger,
-                              regressor: DataRegressor,
-                              hunter_opt_id: int,
-                              victim_opt_id: int) -> bool:
+    def __call__(self,
+                 log: Logger,
+                 regressor: DataRegressor,
+                 hunter_opt_id: int,
+                 victim_opt_id: int) -> bool:
         vals = log.get_history(victim_opt_id, "fx_best")
         fcalls = log.get_history(victim_opt_id, "f_call")
 
@@ -39,5 +39,5 @@ class PseudoConverged(BaseHunter):
 
         fbest_calls = vals[-i]
 
-        self._kill_result = abs(fbest_current - fbest_calls) <= abs(fbest_calls * self.tol)
-        return self._kill_result
+        self._last_result = abs(fbest_current - fbest_calls) <= abs(fbest_calls * self.tol)
+        return self._last_result

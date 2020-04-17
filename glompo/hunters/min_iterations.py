@@ -20,12 +20,12 @@ class MinIterations(BaseHunter):
         else:
             raise ValueError("min_pts must be a positive integer.")
 
-    def is_kill_condition_met(self,
-                              log: Logger,
-                              regressor: DataRegressor,
-                              hunter_opt_id: int,
-                              victim_opt_id: int) -> bool:
+    def __call__(self,
+                 log: Logger,
+                 regressor: DataRegressor,
+                 hunter_opt_id: int,
+                 victim_opt_id: int) -> bool:
         items = len(log.get_history(victim_opt_id))
 
-        self._kill_result = items >= self.min_pts
-        return self._kill_result
+        self._last_result = items >= self.min_pts
+        return self._last_result

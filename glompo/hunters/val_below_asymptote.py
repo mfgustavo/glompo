@@ -33,11 +33,11 @@ class ValBelowAsymptote(BaseHunter):
         self.nwalkers = nwalkers
         self.nsteps = nsteps
 
-    def is_kill_condition_met(self,
-                              log: Logger,
-                              regressor: DataRegressor,
-                              hunter_opt_id: int,
-                              victim_opt_id: int) -> bool:
+    def __call__(self,
+                 log: Logger,
+                 regressor: DataRegressor,
+                 hunter_opt_id: int,
+                 victim_opt_id: int) -> bool:
         hunter_vals = log.get_history(hunter_opt_id, "fx_best")
         victim_y = log.get_history(victim_opt_id, "fx")
         victim_t = np.array(range(len(victim_y)))
@@ -52,8 +52,8 @@ class ValBelowAsymptote(BaseHunter):
 
             if len(result) == 3:
                 med, low, upp = tuple(victim_y[-1] * val for val in result)
-                self._kill_result = hunter_vals[-1] < low
-                return self._kill_result
+                self._last_result = hunter_vals[-1] < low
+                return self._last_result
 
-        self._kill_result = False
-        return self._kill_result
+        self._last_result = False
+        return self._last_result

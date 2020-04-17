@@ -13,6 +13,6 @@ class MaxOptsStarted(BaseChecker):
         super().__init__()
         self.omax = omax
 
-    def check_convergence(self, manager: 'GloMPOManager') -> bool:
-        self._converged = manager.o_counter >= self.omax
-        return self._converged
+    def __call__(self, manager: 'GloMPOManager') -> bool:
+        self._last_result = manager.o_counter >= self.omax
+        return self._last_result

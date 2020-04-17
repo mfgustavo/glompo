@@ -19,12 +19,12 @@ class ConfidenceWidth(BaseHunter):
         else:
             raise ValueError("threshold should be a positive float.")
 
-    def is_kill_condition_met(self,
-                              log: Logger,
-                              regressor: DataRegressor,
-                              hunter_opt_id: int,
-                              victim_opt_id: int) -> bool:
+    def __call__(self,
+                 log: Logger,
+                 regressor: DataRegressor,
+                 hunter_opt_id: int,
+                 victim_opt_id: int) -> bool:
         med, lower, upper = regressor.get_mcmc_results(victim_opt_id, 'Asymptote')
 
-        self._kill_result = (upper - lower) < self.threshold * abs(med)
-        return self._kill_result
+        self._last_result = (upper - lower) < self.threshold * abs(med)
+        return self._last_result

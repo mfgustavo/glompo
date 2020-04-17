@@ -3,47 +3,45 @@
 import pytest
 import numpy as np
 
-from glompo.hunters.basehunter import BaseHunter, _AllHunter, _AnyHunter, _CombiHunter
+from glompo.common.corebase import _CombiCore, _AndCore, _OrCore
+from glompo.hunters.basehunter import BaseHunter
 from glompo.hunters.confidencewidth import ConfidenceWidth
 from glompo.hunters.min_iterations import MinIterations
-from glompo.hunters.val_below_asymptote import ValBelowAsymptote
 from glompo.hunters.pseudoconv import PseudoConverged
 from glompo.core.logger import Logger
 
 
 class PlainHunter(BaseHunter):
-    def __init__(self):
-        pass
-
-    def is_kill_condition_met(self, log, regressor, hunter_opt_id, victim_opt_id) -> bool:
+    def __call__(self, log, regressor, hunter_opt_id, victim_opt_id) -> bool:
         pass
 
 
 class TrueHunter(BaseHunter):
-    def is_kill_condition_met(self, log, regressor, hunter_opt_id, victim_opt_id) -> bool:
+    def __call__(self, log, regressor, hunter_opt_id, victim_opt_id) -> bool:
         return True
 
 
 class FalseHunter(BaseHunter):
-    def is_kill_condition_met(self, log, regressor, hunter_opt_id, victim_opt_id) -> bool:
+    def __call__(self, log, regressor, hunter_opt_id, victim_opt_id) -> bool:
         return False
 
 
 class FancyHunter(BaseHunter):
     def __init__(self, a, b, c):
+        super().__init__()
         self.a = a
         self.b = b + c
 
-    def is_kill_condition_met(self, log, regressor, hunter_opt_id, victim_opt_id) -> bool:
+    def __call__(self, log, regressor, hunter_opt_id, victim_opt_id) -> bool:
         pass
 
 
 def any_hunter():
-    return _AnyHunter(PlainHunter(), PlainHunter())
+    return _OrCore(PlainHunter(), PlainHunter())
 
 
 def all_hunter():
-    return _AllHunter(PlainHunter(), PlainHunter())
+    return _AndCore(PlainHunter(), PlainHunter())
 
 
 class TestBase:
@@ -54,7 +52,7 @@ class TestBase:
                                               (all_hunter(), PlainHunter()),
                                               (any_hunter(), all_hunter())])
     def test_or(self, base1, base2):
-        assert (base1 | base2).__class__.__name__ == "_AnyHunter"
+        assert (base1 | base2).__class__.__name__ == "_OrCore"
 
     @pytest.mark.parametrize("base1, base2", [(PlainHunter(), PlainHunter()),
                                               (PlainHunter(), any_hunter()),
@@ -63,7 +61,7 @@ class TestBase:
                                               (all_hunter(), PlainHunter()),
                                               (any_hunter(), all_hunter())])
     def test_and(self, base1, base2):
-        assert (base1 & base2).__class__.__name__ == "_AllHunter"
+        assert (base1 & base2).__class__.__name__ == "_AndCore"
 
     @pytest.mark.parametrize("hunter, output", [(PlainHunter(), "PlainHunter()"),
                                                 (any_hunter(), "[PlainHunter() OR \nPlainHunter()]"),
@@ -74,11 +72,11 @@ class TestBase:
 
     def test_combi_init(self):
         with pytest.raises(TypeError):
-            _CombiHunter(1, 2)
+            _CombiCore(1, 2)
 
     def test_kill_condition(self):
         hunter = FalseHunter() | FalseHunter() & TrueHunter() | TrueHunter() & (TrueHunter() | FalseHunter())
-        assert hunter.is_kill_condition_met(*(None,) * 4) is True
+        assert hunter(*(None,) * 4) is True
 
 
 class TestConfidenceWidth:
@@ -95,7 +93,7 @@ class TestConfidenceWidth:
                                                    (2.3, True)])
     def test_condition(self, threshold, output):
         cond = ConfidenceWidth(threshold)
-        assert cond.is_kill_condition_met(None, self.FakeRegressor(), None, None) == output
+        assert cond(None, self.FakeRegressor(), None, None) == output
 
     @pytest.mark.parametrize("threshold", [-5, -5.0, 0])
     def test_init_crash(self, threshold):
@@ -124,7 +122,7 @@ class TestMinTraningPoints:
     def test_condition(self, n_pts, output):
         cond = MinIterations(5)
         log = self.FakeLog(n_pts)
-        assert cond.is_kill_condition_met(log, None, None, None) == output
+        assert cond(log, None, None, None) == output
 
     @pytest.mark.parametrize("threshold", [-5, -5.0, 0, 32.5, 0.25])
     def test_init_crash(self, threshold):
@@ -162,4 +160,4 @@ class TestPseudoConv:
                                                          (125, 0.91, True, 5)], indirect=("log",))
     def test_condition(self, iters, tol, output, log):
         cond = PseudoConverged(iters, tol)
-        assert cond.is_kill_condition_met(log, None, None, 1) is output
+        assert cond(log, None, None, 1) is output

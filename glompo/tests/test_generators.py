@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
-from ..generators.random import RandomGenerator
-from ..generators.peterbation import PerterbationGenerator
-from ..common.namedtuples import Bound
+from glompo.generators.random import RandomGenerator
+from glompo.generators.peterbation import PerterbationGenerator
+from glompo.common.namedtuples import Bound
 
 
 class TestRandom:

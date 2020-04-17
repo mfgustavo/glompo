@@ -13,6 +13,6 @@ class MaxKills(BaseChecker):
         super().__init__()
         self.kills_max = kills_max
 
-    def check_convergence(self, manager: 'GloMPOManager') -> bool:
-        self._converged = len(manager.hunt_victims) >= self.kills_max
-        return self._converged
+    def __call__(self, manager: 'GloMPOManager') -> bool:
+        self._last_result = len(manager.hunt_victims) >= self.kills_max
+        return self._last_result

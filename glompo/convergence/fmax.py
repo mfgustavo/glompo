@@ -13,6 +13,6 @@ class MaxFuncCalls(BaseChecker):
         super().__init__()
         self.fmax = fmax
 
-    def check_convergence(self, manager: 'GloMPOManager') -> bool:
-        self._converged = manager.f_counter >= self.fmax
-        return self._converged
+    def __call__(self, manager: 'GloMPOManager') -> bool:
+        self._last_result = manager.f_counter >= self.fmax
+        return self._last_result

@@ -2,7 +2,8 @@
 
 import pytest
 
-from glompo.convergence.basechecker import BaseChecker, _AnyChecker, _AllChecker, _CombiChecker
+from glompo.common.corebase import _CombiCore, _AndCore, _OrCore
+from glompo.convergence.basechecker import BaseChecker
 from glompo.convergence.tmax import MaxSeconds
 from glompo.convergence.fmax import MaxFuncCalls
 from glompo.convergence.nconv import NOptConverged
@@ -15,21 +16,26 @@ class PlainChecker(BaseChecker):
     def __init__(self):
         super().__init__()
 
-    def check_convergence(self, manager) -> bool:
+    def __call__(self, manager) -> bool:
         pass
 
 
 class TrueChecker(BaseChecker):
     def __init__(self):
         super().__init__()
-        self._converged = True
+        self._last_result = True
 
-    def check_convergence(self, manager) -> bool:
+    def __call__(self, manager) -> bool:
+        self._last_result = True
         return True
 
 
 class FalseChecker(BaseChecker):
-    def check_convergence(self, manager) -> bool:
+    def __init__(self):
+        super().__init__()
+        self._last_result = False
+
+    def __call__(self, manager) -> bool:
         return False
 
 
@@ -39,16 +45,16 @@ class FancyChecker(BaseChecker):
         self.a = a
         self.b = b + c
 
-    def check_convergence(self, manager) -> bool:
+    def __call__(self, manager) -> bool:
         pass
 
 
 def any_checker():
-    return _AnyChecker(PlainChecker(), PlainChecker())
+    return _OrCore(PlainChecker(), PlainChecker())
 
 
 def all_checker():
-    return _AllChecker(PlainChecker(), PlainChecker())
+    return _AndCore(PlainChecker(), PlainChecker())
 
 
 class TestBase:
@@ -59,7 +65,7 @@ class TestBase:
                                               (all_checker(), PlainChecker()),
                                               (any_checker(), all_checker())])
     def test_or(self, base1, base2):
-        assert (base1 | base2).__class__.__name__ == "_AnyChecker"
+        assert (base1 | base2).__class__.__name__ == "_OrCore"
 
     @pytest.mark.parametrize("base1, base2", [(PlainChecker(), PlainChecker()),
                                               (PlainChecker(), any_checker()),
@@ -68,7 +74,7 @@ class TestBase:
                                               (all_checker(), PlainChecker()),
                                               (any_checker(), all_checker())])
     def test_and(self, base1, base2):
-        assert (base1 & base2).__class__.__name__ == "_AllChecker"
+        assert (base1 & base2).__class__.__name__ == "_AndCore"
 
     @pytest.mark.parametrize("checker, output", [(PlainChecker(), "PlainChecker()"),
                                                  (any_checker(), "[PlainChecker() OR \nPlainChecker()]"),
@@ -77,13 +83,13 @@ class TestBase:
     def test_str(self, checker, output):
         assert str(checker) == output
 
-    @pytest.mark.parametrize("checker, output", [(PlainChecker(), "PlainChecker() = False"),
+    @pytest.mark.parametrize("checker, output", [(PlainChecker(), "PlainChecker() = None"),
                                                  (TrueChecker(), "TrueChecker() = True"),
-                                                 (any_checker(), "[PlainChecker() = False OR \nPlainChecker() = "
-                                                                 "False]"),
-                                                 (all_checker(), "[PlainChecker() = False AND \nPlainChecker() = "
-                                                                 "False]"),
-                                                 (FancyChecker(1, 2, 3), "FancyChecker(a=1, b=5, c) = False"),
+                                                 (any_checker(), "[PlainChecker() = None OR \nPlainChecker() = "
+                                                                 "None]"),
+                                                 (all_checker(), "[PlainChecker() = None AND \nPlainChecker() = "
+                                                                 "None]"),
+                                                 (FancyChecker(1, 2, 3), "FancyChecker(a=1, b=5, c) = None"),
                                                  (FalseChecker() | FalseChecker() & TrueChecker() | TrueChecker() &
                                                   (TrueChecker() | FalseChecker()), "[[FalseChecker() = False OR \n"
                                                                                     "[FalseChecker() = False AND \n"
@@ -92,15 +98,15 @@ class TestBase:
                                                                                     "[TrueChecker() = True OR \n"
                                                                                     "FalseChecker() = False]]]")])
     def test_conv_str(self, checker, output):
-        assert checker.is_converged_str() == output
+        assert checker.str_with_result() == output
 
     def test_combi_init(self):
         with pytest.raises(TypeError):
-            _CombiChecker(1, 2)
+            _CombiCore(1, 2)
 
     def test_convergence(self):
         checker = FalseChecker() | FalseChecker() & TrueChecker() | TrueChecker() & (TrueChecker() | FalseChecker())
-        assert checker.check_convergence(None) is True
+        assert checker(None) is True
 
 
 class TestOthers:
@@ -125,7 +131,7 @@ class TestOthers:
                                                  ])
     def test_conditions(self, checker, output):
         manager = self.Manager()
-        assert checker.check_convergence(manager) is output
+        assert checker(manager) is output
 
     def test_killsafterconv(self):
         checker = KillsAfterConvergence(4, 2)
@@ -136,13 +142,13 @@ class TestOthers:
             manager.hunt_victims.add(kills)
             if kills % 3 == 0:
                 manager.conv_counter += 1
-            assert not checker.check_convergence(manager)
+            assert not checker(manager)
         manager.hunt_victims.add(100)
-        assert checker.check_convergence(manager)
+        assert checker(manager)
         manager.hunt_victims.add(200)
         manager.hunt_victims.add(300)
         manager.hunt_victims.add(400)
         manager.hunt_victims.add(500)
-        assert checker.check_convergence(manager)
+        assert checker(manager)
         manager.conv_counter += 4
-        assert checker.check_convergence(manager)
+        assert checker(manager)

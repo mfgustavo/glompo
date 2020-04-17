@@ -316,7 +316,7 @@ class GloMPOManager:
         self.o_counter = 0
         self.f_counter = 0
         self.last_hunt = 0
-        self.conv_counter = 0  # Number of _converged optimizers
+        self.conv_counter = 0  # Number of converged optimizers
         self.hunt_counter = 0  # Number of hunting jobs started
         self.hunt_victims = {}  # opt_ids of killed jobs and timestamps when the signal was sent
 
@@ -430,14 +430,14 @@ class GloMPOManager:
 
                 self._inspect_children()
 
-                converged = self.convergence_checker.check_convergence(self)
+                converged = self.convergence_checker(self)
                 if converged:
                     self._optional_print(f"Convergence Reached", 1)
 
             self._optional_print(f"Exiting manager loop.\n"
                                  f"Exit conditions met: \n"
-                                 f"{nested_string_formatting(self.convergence_checker.is_converged_str())}\n", 1)
-            reason = self.convergence_checker.is_converged_str().replace("\n", "")
+                                 f"{nested_string_formatting(self.convergence_checker.str_with_result())}\n", 1)
+            reason = self.convergence_checker.str_with_result().replace("\n", "")
 
             self._stop_all_children()
 
@@ -662,11 +662,11 @@ class GloMPOManager:
                 has_points = len(self.log.get_history(victim_id, "fx")) > 0
                 if not in_graveyard and has_points and victim_id != hunter_id:
                     self._optional_print(f"Optimizer {hunter_id} -> Optimizer {victim_id} hunt started.", 1)
-                    kill = self.killing_conditions.is_kill_condition_met(self.log, self.regressor, hunter_id, victim_id)
+                    kill = self.killing_conditions(self.log, self.regressor, hunter_id, victim_id)
 
                     if kill:
                         self._optional_print(f"Optimizer {hunter_id} wants to kill Optimizer {victim_id}:\n"
-                                             f"{nested_string_formatting(self.killing_conditions.is_killcond_str())}",
+                                             f"{nested_string_formatting(self.killing_conditions.str_with_result())}",
                                              1)
 
                         if victim_id not in self.graveyard:

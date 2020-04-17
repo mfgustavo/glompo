@@ -31,16 +31,16 @@ class TimeAnnealing(BaseHunter):
         else:
             raise ValueError("threshold should be a positive float.")
 
-    def is_kill_condition_met(self,
-                              log: Logger,
-                              regressor: DataRegressor,
-                              hunter_opt_id: int,
-                              victim_opt_id: int) -> bool:
+    def __call__(self,
+                 log: Logger,
+                 regressor: DataRegressor,
+                 hunter_opt_id: int,
+                 victim_opt_id: int) -> bool:
         n_hunter = len(log.get_history(hunter_opt_id, "fx"))
         n_victim = len(log.get_history(victim_opt_id, "fx"))
 
         ratio = n_hunter / n_victim
         test_num = random.uniform(0, self.crit_ratio)
 
-        self._kill_result = test_num > ratio
-        return self._kill_result
+        self._last_result = test_num > ratio
+        return self._last_result

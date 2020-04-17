@@ -25,11 +25,11 @@ class ParameterDistance(BaseHunter):
         else:
             raise ValueError("relative_distance should be a positive float.")
 
-    def is_kill_condition_met(self,
-                              log: Logger,
-                              regressor: DataRegressor,
-                              hunter_opt_id: int,
-                              victim_opt_id: int) -> bool:
+    def __call__(self,
+                 log: Logger,
+                 regressor: DataRegressor,
+                 hunter_opt_id: int,
+                 victim_opt_id: int) -> bool:
         h0 = np.array(log.get_history(hunter_opt_id, 'x')[0])
         h1 = np.array(log.get_history(hunter_opt_id, 'x')[-1])
         v1 = np.array(log.get_history(victim_opt_id, 'x')[-1])
@@ -38,5 +38,5 @@ class ParameterDistance(BaseHunter):
         opt_dist = np.sqrt(np.sum((v1 - h1) ** 2))
         ratio = opt_dist / traj_length
 
-        self._kill_result = ratio <= self.relative_distance
-        return self._kill_result
+        self._last_result = ratio <= self.relative_distance
+        return self._last_result

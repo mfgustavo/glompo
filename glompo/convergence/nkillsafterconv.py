@@ -21,10 +21,10 @@ class KillsAfterConvergence(BaseChecker):
         self.n_converged = n_converged
         self.n_killed = n_killed
 
-    def check_convergence(self, manager: 'GloMPOManager') -> bool:
+    def __call__(self, manager: 'GloMPOManager') -> bool:
         if manager.conv_counter >= self.n_converged and not self.enough_conv:
             self.enough_conv = True
             self.kill_count = len(manager.hunt_victims)
 
-        self._converged = self.enough_conv and len(manager.hunt_victims) - self.kill_count >= self.n_killed
-        return self._converged
+        self._last_result = self.enough_conv and len(manager.hunt_victims) - self.kill_count >= self.n_killed
+        return self._last_result

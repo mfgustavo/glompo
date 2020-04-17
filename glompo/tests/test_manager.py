@@ -154,12 +154,12 @@ class TrueHunter(BaseHunter):
         super().__init__()
         self.target = target
 
-    def is_kill_condition_met(self, log, regressor, hunter_opt_id, victim_opt_id) -> bool:
+    def __call__(self, log, regressor, hunter_opt_id, victim_opt_id) -> bool:
         return victim_opt_id == self.target
 
 
 class ErrorChecker(BaseChecker):
-    def check_convergence(self, manager: 'GloMPOManager') -> bool:
+    def __call__(self, manager: 'GloMPOManager') -> bool:
         raise RuntimeError("This is a test of the GloMPO error management system.")
 
 
@@ -384,7 +384,6 @@ class TestManager:
                                 history_logging=3,
                                 convergence_checker=MaxOptsStarted(3),
                                 killing_conditions=TrueHunter(2),
-                                verbose=1,
                                 force_terminations_after=1,
                                 split_printstreams=False)
 
