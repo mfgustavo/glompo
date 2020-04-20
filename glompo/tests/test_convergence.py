@@ -2,8 +2,8 @@
 
 import pytest
 
-from glompo.common.corebase import _CombiCore, _AndCore, _OrCore
-from glompo.convergence.basechecker import BaseChecker
+from glompo.common.corebase import _CombiCore
+from glompo.convergence.basechecker import BaseChecker, _AndChecker, _OrChecker
 from glompo.convergence.tmax import MaxSeconds
 from glompo.convergence.fmax import MaxFuncCalls
 from glompo.convergence.nconv import NOptConverged
@@ -55,11 +55,11 @@ class LazinessChecker(BaseChecker):
 
 
 def any_checker():
-    return _OrCore(PlainChecker(), PlainChecker())
+    return _OrChecker(PlainChecker(), PlainChecker())
 
 
 def all_checker():
-    return _AndCore(PlainChecker(), PlainChecker())
+    return _AndChecker(PlainChecker(), PlainChecker())
 
 
 class TestBase:
@@ -70,7 +70,7 @@ class TestBase:
                                               (all_checker(), PlainChecker()),
                                               (any_checker(), all_checker())])
     def test_or(self, base1, base2):
-        assert (base1 | base2).__class__.__name__ == "_OrCore"
+        assert (base1 | base2).__class__.__name__ == "_OrChecker"
 
     @pytest.mark.parametrize("base1, base2", [(PlainChecker(), PlainChecker()),
                                               (PlainChecker(), any_checker()),
@@ -79,7 +79,7 @@ class TestBase:
                                               (all_checker(), PlainChecker()),
                                               (any_checker(), all_checker())])
     def test_and(self, base1, base2):
-        assert (base1 & base2).__class__.__name__ == "_AndCore"
+        assert (base1 & base2).__class__.__name__ == "_AndChecker"
 
     @pytest.mark.parametrize("checker, output", [(TrueChecker() | LazinessChecker(), True),
                                                  (FalseChecker() & LazinessChecker(), False)])

@@ -41,3 +41,19 @@ class BaseHunter(_CoreBase):
                 ID number of the 'victim' optimizer, aspects of which will be compared to the 'hunter' in this class to
                 ascertain whether it should be shutdown.
         """
+
+    def __or__(self, other: 'BaseHunter') -> '_OrHunter':
+        return _OrHunter(self, other)
+
+    def __and__(self, other: 'BaseHunter') -> '_AndHunter':
+        return _AndHunter(self, other)
+
+
+class _OrHunter(BaseHunter, _OrCore):
+    def __call__(self, *args, **kwargs) -> bool:
+        return super(BaseHunter, self).__call__(*args, **kwargs)
+
+
+class _AndHunter(BaseHunter, _AndCore):
+    def __call__(self, *args, **kwargs) -> bool:
+        return super(BaseHunter, self).__call__(*args, **kwargs)

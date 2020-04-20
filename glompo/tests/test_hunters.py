@@ -3,8 +3,8 @@
 import pytest
 import numpy as np
 
-from glompo.common.corebase import _CombiCore, _AndCore, _OrCore
-from glompo.hunters.basehunter import BaseHunter
+from glompo.common.corebase import _CombiCore
+from glompo.hunters.basehunter import BaseHunter, _OrHunter, _AndHunter
 from glompo.hunters.confidencewidth import ConfidenceWidth
 from glompo.hunters.min_iterations import MinIterations
 from glompo.hunters.pseudoconv import PseudoConverged
@@ -41,11 +41,11 @@ class FancyHunter(BaseHunter):
 
 
 def any_hunter():
-    return _OrCore(PlainHunter(), PlainHunter())
+    return _OrHunter(PlainHunter(), PlainHunter())
 
 
 def all_hunter():
-    return _AndCore(PlainHunter(), PlainHunter())
+    return _AndHunter(PlainHunter(), PlainHunter())
 
 
 class FakeLog:
@@ -64,7 +64,7 @@ class TestBase:
                                               (all_hunter(), PlainHunter()),
                                               (any_hunter(), all_hunter())])
     def test_or(self, base1, base2):
-        assert (base1 | base2).__class__.__name__ == "_OrCore"
+        assert (base1 | base2).__class__.__name__ == "_OrHunter"
 
     @pytest.mark.parametrize("base1, base2", [(PlainHunter(), PlainHunter()),
                                               (PlainHunter(), any_hunter()),
@@ -73,7 +73,7 @@ class TestBase:
                                               (all_hunter(), PlainHunter()),
                                               (any_hunter(), all_hunter())])
     def test_and(self, base1, base2):
-        assert (base1 & base2).__class__.__name__ == "_AndCore"
+        assert (base1 & base2).__class__.__name__ == "_AndHunter"
 
     @pytest.mark.parametrize("hunter, output", [(PlainHunter(), "PlainHunter()"),
                                                 (any_hunter(), "[PlainHunter() OR \nPlainHunter()]"),
