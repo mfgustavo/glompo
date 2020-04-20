@@ -87,25 +87,25 @@ class TestBase:
         assert checker(None) == output
 
     @pytest.mark.parametrize("checker, output", [(PlainChecker(), "PlainChecker()"),
-                                                 (any_checker(), "[PlainChecker() OR \nPlainChecker()]"),
-                                                 (all_checker(), "[PlainChecker() AND \nPlainChecker()]"),
+                                                 (any_checker(), "[PlainChecker() | \nPlainChecker()]"),
+                                                 (all_checker(), "[PlainChecker() & \nPlainChecker()]"),
                                                  (FancyChecker(1, 2, 3), "FancyChecker(a=1, b=5, c)")])
     def test_str(self, checker, output):
         assert str(checker) == output
 
     @pytest.mark.parametrize("checker, output", [(PlainChecker(), "PlainChecker() = None"),
                                                  (TrueChecker(), "TrueChecker() = True"),
-                                                 (any_checker(), "[PlainChecker() = None OR \nPlainChecker() = "
+                                                 (any_checker(), "[PlainChecker() = None | \nPlainChecker() = "
                                                                  "None]"),
-                                                 (all_checker(), "[PlainChecker() = None AND \nPlainChecker() = "
+                                                 (all_checker(), "[PlainChecker() = None & \nPlainChecker() = "
                                                                  "None]"),
                                                  (FancyChecker(1, 2, 3), "FancyChecker(a=1, b=5, c) = None"),
                                                  (FalseChecker() | FalseChecker() & TrueChecker() | TrueChecker() &
-                                                  (TrueChecker() | FalseChecker()), "[[FalseChecker() = False OR \n"
-                                                                                    "[FalseChecker() = False AND \n"
-                                                                                    "TrueChecker() = True]] OR \n"
-                                                                                    "[TrueChecker() = True AND \n"
-                                                                                    "[TrueChecker() = True OR \n"
+                                                  (TrueChecker() | FalseChecker()), "[[FalseChecker() = False | \n"
+                                                                                    "[FalseChecker() = False & \n"
+                                                                                    "TrueChecker() = True]] | \n"
+                                                                                    "[TrueChecker() = True & \n"
+                                                                                    "[TrueChecker() = True | \n"
                                                                                     "FalseChecker() = False]]]")])
     def test_conv_str(self, checker, output):
         assert checker.str_with_result() == output

@@ -18,16 +18,15 @@ import numpy as np
 import yaml
 
 # Package imports
-from ..generators.basegenerator import BaseGenerator
-from ..generators.random import RandomGenerator
-from ..convergence.nkillsafterconv import KillsAfterConvergence
-from ..convergence.basechecker import BaseChecker
+from ..generators import BaseGenerator, RandomGenerator
+from ..convergence import BaseChecker, KillsAfterConvergence
 from ..common.namedtuples import *
 from ..common.customwarnings import *
 from ..common.helpers import *
 from ..common.wrappers import redirect, task_args_wrapper, catch_user_interrupt
 from ..hunters import BaseHunter, PseudoConverged, TimeAnnealing, ValueAnnealing, ParameterDistance
 from ..optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
+from ..opt_selectors.baseselector import BaseSelector
 from .logger import Logger
 from .scope import GloMPOScope
 from .regression import DataRegressor
@@ -44,8 +43,7 @@ class GloMPOManager:
     def __init__(self,
                  task: Callable[[Sequence[float]], float],
                  n_parms: int,
-                 optimizers: Dict[str, Union[Type[BaseOptimizer], Tuple[Type[BaseOptimizer],
-                                                                        Dict[str, Any], Dict[str, Any]]]],
+                 optimizer_selector: Optional[BaseSelector],
                  bounds: Sequence[Tuple[float, float]],
                  working_dir: Optional[str] = None,
                  overwrite_existing: bool = False,
@@ -77,24 +75,10 @@ class GloMPOManager:
         n_parms: int
             The number of parameters to be optimized.
 
-        optimizers: Dict[str, Union[Type[BaseOptimizer], Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]]]]
-            Dictionary of callable optimization functions (which are children of the BaseOptimizer class) with keywords
-            describing their behaviour. Recognized keywords are:
-                'default': The default optimizer used if any of the below keywords are not set. This is the only
-                    optimizer which *must* be set.
-                'early': Optimizers which are more global in their search and best suited for early stage optimization.
-                'late': Strong local optimizers which are best suited to refining solutions in regions with known good
-                    solutions.
-                'noisy': Optimizer which should be used in very noisy areas with very steep gradients or discontinuities
-            Values can also optionally be (1, 3) tuples of optimizers and dictionaries of optimizer keywords. The first
-            is passed to the optimizer during initialisation and the second during execution.
-            For example:
-                {'default': CMAOptimizer}: The mp_manager will use only CMA-ES type optimizers in all cases and use
-                    default values for them. In cases such as this the optimzer should have no non-default parameters
-                    other than func, x0 and bounds.
-                {'default': CMAOptimizer, 'noisy': (CMAOptimizer, {'sigma': 0.1}, None)}: The mp_manager will act as
-                    above but in noisy areas CMAOptimizers are initialised with a smaller step size. No special keywords
-                    are passed for the minimization itself.
+        optimizer_selector: Optional[BaseSelector]
+            Selection criteria for new optimizers, must be an instance of a BaseSelector subclass. BaseSelector
+            subclasses are initialised by default with a set of BaseOptimizer subclasses the user would like to make
+            available to the optimization. See BaseSelector and BaseOptimizer documentation for more details.
 
         bounds: Sequence[Tuple[float, float]]
             Sequence of tuples of the form (min, max) limiting the range of each parameter. Do not use bounds to fix
@@ -125,7 +109,6 @@ class GloMPOManager:
                 In this case GloMPO will run until 20 000 function evaluations OR until 3 optimizers have been killed
                 after the first convergence provided it has at least run for five minutes.
             Default: KillsAfterConvergence(0, 1) i.e. GloMPO terminates as soon as any optimizer converges.
-
 
         x0_generator: Optional[BaseGenerator] = None
             An instance of a subclass of BaseGenerator which produces starting points for the optimizer. If not provided
@@ -247,26 +230,11 @@ class GloMPOManager:
         else:
             raise ValueError(f"Cannot parse n_parms = {n_parms}. Only integers are allowed.")
 
-        # Save optimizers
-        if 'default' not in optimizers:
-            raise ValueError("'default' not found in optimizer dictionary. This value must be set.")
-        for key in optimizers:
-            if not isinstance(optimizers[key], tuple):
-                optimizers[key] = (optimizers[key], {}, {})
-            elif len(optimizers[key]) == 3 and \
-                    (isinstance(optimizers[key][1], dict) or optimizers[key][1] is None) and \
-                    (isinstance(optimizers[key][2], dict) or optimizers[key][2] is None):
-                init = {} if optimizers[key][1] is None else optimizers[key][1]
-                call = {} if optimizers[key][2] is None else optimizers[key][2]
-                optimizers[key] = (optimizers[key][0], init, call)
-            else:
-                raise ValueError(f"Cannot parse {optimizers[key]}.")
-            if not issubclass(optimizers[key][0], BaseOptimizer):
-                raise TypeError(f"{optimizers[key][0]} not an instance of BaseOptimizer.")
-        self.optimizers = optimizers
-        if any([key in optimizers for key in ['noisy', 'late', 'early']]):
-            warnings.warn("Optimizer keys other than 'default' are not currently supported and will be ignored.",
-                          NotImplementedWarning)
+        # Save optimizer selection criteria
+        if isinstance(optimizer_selector, BaseSelector):
+            self.selector = optimizer_selector
+        else:
+            raise TypeError(f"optimizer_selector not an instance of a subclass of BaseSelector.")
 
         # Save bounds
         self.bounds = []
@@ -512,7 +480,7 @@ class GloMPOManager:
         """
         self.o_counter += 1
 
-        selected, init_kwargs, call_kwargs = self.optimizers[np.random.choice([*self.optimizers])]
+        selected, init_kwargs, call_kwargs = self.selector.select_optimizer(self, self.log)
 
         self._optional_print(f"Selected Optimizer:\n"
                              f"\tOptimizer ID: {self.o_counter}\n"
@@ -723,12 +691,6 @@ class GloMPOManager:
             if caught_exception:
                 reason = f"Process Crash: {caught_exception}"
             with open("glompo_manager_log.yml", "w") as file:
-                optimizers = {}
-                for name in self.optimizers:
-                    optimizers[name] = {"Class": self.optimizers[name][0].__name__,
-                                        "Init Args": self.optimizers[name][1],
-                                        "Minimize Args": self.optimizers[name][2]}
-
                 data = {"Assignment": {"Task": type(self.task.__wrapped__).__name__,
                                        "Working Dir": os.getcwd(),
                                        "Username": os.getlogin(),
@@ -738,7 +700,7 @@ class GloMPOManager:
                         "Settings": {"x0 Generator": type(self.x0_generator).__name__,
                                      "Convergence Checker": str(self.convergence_checker).replace('\n', ''),
                                      "Hunt Conditions": str(self.killing_conditions).replace('\n', ''),
-                                     "Optimizers Available": optimizers,
+                                     "Optimizer Selector": self.selector.glompo_log_repr(),
                                      "Max Parallel Optimizers": self.max_jobs},
                         "Counters": {"Function Evaluations": self.f_counter,
                                      "Hunts Started": self.hunt_counter,

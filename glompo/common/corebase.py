@@ -71,10 +71,10 @@ class _OrCore(_CombiCore):
         return self.base1(*args, **kwargs) or self.base2(*args, **kwargs)
 
     def __str__(self):
-        return self._combi_string_maker("OR")
+        return self._combi_string_maker("|")
 
     def str_with_result(self) -> str:
-        return self._combi_result_string_maker("OR")
+        return self._combi_result_string_maker("|")
 
 
 class _AndCore(_CombiCore):
@@ -83,7 +83,7 @@ class _AndCore(_CombiCore):
         return self.base1(*args, **kwargs) and self.base2(*args, **kwargs)
 
     def __str__(self):
-        return self._combi_string_maker("AND")
+        return self._combi_string_maker("&")
 
     def str_with_result(self) -> str:
-        return self._combi_result_string_maker("AND")
+        return self._combi_result_string_maker("&")
