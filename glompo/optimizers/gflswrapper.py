@@ -72,6 +72,7 @@ class GFLSOptimizer(BaseOptimizer):
         self.verbose = verbose
         self.save_logger = save_logger
         self.algorithm = GFLS(**gfls_kwargs) if gfls_kwargs else GFLS(tr_max=1)
+        self.vector_codec = None
 
     # noinspection PyMethodOverriding
     def minimize(self,
@@ -125,7 +126,7 @@ class GFLSOptimizer(BaseOptimizer):
                 raise ValueError("Min and Max bounds cannot be equal. Rather fix the value and set the variable"
                                  "inactive through the interface.")
             gfls_bounds.append(BoxTanh(bnd[0], bnd[1]))
-        vector_codec = VectorCodec(gfls_bounds)
+        self.vector_codec = VectorCodec(gfls_bounds)
 
         if not isinstance(x0, Logger):
             for i, x in enumerate(x0):
@@ -140,10 +141,10 @@ class GFLSOptimizer(BaseOptimizer):
             callbacks = callbacks + [self.check_pause_flag, self.check_messages, self.push_iter_result]
 
         # noinspection PyUnresolvedReferences
-        fw = ResidualsWrapper(function.__wrapped__.resids, vector_codec.decode)
+        fw = ResidualsWrapper(function.__wrapped__.resids, self.vector_codec.decode)
         logger = driver(
             fw,
-            vector_codec.encode(x0),
+            self.vector_codec.encode(x0),
             self.algorithm,
             self.tmax,
             self.imax,
@@ -170,14 +171,14 @@ class GFLSOptimizer(BaseOptimizer):
             self.message_manager(0, cond)
         result = MinimizeResult()
         result.success = success
-        result.x = vector_codec.decode(x)
+        result.x = self.vector_codec.decode(x)
         result.fx = fx
 
         return result
 
     def push_iter_result(self, logger: Logger, algorithm, stopcond: str, *args):
         i = logger.current
-        x = logger.get("pars")
+        x = self.vector_codec.decode(logger.get("pars"))
         fx = logger.get("func")
         fin = False if stopcond is None else True
         self._results_queue.put(IterationResult(self._opt_id, i, 1, x, fx, fin))

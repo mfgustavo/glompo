@@ -3,6 +3,10 @@
 """ Useful static functions used throughout GloMPO. """
 
 
+from typing import *
+import numpy as np
+
+
 __all__ = ("nested_string_formatting",)
 
 
@@ -38,3 +42,23 @@ def nested_string_formatting(nested_str: str):
     nested_str = "\n".join(lines)
 
     return nested_str
+
+
+def is_bounds_valid(bounds: Sequence[Tuple[float, float]], raise_invalid=True) -> bool:
+    """ Checks if provided bounds are valid.
+        If True raise_invalid raises an error if the bounds are invalid otherwise a bool is returned.
+    """
+
+    for bnd in bounds:
+        if bnd[0] >= bnd[1]:
+            if raise_invalid:
+                raise ValueError("Invalid bounds encountered. Min and max bounds may not be equal nor may they be in"
+                                 "the opposite order. ")
+            return False
+
+        if not np.all(np.isfinite(bnd)):
+            if raise_invalid:
+                raise ValueError("Non-finite bounds found.")
+            return False
+
+    return True

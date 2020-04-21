@@ -598,9 +598,8 @@ class GloMPOManager:
                 fx = res.fx
                 if self.enforce_elitism:
                     history = self.log.get_history(res.opt_id, "fx_best")
-                    if len(history) > 0:
-                        if history[-1] < fx:
-                            fx = history[-1]
+                    if len(history) > 0 and history[-1] < fx:
+                        fx = history[-1]
 
                 self.x0_generator.update(res.x, fx)
                 self.log.put_iteration(res.opt_id, res.n_iter, self.f_counter, list(res.x), fx)

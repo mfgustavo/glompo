@@ -20,7 +20,7 @@ class TimeAnnealing(BaseHunter):
             Parameters
             ----------
             crit_ratio: float = 1
-                Critical ratio of iterations between hunter and victim above which the victim is guarenteed to survive.
+                Critical ratio of iterations between hunter and victim above which the victim is guaranteed to survive.
                 Values lower than one are looser and allow the victim to survive even if it has been in operation
                 longer than the hunter. Values higher than one are stricter and may kill the victim even if it has
                 iterated fewer times than the hunter.

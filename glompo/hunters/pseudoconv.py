@@ -10,7 +10,7 @@ __all__ = ("PseudoConverged",)
 class PseudoConverged(BaseHunter):
 
     def __init__(self, calls: int, tol: float = 0):
-        """ Returns True if the victim's best value has not changed by more than tol fraction in the last calls
+        """ Returns True if the victim's best value has not changed by more than tol fraction in the last 'calls'
             function evaluations where tol is a fraction between 0 and 1.
         """
         super().__init__()
