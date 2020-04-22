@@ -153,11 +153,11 @@ class TestPseudoConv:
         log.add_optimizer(1, None, None)
         calls_per_iter = request.param
         for i in range(10):
-            log.put_iteration(1, i, calls_per_iter*i, i, 10)
+            log.put_iteration(1, i, calls_per_iter*i, calls_per_iter*i, i, 10)
         for i in range(10, 20):
-            log.put_iteration(1, i, calls_per_iter*i, i, 1)
+            log.put_iteration(1, i, calls_per_iter*i, calls_per_iter*i, i, 1)
         for i in range(20, 30):
-            log.put_iteration(1, i, calls_per_iter*i, i, 0.9)
+            log.put_iteration(1, i, calls_per_iter*i, calls_per_iter*i, i, 0.9)
         return log
 
     @pytest.mark.parametrize("iters, tol, output, log", [(10, 0, False, 1),

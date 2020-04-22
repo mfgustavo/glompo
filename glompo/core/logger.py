@@ -21,9 +21,9 @@ class Logger:
         """ Adds a new optimizer data stream to the log. """
         self._storage[opt_id] = _OptimizerLogger(opt_id, class_name, time_start)
 
-    def put_iteration(self, opt_id: int, i: int, f_call: int, x: Sequence[float], fx: float):
+    def put_iteration(self, opt_id: int, i: int, f_call_overall: int, f_call_opt: int, x: Sequence[float], fx: float):
         """ Adds an iteration result to an optimizer data stream. """
-        self._storage[opt_id].append(i, f_call, x, fx)
+        self._storage[opt_id].append(i, f_call_overall, f_call_opt, x, fx)
 
     def put_metadata(self, opt_id: int, key: str, value: str):
         """ Adds metadata about an optimizer. """
@@ -42,11 +42,12 @@ class Logger:
         """
         extract = []
         if track:
-            track_num = {"f_call": 0,
-                         "fx": 1,
-                         "i_best": 2,
-                         "fx_best": 3,
-                         "x": 4}[track]
+            track_num = {"f_call_overall": 0,
+                         "f_call_opt": 1,
+                         "fx": 2,
+                         "i_best": 3,
+                         "fx_best": 4,
+                         "x": 5}[track]
             for item in self._storage[opt_id].history.values():
                 extract.append(item[track_num])
         else:
@@ -84,7 +85,7 @@ class Logger:
         with open(f"{filename}.yml", 'w') as file:
             data = {"DETAILS": self._storage[opt_id].metadata,
                     "MESSAGES": self._storage[opt_id].messages,
-                    "ITERATION_FORMAT": {'i': ['f_call', 'fx', 'i_best', 'fx_best', 'x']},
+                    "ITERATION_FORMAT": {'i': ['f_call_overall', 'f_call_opt', 'fx', 'i_best', 'fx_best', 'x']},
                     "ITERATION_HISTORY": self._storage[opt_id].history}
             yaml.dump(data, file, default_flow_style=False, sort_keys=False)
 
@@ -106,7 +107,7 @@ class _OptimizerLogger:
         """ Appends or overwrites given key-value pair in the stored optimizer metadata. """
         self.metadata[key] = value
 
-    def append(self, i: int, f_call: int, x: Sequence[float], fx: float):
+    def append(self, i: int, f_call_overall: int, f_call_opt: int, x: Sequence[float], fx: float):
         """ Adds an optimizer iteration to the optimizer log. """
         if fx < self.fx_best:
             self.fx_best = fx
@@ -114,10 +115,12 @@ class _OptimizerLogger:
         try:
             iter(x)
             ls = [float(num) for num in x]
-            self.history[i] = [int(f_call), float(fx), int(self.i_best), float(self.fx_best), ls]
+            self.history[i] = [int(f_call_overall), int(f_call_opt), float(fx), int(self.i_best),
+                               float(self.fx_best), ls]
         except TypeError:
             ls = [float(num) for num in [x]]
-            self.history[i] = [int(f_call), float(fx), int(self.i_best), float(self.fx_best), ls]
+            self.history[i] = [int(f_call_overall), int(f_call_opt), float(fx), int(self.i_best),
+                               float(self.fx_best), ls]
 
     def append_message(self, message):
         """ Adds message to the optimizer history. """

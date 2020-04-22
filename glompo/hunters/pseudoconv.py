@@ -23,7 +23,7 @@ class PseudoConverged(BaseHunter):
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
         vals = log.get_history(victim_opt_id, "fx_best")
-        fcalls = log.get_history(victim_opt_id, "f_call")
+        fcalls = log.get_history(victim_opt_id, "f_call_opt")
 
         if fcalls[-1] < self.calls:
             return False

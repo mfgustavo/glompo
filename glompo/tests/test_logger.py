@@ -25,17 +25,17 @@ class TestLogger:
     log.add_optimizer(2, type(opt2).__name__, datetime.datetime.now())
 
     for i in range(1, 30):
-        log.put_iteration(0, i, i, i, np.exp(i))
+        log.put_iteration(0, i, i, i, i, np.exp(i))
     log.put_metadata(0, "Stop Time", datetime.datetime.now())
     log.put_metadata(0, "Exit Condition", "tmax condition met")
 
     for i in range(1, 30):
-        log.put_iteration(1, i, i, [i, i ** 2], np.sin(i))
+        log.put_iteration(1, i, i, i, [i, i ** 2], np.sin(i))
     log.put_metadata(1, "Stop Time", datetime.datetime.now())
     log.put_metadata(1, "Exit Condition", "xtol condition met")
 
     for i in range(1, 30):
-        log.put_iteration(2, i, i, np.array([i ** 2, i / 2 + 3.14]), np.tan(i))
+        log.put_iteration(2, i, i, i, np.array([i ** 2, i / 2 + 3.14]), np.tan(i))
     log.put_metadata(2, "Stop Time", datetime.datetime.now())
     log.put_metadata(2, "Exit Condition", "fmax condition met")
 
@@ -56,7 +56,7 @@ class TestLogger:
         hist = self.log.get_history(0)
         assert [*hist][0] == 1
         assert isinstance([*hist.values()][4], list)
-        assert [*hist.values()][3][1] == np.exp(4)
+        assert [*hist.values()][3][2] == np.exp(4)
         assert [*hist.values()][7][-1] == [8]
 
     def test_history1(self):
@@ -64,7 +64,7 @@ class TestLogger:
         assert hist[3] == np.sin(4)
 
     def test_history2(self):
-        self.log.put_iteration(1, 30, 30, [30, 30**2], -5)
+        self.log.put_iteration(1, 30, 30, 30, [30, 30**2], -5)
 
         hist = self.log.get_history(1, "i_best")
         assert hist[29] == 30

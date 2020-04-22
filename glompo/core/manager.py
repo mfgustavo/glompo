@@ -590,7 +590,13 @@ class GloMPOManager:
             res = self.optimizer_queue.get()
             i_count += 1
             self.last_feedback[res.opt_id] = time()
-            self.f_counter += res.n_icalls
+            self.f_counter += res.i_fcalls
+
+            history = self.log.get_history(res.opt_id, "f_call_opt")
+            if len(history) > 0:
+                opt_fcalls = history[-1] + res.i_fcalls
+            else:
+                opt_fcalls = res.i_fcalls
 
             if res.opt_id not in self.hunt_victims:
 
@@ -602,7 +608,7 @@ class GloMPOManager:
                         fx = history[-1]
 
                 self.x0_generator.update(res.x, fx)
-                self.log.put_iteration(res.opt_id, res.n_iter, self.f_counter, list(res.x), fx)
+                self.log.put_iteration(res.opt_id, res.n_iter, self.f_counter, opt_fcalls, list(res.x), fx)
                 self._optional_print(f"Result from {res.opt_id} @ iter {res.n_iter} fx = {fx}", 2)
 
                 if self.visualisation:
