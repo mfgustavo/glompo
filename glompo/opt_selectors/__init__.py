@@ -6,4 +6,5 @@ from .cycle import CycleSelector
 
 
 __all__ = ("BaseSelector",
-           "RandomSelector")
+           "RandomSelector",
+           "CycleSelector")
