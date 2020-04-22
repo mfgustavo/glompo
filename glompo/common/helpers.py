@@ -7,7 +7,8 @@ from typing import *
 import numpy as np
 
 
-__all__ = ("nested_string_formatting",)
+__all__ = ("nested_string_formatting",
+           "is_bounds_valid")
 
 
 def nested_string_formatting(nested_str: str):

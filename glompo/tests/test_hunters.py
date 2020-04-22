@@ -179,32 +179,38 @@ class TestPseudoConv:
 
 class TestParameterDistance:
 
-    @pytest.mark.parametrize("path1, path2, rel_dist, output", [([[0, 0], [0, 1], [0, 2]],
-                                                                 [[1, 0], [1, 1], [1, 2]], 0.1, False),
-                                                                ([[0, 0], [0, 1], [0, 2]],
-                                                                 [[1, 0], [1, 1], [1, 2]], 0.5, True),
-                                                                ([[0, 0], [0, 1], [1, 2]],
-                                                                 [[1, 0], [1, 1], [1, 2]], 0.1, True),
-                                                                ([[0, 0], [10, 10], [20, 20]],
-                                                                 [[20, 18], [20, 19], [20, 21]], 0.1, True),
-                                                                ([[0, 0], [0, 0.1], [0, 0.2]],
-                                                                 [[0, 0], [10, 10], [0, 0.25]], 0.1, False),
-                                                                ([[0, 0], [100, 100], [0, 1]],
-                                                                 [[1, 0], [1, 1], [0, 1.1]], 0.11, True)
-                                                                ])
-    def test_condition(self, path1, path2, rel_dist, output):
-        cond = ParameterDistance(rel_dist)
+    @pytest.mark.parametrize("path1, path2, bounds, rel_dist, output", [([[0, 0], [0, 1], [0, 2]],
+                                                                         [[1, 0], [1, 1], [1, 2]],
+                                                                         [(0, 2)] * 3, 0.1, False),
+                                                                        ([[0, 0], [0, 1], [0, 2]],
+                                                                         [[1, 0], [1, 1], [1, 2]],
+                                                                         [(0, 2)] * 3, 0.5, True),
+                                                                        ([[0, 0], [0, 1], [1, 2]],
+                                                                         [[1, 0], [1, 1], [1, 2]],
+                                                                         [(0, 2)] * 3, 0.1, True),
+                                                                        ([[0, 0], [10, 10], [20, 20]],
+                                                                         [[20, 18], [20, 19], [20, 21]],
+                                                                         [(0, 20)] * 3, 0.1, True),
+                                                                        ([[0, 0], [0, 0.1], [0, 0.2]],
+                                                                         [[0, 0], [10, 10], [0, 0.25]],
+                                                                         [(0, 10)] * 3, 0.1, True),
+                                                                        ([[0, 0], [100, 100], [0, 1]],
+                                                                         [[1, 0], [1, 1], [0, 1.1]],
+                                                                         [(0, 100)] * 3, 0.11, True)
+                                                                        ])
+    def test_condition(self, path1, path2, bounds, rel_dist, output):
+        cond = ParameterDistance(bounds, rel_dist)
         log = FakeLog(path1, path2)
         assert cond(log, None, 1, 2) == output
 
     @pytest.mark.parametrize("rel_dist", [-5, -5.0, 0])
     def test_init_crash(self, rel_dist):
         with pytest.raises(ValueError):
-            ParameterDistance(rel_dist)
+            ParameterDistance([(0, 2)] * 3, rel_dist)
 
     @pytest.mark.parametrize("rel_dist", [5, 2, 0.2])
     def test_init_pass(self, rel_dist):
-        ParameterDistance(rel_dist)
+        ParameterDistance([(0, 2)] * 3, rel_dist)
 
 
 class TestTimeAnnealing:

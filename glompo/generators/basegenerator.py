@@ -13,7 +13,7 @@ __all__ = ("BaseGenerator",)
 class BaseGenerator(ABC):
 
     @abstractmethod
-    def generate(self, *args, **kwargs) -> np.ndarray:
+    def generate(self) -> np.ndarray:
         """ Returns an array of parameters as a suggested starting point for an optimizer """
 
     def update(self, x: Sequence[float], fx: float):

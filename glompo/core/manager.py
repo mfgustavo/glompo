@@ -317,7 +317,7 @@ class GloMPOManager:
                 raise TypeError(f"killing_conditions not an instance of a subclass of BaseHunter.")
         else:
             self.killing_conditions = PseudoConverged(100, 0.01) & TimeAnnealing(2) & ValueAnnealing() | \
-                                      ParameterDistance(0.1)
+                                      ParameterDistance(self.bounds, 0.05)
 
         # Setup multiprocessing variables
         self.optimizer_packs = {}  # Dict[opt_id (int): ProcessPackage (NamedTuple)]
