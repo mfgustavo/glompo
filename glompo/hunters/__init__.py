@@ -13,6 +13,7 @@ from .val_below_asymptote import ValBelowAsymptote
 from .timeannealing import TimeAnnealing
 from .valueannealing import ValueAnnealing
 from .parameterdistance import ParameterDistance
+from .min_fcalls import MinFuncCalls
 
 __all__ = ("BaseHunter",
            "ConfidenceWidth",
@@ -21,4 +22,5 @@ __all__ = ("BaseHunter",
            "ValBelowAsymptote",
            "ValueAnnealing",
            "TimeAnnealing",
-           "ParameterDistance")
+           "ParameterDistance",
+           "MinFuncCalls")

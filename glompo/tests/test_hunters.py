@@ -52,8 +52,10 @@ class FakeLog:
     def __init__(self, path1, path2):
         self.path = [path1, path2]
 
-    def get_history(self, opt_id, *args):
-        return self.path[opt_id - 1]
+    def get_history(self, opt_id, track):
+        if track != "f_call_opt":
+            return self.path[opt_id - 1]
+        return list(range(1, len(self.path[opt_id-1])+1))
 
 
 class TestBase:

@@ -13,17 +13,17 @@ __all__ = ("TimeAnnealing",)
 class TimeAnnealing(BaseHunter):
 
     def __init__(self, crit_ratio: float = 1):
-        """ This condition calculates the quotient (N_hunter_iterations / N_victim_iterations). A random number is
+        """ This condition calculates the quotient (N_hunter_fcalls / N_victim_fcalls). A random number is
             then generated between zero and crit_ratio. Only if the quotient is larger than this number does the victim
             remain alive.
 
             Parameters
             ----------
             crit_ratio: float = 1
-                Critical ratio of iterations between hunter and victim above which the victim is guaranteed to survive.
-                Values lower than one are looser and allow the victim to survive even if it has been in operation
-                longer than the hunter. Values higher than one are stricter and may kill the victim even if it has
-                iterated fewer times than the hunter.
+                Critical ratio of function calls (not necessarily iterations) between hunter and victim above which the
+                victim is guaranteed to survive. Values lower than one are looser and allow the victim to survive even
+                if it has been in operation longer than the hunter. Values higher than one are stricter and may kill
+                the victim even if it has iterated fewer times than the hunter.
         """
         super().__init__()
         if isinstance(crit_ratio, (float, int)) and crit_ratio > 0:
@@ -36,8 +36,8 @@ class TimeAnnealing(BaseHunter):
                  regressor: DataRegressor,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
-        n_hunter = len(log.get_history(hunter_opt_id, "fx"))
-        n_victim = len(log.get_history(victim_opt_id, "fx"))
+        n_hunter = log.get_history(hunter_opt_id, "f_call_opt")[-1]
+        n_victim = log.get_history(victim_opt_id, "f_call_opt")[-1]
 
         ratio = n_hunter / n_victim
         test_num = random.uniform(0, self.crit_ratio)
