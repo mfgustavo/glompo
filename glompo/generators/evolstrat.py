@@ -14,6 +14,7 @@ class EvolutionaryStrategyGenerator(BaseGenerator):
         if is_bounds_valid(bounds):
             self.bounds = np.array(bounds)
             self.min, self.max = tuple(np.transpose(bounds))
+            self.range = np.abs(self.min - self.max)
             self.n_params = len(bounds)
         self.history = {}
 
@@ -35,8 +36,8 @@ class EvolutionaryStrategyGenerator(BaseGenerator):
         mut_rate = 0.02
         child *= np.random.uniform(1-mut_rate, 1+mut_rate, self.n_params)
 
-        # Clip back into bounds
-        child = np.clip(child, self.min, self.max)
+        # Clip back into (but not onto) bounds
+        child = np.clip(child, self.min + self.range*0.0001, self.max - self.range*0.0001)
 
         return child
 
