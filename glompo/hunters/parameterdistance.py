@@ -5,7 +5,7 @@ from typing import *
 import numpy as np
 
 from .basehunter import BaseHunter
-from ..core.logger import Logger
+from ..core.optimizerlogger import OptimizerLogger
 from ..core.regression import DataRegressor
 from ..common.helpers import is_bounds_valid
 
@@ -37,7 +37,7 @@ class ParameterDistance(BaseHunter):
             self.trans_space_dist = self.distance(lower_pt, upper_pt)
 
     def __call__(self,
-                 log: Logger,
+                 log: OptimizerLogger,
                  regressor: DataRegressor,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
@@ -48,6 +48,8 @@ class ParameterDistance(BaseHunter):
         ratio = opt_dist / self.trans_space_dist
 
         self._last_result = ratio <= self.relative_distance
+        self.logger.debug(f"ParameterDistance: Hunter={hunter_opt_id}, Victim={victim_opt_id} Result={opt_dist:.2f}/"
+                          f"{self.trans_space_dist:.2f} <= {self.relative_distance:.2f} = {self._last_result}.")
         return self._last_result
 
     @staticmethod

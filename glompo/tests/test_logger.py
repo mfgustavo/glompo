@@ -6,7 +6,7 @@ import shutil
 import pytest
 import numpy as np
 
-from glompo.core.logger import Logger
+from glompo.core.optimizerlogger import OptimizerLogger
 from glompo.optimizers.gflswrapper import GFLSOptimizer
 from glompo.optimizers.cmawrapper import CMAOptimizer
 from glompo.optimizers.baseoptimizer import BaseOptimizer
@@ -14,7 +14,7 @@ from glompo.optimizers.baseoptimizer import BaseOptimizer
 
 class TestLogger:
 
-    log = Logger()
+    log = OptimizerLogger()
 
     opt0 = GFLSOptimizer(0)
     opt1 = CMAOptimizer(1)

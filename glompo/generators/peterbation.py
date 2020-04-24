@@ -30,6 +30,7 @@ class PerterbationGenerator(BaseGenerator):
             Standard deviation of each parameter. Used here to control how wide the generator should explore around the
             mean.
         """
+        super().__init__()
         self.n_params = len(x0)
         self.loc = np.array(x0)
 

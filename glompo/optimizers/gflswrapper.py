@@ -95,13 +95,13 @@ class GFLSOptimizer(BaseOptimizer):
 
             function must include an implementation of function.resids() which returns these residuals.
 
-        x0 : Union[Sequence[float], Type[Logger]]
-            Initial set of starting parameters or an instance of optsam.Logger with a saved history of at least one
+        x0 : Union[Sequence[float], Type[OptimizerLogger]]
+            Initial set of starting parameters or an instance of optsam.OptimizerLogger with a saved history of at least one
             iteration.
         bounds : Sequence[Tuple[float, float]]
             Sequence of tuples of the form (min, max) which bound the parameters.
-        callbacks : Union[Sequence[Callable[[Type[Logger, AlgoBase, Union[str, None]]], Any]],
-                          Callable[[Logger, AlgoBase, Union[str, None]], Any]]
+        callbacks : Union[Sequence[Callable[[Type[OptimizerLogger, AlgoBase, Union[str, None]]], Any]],
+                          Callable[[OptimizerLogger, AlgoBase, Union[str, None]], Any]]
             A list of functions called after every iteration. GFLS compatible callbacks can be found at the end of this
             file.
 

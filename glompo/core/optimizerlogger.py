@@ -9,10 +9,10 @@ import os
 import yaml
 
 
-__all__ = ("Logger",)
+__all__ = ("OptimizerLogger",)
 
 
-class Logger:
+class OptimizerLogger:
     """ Stores progress of GloMPO optimizers. """
     def __init__(self):
         self._storage = {}

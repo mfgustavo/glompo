@@ -3,7 +3,7 @@
 from typing import *
 
 from .baseselector import BaseSelector
-from ..core.logger import Logger
+from ..core.optimizerlogger import OptimizerLogger
 from ..optimizers.baseoptimizer import BaseOptimizer
 
 
@@ -21,6 +21,6 @@ class CycleSelector(BaseSelector):
 
     def select_optimizer(self,
                          manager: 'GloMPOManager',
-                         log: Logger) -> Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]]:
+                         log: OptimizerLogger) -> Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]]:
         self.i = self.i + 1 if self.i < len(self.avail_opts) - 1 else 0
         return self.avail_opts[self.i]

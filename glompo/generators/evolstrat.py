@@ -11,6 +11,7 @@ from glompo.common.helpers import is_bounds_valid
 class EvolutionaryStrategyGenerator(BaseGenerator):
 
     def __init__(self, bounds: Sequence[Tuple[float, float]]):
+        super().__init__()
         if is_bounds_valid(bounds):
             self.bounds = np.array(bounds)
             self.min, self.max = tuple(np.transpose(bounds))
@@ -22,9 +23,11 @@ class EvolutionaryStrategyGenerator(BaseGenerator):
         if not self.history:
             return (self.bounds[:, 1] - self.bounds[:, 0]) * np.random.random(self.n_params) + self.bounds[:, 0]
 
-        prob_vec = 1/np.array([*self.history.values()])
-        prob_tot = np.sum(prob_vec)
-        par1, par2 = np.random.choice(len([*self.history]), 2, p=prob_vec/prob_tot)
+        x = [*self.history.values()]
+        y = x + 1.01 * np.abs(np.min(x)) + 1.01  # Shift values to a minimum of 1.01
+        y = 1 / np.log10(y)  # Take the log for order of magnitude differences and invert to weigh lower numbers higher
+        prob_tot = np.sum(y)
+        par1, par2 = np.random.choice(len([*self.history]), 2, p=y/prob_tot)
         par1 = [*self.history][par1]
         par2 = [*self.history][par2]
 

@@ -3,7 +3,7 @@
 import numpy as np
 
 from .basehunter import BaseHunter
-from ..core.logger import Logger
+from ..core.optimizerlogger import OptimizerLogger
 from ..core.regression import DataRegressor
 
 
@@ -34,7 +34,7 @@ class ValBelowAsymptote(BaseHunter):
         self.nsteps = nsteps
 
     def __call__(self,
-                 log: Logger,
+                 log: OptimizerLogger,
                  regressor: DataRegressor,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:

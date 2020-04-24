@@ -6,6 +6,7 @@
 from typing import *
 from time import time
 import warnings
+import logging
 
 import matplotlib.animation as ani
 import matplotlib.lines as lines
@@ -57,7 +58,7 @@ class GloMPOScope:
             constantly rescale the axis.
         log_scale: bool = False
             If True, the base 10 logarithm of y values are displayed on the scope. This can be used in conjunction
-            with the y_range option and will be interpretted in the log-scale.
+            with the y_range option and will be interpretted in the opt_log-scale.
         record_movie : bool = False
             If True then a matplotlib.animation.FFMpegWriter instance is created to record the plot.
         interactive_mode : bool = False
@@ -68,7 +69,7 @@ class GloMPOScope:
         movie_kwargs : Optional[Dict[str, Any]] = None
             Optional dictionary of arguments to be sent to matplotlib.animation.FFMpegWriter.setup().
         """
-
+        self.logger = logging.getLogger('glompo.scope')
         self.streams = {}
         self.dead_streams = set()
         self.n_streams = 0
@@ -83,8 +84,10 @@ class GloMPOScope:
         self.ax.set_xlabel("Total Function Calls")
         if self.log_scale:
             self.ax.set_ylabel("Log10(Error)")
+            self.logger.debug("Using log scale error values")
         else:
             self.ax.set_ylabel("Error")
+            self.logger.debug("Using linear scale error values")
 
         # Create custom legend
         self.leg_elements = [lines.Line2D([], [], ls='-', c='black', label='Optimizer Evaluations'),
@@ -108,23 +111,28 @@ class GloMPOScope:
             self.ax.set_autoscalex_on(True)
         elif isinstance(x_range, tuple):
             if x_range[0] >= x_range[1]:
+                self.logger.critical("Cannot parse x_range, min >= max.")
                 raise ValueError(f"Cannot parse x_range = {x_range}. Min must be less than and not equal to max.")
             self.ax.set_xlim(x_range[0], x_range[1])
         elif isinstance(x_range, int):
             if x_range < 2:
+                self.logger.critical("Cannot parse x_range, x_range < 2")
                 raise ValueError(f"Cannot parse x_range = {x_range}. Value larger than 1 required.")
             self.truncated = x_range
         else:
-            raise TypeError(f"Cannot parse x_range = {x_range}. Only int, None_Type and tuple can be used.")
+            self.logger.critical("Cannot parse x_range. Unsupported type. None, int or tuple expected.")
+            raise TypeError(f"Cannot parse x_range = {x_range}. Only int, NoneType and tuple can be used.")
 
         if isinstance(y_range, tuple):
             if y_range[0] >= y_range[1]:
+                self.logger.critical("Cannot parse y_range, min >= max")
                 raise ValueError(f"Cannot parse y_range = {y_range}. Min must be less than and not equal to max.")
             self.ax.set_ylim(y_range[0], y_range[1])
         elif y_range is None:
             self.ax.set_autoscaley_on(True)
         else:
-            raise TypeError(f"Cannot parse y_range = {y_range}. Only tuple can be used.")
+            self.logger.critical("Cannot parse y_range. Unsupported type. None or tuple expected.")
+            raise TypeError(f"Cannot parse y_range = {y_range}. Only a tuple can be used.")
 
         self.record_movie = record_movie
         self.movie_name = None
@@ -133,19 +141,23 @@ class GloMPOScope:
                 self.writer = MyFFMpegWriter(**writer_kwargs) if writer_kwargs else MyFFMpegWriter()
             except TypeError:
                 warnings.warn("Unidentified key in writer_kwargs. Using default values.", UserWarning)
+                self.logger.warning("Unidentified key in writer_kwargs. Using default values.")
                 self.writer = MyFFMpegWriter()
             if not movie_kwargs:
                 movie_kwargs = {}
             if 'outfile' not in movie_kwargs:
                 movie_kwargs['outfile'] = 'glomporecording.mp4'
                 self.movie_name = 'glomporecording.mp4'
+                self.logger.info("Saving scope recording as glomporecording.mp4")
             else:
                 self.movie_name = movie_kwargs['outfile']
             try:
                 self.writer.setup(fig=self.fig, **movie_kwargs)
             except TypeError:
                 warnings.warn("Unidentified key in writer_kwargs. Using default values.", UserWarning)
+                self.logger.warning("Unidentified key in writer_kwargs. Using default values.")
                 self.writer.setup(fig=self.fig, outfile='glomporecording.mp4')
+        self.logger.debug("Scope initialised successfully")
 
     def _redraw_graph(self):
         """ Redraws the figure after new data has been added. Grabs a frame if a movie is being recorded. """
@@ -178,6 +190,7 @@ class GloMPOScope:
                                 line.xy = (np.clip(self.x_max - self.truncated, 0, None), line.xy[1])
                         if all(done):
                             self.dead_streams.add(opt_id)
+                            self.logger.debug(f"Opt{opt_id} identified as out of scope.")
 
             self.ax.relim()
             self.ax.autoscale_view()
@@ -194,12 +207,15 @@ class GloMPOScope:
 
         if opt_id in self.dead_streams:
             self.dead_streams.remove(opt_id)
+            self.logger.warning(f"Receiving data for opt{opt_id} previously identifed as truncated.")
 
         if pt:
             x, y = pt
 
             if pt_given and self.log_scale:
                 y = np.log10(y)
+                if np.isnan(y):
+                    self.logger.error("Log10(y) returned NaN.")
 
             self.x_max = x if x > self.x_max else self.x_max
 
@@ -245,6 +261,7 @@ class GloMPOScope:
             threshold = 77
         else:
             colors = plt.get_cmap("Dark2")
+            self.logger.warning("Using final color palette, colors will loop for here on.")
             threshold = 89
 
         for line in self.streams[opt_id]:
@@ -265,6 +282,7 @@ class GloMPOScope:
         self.leg_elements.append(lines.Line2D([], [], ls='-', c=colors(self.n_streams - threshold),
                                               label=label))
         self.ax.legend(loc='upper right', handles=self.leg_elements, bbox_to_anchor=(1.35, 1))
+        self.logger.debug(f"Added new plot set for optimizer {opt_id}")
 
     def update_optimizer(self, opt_id: int, pt: tuple, redraw_graph: bool = True):
         """ Given pt tuple is used to update the opt_id optimizer plot."""
@@ -286,6 +304,8 @@ class GloMPOScope:
             median = np.log10(median)
             lower = np.log10(lower)
             upper = np.log10(upper)
+            if np.any(np.isnan([median, lower, upper])):
+                self.logger.error("Log10 in update_mean returned NaN.")
 
         # Mean line
         line = self.streams[opt_id]['mean']
@@ -346,8 +366,10 @@ class GloMPOScope:
             try:
                 self.writer.finish()
             except Exception as e:
+                self.logger.exception("generate_movie failed")
                 warnings.warn(f"Exception caught while trying to save movie: {e}", RuntimeWarning)
         else:
+            self.logger.error("generate_movie called without initialisation parameter record_movie = False")
             warnings.warn("Unable to generate movie file as data was not collected during the dynamic plotting.\n"
                           "Rerun GloMPOScope with record_movie = True during initialisation.", UserWarning)
 

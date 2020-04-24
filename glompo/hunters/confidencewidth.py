@@ -1,6 +1,6 @@
 
 from .basehunter import BaseHunter
-from ..core.logger import Logger
+from ..core.optimizerlogger import OptimizerLogger
 from ..core.regression import DataRegressor
 
 
@@ -20,7 +20,7 @@ class ConfidenceWidth(BaseHunter):
             raise ValueError("threshold should be a positive float.")
 
     def __call__(self,
-                 log: Logger,
+                 log: OptimizerLogger,
                  regressor: DataRegressor,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:

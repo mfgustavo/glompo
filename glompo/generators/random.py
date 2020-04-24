@@ -13,6 +13,7 @@ class RandomGenerator(BaseGenerator):
     """ Generates random starting points within given bounds. """
 
     def __init__(self, bounds: Sequence[Tuple[float, float]]):
+        super().__init__()
         self.n_params = len(bounds)
         if is_bounds_valid(bounds):
             self.bounds = np.array(bounds)

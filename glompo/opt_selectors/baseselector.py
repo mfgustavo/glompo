@@ -3,11 +3,12 @@
 """ Abstract class for the construction of selectors used in selecting new optimizers. """
 
 
+import logging
 from typing import *
 from abc import ABC, abstractmethod
 
 from ..optimizers.baseoptimizer import BaseOptimizer
-from ..core.logger import Logger
+from ..core.optimizerlogger import OptimizerLogger
 
 
 __all__ = ("BaseSelector",)
@@ -33,6 +34,7 @@ class BaseSelector(ABC):
                     c) Dictionary of kwargs for calling the BaseOptimizer().minimize() method (if there are no arguments
                        use an empty dictionary not None).
         """
+        self.logger = logging.getLogger('glompo.selector')
         if not isinstance(avail_opts, list):
             raise TypeError("avail_opts must be a list.")
 
@@ -49,7 +51,7 @@ class BaseSelector(ABC):
 
     def glompo_log_repr(self):
         """ Returns a representation of this class in dictionary format which is human-readable and can be saved as
-            part of the GloMPO manager log yaml file.
+            part of the GloMPO manager opt_log yaml file.
         """
 
         dict_form = {}
@@ -63,23 +65,15 @@ class BaseSelector(ABC):
     @abstractmethod
     def select_optimizer(self,
                          manager: 'GloMPOManager',
-                         log: Logger) -> Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]]:
-        """ Provided with the manager object and log file of all optimizers, returns a optimizer object along with
-            initialisation and call kwargs.
+                         log: OptimizerLogger) -> Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]]:
+        """ Provided with the manager object and opt_log file of all optimizers, returns a optimizer class
+            followed by a dictionary of initialisation keyword arguments and then a dictionary of call kwargs for the
+            BaseOptimizer().minimize() method.
 
             Parameters
             ----------
             manager: GloMPOManager
                 Running manager instance, can be used to read certain counters and state variables.
-            log: Logger
+            log: OptimizerLogger
                 Contains the details and iteration history of ever optimizer started thus far.
-
-            Returns
-            -------
-            optimizer: Type[BaseOptimizer]
-                An uninitialised optimizer class.
-            init_kwargs: Dict[str, Any]
-                Dictionary of kwargs used to initialise the optimizer.
-            call_kwargs: Dict[str, Any]
-                Dictionary of kwargs passed to the BaseOptimizer().minimize() method when it is called.
         """

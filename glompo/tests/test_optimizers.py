@@ -6,6 +6,7 @@ from time import time, sleep
 from collections import namedtuple
 import os
 import shutil
+import logging
 import multiprocessing as mp
 
 import pytest
@@ -240,6 +241,15 @@ class TestSubclassesGlompoCompatible:
         mp_package.event.set()
         sleep(0.5)
         assert not p.is_alive()
+
+    @pytest.mark.parametrize("opti", available_classes)
+    def test_haslogger(self, opti, mp_package):
+        opti = opti(results_queue=mp_package.queue,
+                    signal_pipe=mp_package.c_pipe,
+                    pause_flag=mp_package.event)
+
+        assert hasattr(opti, 'logger')
+        assert isinstance(opti.logger, logging.Logger)
 
     @classmethod
     def teardown_class(cls):

@@ -21,7 +21,7 @@ glompo/convergence/nkillsafterconv.py
 glompo/convergence/omax.py
 glompo/convergence/tmax.py
 glompo/core/__init__.py
-glompo/core/logger.py
+glompo/core/optimizerlogger.py
 glompo/core/logprob.py
 glompo/core/manager.py
 glompo/core/regression.py

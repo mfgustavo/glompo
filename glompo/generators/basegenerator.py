@@ -4,6 +4,8 @@
 
 from typing import *
 from abc import ABC, abstractmethod
+import logging
+
 import numpy as np
 
 
@@ -11,6 +13,9 @@ __all__ = ("BaseGenerator",)
 
 
 class BaseGenerator(ABC):
+
+    def __init__(self):
+        self.logger = logging.getLogger('glompo.generator')
 
     @abstractmethod
     def generate(self) -> np.ndarray:

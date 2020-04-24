@@ -12,7 +12,7 @@ from glompo.hunters.parameterdistance import ParameterDistance
 from glompo.hunters.timeannealing import TimeAnnealing
 from glompo.hunters.valueannealing import ValueAnnealing
 from glompo.hunters.val_below_asymptote import ValBelowAsymptote
-from glompo.core.logger import Logger
+from glompo.core.optimizerlogger import OptimizerLogger
 
 
 class PlainHunter(BaseHunter):
@@ -151,7 +151,7 @@ class TestMinTraningPoints:
 class TestPseudoConv:
     @pytest.fixture
     def log(self, request):
-        log = Logger()
+        log = OptimizerLogger()
         log.add_optimizer(1, None, None)
         calls_per_iter = request.param
         for i in range(10):

@@ -15,6 +15,7 @@ class IncumbentGenerator(BaseGenerator):
     """
 
     def __init__(self, bounds: Sequence[Tuple[float, float]]):
+        super().__init__()
         self.best_fx = np.inf
         self.best_x = None
         self.n_params = len(bounds)

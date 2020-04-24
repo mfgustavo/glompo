@@ -3,9 +3,10 @@
 """ Abstract hunter classes used to construct the convergence criteria. """
 
 
+import logging
 from abc import abstractmethod
 
-from ..core.logger import Logger
+from ..core.optimizerlogger import OptimizerLogger
 from ..core.regression import DataRegressor
 from ..common.corebase import *
 
@@ -16,9 +17,13 @@ __all__ = ("BaseHunter",)
 class BaseHunter(_CoreBase):
     """ Base hunter from which all hunters must inherit to be compatible with GloMPO. """
 
+    def __init__(self):
+        super().__init__()
+        self.logger = logging.getLogger('glompo.hunter')
+
     @abstractmethod
     def __call__(self,
-                 log: Logger,
+                 log: OptimizerLogger,
                  regressor: DataRegressor,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
@@ -30,7 +35,7 @@ class BaseHunter(_CoreBase):
 
             Parameters
             ----------
-            log: Logger
+            log: OptimizerLogger
                 Instance of Logger class that contains the iteration history of every optimizer.
             regressor: DataRegressor
                 Instance of the DataRegressor class which contains both frequentist and Bayesian methods to regress the
@@ -49,11 +54,11 @@ class BaseHunter(_CoreBase):
         return _AndHunter(self, other)
 
 
-class _OrHunter(BaseHunter, _OrCore):
+class _OrHunter(_OrCore, BaseHunter):
     def __call__(self, *args, **kwargs) -> bool:
-        return super(BaseHunter, self).__call__(*args, **kwargs)
+        return super().__call__(*args, **kwargs)
 
 
-class _AndHunter(BaseHunter, _AndCore):
+class _AndHunter(_AndCore, BaseHunter):
     def __call__(self, *args, **kwargs) -> bool:
-        return super(BaseHunter, self).__call__(*args, **kwargs)
+        return super().__call__(*args, **kwargs)

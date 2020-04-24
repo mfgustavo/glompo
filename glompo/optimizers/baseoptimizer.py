@@ -11,6 +11,7 @@ from threading import Event
 from typing import *
 from abc import ABC, abstractmethod
 import warnings
+import logging
 
 
 __all__ = ('BaseOptimizer', 'MinimizeResult')
@@ -66,7 +67,8 @@ class BaseOptimizer(ABC):
         """
 
     def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
-                 pause_flag: Event = None):
+                 pause_flag: Event = None, **kwargs):
+        self.logger = logging.getLogger('glompo.optimizers')
         self._opt_id = opt_id
         self._signal_pipe = signal_pipe
         self._results_queue = results_queue

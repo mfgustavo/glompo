@@ -12,7 +12,7 @@ import yaml
 import pytest
 
 from glompo.core.manager import GloMPOManager
-from glompo.core.logger import Logger
+from glompo.core.optimizerlogger import OptimizerLogger
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from glompo.generators import RandomGenerator, BaseGenerator
 from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxOptsStarted, MaxFuncCalls, MaxSeconds
@@ -23,8 +23,8 @@ from glompo.opt_selectors import BaseSelector, CycleSelector
 
 
 class DummySelector(BaseSelector):
-    def select_optimizer(self, manager: 'GloMPOManager', log: Logger) -> Tuple[Type[BaseOptimizer], Dict[str, Any],
-                                                                               Dict[str, Any]]:
+    def select_optimizer(self, manager: 'GloMPOManager', log: OptimizerLogger) -> Tuple[Type[BaseOptimizer], Dict[str, Any],
+                                                                                        Dict[str, Any]]:
         pass
 
 
@@ -204,8 +204,7 @@ class TestManager:
                     **kwargs}
             GloMPOManager(**keys)
 
-    @pytest.mark.parametrize("kwargs", [{'verbose': 6.7},
-                                        {'n_parms': 6.0},
+    @pytest.mark.parametrize("kwargs", [{'n_parms': 6.0},
                                         {'n_parms': -1},
                                         {'n_parms': 0},
                                         {'max_jobs': -1},
@@ -244,15 +243,15 @@ class TestManager:
                   **kwargs}
         GloMPOManager(**kwargs)
 
-    @pytest.mark.parametrize("history_logging", [0, -5, 10, 23.56, 2.3])
-    def test_init_clipping(self, history_logging):
+    @pytest.mark.parametrize("summary_files", [0, -5, 10, 23.56, 2.3])
+    def test_init_clipping(self, summary_files):
         opt = GloMPOManager(task=lambda x, y: x + y,
                             n_parms=2,
                             optimizer_selector=DummySelector([OptimizerTest1]),
                             bounds=((0, 1), (0, 1)),
                             overwrite_existing=True,
-                            history_logging=history_logging)
-        assert opt.history_logging == int(np.clip(int(history_logging), 0, 3))
+                            summary_files=summary_files)
+        assert opt.summary_files == int(np.clip(int(summary_files), 0, 3))
 
     def test_init_workingdir(self):
         with pytest.warns(UserWarning, match="Cannot parse working_dir"):
@@ -298,7 +297,7 @@ class TestManager:
                                 working_dir="tests/temp_outputs",
                                 overwrite_existing=True,
                                 max_jobs=1,
-                                history_logging=3,
+                                summary_files=3,
                                 convergence_checker=MaxOptsStarted(2))
         with pytest.warns(RuntimeWarning, match="terminated normally without sending a"):
             manager.start_manager()
@@ -318,7 +317,7 @@ class TestManager:
                                 working_dir="tests/temp_outputs",
                                 overwrite_existing=True,
                                 max_jobs=1,
-                                history_logging=3,
+                                summary_files=3,
                                 convergence_checker=MaxOptsStarted(2))
         with pytest.warns(None) as warns:
             manager.start_manager()
@@ -342,7 +341,7 @@ class TestManager:
                                 working_dir="tests/temp_outputs",
                                 overwrite_existing=True,
                                 max_jobs=1,
-                                history_logging=3,
+                                summary_files=3,
                                 convergence_checker=MaxOptsStarted(2),
                                 force_terminations_after=1)
 
@@ -366,7 +365,7 @@ class TestManager:
                                 overwrite_existing=True,
                                 max_jobs=2,
                                 enforce_elitism=True,
-                                history_logging=3,
+                                summary_files=3,
                                 convergence_checker=MaxOptsStarted(3),
                                 killing_conditions=TrueHunter(2),
                                 force_terminations_after=1,
@@ -391,7 +390,7 @@ class TestManager:
                                 working_dir="tests/temp_outputs",
                                 overwrite_existing=True,
                                 max_jobs=1,
-                                history_logging=3,
+                                summary_files=3,
                                 convergence_checker=MaxOptsStarted(2),
                                 force_terminations_after=1)
 
@@ -414,7 +413,7 @@ class TestManager:
                                 working_dir="tests/temp_outputs",
                                 overwrite_existing=True,
                                 max_jobs=1,
-                                history_logging=1,
+                                summary_files=1,
                                 convergence_checker=ErrorChecker(),
                                 force_terminations_after=1)
         with pytest.warns(RuntimeWarning, match="Optimization failed. Caught exception: "
@@ -542,10 +541,9 @@ class TestManager:
                                     5 * 60),
                                 x0_generator=IntervalGenerator(),
                                 killing_conditions=None,
-                                history_logging=3,
+                                summary_files=3,
                                 visualisation=False,
-                                visualisation_args=None,
-                                verbose=0)
+                                visualisation_args=None)
         result = manager.start_manager()
         assert np.all(np.isclose(result.x, 0, atol=1e-6))
         assert np.isclose(result.fx, -0.00797884560802864)
