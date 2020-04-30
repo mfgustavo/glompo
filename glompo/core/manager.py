@@ -9,6 +9,7 @@ import warnings
 import multiprocessing as mp
 import traceback
 import os
+import getpass
 import socket
 from datetime import datetime
 from time import time
@@ -710,7 +711,7 @@ class GloMPOManager:
             with open("glompo_manager_log.yml", "w") as file:
                 data = {"Assignment": {"Task": type(self.task.__wrapped__).__name__,
                                        "Working Dir": os.getcwd(),
-                                       "Username": os.getlogin(),
+                                       "Username": getpass.getuser(),
                                        "Hostname": socket.gethostname(),
                                        "Start Time": self.dt_start,
                                        "Stop Time": datetime.now()},
