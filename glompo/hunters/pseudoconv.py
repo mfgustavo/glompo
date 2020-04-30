@@ -25,7 +25,7 @@ class PseudoConverged(BaseHunter):
         vals = log.get_history(victim_opt_id, "fx_best")
         fcalls = log.get_history(victim_opt_id, "f_call_opt")
 
-        if fcalls[-1] < self.calls:
+        if fcalls[-1] <= self.calls:
             return False
 
         fbest_current = vals[-1]
@@ -34,7 +34,11 @@ class PseudoConverged(BaseHunter):
         nearest_iter = fcalls[-1]
         while fcalls[-1] - nearest_iter < self.calls:
             i += 1
-            nearest_iter = fcalls[-2 - i]
+            try:
+                nearest_iter = fcalls[-2 - i]
+            except IndexError:
+                self.logger.warning("PseudoConverged: IndexError caught, returning False")
+                return False
         i += 2
 
         fbest_calls = vals[-i]

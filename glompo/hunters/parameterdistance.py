@@ -48,8 +48,15 @@ class ParameterDistance(BaseHunter):
         ratio = opt_dist / self.trans_space_dist
 
         self._last_result = ratio <= self.relative_distance
-        self.logger.debug(f"ParameterDistance: Hunter={hunter_opt_id}, Victim={victim_opt_id} Result={opt_dist:.2f}/"
-                          f"{self.trans_space_dist:.2f} <= {self.relative_distance:.2f} = {self._last_result}.")
+        self.logger.debug("ParameterDistance: Hunter=%d, Victim=%d, "
+                          "Result=%.2f / %.2f <= %.2f} = "
+                          "%s.",
+                          hunter_opt_id,
+                          victim_opt_id,
+                          opt_dist,
+                          self.trans_space_dist,
+                          self.relative_distance,
+                          self._last_result)
         return self._last_result
 
     @staticmethod

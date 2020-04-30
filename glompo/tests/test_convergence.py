@@ -36,6 +36,7 @@ class FalseChecker(BaseChecker):
         self._last_result = False
 
     def __call__(self, manager) -> bool:
+        self._last_result = False
         return False
 
 
@@ -109,6 +110,12 @@ class TestBase:
                                                                                     "FalseChecker() = False]]]")])
     def test_conv_str(self, checker, output):
         assert checker.str_with_result() == output
+
+    def test_reset(self):
+        checker = TrueChecker() | FalseChecker()
+        assert checker.str_with_result() == "[TrueChecker() = True | \nFalseChecker() = False]"
+        checker(None)
+        assert checker.str_with_result() == "[TrueChecker() = True | \nFalseChecker() = None]"
 
     def test_combi_init(self):
         with pytest.raises(TypeError):

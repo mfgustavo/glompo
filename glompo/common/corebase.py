@@ -55,7 +55,7 @@ class _CombiCore(_CoreBase):
         self.base2 = base2
 
     def __call__(self, *args, **kwargs):
-        pass
+        self.reset()
 
     def _combi_string_maker(self, keyword: str):
         return f"[{self.base1} {keyword} \n{self.base2}]"
@@ -64,10 +64,19 @@ class _CombiCore(_CoreBase):
         return f"[{self.base1.str_with_result()} {keyword} \n" \
                f"{self.base2.str_with_result()}]"
 
+    def reset(self):
+        """ Resets _last_result to None. Given that hunter and checkers are evaluated lazily, it is possible for
+            misleading results to be returned by str_with_result indicating a hunt has been evaluated when it has not.
+            Bases are thus reset before calls to prevent this.
+        """
+        self.base1._last_result = None
+        self.base2._last_result = None
+
 
 class _OrCore(_CombiCore):
 
     def __call__(self, *args, **kwargs):
+        super().__call__(*args, **kwargs)
         return self.base1(*args, **kwargs) or self.base2(*args, **kwargs)
 
     def __str__(self):
@@ -80,6 +89,7 @@ class _OrCore(_CombiCore):
 class _AndCore(_CombiCore):
 
     def __call__(self, *args, **kwargs):
+        super().__call__(*args, **kwargs)
         return self.base1(*args, **kwargs) and self.base2(*args, **kwargs)
 
     def __str__(self):

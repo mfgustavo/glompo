@@ -161,7 +161,7 @@ class GloMPOScope:
 
     def _redraw_graph(self):
         """ Redraws the figure after new data has been added. Grabs a frame if a movie is being recorded. """
-        if time() - self.t_last > 1:
+        if time() - self.t_last > 3:
             self.t_last = time()
 
             # Purge old results
@@ -197,7 +197,9 @@ class GloMPOScope:
             self.fig.canvas.draw()
             self.fig.canvas.flush_events()
             if self.record_movie:
+                self.logger.debug('Grabbing frame')
                 self.writer.grab_frame()
+                self.logger.debug('Frame grabbed')
 
     def _update_point(self, opt_id: int, track: str, pt: tuple = None):
         """ General method to add a point to a track for a specific optimizer. """

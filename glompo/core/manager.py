@@ -384,7 +384,6 @@ class GloMPOManager:
                 if result.origin and 'opt_id' in result.origin:
                     best_id = result.origin['opt_id']
 
-                self.logger.debug("Starting hunt")
                 if best_id > 0:
                     self._start_hunt(best_id)
 
@@ -595,7 +594,7 @@ class GloMPOManager:
         """ Retrieve results from the queue and process them into the opt_log. """
         i_count = 0
         while not self.optimizer_queue.empty() and i_count < 10:
-            res = self.optimizer_queue.get()
+            res = self.optimizer_queue.get_nowait()
             i_count += 1
             self.last_feedback[res.opt_id] = time()
             self.f_counter += res.i_fcalls
@@ -638,6 +637,8 @@ class GloMPOManager:
             if self.visualisation:
                 self.scope.update_hunt_start(hunter_id)
 
+            self.logger.debug("Starting hunt")
+            self.logger.debug("XXX", self.optimizer_packs, self.opt_log)
             for victim_id in self.optimizer_packs:
                 in_graveyard = victim_id in self.graveyard
                 has_points = len(self.opt_log.get_history(victim_id, "fx")) > 0
@@ -655,6 +656,7 @@ class GloMPOManager:
 
                         if self.visualisation:
                             self.scope.update_hunt_end(hunter_id)
+            self.logger.debug("Hunting complete")
 
     def _shutdown_job(self, opt_id):
         """ Sends a stop signal to optimizer opt_id and updates variables around its termination. """
