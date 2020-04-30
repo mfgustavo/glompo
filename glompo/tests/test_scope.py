@@ -8,39 +8,40 @@ import pytest
 import numpy as np
 import matplotlib.pyplot as plt
 
-from glompo.core.scope import GloMPOScope
 
-
+@pytest.mark.scope
 class TestScope:
+
+    from glompo.core.scope import GloMPOScope
 
     @pytest.fixture()
     def scope(self):
-        return GloMPOScope(x_range=None,
-                           y_range=None,
-                           record_movie=False,
-                           interactive_mode=False)
+        return self.GloMPOScope(x_range=None,
+                                y_range=None,
+                                record_movie=False,
+                                interactive_mode=False)
 
     @pytest.mark.parametrize("kwargs", [{'x_range': -5},
                                         {'x_range': (500, 0)},
                                         {'y_range': (500, 0)}])
     def test_init_valerr(self, kwargs):
         with pytest.raises(ValueError):
-            GloMPOScope(**kwargs)
+            self.GloMPOScope(**kwargs)
 
     @pytest.mark.parametrize("kwargs", [{'x_range': 5.5},
                                         {'y_range': 5.5}])
     def test_init_typerr(self, kwargs):
         with pytest.raises(TypeError):
-            GloMPOScope(**kwargs)
+            self.GloMPOScope(**kwargs)
 
     @pytest.mark.parametrize("kwargs", [{'movie_kwargs': {'key1': 'xxx', 'key2': 'xxx'}},
                                         {'writer_kwargs': {'key': 'xxx'}}])
     def test_init_keyerr(self, kwargs):
         with pytest.warns(UserWarning):
-            scope = GloMPOScope(record_movie=True,
-                                x_range=(0, 1000),
-                                y_range=(0, 1000),
-                                **kwargs)
+            scope = self.GloMPOScope(record_movie=True,
+                                     x_range=(0, 1000),
+                                     y_range=(0, 1000),
+                                     **kwargs)
             scope.writer.cleanup()
 
     @pytest.mark.parametrize("i, palette", [(10, 1), (35, 2), (53, 3), (67, 4), (73, 5), (88, 6), (200, 7)])
@@ -122,7 +123,7 @@ class TestScope:
 
     @pytest.mark.filterwarnings("ignore:More than 20 figures")
     def test_generate_movie(self):
-        scope = GloMPOScope(record_movie=True)
+        scope = self.GloMPOScope(record_movie=True)
         scope.add_stream(1)
         scope.add_stream(2)
         for i in range(0, 510, 10):
