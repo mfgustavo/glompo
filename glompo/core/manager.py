@@ -29,7 +29,6 @@ from ..hunters import BaseHunter, PseudoConverged, TimeAnnealing, ValueAnnealing
 from ..optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from ..opt_selectors.baseselector import BaseSelector
 from .optimizerlogger import OptimizerLogger
-from .scope import GloMPOScope
 from .regression import DataRegressor
 
 
@@ -302,6 +301,7 @@ class GloMPOManager:
         self.opt_log = OptimizerLogger()
         self.regressor = DataRegressor()
         if visualisation:
+            from .scope import GloMPOScope  # Only imported if needed to avoid matplotlib compatibility issues
             self.scope = GloMPOScope(**visualisation_args) if visualisation_args else GloMPOScope()
         if region_stability_check:
             warnings.warn("region_stability_check not implemented. Ignoring.", NotImplementedWarning)
