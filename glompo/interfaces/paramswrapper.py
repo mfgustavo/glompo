@@ -2,122 +2,88 @@
 
 # Native Python imports
 from typing import *
-
-# External package imports
-import multiprocessing as mp
+import warnings
 
 # AMS imports
-from scm.params.optimizers.base import *
-from scm.params.core.parameteroptimization import Optimization
+from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
 
 # Package imports
-from core.scope import GloMPOScope
+from ..core.manager import GloMPOManager
+from ..opt_selectors.baseselector import BaseSelector
 
 
-__all__ = ("ParamsGlompoOptimizer",)
+class GlompoParamsWrapper(BaseOptimizer):
+    """ Wraps the GloMPO manager into a ParAMS optimizer. """
 
+    def __init__(self, optimizer_selector: BaseSelector, manager_kwargs: Optional[Dict[str, Any]] = None):
+        """ Accepts GloMPO configurational information.
 
-class ParamsGlompoOptimizer(BaseOptimizer):
-    """ Runs given jobs in parallel and tracks their progress using Gaussian Process Regressions.
-        Based on these predictions the class will update hyperparameters, kill poor performing jobs and
-        intelligently restart others. """
-
-    needscaler = False  # TODO: Explore this??? Depends on the individual jobs run
-
-    def __init__(self, optimizers: dict, max_jobs: int, visualisation: bool = False,
-                 visualisation_args: Union[dict, None] = None):
-        """
-        Generates the environment for a globally managed parallel optimization job.
-
-        Parameters
-        ----------
-        optimizers: dict, Callables
-            Dictionary of callable optimization functions with keywords describing their behaviour. Recognized keywords
-            are:
-                'default': The default optimizer used if any of the below keywords are not set. This is the only
-                    optimizer which *must* be set.
-                'early': Optimizers which are more global in their search and best suited for early stage optimization.
-                'late': Strong local optimizers which are best suited to refining solutions in regions with known good
-                    solutions.
-                'noisy': Optimizer which should be used in very noisy areas with very steep gradients or discontinuities
-
-        max_jobs : int
-            The maximum number of local optimizers run in parallel.
-        visualisation : bool
-            If True then a dynamic plot is generated to demonstrate the performance of the optimizers. Further options
-            (see visualisation_args) allow this plotting to be recorded and saved as a film.
-        visualisation_args : Union[dict, None]
-            Optional arguments to parameterize the dynamic plotting feature.
+            Parameters
+            ----------
+            optimizer_selector: BaseSelector
+                Initialised BaseSelector object which specifies how optimizers are selected and initialised. See
+                glompo.opt_selectors.BaseSelector for detailed documentation.
+            manager_kwargs: Optional[Dict[str, Any]] = None
+                A dictionary of optional arguments to the GloMPOManager initialisation function.
+                Notes that all arguments are accepted but required GloMPO arguments 'task', 'n_parms', 'bounds' and
+                'max_jobs' will be overwritten as they are passed by the 'minimize' function in accordance with ParAMS
+                API.
         """
 
-        self.result = MinimizeResult()
-
-        if 'default' not in optimizers:
-            raise ValueError("'default' not found in optimizer dictionary. This value must be set.")
-        elif not any([callable(opt.minimize) for opt in optimizers.values()]):
-            raise ValueError("Incompatible optimizer found in dictionary. Ensure it is a child of the BaseOptimizer "
-                             "class and has a minimize() method.")
+        if manager_kwargs:
+            self.manager_kwargs = manager_kwargs
+            for kw in ['task', 'n_parms', 'bounds', 'max_jobs']:
+                if kw in self.manager_kwargs:
+                    del self.manager_kwargs[kw]
         else:
-            self.optimizers = optimizers
+            self.manager_kwargs = {}
 
-        self.max_jobs = max_jobs
-
-        self.optimizer_jobs = []
-        self.hyperparm_jobs = []
-        self.hunting_jobs = []
-
-        self.manager = mp.Manager()
-        self.optimizer_queue = self.manager.Queue()
-        self.hyperparm_queue = self.manager.Queue()
-        self.hunting_queue = self.manager.Queue()
-
-        if visualisation:
-            self.scope = GloMPOScope(num_streams=max_jobs, **visualisation_args)
-
-    # noinspection PyMethodOverriding
-    def minimize(self, function: Callable, x0: Sequence[float], bounds: Sequence[Tuple[float, float]],
-                 callbacks: Callable = None, parent: Union[Type[Optimization], None] = None) -> MinimizeResult:
+    def minimize(self,
+                 function: Callable,
+                 x0: Sequence[float],
+                 bounds: Sequence[Tuple[float, float]],
+                 workers: int = 1,
+                 callbacks: List[Callable] = None) -> MinimizeResult:
         """
+        Passes 'function' to GloMPO to be minimized. Returns and instance of MinimizeResult.
 
         Parameters
         ----------
-        function : Optimization.run
-        x0 : Sequence[float]
-        bounds : Sequence[Tuple[float, float]]
-        callbacks : Callable
-            Callbacks used to terminate optimizers early. Their use is *strongly* discouraged when using GloMPOManager
-        parent : Union[Type[Optimization], None]
-            Instance of the Optimization class which bundles function together. Allows access to various optimization
-            functions like individual error function contributions or performance at each iteration.
+        function: Callable
+            Function to be minimized, this is passed as GloMPO's 'task' parameter.
+        x0: Sequence[float]
+            The length of this vector is taken to be the number of parameters in the optimization. It is not, however,
+            used as the starting point for any optimizer the correct way to control this is by using GloMPO
+            'BaseGenerator' objects.
+        bounds: Sequence[Tuple[float, float]]
+            Sequence of (min, max) pairs used to bound the search area for every parameter.
+            The 'bounds' parameter is passed to GloMPO as its 'bounds' parameter.
+        workers: int
+            Passed to GloMPO as its 'max_jobs' parameter. The maximum number of optimizers run in parallel.
+        callbacks: List[Callable]
+            GloMPO ignores the callbacks parameter as it is ambiguous in this context. To control the termination of
+            the manager itself use BaseChecker objects passed to GloMPO's convergence_criteria parameter.
 
-        Returns
-        -------
-        MinimizeResult
-            The result of the optimization. Can be accessed by:
-                success : bool
-                    Whether the optimization was successful or not
-                x : numpy.array
-                    The optimized parameters
-                fx : float
-                    The corresponding |Fitfunc| value of `x`
+            To control individual optimizers with callbacks, pass callback functions through BaseSelector objects to
+            GloMPO's optimizer_selector parameter. Callbacks in this sense, however, are discouraged as it defeats
+            the purpose of GloMPO's monitored optimization.
+
+            In some cases it may be preferable to pass callback conditions as BaseHunter objects instead.
         """
-        print(function._callbacks)
 
-    # noinspection PyMethodOverriding
-    def callstop(self, reason=None):
-        pass
+        warnings.warn("The x0 parameter is ignored by GloMPO. To control the starting locations of optimizers within "
+                      "GloMPO make use of its BaseGenerator objects.", RuntimeWarning)
+        if callbacks:
+            warnings.warn("Callbacks provided to the minimize function are ignored. Callbacks to individual "
+                          "optimizers can be passed to GloMPO through BaseSelector objects. Callbacks to control the "
+                          "manager itself are passed using GloMPO BaseChecker objects.")
 
-    def _start_new_job(self):
-        pass
+        manager = GloMPOManager(task=function,
+                                n_parms=len(x0),
+                                bounds=bounds,
+                                max_jobs=workers,
+                                **self.manager_kwargs)
 
-    def _kill_job(self):
-        pass
+        result = manager.start_manager()
 
-    def _start_hunt(self):
-        pass
-
-    def _optimize_hyperparameters(self):
-        pass
-
-    def _explore_basin(self):
-        pass
+        return result
