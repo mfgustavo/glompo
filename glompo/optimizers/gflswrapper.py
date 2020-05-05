@@ -4,6 +4,7 @@
 from typing import *
 import os
 import warnings
+import collections
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
 
@@ -117,8 +118,14 @@ class GFLSOptimizer(BaseOptimizer):
         """
 
         # noinspection PyUnresolvedReferences
-        if not hasattr(function.__wrapped__, 'resids'):
+        if not hasattr(function.__wrapped__, 'resids') and \
+                isinstance(function.__wrapped__.resids, collections.Callable):
             raise NotImplementedError("GFLS requires function to include a resids() method.")
+
+        self.logger.debug(f"GFLS minimizing with:\n"
+                          f"x0 = {x0}\n"
+                          f"bounds = {bounds}\n"
+                          f"callbacks = {callbacks}")
 
         gfls_bounds = []
         for bnd in bounds:
@@ -142,6 +149,7 @@ class GFLSOptimizer(BaseOptimizer):
 
         # noinspection PyUnresolvedReferences
         fw = ResidualsWrapper(function.__wrapped__.resids, self.vector_codec.decode)
+        self.logger.debug(f"Starting GFLS driver.")
         logger = driver(
             fw,
             self.vector_codec.encode(x0),
@@ -181,6 +189,7 @@ class GFLSOptimizer(BaseOptimizer):
         x = self.vector_codec.decode(logger.get("pars"))
         fx = logger.get("func")
         fin = False if stopcond is None else True
+        self.logger.debug(f"Pushing iteration: {IterationResult(self._opt_id, i, 1, x, fx, fin)}")
         self._results_queue.put(IterationResult(self._opt_id, i, 1, x, fx, fin))
 
     def check_messages(self, logger: Logger, algorithm, stopcond):

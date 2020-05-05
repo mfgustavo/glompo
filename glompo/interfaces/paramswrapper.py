@@ -1,13 +1,12 @@
 
 
-# Native Python imports
 from typing import *
 import warnings
 
-# AMS imports
+import numpy as np
+
 from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
 
-# Package imports
 from ..core.manager import GloMPOManager
 from ..opt_selectors.baseselector import BaseSelector
 
@@ -37,6 +36,8 @@ class GlompoParamsWrapper(BaseOptimizer):
                     del self.manager_kwargs[kw]
         else:
             self.manager_kwargs = {}
+
+        self.selector = optimizer_selector
 
     def minimize(self,
                  function: Callable,
@@ -69,6 +70,13 @@ class GlompoParamsWrapper(BaseOptimizer):
             the purpose of GloMPO's monitored optimization.
 
             In some cases it may be preferable to pass callback conditions as BaseHunter objects instead.
+
+        Notes
+        -----
+        GloMPO is not currently compatible with using multiple DataSets and only the first one will be considered.
+
+        Beware of using batching with GFLS as it requires all contributions to be evaluated every iteration.
+
         """
 
         warnings.warn("The x0 parameter is ignored by GloMPO. To control the starting locations of optimizers within "
@@ -78,8 +86,31 @@ class GlompoParamsWrapper(BaseOptimizer):
                           "optimizers can be passed to GloMPO through BaseSelector objects. Callbacks to control the "
                           "manager itself are passed using GloMPO BaseChecker objects.")
 
-        manager = GloMPOManager(task=function,
+        class FunctionWrapper:
+            """ Wraps function to:
+                1) Return a float from the __call__ function;
+                2) Add a resids parameter for compatibility with optsam optimizers.
+            """
+            def __init__(self, func):
+                self.func = func
+                self.contris = np.array([])
+
+            def __call__(self, *args, **kwargs) -> float:
+                print("Calling function")
+                result = self.func(*args, **kwargs)
+                print("Function called")
+                fx = result[0][1]
+                print(f"Extracted fx = {fx}")
+                self.contris = [*result[0][-1].values()]
+                print(f"Extracted contris = {fx}")
+                return fx
+
+            def resids(self, *args, **kwargs):
+                return np.array(self.contris)
+
+        manager = GloMPOManager(task=FunctionWrapper(function),
                                 n_parms=len(x0),
+                                optimizer_selector=self.selector,
                                 bounds=bounds,
                                 max_jobs=workers,
                                 **self.manager_kwargs)
