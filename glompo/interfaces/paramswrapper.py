@@ -59,6 +59,10 @@ class GlompoParamsWrapper(BaseOptimizer):
         bounds: Sequence[Tuple[float, float]]
             Sequence of (min, max) pairs used to bound the search area for every parameter.
             The 'bounds' parameter is passed to GloMPO as its 'bounds' parameter.
+
+            Note that by default ParAMS shifts and scales all parameters to the interval (0, 1). GloMPO will work in
+            this space and be blind to the true bounds, thus results from the GloMPO logs cannot be applied directly
+            to the function.
         workers: int
             Passed to GloMPO as its 'max_jobs' parameter. The maximum number of optimizers run in parallel.
         callbacks: List[Callable]
