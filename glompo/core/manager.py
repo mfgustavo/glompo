@@ -468,6 +468,7 @@ class GloMPOManager:
         process = mp.Process(target=target,
                              args=(task, x0, bounds),
                              kwargs=call_kwargs,
+                             name=f"Opt{opt_id}",
                              daemon=True)
 
         self.optimizer_packs[opt_id] = ProcessPackage(process, pipe, event)

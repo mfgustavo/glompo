@@ -100,13 +100,9 @@ class GlompoParamsWrapper(BaseOptimizer):
                 self.contris = np.array([])
 
             def __call__(self, *args, **kwargs) -> float:
-                print("Calling function")
                 result = self.func(*args, **kwargs)
-                print("Function called")
-                fx = result[0][1]
-                print(f"Extracted fx = {fx}")
+                fx = result[0][0]
                 self.contris = [*result[0][-1].values()]
-                print(f"Extracted contris = {fx}")
                 return fx
 
             def resids(self, *args, **kwargs):
