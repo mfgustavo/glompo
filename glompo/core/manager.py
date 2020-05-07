@@ -11,6 +11,7 @@ import traceback
 import os
 import getpass
 import socket
+import sys
 from datetime import datetime
 from time import time
 from typing import *
@@ -25,12 +26,13 @@ from ..convergence import BaseChecker, KillsAfterConvergence
 from ..common.namedtuples import *
 from ..common.customwarnings import *
 from ..common.helpers import *
-from ..common.wrappers import redirect, task_args_wrapper, catch_user_interrupt
+from ..common.wrappers import process_print_redirect, task_args_wrapper, catch_user_interrupt
 from ..hunters import BaseHunter, PseudoConverged, TimeAnnealing, ValueAnnealing, ParameterDistance
 from ..optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from ..opt_selectors.baseselector import BaseSelector
 from .optimizerlogger import OptimizerLogger
 from .regression import DataRegressor
+from ._backends import CustomThread, ThreadPrintRedirect
 
 
 __all__ = ("GloMPOManager",)
@@ -52,6 +54,7 @@ class GloMPOManager:
                  max_jobs: Optional[int] = None,
                  task_args: Optional[Tuple] = None,
                  task_kwargs: Optional[Dict] = None,
+                 backend: str = 'processes',
                  convergence_checker: Optional[BaseChecker] = None,
                  x0_generator: Optional[BaseGenerator] = None,
                  killing_conditions: Optional[BaseHunter] = None,
@@ -102,6 +105,18 @@ class GloMPOManager:
 
         task_kwargs: Optional[Dict] = None
             Optional keyword arguments passed to task with every call.
+
+        backend: str = 'processes'
+            Indicates the form of parallelism used by the optimizers. 'processes' will bundle each optimizer into a
+            multiprocessing.Process, while 'threads' will send the task to a threading.Thread.
+
+            The appropriateness of each depends on the task itself. Using multiprocessing may provide computational
+            advantages but becomes resource expensive as the task is duplicated between processes, there may also be
+            I/O collisions if the task relies on external files during its calculation.
+
+            If threads are used, make sure the task is thread-safe! Also note that forced terminations are not
+            possible in this case and hanging optimizers will not be killed. The 'force_terminations_after' parameter
+            is ignored.
 
         convergence_checker: Optional[BaseChecker] = None
             Criteria used for convergence. A collection of subclasses of BaseChecker are provided, tthese can be
@@ -177,9 +192,7 @@ class GloMPOManager:
             If True, optimizer print messages will be intercepted and saved to separate files.
         """
 
-        # CONSTANTS
-        self._SIGNAL_DICT = {0: "Normal Termination (Args have reason)",
-                             1: "I have made some nan's... oopsie... >.<"}
+        # Filter Warnings
         warnings.simplefilter("always", UserWarning)
         warnings.simplefilter("always", RuntimeWarning)
         warnings.simplefilter("always", NotImplementedWarning)
@@ -323,13 +336,25 @@ class GloMPOManager:
             self.logger.info("Hunting conditions set to default: PseudoConverged(100, 0.01) & TimeAnnealing(2) & "
                              "ValueAnnealing() | ParameterDistance(bounds, 0.05)")
 
-        # Setup multiprocessing variables
+        # Setup backend
+        if any([backend == valid_opt for valid_opt in ('processes', 'threads')]):
+            self.proc_backend = backend == 'processes'
+        else:
+            self.backend = 'processes'
+            self.logger.warning(f"Unable to parse backend '{backend}'. 'processes' or 'threads' expected."
+                                f"Defaulting to 'processes'.")
+            warnings.warn(f"Unable to parse backend '{backend}'. 'processes' or 'threads' expected."
+                          f"Defaulting to 'processes'.")
         self.optimizer_packs = {}  # Dict[opt_id (int): ProcessPackage (NamedTuple)]
         self.graveyard = set()  # opt_ids of known non-active optimizers
         self.last_feedback = {}
 
         self.mp_manager = mp.Manager()
         self.optimizer_queue = self.mp_manager.Queue()
+
+        if self.split_printstreams and not self.proc_backend:
+            sys.stdout = ThreadPrintRedirect(sys.stdout)
+            sys.stderr = ThreadPrintRedirect(sys.stderr)
 
         # Purge Old Results
         files = os.listdir(".")
@@ -462,14 +487,18 @@ class GloMPOManager:
         bounds = np.array(self.bounds)
         target = catch_user_interrupt(optimizer.minimize)
 
-        if self.split_printstreams:
-            target = redirect(opt_id, optimizer.minimize)
+        if self.split_printstreams and self.proc_backend:
+            target = process_print_redirect(opt_id, optimizer.minimize)
 
-        process = mp.Process(target=target,
-                             args=(task, x0, bounds),
-                             kwargs=call_kwargs,
-                             name=f"Opt{opt_id}",
-                             daemon=True)
+        kwargs = {'target': target,
+                  'args': (task, x0, bounds),
+                  'kwargs': call_kwargs,
+                  'name': f"Opt{opt_id}",
+                  'daemon': True}
+        if self.proc_backend:
+            process = mp.Process(**kwargs)
+        else:
+            process = CustomThread(redirect_print=self.split_printstreams, **kwargs)
 
         self.optimizer_packs[opt_id] = ProcessPackage(process, pipe, event)
         self.optimizer_packs[opt_id].process.start()

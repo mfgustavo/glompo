@@ -18,7 +18,7 @@ from glompo.generators import RandomGenerator, BaseGenerator
 from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxOptsStarted, MaxFuncCalls, MaxSeconds
 from glompo.hunters import BaseHunter, MinIterations
 from glompo.common.namedtuples import *
-from glompo.common.wrappers import redirect, task_args_wrapper
+from glompo.common.wrappers import process_print_redirect, task_args_wrapper
 from glompo.opt_selectors import BaseSelector, CycleSelector
 
 
@@ -278,7 +278,7 @@ class TestManager:
             print("redirect_test")
             raise RuntimeError("redirect_test_error")
 
-        wrapped_func = redirect(1, func)
+        wrapped_func = process_print_redirect(1, func)
         p = mp.Process(target=wrapped_func)
         p.start()
         p.join()

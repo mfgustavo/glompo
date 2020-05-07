@@ -4,6 +4,7 @@
 
 
 from typing import *
+from threading import Thread
 from multiprocessing import Process, Event
 from multiprocessing.connection import Connection
 
@@ -51,7 +52,7 @@ class IterationResult(NamedTuple):
 
 class ProcessPackage(NamedTuple):
     """ Package of a running process and its communication channels. """
-    process: Process
+    process: Union[Process, Thread]
     signal_pipe: Connection
     allow_run_event: Event
 

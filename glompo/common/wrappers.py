@@ -8,7 +8,7 @@ import sys
 import inspect
 
 
-def redirect(opt_id, func):
+def process_print_redirect(opt_id, func):
     """ Wrapper to redirect a process' output to a designated text file. """
 
     @wraps(func)
