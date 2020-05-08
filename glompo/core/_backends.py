@@ -13,7 +13,9 @@ import warnings
 
 class CustomThread(threading.Thread):
 
-    """ Adds an exitcode property to the Thread base class. """
+    """ Adds an exitcode property to the Thread base class as well as code to redirect the thread printstream to a
+        file if this has been setup before hand.
+    """
 
     def __init__(self, redirect_print: bool = False, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -31,6 +33,11 @@ class CustomThread(threading.Thread):
                     warnings.warn("Prinstream redirect failed. Print stream will only redirect if ThreadPrintRedirect "
                                   "is setup beforehand.", RuntimeWarning)
             super().run()
+            try:
+                sys.stdout.close(threading.currentThread().ident)
+                sys.stderr.close(threading.currentThread().ident)
+            except Exception as e:
+                warnings.warn(f"Closing prinstream files failed. Caught exception: {e}", RuntimeWarning)
         except Exception as e:
             self.exitcode = -1
             raise e
@@ -65,7 +72,7 @@ class ThreadPrintRedirect:
 
     def write(self, message):
         ident = threading.currentThread().ident
-        if ident in self.threads:
+        if ident in self.threads and not self.threads[ident].closed:
             self.threads[ident].write(message)
         else:
             self.stdout.write(message)
@@ -74,6 +81,9 @@ class ThreadPrintRedirect:
         """ Required for Python 3 compatibility. """
         pass
 
-    def close(self):
-        for file in self.threads.values():
-            file.close()
+    def close(self, thread_id: int = None):
+        if thread_id:
+            self.threads[thread_id].close()
+        else:
+            for file in self.threads.values():
+                file.close()

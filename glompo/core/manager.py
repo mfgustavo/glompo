@@ -356,6 +356,10 @@ class GloMPOManager:
             sys.stdout = ThreadPrintRedirect(sys.stdout)
             sys.stderr = ThreadPrintRedirect(sys.stderr)
 
+        if self.allow_forced_terminations and not self.proc_backend:
+            warnings.warn("Cannot use force terminations with threading.", UserWarning)
+            self.logger.warning("Cannot use force terminations with threading.")
+
         # Purge Old Results
         files = os.listdir(".")
         if overwrite_existing:
@@ -460,6 +464,10 @@ class GloMPOManager:
 
             self.logger.debug("Saving summary file results")
             self._save_log(best_id, result, reason, caught_exception)
+
+            if not self.proc_backend and self.split_printstreams:
+                sys.stdout.close()
+                sys.stderr.close()
 
             self.logger.info("GloMPO Optimization Routine Done")
 
@@ -598,7 +606,8 @@ class GloMPOManager:
             if self.optimizer_packs[opt_id].process.is_alive() and \
                     time() - self.last_feedback[opt_id] > self._TOO_LONG and \
                     self.allow_forced_terminations and \
-                    opt_id not in self.hunt_victims:
+                    opt_id not in self.hunt_victims and \
+                    self.proc_backend:
                 warnings.warn(f"Optimizer {opt_id} seems to be hanging. Forcing termination.", RuntimeWarning)
                 self.logger.error(f"Optimizer {opt_id} seems to be hanging. Forcing termination.")
                 self.graveyard.add(opt_id)
@@ -611,7 +620,8 @@ class GloMPOManager:
             if opt_id in self.hunt_victims and \
                self.allow_forced_terminations and \
                self.optimizer_packs[opt_id].process.is_alive() and \
-               time() - self.hunt_victims[opt_id] > self._TOO_LONG:
+               time() - self.hunt_victims[opt_id] > self._TOO_LONG and \
+               self.proc_backend:
                 self.optimizer_packs[opt_id].process.terminate()
                 self.optimizer_packs[opt_id].process.join(3)
                 self.opt_log.put_message(opt_id, "Force terminated due to no feedback after kill signal "

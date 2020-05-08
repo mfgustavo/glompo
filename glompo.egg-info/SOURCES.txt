@@ -21,6 +21,7 @@ glompo/convergence/nkillsafterconv.py
 glompo/convergence/omax.py
 glompo/convergence/tmax.py
 glompo/core/__init__.py
+glompo/core/_backends.py
 glompo/core/logprob.py
 glompo/core/manager.py
 glompo/core/optimizerlogger.py
@@ -52,11 +53,11 @@ glompo/opt_selectors/cycle.py
 glompo/opt_selectors/random.py
 glompo/optimizers/__init__.py
 glompo/optimizers/baseoptimizer.py
-glompo/optimizers/callbacks.py
 glompo/optimizers/cmawrapper.py
 glompo/optimizers/eemc.py
 glompo/optimizers/gflswrapper.py
 glompo/optimizers/neblermead.py
+glompo/optimizers/random.py
 glompo/tests/__init__.py
 glompo/tests/conftest.py
 glompo/tests/core_tests/__init__.py
