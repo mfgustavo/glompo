@@ -40,12 +40,27 @@ class BaseSelector(ABC):
 
         self.avail_opts = []
         for item in avail_opts:
-            if issubclass(item, BaseOptimizer):
-                self.avail_opts.append((item, {}, {}))
-            elif isinstance(item, tuple) and issubclass(item[0], BaseOptimizer) and isinstance(item[1], dict) and \
-                    isinstance(item[2], dict):
-                self.avail_opts.append(item)
-            else:
+            try:
+                if isinstance(item, tuple) and len(item) == 3:
+                    opt, init_dict, call_dict = item
+                    assert issubclass(opt, BaseOptimizer)
+
+                    if init_dict is None:
+                        init_dict = {}
+                    assert isinstance(init_dict, dict)
+
+                    if call_dict is None:
+                        call_dict = {}
+                    assert isinstance(call_dict, dict)
+
+                    self.avail_opts.append((opt, init_dict, call_dict))
+
+                else:
+                    opt = item
+                    assert issubclass(opt, BaseOptimizer)
+                    self.avail_opts.append((opt, {}, {}))
+
+            except AssertionError:
                 raise ValueError(f"Cannot parse {item}. Expected:  Union[Type[BaseOptimizer], Tuple[BaseOptimizer, "
                                  f"Dict[str, Any], Dict[str, Any]]] expected.")
 
