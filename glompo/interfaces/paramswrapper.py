@@ -11,6 +11,41 @@ from ..core.manager import GloMPOManager
 from ..opt_selectors.baseselector import BaseSelector
 
 
+__all__ = ("GlompoParamsWrapper",)
+
+
+class _FunctionWrapper:
+    """ Wraps function to match the API required by GloMPO 'tasks'. Can be modified to achieve compatibility with
+        other optimizers.
+
+        Currently:
+        1) Returns a float from the __call__ function;
+        2) Add a resids parameter for compatibility with optsam GFLS algorithm.
+    """
+
+    def __init__(self, func):
+        self.func = func
+
+    def __call__(self, pars) -> float:
+        result = self.func(pars)
+        fx = result[0][0]
+        return fx
+
+    def resids(self, pars):
+        """ Method added to conform the function to optsam API and allow the GFLS algorithm to be used. """
+        result = self.func(pars)
+        fx = result[0][0]
+
+        contris = [*result[0][-1].values()]  # Calculated in ParAMS as fractions of total
+        contris = [fx * contri for contri in contris]
+        contris = np.sqrt(contris)  # Undo squaring done in ParAMS to match GFLS requirements
+
+        if contris:
+            return np.array(contris)
+        else:
+            return np.array([np.inf])
+
+
 class GlompoParamsWrapper(BaseOptimizer):
     """ Wraps the GloMPO manager into a ParAMS optimizer. """
 
@@ -90,25 +125,7 @@ class GlompoParamsWrapper(BaseOptimizer):
                           "optimizers can be passed to GloMPO through BaseSelector objects. Callbacks to control the "
                           "manager itself are passed using GloMPO BaseChecker objects.")
 
-        class FunctionWrapper:
-            """ Wraps function to:
-                1) Return a float from the __call__ function;
-                2) Add a resids parameter for compatibility with optsam optimizers.
-            """
-            def __init__(self, func):
-                self.func = func
-                self.contris = np.array([])
-
-            def __call__(self, *args, **kwargs) -> float:
-                result = self.func(*args, **kwargs)
-                fx = result[0][0]
-                self.contris = [*result[0][-1].values()]
-                return fx
-
-            def resids(self, *args, **kwargs):
-                return np.array(self.contris)
-
-        manager = GloMPOManager(task=FunctionWrapper(function),
+        manager = GloMPOManager(task=_FunctionWrapper(function),
                                 n_parms=len(x0),
                                 optimizer_selector=self.selector,
                                 bounds=bounds,
