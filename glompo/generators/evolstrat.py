@@ -21,13 +21,18 @@ class EvolutionaryStrategyGenerator(BaseGenerator):
         [0.98, 1.02].
     """
 
-    def __init__(self, bounds: Sequence[Tuple[float, float]], max_length: Optional[int] = None):
+    def __init__(self, bounds: Sequence[Tuple[float, float]], min_length: int = 2,
+                 max_length: Optional[int] = None):
         """
         Parameters
         ----------
         bounds: Sequence[Tuple[float, float]]
             (min, max) bounds of each parameter.
-        max_length: Optional[int]
+        min_length: int = 2
+            If there are fewer valid results in the generator's history than min_length then a random vector is
+            returned. Note that function evaluations resulting in an infinite or NaN result are automatically
+            excluded from the history.
+        max_length: Optional[int] = None
             To reduce memory consumption as points are added to the generator only the last max_length points can be
             saved and old points are dumped as new ones are added.
         """
@@ -38,9 +43,11 @@ class EvolutionaryStrategyGenerator(BaseGenerator):
             self.range = np.abs(self.min - self.max)
             self.n_params = len(bounds)
         self.history = deque(maxlen=max_length)
+        self.min_length = min_length
 
     def generate(self) -> np.ndarray:
-        if not self.history:
+        if len(self.history) < self.min_length:
+            self.logger.debug(f"Returning random vector")
             return (self.bounds[:, 1] - self.bounds[:, 0]) * np.random.random(self.n_params) + self.bounds[:, 0]
 
         vecs, y = np.transpose(self.history)
@@ -52,7 +59,7 @@ class EvolutionaryStrategyGenerator(BaseGenerator):
         par2 = np.array(vecs[par2])
 
         # Blend Crossover
-        alpha = np.random.uniform(-0.5, 1.5)
+        alpha = np.random.uniform(-0.5, 1.5, self.n_params)
         child = alpha * par1 + (1-alpha) * par2
 
         # Mutation
@@ -65,4 +72,5 @@ class EvolutionaryStrategyGenerator(BaseGenerator):
         return child
 
     def update(self, x: Sequence[float], fx: float):
-        self.history.append((x, fx))
+        if np.isfinite(fx):
+            self.history.append((x, fx))
