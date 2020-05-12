@@ -38,7 +38,8 @@ class PseudoConverged(BaseHunter):
             try:
                 nearest_iter = fcalls[-2 - i]
             except IndexError:
-                self.logger.warning("PseudoConverged: IndexError caught, returning False")
+                # Some optimizers with multiple calls per iteration may fall out here since they can't iterate back
+                # further but still have not found a match.
                 self._last_result = False
                 return self._last_result
         i += 2
