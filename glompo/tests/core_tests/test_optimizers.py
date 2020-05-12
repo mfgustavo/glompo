@@ -14,6 +14,8 @@ import pytest
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from glompo.optimizers.cmawrapper import CMAOptimizer
 from glompo.optimizers.gflswrapper import GFLSOptimizer
+from glompo.optimizers.random import RandomOptimizer
+from glompo.optimizers.nevergrad import Nevergrad
 from glompo.common.namedtuples import IterationResult
 
 
@@ -128,7 +130,7 @@ class TestBase:
 class TestSubclassesGlompoCompatible:
 
     # Append new optimizer class names to this list to run tests for GloMPO compatibility
-    available_classes = [CMAOptimizer, GFLSOptimizer]
+    available_classes = [CMAOptimizer, GFLSOptimizer, Nevergrad]
 
     package = namedtuple("package", "queue p_pipe c_pipe event")
 

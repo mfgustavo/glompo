@@ -20,5 +20,5 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     package_dir={"glompo": "glompo"},
-    install_requires=["numpy", "matplotlib", "scipy", 'pytest', 'cma', 'PyYAML', 'emcee']
+    install_requires=["numpy", "matplotlib", "scipy", 'pytest', 'cma', 'PyYAML', 'emcee', 'nevergrad']
 )
