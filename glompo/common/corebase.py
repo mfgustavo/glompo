@@ -77,7 +77,8 @@ class _OrCore(_CombiCore):
 
     def __call__(self, *args, **kwargs):
         super().__call__(*args, **kwargs)
-        return self.base1(*args, **kwargs) or self.base2(*args, **kwargs)
+        self._last_result = self.base1(*args, **kwargs) or self.base2(*args, **kwargs)
+        return self._last_result
 
     def __str__(self):
         return self._combi_string_maker("|")
@@ -90,7 +91,8 @@ class _AndCore(_CombiCore):
 
     def __call__(self, *args, **kwargs):
         super().__call__(*args, **kwargs)
-        return self.base1(*args, **kwargs) and self.base2(*args, **kwargs)
+        self._last_result = self.base1(*args, **kwargs) and self.base2(*args, **kwargs)
+        return self._last_result
 
     def __str__(self):
         return self._combi_string_maker("&")
