@@ -28,7 +28,7 @@ from ..common.customwarnings import *
 from ..common.helpers import *
 from ..common.wrappers import process_print_redirect, task_args_wrapper, catch_user_interrupt
 from ..hunters import BaseHunter, PseudoConverged, TimeAnnealing, ValueAnnealing, ParameterDistance
-from ..optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
+from ..optimizers.baseoptimizer import BaseOptimizer
 from ..opt_selectors.baseselector import BaseSelector
 from .optimizerlogger import OptimizerLogger
 from .regression import DataRegressor
@@ -291,6 +291,7 @@ class GloMPOManager:
         # Save max conditions and counters
         self.t_start = None
         self.dt_start = None
+        self.converged = False
         self.o_counter = 0
         self.f_counter = 0
         self.last_hunt = 0
@@ -380,11 +381,10 @@ class GloMPOManager:
 
         self.logger.info("Initialization Done")
 
-    def start_manager(self) -> MinimizeResult:
+    def start_manager(self) -> Result:
         """ Begins the optimization routine and returns the selected minimum in an instance of MinimizeResult. """
 
         result = Result(None, None, None, None)
-        converged = False
         reason = ""
         caught_exception = None
         best_id = -1
@@ -395,7 +395,7 @@ class GloMPOManager:
             self.t_start = time()
             self.dt_start = datetime.now()
 
-            while not converged:
+            while not self.converged:
 
                 self.logger.debug("Checking for available optimizer slots")
                 self._fill_optimizer_slots()
@@ -429,8 +429,8 @@ class GloMPOManager:
                 self.logger.debug("Checking for hanging processes")
                 self._inspect_children()
 
-                converged = self.convergence_checker(self)
-                if converged:
+                self.converged = self.convergence_checker(self)
+                if self.converged:
                     self.logger.info(f"Convergence Reached")
 
             self.logger.info("Exiting manager loop")
