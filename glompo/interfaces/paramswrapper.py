@@ -134,4 +134,10 @@ class GlompoParamsWrapper(BaseOptimizer):
 
         result = manager.start_manager()
 
-        return result
+        # Reshape glompo.common.namedtuples.Result into scm.params.optimizers.base.MinimizeResult
+        params_res = MinimizeResult()
+        params_res.x = result.x
+        params_res.fx = result.fx
+        params_res.success = manager.converged
+
+        return params_res
