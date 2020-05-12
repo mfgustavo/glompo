@@ -58,14 +58,6 @@ class BaseOptimizer(ABC):
 
     """
 
-    @property
-    @classmethod
-    @abstractmethod
-    def needscaler(cls):
-        """
-        Force class variable 'needscaler'. To be set to True or False
-        """
-
     def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
                  pause_flag: Event = None, **kwargs):
         self.logger = logging.getLogger('glompo.optimizers')

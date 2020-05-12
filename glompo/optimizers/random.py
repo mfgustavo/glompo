@@ -18,8 +18,6 @@ class RandomOptimizer(BaseOptimizer):
     Evaluates random points within the bounds for a fixed number of iterations (used for debugging).
     """
 
-    needscaler = True
-
     def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
                  pause_flag: Event = None, iters: int = 100):
         """ Initialize with the above parameters. """

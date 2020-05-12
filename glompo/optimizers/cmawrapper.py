@@ -36,8 +36,6 @@ class CMAOptimizer(BaseOptimizer):
         supported: Termination if ``sigma < minsigma``.
     """
 
-    needscaler = True
-
     def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
                  pause_flag: Event = None, sigma=0.5, sampler='full', **cmasettings):
         """ Initialize with the above parameters. """
@@ -72,38 +70,58 @@ class CMAOptimizer(BaseOptimizer):
             os.makedirs(self.dir)
 
         self.opts.update({'verb_filenameprefix': self.dir+'cma_'})
+        self.logger.debug(f"Updated options")
 
         bmin, bmax = np.transpose(bounds)
         bounds = [bmin, bmax]
+        self.logger.debug(f"Setup bounds")
 
         self.opts.update({'bounds': bounds})
+        self.logger.debug(f"Updated options with bounds")
         es = cma.CMAEvolutionStrategy(x0, self.sigma, self.opts)
+        self.logger.debug(f"Created CMA algo instance")
         self.es = es
         self.result = MinimizeResult()
 
         t_start = time()
         solutions = 0
+        self.logger.debug(f"Entering optimization loop")
         while not es.stop():
+            self.logger.debug(f"Asking for solutions")
             solutions = es.ask()
+            self.logger.debug(f"solutions generated: {solutions}")
+
             es.tell(solutions, [function(x) for x in solutions])
+            self.logger.debug(f"Told solutions")
             es.logger.add()
+            self.logger.debug(f"Add solutions to log")
             self.result.x, self.result.fx = es.result[:2]
+            self.logger.debug(f"Extracted x and fx from result")
             if self._results_queue:
                 self.push_iter_result(es.countiter, len(solutions), self.result.x, self.result.fx, False)
+                self.logger.debug(f"Pushed result to queue")
                 self.check_messages()
+                self.logger.debug(f"Checked messages")
                 self._pause_signal.wait()
+                self.logger.debug(f"Passed pause test")
             self._customtermination(callbacks)
+            self.logger.debug(f"callbacks called")
             print(f'At CMA Iteration: {es.countiter}. Best f(x)={es.best.f:.3e}.')
             if es.countiter % 20 == 0:
                 print('[DEBUG] Avg. time per cmaes loop: {}.'.format((t_start - time())/es.countiter))
 
+        self.logger.debug(f"Exited optimization loop")
         self.result.success = True
         self.result.x, self.result.fx = es.result[:2]
         if self._results_queue:
+            self.logger.debug(f"Pushing final result")
             self.push_iter_result(es.countiter, len(solutions), self.result.x, self.result.fx, True)
+            self.logger.debug(f"Messaging termination to manager.")
             self.message_manager(0, "Optimizer convergence")
+            self.logger.debug(f"Final message check")
             self.check_messages()
         with open(self.dir+'cma_results.pkl', 'wb') as f:
+            self.logger.debug(f"Pickling results")
             pickle.dump(es.result, f, -1)
         return self.result
 
@@ -134,6 +152,13 @@ class CMAOptimizer(BaseOptimizer):
             self.callstop()
 
     def push_iter_result(self, i, f_calls, x, fx, final):
+        self.logger.debug(f"Pushing result:\n"
+                          f"opt_id = {self._opt_id}\n"
+                          f"i = {i}\n"
+                          f"f_calls = {f_calls}\n"
+                          f"x = {x}\n"
+                          f"fx = {fx}\n"
+                          f"final = {final}")
         self._results_queue.put(IterationResult(self._opt_id, i, f_calls, x, fx, final))
 
     def callstop(self, reason=None):
