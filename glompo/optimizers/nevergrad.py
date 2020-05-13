@@ -128,7 +128,7 @@ class _NevergradCallbacksWrapper:
                 if not stop_cond and self.parent.stop:
                     stop_cond = f"GloMPO termination signal."
                 self.parent.logger.debug(f"Stop = {bool(stop_cond)} after message check from manager")
-                self.parent.logger.debugt(f"Pushing result to queue")
+                self.parent.logger.debug(f"Pushing result to queue")
                 self.parent.push_iter_result(
                     IterationResult(opt_id=self.parent._opt_id,
                                     n_iter=opt.num_tell + 1,
