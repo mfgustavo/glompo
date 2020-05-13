@@ -59,14 +59,13 @@ class GlompoParamsWrapper(BaseOptimizer):
                 glompo.opt_selectors.BaseSelector for detailed documentation.
             manager_kwargs: Optional[Dict[str, Any]] = None
                 A dictionary of optional arguments to the GloMPOManager initialisation function.
-                Notes that all arguments are accepted but required GloMPO arguments 'task', 'n_parms', 'bounds' and
-                'max_jobs' will be overwritten as they are passed by the 'minimize' function in accordance with ParAMS
-                API.
+                Notes that all arguments are accepted but required GloMPO arguments 'task', 'n_parms',  and 'bounds'
+                will be overwritten as they are passed by the 'minimize' function in accordance with ParAMS API.
         """
 
         if manager_kwargs:
             self.manager_kwargs = manager_kwargs
-            for kw in ['task', 'n_parms', 'bounds', 'max_jobs']:
+            for kw in ['task', 'n_parms', 'bounds']:
                 if kw in self.manager_kwargs:
                     del self.manager_kwargs[kw]
         else:
@@ -99,7 +98,9 @@ class GlompoParamsWrapper(BaseOptimizer):
             this space and be blind to the true bounds, thus results from the GloMPO logs cannot be applied directly
             to the function.
         workers: int
-            Passed to GloMPO as its 'max_jobs' parameter. The maximum number of optimizers run in parallel.
+            Represents the maximum number of optimizers run in parallel. Passed to GloMPO as its 'max_jobs' parameter
+            if 'max_jobs' has not been sent during initialisation via manager_kwargs otherwise ignored. If allowed to
+            default this will usually result in the number of optimizers as there are cores available.
         callbacks: List[Callable]
             GloMPO ignores the callbacks parameter as it is ambiguous in this context. To control the termination of
             the manager itself use BaseChecker objects passed to GloMPO's convergence_criteria parameter.
@@ -125,11 +126,13 @@ class GlompoParamsWrapper(BaseOptimizer):
                           "optimizers can be passed to GloMPO through BaseSelector objects. Callbacks to control the "
                           "manager itself are passed using GloMPO BaseChecker objects.")
 
+        if 'max_jobs' not in self.manager_kwargs:
+            self.manager_kwargs['max_jobs'] = workers
+
         manager = GloMPOManager(task=_FunctionWrapper(function),
                                 n_parms=len(x0),
                                 optimizer_selector=self.selector,
                                 bounds=bounds,
-                                max_jobs=workers,
                                 **self.manager_kwargs)
 
         result = manager.start_manager()
