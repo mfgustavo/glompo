@@ -266,7 +266,7 @@ class GloMPOManager:
                 raise TypeError(f"Cannot parse max_jobs = {max_jobs}. Only positive integers are allowed.")
         else:
             self.max_jobs = mp.cpu_count() - 1
-        self.logger.info("max_jobs set to CPU count.")
+            self.logger.info("max_jobs set to CPU count.")
 
         # Save convergence criteria
         if convergence_checker:
