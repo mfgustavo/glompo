@@ -14,6 +14,7 @@ from .timeannealing import TimeAnnealing
 from .valueannealing import ValueAnnealing
 from .parameterdistance import ParameterDistance
 from .min_fcalls import MinFuncCalls
+from .lastptsinvalid import LastPointsInvalid
 
 __all__ = ("BaseHunter",
            "ConfidenceWidth",
@@ -23,4 +24,5 @@ __all__ = ("BaseHunter",
            "ValueAnnealing",
            "TimeAnnealing",
            "ParameterDistance",
-           "MinFuncCalls")
+           "MinFuncCalls",
+           "LastPointsInvalid")

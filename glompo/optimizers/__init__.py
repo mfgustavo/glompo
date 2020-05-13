@@ -6,8 +6,10 @@
 from .baseoptimizer import BaseOptimizer
 from .cmawrapper import CMAOptimizer
 from .gflswrapper import GFLSOptimizer
+from .nevergrad import Nevergrad
 
 
 __all__ = ("BaseOptimizer",
            "CMAOptimizer",
-           "GFLSOptimizer")
+           "GFLSOptimizer",
+           "Nevergrad")
