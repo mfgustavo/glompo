@@ -27,5 +27,5 @@ class LastPointsInvalid(BaseHunter):
                  victim_opt_id: int) -> bool:
 
         fcalls = log.get_history(victim_opt_id, "fx")[-self.n_iters:]
-        self._last_result = len(fcalls) >= self.n_iters and np.isfinite(fcalls).all()
+        self._last_result = len(fcalls) >= self.n_iters and np.isinf(fcalls).all()
         return self._last_result

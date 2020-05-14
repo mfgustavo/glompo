@@ -12,6 +12,7 @@ from glompo.hunters.parameterdistance import ParameterDistance
 from glompo.hunters.timeannealing import TimeAnnealing
 from glompo.hunters.valueannealing import ValueAnnealing
 from glompo.hunters.val_below_asymptote import ValBelowAsymptote
+from glompo.hunters.lastptsinvalid import LastPointsInvalid
 from glompo.core.optimizerlogger import OptimizerLogger
 
 
@@ -274,3 +275,19 @@ class TestValBelowAsymptote:
         log = FakeLog(path1, path2)
         reg = self.FakeRegressor(result)
         assert cond(log, reg, 1, 2) == output
+
+
+class TestLastPointsInvalid:
+
+    @pytest.mark.parametrize("path, output", [([12, np.inf, np.inf, np.inf, np.inf], False),
+                                              ([np.inf, np.inf, np.inf, np.inf], False),
+                                              ([np.inf, np.inf, np.inf, np.inf, np.inf], True),
+                                              ([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf], True),
+                                              ([np.inf, np.inf, np.inf, 8, np.inf], False),
+                                              ([84, np.inf, np.inf, np.inf, np.inf, np.inf], True),
+                                              ([84, 654, np.inf, np.inf, np.inf, np.inf], False)
+                                              ])
+    def test_condition(self, path, output):
+        cond = LastPointsInvalid(5)
+        log = FakeLog([], path)
+        assert cond(log, None, 1, 2) == output
