@@ -74,7 +74,7 @@ class BaseOptimizer(ABC):
 
     @abstractmethod
     def minimize(self,
-                 function: Callable,
+                 function: Callable[Sequence[float], float],
                  x0: Sequence[float],
                  bounds: Sequence[Tuple[float, float]],
                  callbacks: Callable = None, **kwargs) -> MinimizeResult:
