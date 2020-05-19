@@ -83,9 +83,8 @@ class BaseOptimizer(ABC):
             other Exceptions to log them.
         """
         try:
-            self.logger.info(f"What is happening here? I am logging to {self.logger.name}")
             return self.minimize(function, x0, bounds, callbacks, **kwargs)
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, BrokenPipeError):
             print("Interrupt signal received. Process stopping.")
             self.logger.warning("Interrupt signal received. Process stopping.")
         except Exception as e:
