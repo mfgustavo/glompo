@@ -27,21 +27,22 @@ class SplitOptimizerLogs(logging.Filter):
         --------
             formatter = logging.Formatter("%(levelname)s : %(name)s : %(processName)s :: %(message)s")
 
-            filter = logging.Filter('glompo.optimizers')
-            split_filter = SplitOptimizerLogs("diverted_logs", formatter=formatter)
-
-            handler = logging.StreamHandler(sys.stdout)
-            opt_handler.setFormatter(formatter)
+            # Adds individual handlers for each optimizer created
+            # Format for the new handlers is set by formatter
+            # Propagate=True sends the message on to opt_handler which in this case is stdout
+            opt_filter = SplitOptimizerLogs("diverted_logs", propagate=True, formatter=formatter)
+            opt_handler = logging.StreamHandler(sys.stdout)
             opt_handler.addFilter(opt_filter)
-            opt_handler.addFilter(opt_split_filter)
-            opt_handler.setLevel('DEBUG')
+            opt_handler.setFormatter(formatter)
 
-            logger = logging.getLogger('glompo')
-            logger.addHandler(opt_handler)
-            logger.setLevel('DEBUG')
+            # Messages of the INFO level will propogate to stdout
+            opt_handler.setLevel('INFO')
 
-            manager = GloMPOManager(...)
-            manager.start_manager()
+            logging.getLogger("glompo.optimizers").addHandler(opt_handler)
+
+            # The level for the handlers made in SplitOptimizerLogs is set at the higher level.
+            # Here DEBUG level messages will be logged to the files even though INFO level propagates to the console
+            logging.getLogger("glompo.optimizers").setLevel('DEBUG')
         """
         self.opened = set()
         self.filepath = filepath + '/' if filepath else ""
@@ -49,6 +50,7 @@ class SplitOptimizerLogs(logging.Filter):
         self.fomatter = formatter
 
     def filter(self, record: logging.LogRecord) -> int:
+
         opt_id = int(record.name.replace("glompo.optimizers.opt", ""))
 
         if opt_id not in self.opened:

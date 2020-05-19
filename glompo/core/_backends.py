@@ -3,9 +3,7 @@
 """ Contains code to support using both multiprocessing and threading within the GloMPO manager. """
 
 
-import multiprocessing as mp
 import threading
-import queue
 import sys
 import _io
 import warnings

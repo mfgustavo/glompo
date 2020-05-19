@@ -39,9 +39,8 @@ __all__ = ("GloMPOManager",)
 
 
 class GloMPOManager:
-    """ Runs given jobs in parallel and tracks their progress using Gaussian Process Regressions.
-        Based on these predictions the class will update hyperparameters, kill poor performing jobs and
-        intelligently restart others.
+    """ Attempts to minimize a given function using numerous optimizers in parallel, based on their performance and
+        decision criteria, will stop and intelligently restart others.
     """
 
     def __init__(self,
@@ -198,7 +197,7 @@ class GloMPOManager:
         warnings.simplefilter("always", NotImplementedWarning)
 
         # Setup logging
-        self.logger = logging.getLogger('glompo')
+        self.logger = logging.getLogger('glompo.manager')
         self.logger.info("Initializing Manager ... ")
 
         # Setup working directory
@@ -244,7 +243,7 @@ class GloMPOManager:
             raise TypeError(f"optimizer_selector not an instance of a subclass of BaseSelector.")
 
         # Save bounds
-        self.bounds = []
+        self.bounds: List[Bound] = []
         if len(bounds) != n_parms:
             raise ValueError(f"Number of parameters (n_parms) and number of bounds are not equal")
         for bnd in bounds:
@@ -297,7 +296,7 @@ class GloMPOManager:
         self.last_hunt = 0
         self.conv_counter = 0  # Number of converged optimizers
         self.hunt_counter = 0  # Number of hunting jobs started
-        self.hunt_victims = {}  # opt_ids of killed jobs and timestamps when the signal was sent
+        self.hunt_victims: Dict[int, float] = {}  # opt_ids of killed jobs and timestamps when the signal was sent
 
         # Save behavioural args
         self.allow_forced_terminations = force_terminations_after > 0
@@ -308,6 +307,8 @@ class GloMPOManager:
         self.summary_files = np.clip(int(summary_files), 0, 3)
         if self.summary_files != summary_files:
             self.logger.warning(f"summary_files argument given as {summary_files} clipped to {self.summary_files}")
+        if summary_files:
+            yaml.add_representer(LiteralWrapper, literal_presenter)
         self.split_printstreams = split_printstreams
         self.visualisation = visualisation
         self.hunt_frequency = hunt_frequency
@@ -346,9 +347,9 @@ class GloMPOManager:
                                 f"Defaulting to 'processes'.")
             warnings.warn(f"Unable to parse backend '{backend}'. 'processes' or 'threads' expected."
                           f"Defaulting to 'processes'.")
-        self.optimizer_packs = {}  # Dict[opt_id (int): ProcessPackage (NamedTuple)]
-        self.graveyard = set()  # opt_ids of known non-active optimizers
-        self.last_feedback = {}
+        self.optimizer_packs: Dict[int, ProcessPackage] = {}
+        self.graveyard: Set[int] = set()
+        self.last_feedback: Dict[int, float] = {}
 
         self.mp_manager = mp.Manager()
         self.optimizer_queue = self.mp_manager.Queue()
@@ -436,7 +437,7 @@ class GloMPOManager:
             self.logger.info("Exiting manager loop")
             self.logger.info(f"Exit conditions met: \n"
                              f"{nested_string_formatting(self.convergence_checker.str_with_result())}")
-            reason = self.convergence_checker.str_with_result().replace("\n", "")
+            reason = self.convergence_checker.str_with_result()
 
             self.logger.debug("Cleaning up multiprocessing")
             self._stop_all_children()
@@ -493,10 +494,10 @@ class GloMPOManager:
         task = self.task
         x0 = self.x0_generator.generate()
         bounds = np.array(self.bounds)
-        target = catch_user_interrupt(optimizer.minimize)
+        target = optimizer._minimize
 
         if self.split_printstreams and self.proc_backend:
-            target = process_print_redirect(opt_id, optimizer.minimize)
+            target = process_print_redirect(opt_id, optimizer._minimize)
 
         kwargs = {'target': target,
                   'args': (task, x0, bounds),
@@ -688,18 +689,19 @@ class GloMPOManager:
                     kill = self.killing_conditions(self.opt_log, self.regressor, hunter_id, victim_id)
 
                     if kill:
+                        reason = nested_string_formatting(self.killing_conditions.str_with_result())
                         self.logger.info(f"Optimizer {hunter_id} wants to kill Optimizer {victim_id}:\n"
                                          f"Reason:\n"
-                                         f"{nested_string_formatting(self.killing_conditions.str_with_result())}")
+                                         f"{reason}")
 
                         if victim_id not in self.graveyard:
-                            self._shutdown_job(victim_id)
+                            self._shutdown_job(victim_id, hunter_id, reason)
 
                         if self.visualisation:
                             self.scope.update_hunt_end(hunter_id)
             self.logger.debug("Hunting complete")
 
-    def _shutdown_job(self, opt_id):
+    def _shutdown_job(self, opt_id: int, hunter_id: int, reason: str):
         """ Sends a stop signal to optimizer opt_id and updates variables around its termination. """
         self.hunt_victims[opt_id] = time()
         self.graveyard.add(opt_id)
@@ -708,12 +710,15 @@ class GloMPOManager:
         self.logger.debug(f"Termination signal sent to {opt_id}")
 
         self.opt_log.put_metadata(opt_id, "Stop Time", datetime.now())
-        self.opt_log.put_metadata(opt_id, "End Condition", "GloMPO Termination")
+        self.opt_log.put_metadata(opt_id, "End Condition", LiteralWrapper(f"GloMPO Termination\n"
+                                                                          f"Hunter: {hunter_id}\n"
+                                                                          f"Reason: "
+                                                                          f"{nested_string_formatting(reason)}"))
 
         if self.visualisation:
             self.scope.update_kill(opt_id)
 
-    def _find_best_result(self):
+    def _find_best_result(self) -> Result:
         # TODO Better answer selection esp in context of answer stability?
         best_fx = np.inf
         best_x = []
@@ -749,6 +754,7 @@ class GloMPOManager:
             if caught_exception:
                 reason = f"Process Crash: {caught_exception}"
             with open("glompo_manager_log.yml", "w") as file:
+
                 data = {"Assignment": {"Task": type(self.task.__wrapped__).__name__,
                                        "Working Dir": os.getcwd(),
                                        "Username": getpass.getuser(),
@@ -756,8 +762,10 @@ class GloMPOManager:
                                        "Start Time": self.dt_start,
                                        "Stop Time": datetime.now()},
                         "Settings": {"x0 Generator": type(self.x0_generator).__name__,
-                                     "Convergence Checker": str(self.convergence_checker).replace('\n', ''),
-                                     "Hunt Conditions": str(self.killing_conditions).replace('\n', ''),
+                                     "Convergence Checker": LiteralWrapper(nested_string_formatting(str(
+                                         self.convergence_checker))),
+                                     "Hunt Conditions": LiteralWrapper(nested_string_formatting(str(
+                                         self.killing_conditions))),
                                      "Optimizer Selector": self.selector.glompo_log_repr(),
                                      "Max Parallel Optimizers": self.max_jobs},
                         "Counters": {"Function Evaluations": self.f_counter,
@@ -768,7 +776,7 @@ class GloMPOManager:
                         "Solution": {"fx": result.fx,
                                      "stats": result.stats,
                                      "origin": result.origin,
-                                     "exit cond.": reason,
+                                     "exit cond.": LiteralWrapper(nested_string_formatting(reason)),
                                      "x": result.x},
                         }
                 self.logger.debug("Saving manager summary file.")

@@ -18,11 +18,11 @@
         and regulated by the summary_files parameter in the __init__ method.
 
         The GloMPO logger is called 'glompo' and components have individual loggers too, allowing filtering if
-        desired. These are: 'glompo.checker', 'glompo.scope', 'glompo.logger', 'glompo.generator', 'glompo.hunter',
-        'glompo.selector' and 'glompo.optimizers'. Logging from optimizers can be accessed collectively via
-        'glompo.optimizers' or individually for each optimizer via 'glompo.optimizers.optX' where X is the ID number
+        desired. These are: 'glompo.manager', 'glompo.checker', 'glompo.scope', 'glompo.logger', 'glompo.generator',
+        'glompo.hunter', 'glompo.selector' and 'glompo.optimizers'. Logging from optimizers can be accessed collectively
+        via 'glompo.optimizers' or individually for each optimizer via 'glompo.optimizers.optX' where X is the ID number
         of the optimizer (see common/logging.py for a useful Filter which automatically redirects new optimizers to
-        new streams).
+        new log files).
 
         Within user written plug-ins such as custom hunters and convergence criteria, a self.logger attribute is
         present and can be used to log behaviour.

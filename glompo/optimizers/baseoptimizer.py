@@ -12,7 +12,9 @@ from typing import *
 from abc import ABC, abstractmethod
 import warnings
 import logging
+import traceback
 
+from ..common.helpers import LiteralWrapper
 
 __all__ = ('BaseOptimizer', 'MinimizeResult')
 
@@ -71,6 +73,26 @@ class BaseOptimizer(ABC):
         self._TO_MANAGER_SIGNAL_DICT = {0: "Normal Termination",
                                         1: "Numerical Errors Detected",
                                         9: "Other Message (Saved to Log)"}
+
+    def _minimize(self,
+                  function: Callable[[Sequence[float]], float],
+                  x0: Sequence[float],
+                  bounds: Sequence[Tuple[float, float]],
+                  callbacks: Callable = None, **kwargs) -> MinimizeResult:
+        """ Wrapper around minimize that captures KeyboardInterrupt exceptions to exit gracefully and
+            other Exceptions to log them.
+        """
+        try:
+            self.logger.info(f"What is happening here? I am logging to {self.logger.name}")
+            return self.minimize(function, x0, bounds, callbacks, **kwargs)
+        except KeyboardInterrupt:
+            print("Interrupt signal received. Process stopping.")
+            self.logger.warning("Interrupt signal received. Process stopping.")
+        except Exception as e:
+            formatted_e = "".join(traceback.TracebackException.from_exception(e).format())
+            self.logger.critical("Critical error encountered", exc_info=e)
+            self._signal_pipe.send((9, LiteralWrapper(formatted_e)))
+            raise e
 
     @abstractmethod
     def minimize(self,
