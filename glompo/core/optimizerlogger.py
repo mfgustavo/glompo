@@ -15,7 +15,10 @@ __all__ = ("OptimizerLogger",)
 class OptimizerLogger:
     """ Stores progress of GloMPO optimizers. """
     def __init__(self):
-        self._storage = {}
+        self._storage: Dict[int, _OptimizerLogger] = {}
+
+    def __len__(self):
+        return len(self._storage)
 
     def add_optimizer(self, opt_id: int, class_name: str, time_start: str):
         """ Adds a new optimizer data stream to the log. """

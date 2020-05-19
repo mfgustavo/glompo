@@ -335,8 +335,7 @@ class GloMPOManager:
         else:
             self.killing_conditions = PseudoConverged(100, 0.01) & TimeAnnealing(2) & ValueAnnealing() | \
                                       ParameterDistance(self.bounds, 0.05)
-            self.logger.info("Hunting conditions set to default: PseudoConverged(100, 0.01) & TimeAnnealing(2) & "
-                             "ValueAnnealing() | ParameterDistance(bounds, 0.05)")
+            self.logger.info(f"Hunting conditions set to default: {self.killing_conditions}")
 
         # Setup backend
         if any([backend == valid_opt for valid_opt in ('processes', 'threads')]):

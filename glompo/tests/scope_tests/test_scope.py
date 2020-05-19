@@ -17,6 +17,7 @@ class TestScope:
     def scope(self):
         return GloMPOScope(x_range=None,
                            y_range=None,
+                           events_per_flush=0,
                            record_movie=False,
                            interactive_mode=False)
 
@@ -86,7 +87,7 @@ class TestScope:
         scope.truncated = 300
         scope.add_stream(1)
         for i in range(0, max_val, 10):
-            scope.update_optimizer(1, (i, i ** 2 / 6), False)
+            scope.update_optimizer(1, (i, i ** 2 / 6))
         scope._redraw_graph()
 
         x = scope.streams[1]['all_opt'].get_xdata()
@@ -104,13 +105,12 @@ class TestScope:
     @pytest.mark.filterwarnings("ignore:More than 20 figures")
     @pytest.mark.parametrize("max_val", [0, 100, 200, 300])
     def test_deletion(self, max_val, scope):
-        # TODO: Test now fails because redraw_graph is called from within update_optimizer
         scope.truncated = 300
         scope.add_stream(1)
         scope.add_stream(2)
         for i in range(0, max_val, 10):
-            scope.update_optimizer(1, (i, i ** 2 / 6), False)
-        scope.update_optimizer(2, (600, 1), False)
+            scope.update_optimizer(1, (i, i ** 2 / 6))
+        scope.update_optimizer(2, (600, 1))
         scope._redraw_graph()
 
         x = scope.streams[1]['all_opt'].get_xdata()
@@ -126,8 +126,8 @@ class TestScope:
         scope.add_stream(1)
         scope.add_stream(2)
         for i in range(0, 510, 10):
-            scope.update_optimizer(1, (i, np.sin(i)), False)
-            scope.update_optimizer(2, (i, np.cos(i)), False)
+            scope.update_optimizer(1, (i, np.sin(i)))
+            scope.update_optimizer(2, (i, np.cos(i)))
 
             if i % 30:
                 scope.t_last = 0

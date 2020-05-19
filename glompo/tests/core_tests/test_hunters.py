@@ -50,8 +50,11 @@ def all_hunter():
 
 
 class FakeLog:
-    def __init__(self, path1, path2):
-        self.path = [path1, path2]
+    def __init__(self, *args):
+        self.path = [*args]
+
+    def __len__(self):
+        return len(self.path)
 
     def get_history(self, opt_id, track):
         if track != "f_call_opt":
@@ -180,28 +183,46 @@ class TestPseudoConv:
 
 class TestParameterDistance:
 
-    @pytest.mark.parametrize("path1, path2, bounds, rel_dist, output", [([[0, 0], [0, 1], [0, 2]],
-                                                                         [[1, 0], [1, 1], [1, 2]],
-                                                                         [(0, 2)] * 3, 0.1, False),
-                                                                        ([[0, 0], [0, 1], [0, 2]],
-                                                                         [[1, 0], [1, 1], [1, 2]],
-                                                                         [(0, 2)] * 3, 0.5, True),
-                                                                        ([[0, 0], [0, 1], [1, 2]],
-                                                                         [[1, 0], [1, 1], [1, 2]],
-                                                                         [(0, 2)] * 3, 0.1, True),
-                                                                        ([[0, 0], [10, 10], [20, 20]],
-                                                                         [[20, 18], [20, 19], [20, 21]],
-                                                                         [(0, 20)] * 3, 0.1, True),
-                                                                        ([[0, 0], [0, 0.1], [0, 0.2]],
-                                                                         [[0, 0], [10, 10], [0, 0.25]],
-                                                                         [(0, 10)] * 3, 0.1, True),
-                                                                        ([[0, 0], [100, 100], [0, 1]],
-                                                                         [[1, 0], [1, 1], [0, 1.1]],
-                                                                         [(0, 100)] * 3, 0.11, True)
-                                                                        ])
-    def test_condition(self, path1, path2, bounds, rel_dist, output):
-        cond = ParameterDistance(bounds, rel_dist)
-        log = FakeLog(path1, path2)
+    @pytest.mark.parametrize("paths, bounds, rel_dist, test_all, output", [(([[0, 0], [0, 1], [0, 2]],
+                                                                             [[1, 0], [1, 1], [1, 2]]),
+                                                                            [(0, 2)] * 3, 0.1, False, False),
+                                                                           (([[0, 0], [0, 1], [0, 2]],
+                                                                            [[1, 0], [1, 1], [1, 2]]),
+                                                                            [(0, 2)] * 3, 0.5, False, True),
+                                                                           (([[0, 0], [0, 1], [1, 2]],
+                                                                            [[1, 0], [1, 1], [1, 2]]),
+                                                                            [(0, 2)] * 3, 0.1, False, True),
+                                                                           (([[0, 0], [10, 10], [20, 20]],
+                                                                            [[20, 18], [20, 19], [20, 21]]),
+                                                                            [(0, 20)] * 3, 0.1, False, True),
+                                                                           (([[0, 0], [0, 0.1], [0, 0.2]],
+                                                                            [[0, 0], [10, 10], [0, 0.25]]),
+                                                                            [(0, 10)] * 3, 0.1, False, True),
+                                                                           (([[0, 0], [100, 100], [0, 1]],
+                                                                            [[1, 0], [1, 1], [0, 1.1]]),
+                                                                            [(0, 100)] * 3, 0.11, False, True),
+                                                                           (([[0, 0], [0, 1], [0, 2]],
+                                                                             [[1, 0], [1, 1], [1, 2]],
+                                                                             [],
+                                                                             [],
+                                                                             []),
+                                                                            [(0, 2)] * 3, 0.5, True, True),
+                                                                           (([[0, 0], [0, 1], [0, 2]],
+                                                                             [[0, 0], [0, 1], [1, 2]],
+                                                                             [[0, 0], [0, 1], [0, 3]],
+                                                                             [[1, 0], [1, 1], [1.3, 2]],
+                                                                             [[0, 0], [0, 1], [4, 2]]),
+                                                                            [(0, 2)] * 3, 0.1, True, True),
+                                                                           (([[0, 0], [0, 1], [0, 2]],
+                                                                             [[0, 0], [0, 1], [1, 2]],
+                                                                             [[0, 0], [0, 1], [0, 3]],
+                                                                             [[1, 0], [1, 1], [0.3, 2]],
+                                                                             [[0, 0], [0, 1], [4, 2]]),
+                                                                            [(0, 2)] * 3, 0.1, True, False)
+                                                                           ])
+    def test_condition(self, paths, bounds, rel_dist, test_all, output):
+        cond = ParameterDistance(bounds, rel_dist, test_all)
+        log = FakeLog(*paths)
         assert cond(log, None, 1, 2) == output
 
     @pytest.mark.parametrize("rel_dist", [-5, -5.0, 0])
