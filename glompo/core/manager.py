@@ -26,7 +26,7 @@ from ..convergence import BaseChecker, KillsAfterConvergence
 from ..common.namedtuples import *
 from ..common.customwarnings import *
 from ..common.helpers import *
-from ..common.wrappers import process_print_redirect, task_args_wrapper, catch_user_interrupt
+from ..common.wrappers import process_print_redirect, task_args_wrapper
 from ..hunters import BaseHunter, PseudoConverged, TimeAnnealing, ValueAnnealing, ParameterDistance
 from ..optimizers.baseoptimizer import BaseOptimizer
 from ..opt_selectors.baseselector import BaseSelector
@@ -494,9 +494,11 @@ class GloMPOManager:
         task = self.task
         x0 = self.x0_generator.generate()
         bounds = np.array(self.bounds)
+        # noinspection PyProtectedMember
         target = optimizer._minimize
 
         if self.split_printstreams and self.proc_backend:
+            # noinspection PyProtectedMember
             target = process_print_redirect(opt_id, optimizer._minimize)
 
         kwargs = {'target': target,

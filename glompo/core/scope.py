@@ -4,7 +4,6 @@
 
 
 from typing import *
-from time import time
 import warnings
 import logging
 
@@ -39,6 +38,7 @@ class GloMPOScope:
                  log_scale: bool = False,
                  record_movie: bool = False,
                  interactive_mode: bool = False,
+                 events_per_flush: int = 10,
                  writer_kwargs: Optional[Dict[str, Any]] = None,
                  movie_kwargs: Optional[Dict[str, Any]] = None):
         """
@@ -46,27 +46,31 @@ class GloMPOScope:
 
         Parameters
         ----------
-        x_range : Union[Tuple[float, float], int, None] = 300
+        x_range: Union[Tuple[float, float], int, None] = 300
             If None is provided the x-axis will automatically and continuously rescale from zero as the number of
             function evaluations increases.
             If a tuple of the form (min, max) is provided then the x-axis will be fixed to this range.
             If an integer is provided then the plot will only show the last x_range evaluations and discard earlier
             points. This is useful to make differences between optimizers visible in the late stage and also keep the
             scope operating at an adequate speed.
-        y_range : Optional[Tuple[float, float]] = None
+        y_range: Optional[Tuple[float, float]] = None
             Sets the y-axis limits of the plot, default is an empty tuple which leads the plot to automatically and
             constantly rescale the axis.
         log_scale: bool = False
             If True, the base 10 logarithm of y values are displayed on the scope. This can be used in conjunction
             with the y_range option and will be interpretted in the opt_log-scale.
-        record_movie : bool = False
+        record_movie: bool = False
             If True then a matplotlib.animation.FFMpegWriter instance is created to record the plot.
-        interactive_mode : bool = False
+        interactive_mode: bool = False
             If True the plot is visible on screen during the optimization.
-        writer_kwargs : Optional[Dict[str, Any]] = None
+        events_per_flush: int = 10
+            The number of 'events' or updates and changes to the scope before the changes are flushed and the plot is
+            redrawn. A lower number provides a smoother visualisation but is expensive and, if recorded,
+            takes a larger amount of space.
+        writer_kwargs: Optional[Dict[str, Any]] = None
             Optional dictionary of arguments to be sent to the initialisation of the matplotlib.animation.FFMpegWriter
             class.
-        movie_kwargs : Optional[Dict[str, Any]] = None
+        movie_kwargs: Optional[Dict[str, Any]] = None
             Optional dictionary of arguments to be sent to matplotlib.animation.FFMpegWriter.setup().
         """
         self.logger = logging.getLogger('glompo.scope')
@@ -76,6 +80,8 @@ class GloMPOScope:
         self.t_last = 0
         self.x_max = 0
         self.log_scale = log_scale
+        self.events_per_flush = events_per_flush
+        self.event_counter = 0
 
         plt.ion() if interactive_mode else plt.ioff()
 
@@ -161,8 +167,8 @@ class GloMPOScope:
 
     def _redraw_graph(self):
         """ Redraws the figure after new data has been added. Grabs a frame if a movie is being recorded. """
-        if time() - self.t_last > 3:
-            self.t_last = time()
+        if self.event_counter > self.events_per_flush:
+            self.event_counter = 0
 
             # Purge old results
             if self.truncated:
@@ -200,6 +206,8 @@ class GloMPOScope:
                 self.logger.debug('Grabbing frame')
                 self.writer.grab_frame()
                 self.logger.debug('Frame grabbed')
+        else:
+            self.event_counter += 1
 
     def _update_point(self, opt_id: int, track: str, pt: tuple = None):
         """ General method to add a point to a track for a specific optimizer. """
@@ -286,11 +294,10 @@ class GloMPOScope:
         self.ax.legend(loc='upper right', handles=self.leg_elements, bbox_to_anchor=(1.35, 1))
         self.logger.debug(f"Added new plot set for optimizer {opt_id}")
 
-    def update_optimizer(self, opt_id: int, pt: tuple, redraw_graph: bool = True):
+    def update_optimizer(self, opt_id: int, pt: tuple):
         """ Given pt tuple is used to update the opt_id optimizer plot."""
         self._update_point(opt_id, 'all_opt', pt)
-        if redraw_graph:
-            self._redraw_graph()
+        self._redraw_graph()
 
     def update_scatter(self, opt_id: int, pt: tuple):
         """ Given pt tuple is used to update the opt_id training data plot."""
