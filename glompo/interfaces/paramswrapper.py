@@ -50,7 +50,7 @@ class _FunctionWrapper:
 class GlompoParamsWrapper(BaseOptimizer):
     """ Wraps the GloMPO manager into a ParAMS optimizer. """
 
-    def __init__(self, optimizer_selector: BaseSelector, manager_kwargs: Optional[Dict[str, Any]] = None):
+    def __init__(self, optimizer_selector: BaseSelector, **manager_kwargs):
         """ Accepts GloMPO configurational information.
 
             Parameters
@@ -58,19 +58,16 @@ class GlompoParamsWrapper(BaseOptimizer):
             optimizer_selector: BaseSelector
                 Initialised BaseSelector object which specifies how optimizers are selected and initialised. See
                 glompo.opt_selectors.BaseSelector for detailed documentation.
-            manager_kwargs: Optional[Dict[str, Any]] = None
-                A dictionary of optional arguments to the GloMPOManager initialisation function.
-                Notes that all arguments are accepted but required GloMPO arguments 'task', 'n_parms',  and 'bounds'
+            **manager_kwargs
+                Optional arguments to the GloMPOManager initialisation function.
+                Note that all arguments are accepted but required GloMPO arguments 'task', 'n_parms',  and 'bounds'
                 will be overwritten as they are passed by the 'minimize' function in accordance with ParAMS API.
         """
 
-        if manager_kwargs:
-            self.manager_kwargs = manager_kwargs
-            for kw in ['task', 'n_parms', 'bounds']:
-                if kw in self.manager_kwargs:
-                    del self.manager_kwargs[kw]
-        else:
-            self.manager_kwargs = {}
+        self.manager_kwargs = manager_kwargs
+        for kw in ['task', 'n_parms', 'bounds']:
+            if kw in self.manager_kwargs:
+                del self.manager_kwargs[kw]
 
         self.selector = optimizer_selector
 

@@ -23,7 +23,7 @@ class Nevergrad(BaseOptimizer):
 
     def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
                  pause_flag: Event = None, optimizer: str = 'TBPSA', zero: float = -float('inf'),
-                 optkw: Optional[Dict[str, Any]] = None):
+                 **optkw):
         """
         Parameters
         ----------
@@ -31,7 +31,7 @@ class Nevergrad(BaseOptimizer):
             String key to the desired optimizer. See nevergrad documentation for a list of available algorithms.
         zero : float
             Will stop the optimization when this cost function value is reached.
-        optkw: Optional[Dict[str, Any]] = None
+        optkw
             Additional kwargs for the optimizer initialization.
         """
         super().__init__(opt_id, signal_pipe, results_queue, pause_flag)
@@ -39,7 +39,7 @@ class Nevergrad(BaseOptimizer):
         self.opt_algo = ng.optimizers.registry[optimizer]
         self.zero = zero
         self.stop = False
-        self.kwargs = optkw if optkw else {}
+        self.kwargs = optkw
 
     def minimize(self, function, x0, bounds, workers=1, callbacks=None) -> MinimizeResult:
         if self.opt_algo.no_parallelization is True:
