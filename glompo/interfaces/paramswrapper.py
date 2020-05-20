@@ -40,7 +40,7 @@ class _FunctionWrapper:
         contris = [fx * contri for contri in contris]
         contris = np.sqrt(contris)  # Undo squaring done in ParAMS to match GFLS requirements
 
-        if contris:
+        if contris is not None:
             return np.array(contris)
         else:
             return np.array([np.inf])
