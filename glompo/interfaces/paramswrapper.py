@@ -34,34 +34,16 @@ class _FunctionWrapper:
     def resids(self, pars):
         """ Method added to conform the function to optsam API and allow the GFLS algorithm to be used. """
 
-        ###
-        import logging
-        logger = logging.getLogger("glompo.params")
-        handler = logging.FileHandler("interface_log.log", 'a+')
-        formatter = logging.Formatter("%(threadName)s :: %(message)s")
-        handler.setLevel('DEBUG')
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-        ###
-
         result = self.func(pars)
         fx = result[0][0]
-        logger.debug(f"fx = {fx}")
 
         contris = [*result[0][-1].values()]  # Calculated in ParAMS as fractions of total
-        logger.debug(f"raw_contris = {contris}")
-
         contris = [fx * contri for contri in contris]
-        logger.debug(f"fx_contris = {contris}")
-
         contris = np.sqrt(contris)  # Undo squaring done in ParAMS to match GFLS requirements
-        logger.debug(f"sqrt_contris = {contris}")
 
-        if contris is not None:
-            logger.debug(f"Returning: {np.array(contris)}")
+        if len(contris) > 0:
             return np.array(contris)
         else:
-            logger.debug(f"Returning: {np.array([np.inf])}")
             return np.array([np.inf])
 
 
