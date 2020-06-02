@@ -92,3 +92,7 @@ class BaseSelector(ABC):
             log: OptimizerLogger
                 Contains the details and iteration history of ever optimizer started thus far.
         """
+
+    def __contains__(self, item):
+        opts = (opt[0] for opt in self.avail_opts)
+        return item in opts

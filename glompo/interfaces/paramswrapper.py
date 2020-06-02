@@ -6,12 +6,28 @@ import warnings
 import numpy as np
 
 from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
+from scm.params.core.lossfunctions import Loss
 
 from ..core.manager import GloMPOManager
 from ..opt_selectors.baseselector import BaseSelector
+from ..optimizers.gflswrapper import GFLSOptimizer
 
 
 __all__ = ("GlompoParamsWrapper",)
+
+
+class GFLSFriendlyLoss:
+    """ The GFLS optimizer requires that the function provide a list of residuals. This is not supported by the
+        native ParAMS LossFunctions and thus this class can be used to overwrite the 'contris' return to match the
+        residuals required.
+    """
+
+    def __call__(self, x, y, w=None):
+        x, y, w = Loss.asarrays(x, y, w)
+        fx = (x - y) / w
+        self.fx = np.sum(fx ** 2)
+        self.contribution = fx
+        return self.fx
 
 
 class _FunctionWrapper:
@@ -35,11 +51,7 @@ class _FunctionWrapper:
         """ Method added to conform the function to optsam API and allow the GFLS algorithm to be used. """
 
         result = self.func(pars)
-        fx = result[0][0]
-
-        contris = [*result[0][-1].values()]  # Calculated in ParAMS as fractions of total
-        contris = [fx * contri for contri in contris]
-        contris = np.sqrt(contris)  # Undo squaring done in ParAMS to match GFLS requirements
+        contris = [*result[0][-1].values()]
 
         if len(contris) > 0:
             return np.array(contris)
@@ -70,6 +82,9 @@ class GlompoParamsWrapper(BaseOptimizer):
                 del self.manager_kwargs[kw]
 
         self.selector = optimizer_selector
+
+        self._loss = GFLSFriendlyLoss if GFLSOptimizer in optimizer_selector else None
+
 
     def minimize(self,
                  function: Callable,

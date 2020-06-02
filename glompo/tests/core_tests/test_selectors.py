@@ -31,6 +31,14 @@ class BasicOptimizer(BaseOptimizer):
         pass
 
 
+class OptimizerA(BasicOptimizer):
+    pass
+
+
+class OptimizerB(BasicOptimizer):
+    pass
+
+
 class BasicSelector(BaseSelector):
 
     def select_optimizer(self, manager: 'GloMPOManager', log: OptimizerLogger) -> Tuple[Type[BaseOptimizer],
@@ -58,3 +66,11 @@ class TestSelectors:
         assert issubclass(ret[0], BaseOptimizer)
         assert isinstance(ret[1], dict)
         assert isinstance(ret[2], dict)
+
+    @pytest.mark.parametrize("avail_opts, test, result", [([OptimizerA], OptimizerA, True),
+                                                          ([OptimizerB], OptimizerA, False),
+                                                          ([OptimizerA, OptimizerB], OptimizerA, True),
+                                                          ([OptimizerA, OptimizerB], OptimizerB, True)])
+    def test_contains(self, avail_opts, test, result):
+        selector = BasicSelector(avail_opts)
+        assert (test in selector) == result
