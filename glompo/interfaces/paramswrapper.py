@@ -83,7 +83,8 @@ class GlompoParamsWrapper(BaseOptimizer):
 
         self.selector = optimizer_selector
 
-        self._loss = GFLSFriendlyLoss if GFLSOptimizer in optimizer_selector else None
+        if GFLSOptimizer in optimizer_selector:
+            self._loss = GFLSFriendlyLoss
 
 
     def minimize(self,
