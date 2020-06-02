@@ -16,7 +16,7 @@ from ..optimizers.gflswrapper import GFLSOptimizer
 __all__ = ("GlompoParamsWrapper",)
 
 
-class GFLSFriendlyLoss:
+class GFLSFriendlyLoss(Loss):
     """ The GFLS optimizer requires that the function provide a list of residuals. This is not supported by the
         native ParAMS LossFunctions and thus this class can be used to overwrite the 'contris' return to match the
         residuals required.
