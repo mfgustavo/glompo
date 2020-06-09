@@ -713,8 +713,8 @@ class GloMPOManager:
         self.opt_log.put_metadata(opt_id, "Stop Time", datetime.now())
         self.opt_log.put_metadata(opt_id, "End Condition", LiteralWrapper(f"GloMPO Termination\n"
                                                                           f"Hunter: {hunter_id}\n"
-                                                                          f"Reason: "
-                                                                          f"{nested_string_formatting(reason)}"))
+                                                                          f"Reason: \n"
+                                                                          f"{reason}"))
 
         if self.visualisation:
             self.scope.update_kill(opt_id)

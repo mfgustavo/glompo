@@ -8,6 +8,8 @@ from math import inf
 import os
 import yaml
 
+from glompo.common.helpers import LiteralWrapper, literal_presenter
+
 
 __all__ = ("OptimizerLogger",)
 
@@ -85,6 +87,7 @@ class OptimizerLogger:
         os.chdir(orig_dir)
 
     def _write_file(self, opt_id, filename):
+        yaml.add_representer(LiteralWrapper, literal_presenter)
         with open(f"{filename}.yml", 'w') as file:
             data = {"DETAILS": self._storage[opt_id].metadata,
                     "MESSAGES": self._storage[opt_id].messages,
