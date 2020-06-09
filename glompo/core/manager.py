@@ -747,7 +747,7 @@ class GloMPOManager:
                 self.graveyard.add(opt_id)
                 self.opt_log.put_metadata(opt_id, "Stop Time", datetime.now())
                 self.opt_log.put_metadata(opt_id, "End Condition", f"GloMPO Convergence")
-                self.optimizer_packs[opt_id].process.join(self._TOO_LONG / 20)
+                self.optimizer_packs[opt_id].process.join(10)
                 self.logger.debug(f"Termination signal sent to optimizer {opt_id}")
 
     def _save_log(self, best_id: int, result: Result, reason: str, caught_exception: bool):
@@ -795,7 +795,11 @@ class GloMPOManager:
             self.graveyard.add(opt_id)
             self.opt_log.put_metadata(opt_id, "Stop Time", datetime.now())
             self.opt_log.put_metadata(opt_id, "End Condition", opt_reason)
-            self.optimizer_packs[opt_id].process.join(1)
+            self.optimizer_packs[opt_id].process.join(10)
             if self.optimizer_packs[opt_id].process.is_alive():
-                self.optimizer_packs[opt_id].process.terminate()
-                self.logger.debug(f"Termination signal sent to optimizer {opt_id}")
+                if self.proc_backend:
+                    self.optimizer_packs[opt_id].process.terminate()
+                    self.logger.debug(f"Termination signal sent to optimizer {opt_id}")
+                else:
+                    self.logger.warn(f"Could not join optimizer {opt_id}. May crash out with it still running and "
+                                     f"thus generate errors.")
