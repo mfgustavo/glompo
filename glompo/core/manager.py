@@ -201,6 +201,7 @@ class GloMPOManager:
         self.logger.info("Initializing Manager ... ")
 
         # Setup working directory
+        self.init_workdir = os.getcwd()
         if working_dir:
             try:
                 os.chdir(working_dir)
@@ -468,6 +469,8 @@ class GloMPOManager:
             if not self.proc_backend and self.split_printstreams:
                 sys.stdout.close()
                 sys.stderr.close()
+
+            os.chdir(self.init_workdir)
 
             self.logger.info("GloMPO Optimization Routine Done")
 
