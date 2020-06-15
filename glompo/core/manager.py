@@ -801,5 +801,5 @@ class GloMPOManager:
                     self.optimizer_packs[opt_id].process.terminate()
                     self.logger.debug(f"Termination signal sent to optimizer {opt_id}")
                 else:
-                    self.logger.warn(f"Could not join optimizer {opt_id}. May crash out with it still running and "
-                                     f"thus generate errors.")
+                    self.logger.warning(f"Could not join optimizer {opt_id}. May crash out with it still running and "
+                                        f"thus generate errors.")
