@@ -23,5 +23,5 @@ class SinglePointGenerator(BaseGenerator):
         else:
             self.vector = (self.bounds[:, 1] - self.bounds[:, 0]) * np.random.random(self.n_params) + self.bounds[:, 0]
 
-    def generate(self) -> np.ndarray:
+    def generate(self, manager: 'GloMPOManager') -> np.ndarray:
         return self.vector

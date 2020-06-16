@@ -18,6 +18,6 @@ class RandomGenerator(BaseGenerator):
         if is_bounds_valid(bounds):
             self.bounds = np.array(bounds)
 
-    def generate(self) -> np.ndarray:
+    def generate(self, manager: 'GloMPOManager') -> np.ndarray:
         calc = (self.bounds[:, 1] - self.bounds[:, 0]) * np.random.random(self.n_params) + self.bounds[:, 0]
         return calc

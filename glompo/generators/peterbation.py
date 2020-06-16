@@ -52,7 +52,7 @@ class PerterbationGenerator(BaseGenerator):
 
         self.scale = np.array(scale)
 
-    def generate(self) -> np.ndarray:
+    def generate(self, manager: 'GloMPOManager') -> np.ndarray:
         call = []
         for i in range(self.n_params):
             a = (self.min[i] - self.loc[i]) / self.scale[i]

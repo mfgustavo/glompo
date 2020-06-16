@@ -289,6 +289,7 @@ class GloMPOManager:
             self.logger.info("x0 generator set to default: RandomGenerator()")
 
         # Save max conditions and counters
+        self.result = Result(None, None, None, None)
         self.t_start = None
         self.dt_start = None
         self.converged = False
@@ -385,7 +386,6 @@ class GloMPOManager:
     def start_manager(self) -> Result:
         """ Begins the optimization routine and returns the selected minimum in an instance of MinimizeResult. """
 
-        result = Result(None, None, None, None)
         reason = ""
         caught_exception = None
         best_id = -1
@@ -411,9 +411,9 @@ class GloMPOManager:
                 self._process_results()
                 self.logger.debug("Iteration results check done.")
 
-                result = self._find_best_result()
-                if result.origin and 'opt_id' in result.origin:
-                    best_id = result.origin['opt_id']
+                self.result = self._find_best_result()
+                if self.result.origin and 'opt_id' in self.result.origin:
+                    best_id = self.result.origin['opt_id']
 
                 if best_id > 0:
                     self._start_hunt(best_id)
@@ -442,8 +442,6 @@ class GloMPOManager:
             self.logger.debug("Cleaning up multiprocessing")
             self._stop_all_children()
 
-            return result
-
         except KeyboardInterrupt:
             caught_exception = "User Interrupt"
             self.logger.error("Caught User Interrupt, closing GloMPO gracefully.")
@@ -464,7 +462,7 @@ class GloMPOManager:
                 self.scope.generate_movie()
 
             self.logger.debug("Saving summary file results")
-            self._save_log(best_id, result, reason, caught_exception)
+            self._save_log(best_id, self.result, reason, caught_exception)
 
             if not self.proc_backend and self.split_printstreams:
                 sys.stdout.close()
@@ -474,7 +472,7 @@ class GloMPOManager:
 
             self.logger.info("GloMPO Optimization Routine Done")
 
-            return result
+            return self.result
 
     def _fill_optimizer_slots(self):
         """ Starts new optimizers if there are slots available. """
@@ -494,7 +492,7 @@ class GloMPOManager:
         self.logger.info(f"Starting Optimizer: {opt_id}")
 
         task = self.task
-        x0 = self.x0_generator.generate()
+        x0 = self.x0_generator.generate(self)
         bounds = np.array(self.bounds)
         # noinspection PyProtectedMember
         target = optimizer._minimize
@@ -660,7 +658,6 @@ class GloMPOManager:
                     if len(history) > 0 and history[-1] < fx:
                         fx = history[-1]
 
-                self.x0_generator.update(res.x, fx)
                 self.opt_log.put_iteration(res.opt_id, res.n_iter, self.f_counter, opt_fcalls, list(res.x), fx)
                 self.logger.debug(f"Result from {res.opt_id} @ iter {res.n_iter} fx = {fx}")
 

@@ -4,6 +4,7 @@ from typing import *
 import numpy as np
 from .basegenerator import BaseGenerator
 from ..common.helpers import is_bounds_valid
+from ..common.namedtuples import Result
 
 
 __all__ = ("IncumbentGenerator",)
@@ -16,19 +17,14 @@ class IncumbentGenerator(BaseGenerator):
 
     def __init__(self, bounds: Sequence[Tuple[float, float]]):
         super().__init__()
-        self.best_fx = np.inf
-        self.best_x = None
         self.n_params = len(bounds)
 
         if is_bounds_valid(bounds):
             self.bounds = np.array(bounds)
 
-    def generate(self) -> np.ndarray:
-        if self.best_x is None:
+    def generate(self, manager: 'GloMPOManager') -> np.ndarray:
+        best: Result = manager.result
+        if best.x is not None:
             return (self.bounds[:, 1] - self.bounds[:, 0]) * np.random.random(self.n_params) + self.bounds[:, 0]
-        return self.best_x
 
-    def update(self, x: Sequence[float], fx: float):
-        if fx < self.best_fx:
-            self.best_fx = fx
-            self.best_x = x
+        return best.x
