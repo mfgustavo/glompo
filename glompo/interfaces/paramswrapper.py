@@ -6,7 +6,7 @@ import warnings
 import numpy as np
 
 from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
-from scm.params.core.lossfunctions import Loss
+from scm.params.core.lossfunctions import SSE
 
 from ..core.manager import GloMPOManager
 from ..opt_selectors.baseselector import BaseSelector
@@ -14,20 +14,6 @@ from ..optimizers.gflswrapper import GFLSOptimizer
 
 
 __all__ = ("GlompoParamsWrapper",)
-
-
-class GFLSFriendlyLoss(Loss):
-    """ The GFLS optimizer requires that the function provide a list of residuals. This is not supported by the
-        native ParAMS LossFunctions and thus this class can be used to overwrite the 'contris' return to match the
-        residuals required.
-    """
-
-    def __call__(self, x, y, w=None):
-        x, y, w = Loss.asarrays(x, y, w)
-        fx = (x - y) / w
-        self.fx = np.sum(fx ** 2)
-        self.contribution = fx
-        return self.fx
 
 
 class _FunctionWrapper:
@@ -44,17 +30,24 @@ class _FunctionWrapper:
 
     def __call__(self, pars) -> float:
         result = self.func(pars)
-        fx = result[0][0]
+        fx = result[0].fx
         return fx
 
     def resids(self, pars):
         """ Method added to conform the function to optsam API and allow the GFLS algorithm to be used. """
 
-        result = self.func(pars)
-        contris = [*result[0][-1].values()]
+        result = self.func(pars)[0]
 
-        if len(contris) > 0:
-            return np.array(contris)
+        resids = result.residuals
+        dataset = result.dataset
+
+        if len(resids) > 0:
+            weights = dataset.get('weight')
+            sigmas = dataset.get('sigma')
+
+            resids = np.concatenate([(w/s)*r for w, s, r in zip(weights, sigmas, resids)])
+            print(resids)
+            return resids
         else:
             return np.array([np.inf])
 
@@ -84,7 +77,7 @@ class GlompoParamsWrapper(BaseOptimizer):
         self.selector = optimizer_selector
 
         if GFLSOptimizer in optimizer_selector:
-            self._loss = GFLSFriendlyLoss()
+            self._loss = SSE()
 
 
     def minimize(self,
