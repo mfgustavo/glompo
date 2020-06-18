@@ -10,6 +10,7 @@ from .tmax import MaxSeconds
 from .omax import MaxOptsStarted
 from .nkills import MaxKills
 from .nconv import NOptConverged
+from .ftarget import TargetCost
 
 __all__ = ("BaseChecker",
            "KillsAfterConvergence",
@@ -17,4 +18,5 @@ __all__ = ("BaseChecker",
            "MaxSeconds",
            "MaxKills",
            "MaxOptsStarted",
-           "NOptConverged")
+           "NOptConverged",
+           "TargetCost",)
