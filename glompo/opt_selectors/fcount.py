@@ -30,7 +30,6 @@ class FCallsSelector(BaseSelector):
             selector will switch to selecting the next optimizer in the list.
         """
         super().__init__(avail_opts)
-        self.avail_opts = avail_opts
         self.fcall_thresholds = fcall_thresholds
         self.toggle = 0
 
