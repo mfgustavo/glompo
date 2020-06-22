@@ -22,8 +22,7 @@ class Nevergrad(BaseOptimizer):
     """
 
     def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
-                 pause_flag: Event = None, optimizer: str = 'TBPSA', zero: float = -float('inf'),
-                 **optkw):
+                 pause_flag: Event = None, workers: int = 1, optimizer: str = 'TBPSA', zero: float = -float('inf')):
         """
         Parameters
         ----------
@@ -34,34 +33,34 @@ class Nevergrad(BaseOptimizer):
         optkw
             Additional kwargs for the optimizer initialization.
         """
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag)
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers)
 
         self.opt_algo = ng.optimizers.registry[optimizer]
+        if self.opt_algo.no_parallelization is True:
+            warnings.warn(RuntimeWarning, "The selected algorithm does not support parallel execution,"
+                                          " workers overwritten and set to one.")
+            self.workers = 1
         self.zero = zero
         self.stop = False
-        self.kwargs = optkw
 
-    def minimize(self, function, x0, bounds, callbacks=None, workers=1) -> MinimizeResult:
-        if self.opt_algo.no_parallelization is True:
-            workers = 1
-
+    def minimize(self, function, x0, bounds, callbacks=None, **kwargs) -> MinimizeResult:
         lower, upper = np.transpose(bounds)
         parametrization = ng.p.Array(init=x0)
         parametrization.set_bounds(lower, upper)
 
-        optimizer = self.opt_algo(parametrization=parametrization, budget=int(4e5), num_workers=workers, **self.kwargs)
+        optimizer = self.opt_algo(parametrization=parametrization, budget=int(4e50), num_workers=self.workers, **kwargs)
         self.logger.debug("Created nevergrad optimizer object")
 
         ng_callbacks = _NevergradCallbacksWrapper(self, callbacks)
         self.logger.debug("Created callbacks object")
         optimizer.register_callback('tell', ng_callbacks)
         self.logger.debug("Callbacks registered with optimizer")
-        if workers > 1:
-            with ThreadPoolExecutor(max_workers=workers) as executor:
-                self.logger.debug("Starting minimization in the thread pool.")
+        if self.workers > 1:
+            with ThreadPoolExecutor(max_workers=self.workers) as executor:
+                self.logger.debug(f"Executing within thread pool with {self.workers} workers")
                 opt_vec = optimizer.minimize(function, executor=executor, batch_mode=False)
         else:
-            self.logger.debug("Starting minimization outside of the thread pool")
+            self.logger.debug("Executing serially.")
             opt_vec = optimizer.minimize(function, batch_mode=False)
 
         self.logger.debug("Optimization complete. Formatting into MinimizeResult instance")

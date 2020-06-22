@@ -32,9 +32,9 @@ class CMAOptimizer(BaseOptimizer):
     """
 
     def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
-                 pause_flag: Event = None,
+                 pause_flag: Event = None, workers: int = 1,
                  sigma: float = 0.5, sampler: str = 'full', verbose=True,
-                 workers: int = 1, **cmasettings):
+                 **cmasettings):
         """ Parameters
             ----------
             sigma: float
@@ -51,11 +51,10 @@ class CMAOptimizer(BaseOptimizer):
                 available options. Most useful keys are: `timeout`, `tolstagnation`, `popsize`. Additionally,
                 the key `minsigma` is supported: Termination if ``sigma < minsigma``.
         """
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag)
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers)
         self.sigma = sigma
         self.verbose = verbose
         self.sampler = sampler
-        self.workers = workers
         self.opts = {}
         self.dir = ''
         self.es = None

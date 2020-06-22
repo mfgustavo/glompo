@@ -21,6 +21,13 @@ class CycleSelector(BaseSelector):
 
     def select_optimizer(self,
                          manager: 'GloMPOManager',
-                         log: OptimizerLogger) -> Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]]:
+                         log: OptimizerLogger,
+                         slots_available: int) -> Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]],
+                                                        None]:
         self.i = self.i + 1 if self.i < len(self.avail_opts) - 1 else 0
-        return self.avail_opts[self.i]
+        selected = self.avail_opts[self.i]
+
+        if selected[1]['workers'] > slots_available:
+            return None
+
+        return selected

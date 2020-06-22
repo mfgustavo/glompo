@@ -55,6 +55,7 @@ class ProcessPackage(NamedTuple):
     process: Union[Process, Thread]
     signal_pipe: Connection
     allow_run_event: Event
+    slots: int
 
 
 class RegressorCacheItem(NamedTuple):

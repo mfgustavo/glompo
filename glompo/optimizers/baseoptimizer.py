@@ -61,7 +61,26 @@ class BaseOptimizer(ABC):
     """
 
     def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
-                 pause_flag: Event = None, **kwargs):
+                 pause_flag: Event = None, workers: int = 1, **kwargs):
+        """
+        Parameters
+        ----------
+        opt_id: int = None
+            Unique identifier automatically assigned within the GloMPO manager framework.
+        signal_pipe: multiprocessing.connection.Connection = None
+            Bidirectional pipe used to message management behaviour between the manager and optimizer.
+        results_queue: queue.Queue = None
+            Threading queue into which optimizer iteration results are centralised accross all optimizers and sent to
+            the manager.
+        pause_flag: threading.Event = None
+            Event flag which can be used to pause the optimizer inbetween iterations.
+        workers: int = 1
+            The number of processing threads used by the optimizer. Defaults to one. The manager will only start the
+            optimizer if there are sufficient slots available for it:
+                workers <= manager.max_jobs - manager.n_slots_occupied.
+        kwargs
+            Optimizer specific initialization arguments.
+        """
         self.logger = logging.getLogger(f'glompo.optimizers.opt{opt_id}')
         self._opt_id = opt_id
         self._signal_pipe = signal_pipe
@@ -73,6 +92,7 @@ class BaseOptimizer(ABC):
         self._TO_MANAGER_SIGNAL_DICT = {0: "Normal Termination",
                                         1: "Numerical Errors Detected",
                                         9: "Other Message (Saved to Log)"}
+        self.workers = workers
 
     def _minimize(self,
                   function: Callable[[Sequence[float]], float],

@@ -95,8 +95,10 @@ class GloMPOManager:
             FileExistsError if these results are detected.
 
         max_jobs: Optional[int] = None
-            The maximum number of local optimizers run in parallel at one time. Defaults to the number of CPUs available
-            to the system.
+            The maximum number of threads the manager may create. The number of threads created by a particular
+            optimizer is given by optimizer.workers during its initialisation. An optimizer will not be started if
+            the number of threads it creates will exceed max_jobs even if the manager is currently managing fewer
+            than the number of jobs available. Defaults to the number of CPUs available to the system.
 
         task_args: Optional[Tuple]] = None
             Optional arguments passed to task with every call.
@@ -462,12 +464,18 @@ class GloMPOManager:
 
     def _fill_optimizer_slots(self):
         """ Starts new optimizers if there are slots available. """
-        processes = [pack.process for pack in self.optimizer_packs.values()]
-        count = sum([int(proc.is_alive()) for proc in processes])
-        while count < self.max_jobs:
-            opt = self._setup_new_optimizer()
-            self._start_new_job(*opt)
-            count += 1
+        processes = [pack.slots for pack in self.optimizer_packs.values() if pack.process.is_alive()]
+        count = sum(processes)
+
+        is_possible = True  # Flag if no optimizer can fit in the slots available due to its configuration
+        while count < self.max_jobs and is_possible:
+            opt = self._setup_new_optimizer(self.max_jobs - count)
+            if opt:
+                self._start_new_job(*opt)
+                count += opt[1]['workers']
+            else:
+                is_possible = False
+                self.logger.info("Insufficient slots to start new optimizer.")
 
     def _start_new_job(self, opt_id: int, optimizer: BaseOptimizer, call_kwargs: Dict[str, Any],
                        pipe: mp.connection.Connection, event: mp.Event):
@@ -505,13 +513,18 @@ class GloMPOManager:
             if opt_id not in self.scope.streams:
                 self.scope.add_stream(opt_id, type(optimizer).__name__)
 
-    def _setup_new_optimizer(self) -> OptimizerPackage:
+    def _setup_new_optimizer(self, slots_available: int) -> OptimizerPackage:
         """ Selects and initializes new optimizer and multiprocessing variables. Returns an OptimizerPackage which
             can be sent to _start_new_job to begin new process.
         """
-        self.o_counter += 1
 
-        selected, init_kwargs, call_kwargs = self.selector.select_optimizer(self, self.opt_log)
+        selector_return = self.selector.select_optimizer(self, self.opt_log, slots_available)
+
+        if selector_return is None:
+            return None
+
+        selected, init_kwargs, call_kwargs = selector_return
+        self.o_counter += 1
 
         self.logger.info(f"Setting up optimizer {self.o_counter} of type {selected.__name__}")
 
