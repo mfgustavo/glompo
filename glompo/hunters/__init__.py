@@ -13,6 +13,7 @@ from .valueannealing import ValueAnnealing
 from .parameterdistance import ParameterDistance
 from .min_fcalls import MinFuncCalls
 from .lastptsinvalid import LastPointsInvalid
+from .type import TypeHunter
 
 __all__ = ("BaseHunter",
            "MinIterations",
@@ -21,4 +22,5 @@ __all__ = ("BaseHunter",
            "TimeAnnealing",
            "ParameterDistance",
            "MinFuncCalls",
-           "LastPointsInvalid")
+           "LastPointsInvalid",
+           "TypeHunter")
