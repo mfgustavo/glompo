@@ -41,7 +41,7 @@ class Nevergrad(BaseOptimizer):
         self.stop = False
         self.kwargs = optkw
 
-    def minimize(self, function, x0, bounds, workers=1, callbacks=None) -> MinimizeResult:
+    def minimize(self, function, x0, bounds, callbacks=None, workers=1) -> MinimizeResult:
         if self.opt_algo.no_parallelization is True:
             workers = 1
 

@@ -4,7 +4,6 @@ import random
 
 from .basehunter import BaseHunter
 from ..core.optimizerlogger import OptimizerLogger
-from ..core.regression import DataRegressor
 
 
 __all__ = ("TimeAnnealing",)
@@ -33,7 +32,6 @@ class TimeAnnealing(BaseHunter):
 
     def __call__(self,
                  log: OptimizerLogger,
-                 regressor: DataRegressor,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
         n_hunter = log.get_history(hunter_opt_id, "f_call_opt")[-1]

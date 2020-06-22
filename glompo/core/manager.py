@@ -31,7 +31,6 @@ from ..hunters import BaseHunter, PseudoConverged, TimeAnnealing, ValueAnnealing
 from ..optimizers.baseoptimizer import BaseOptimizer
 from ..opt_selectors.baseselector import BaseSelector
 from .optimizerlogger import OptimizerLogger
-from .regression import DataRegressor
 from ._backends import CustomThread, ThreadPrintRedirect
 
 
@@ -96,8 +95,8 @@ class GloMPOManager:
             FileExistsError if these results are detected.
 
         max_jobs: Optional[int] = None
-            The maximum number of local optimizers run in parallel at one time. Defaults to one less than the number of
-            CPUs available to the system with a minimum of 1.
+            The maximum number of local optimizers run in parallel at one time. Defaults to the number of CPUs available
+            to the system.
 
         task_args: Optional[Tuple]] = None
             Optional arguments passed to task with every call.
@@ -158,10 +157,7 @@ class GloMPOManager:
             If True, the mp_manager reports the statistical significance of the suggested solution.
 
         enforce_elitism: bool = False
-            Some optimizers return their best ever results while some only return the result of a particular
-            iteration. For particularly exploratory optimizers this can lead to large scale jumps in their evaluation
-            of the error or trajectories which tend upward. This, in turn, can lead to poor predictive ability of the
-            Bayesian regression. If enforce_elitism is True, feedback from optimizers is filtered to only accept
+            If enforce_elitism is True, feedback from optimizers is filtered to only accept
             results which improve upon the incumbent.
 
         summary_files: int = 0
@@ -265,7 +261,7 @@ class GloMPOManager:
             else:
                 raise TypeError(f"Cannot parse max_jobs = {max_jobs}. Only positive integers are allowed.")
         else:
-            self.max_jobs = mp.cpu_count() - 1
+            self.max_jobs = mp.cpu_count()
             self.logger.info("max_jobs set to CPU count.")
 
         # Save convergence criteria
@@ -317,7 +313,6 @@ class GloMPOManager:
 
         # Initialise support classes
         self.opt_log = OptimizerLogger()
-        self.regressor = DataRegressor()
         if visualisation:
             from .scope import GloMPOScope  # Only imported if needed to avoid matplotlib compatibility issues
             self.scope = GloMPOScope(**visualisation_args) if visualisation_args else GloMPOScope()
@@ -417,15 +412,6 @@ class GloMPOManager:
 
                 if best_id > 0:
                     self._start_hunt(best_id)
-
-                if self.visualisation:
-                    for opt_id in self.optimizer_packs:
-                        if opt_id not in self.graveyard:
-                            cache = self.regressor.get_mcmc_results(opt_id, 'asymptote')
-                            if cache:
-                                yn = self.opt_log.get_history(opt_id, "fx")[-1]
-                                median, lower, upper = tuple(yn*i for i in cache)
-                                self.scope.update_mean(opt_id, median, lower, upper)
 
                 self.logger.debug("Checking for hanging processes")
                 self._inspect_children()
@@ -687,7 +673,7 @@ class GloMPOManager:
                 has_points = len(self.opt_log.get_history(victim_id, "fx")) > 0
                 if not in_graveyard and has_points and victim_id != hunter_id:
                     self.logger.debug(f"Optimizer {hunter_id} -> Optimizer {victim_id} hunt started.")
-                    kill = self.killing_conditions(self.opt_log, self.regressor, hunter_id, victim_id)
+                    kill = self.killing_conditions(self.opt_log, hunter_id, victim_id)
 
                     if kill:
                         reason = nested_string_formatting(self.killing_conditions.str_with_result())

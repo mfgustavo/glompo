@@ -7,7 +7,6 @@ import logging
 from abc import abstractmethod
 
 from ..core.optimizerlogger import OptimizerLogger
-from ..core.regression import DataRegressor
 from ..common.corebase import *
 
 
@@ -24,7 +23,6 @@ class BaseHunter(_CoreBase):
     @abstractmethod
     def __call__(self,
                  log: OptimizerLogger,
-                 regressor: DataRegressor,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
         """ When called, this method may check any values within the logs or GPRs of both hunter or the victim
