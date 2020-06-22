@@ -468,17 +468,21 @@ class GloMPOManager:
         count = sum(processes)
 
         is_possible = True  # Flag if no optimizer can fit in the slots available due to its configuration
-        while count < self.max_jobs and is_possible:
-            opt = self._setup_new_optimizer(self.max_jobs - count)
-            if opt:
-                self._start_new_job(*opt)
-                count += opt[1]['workers']
-            else:
-                is_possible = False
-                self.logger.info("Insufficient slots to start new optimizer.")
+        if count < self.max_jobs:
+            while count < self.max_jobs and is_possible:
+                opt = self._setup_new_optimizer(self.max_jobs - count)
+                if opt:
+                    self._start_new_job(*opt)
+                    count += opt.slots
+                else:
+                    is_possible = False
+
+            processes = [pack.slots for pack in self.optimizer_packs.values() if pack.process.is_alive()]
+            self.logger.info(f"Status: {len(processes)} optimizers alive, {sum(processes)}/{self.max_jobs} slots filled"
+                             f", {self.f_counter} function evaluations.")
 
     def _start_new_job(self, opt_id: int, optimizer: BaseOptimizer, call_kwargs: Dict[str, Any],
-                       pipe: mp.connection.Connection, event: mp.Event):
+                       pipe: mp.connection.Connection, event: mp.Event, workers: int):
         """ Given an initialised optimizer and multiprocessing variables, this method packages them and starts a new
             process.
         """
@@ -505,7 +509,7 @@ class GloMPOManager:
         else:
             process = CustomThread(redirect_print=self.split_printstreams, **kwargs)
 
-        self.optimizer_packs[opt_id] = ProcessPackage(process, pipe, event)
+        self.optimizer_packs[opt_id] = ProcessPackage(process, pipe, event, workers)
         self.optimizer_packs[opt_id].process.start()
         self.last_feedback[opt_id] = time()
 
@@ -541,8 +545,8 @@ class GloMPOManager:
         self.opt_log.add_optimizer(self.o_counter, type(optimizer).__name__, datetime.now())
 
         if call_kwargs:
-            return OptimizerPackage(self.o_counter, optimizer, call_kwargs, parent_pipe, event)
-        return OptimizerPackage(self.o_counter, optimizer, {}, parent_pipe, event)
+            return OptimizerPackage(self.o_counter, optimizer, call_kwargs, parent_pipe, event, init_kwargs['workers'])
+        return OptimizerPackage(self.o_counter, optimizer, {}, parent_pipe, event, init_kwargs['workers'])
 
     def _check_signals(self, opt_id: int) -> bool:
         """ Checks for signals from optimizer opt_id and processes it.

@@ -38,6 +38,7 @@ class OptimizerPackage(NamedTuple):
     call_kwargs: Dict[str, Any]
     signal_pipe: Connection
     allow_run_event: Event
+    slots: int
 
 
 class IterationResult(NamedTuple):
