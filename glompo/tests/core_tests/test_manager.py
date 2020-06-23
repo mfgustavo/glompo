@@ -23,8 +23,11 @@ from glompo.opt_selectors import BaseSelector, CycleSelector
 
 
 class DummySelector(BaseSelector):
-    def select_optimizer(self, manager: 'GloMPOManager', log: OptimizerLogger) -> Tuple[Type[BaseOptimizer],
-                                                                                        Dict[str, Any], Dict[str, Any]]:
+    def select_optimizer(self,
+                         manager: 'GloMPOManager',
+                         log: OptimizerLogger,
+                         slots_available: int) -> Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]],
+                                                        None]:
         pass
 
 
@@ -160,7 +163,7 @@ class TrueHunter(BaseHunter):
         super().__init__()
         self.target = target
 
-    def __call__(self, log, regressor, hunter_opt_id, victim_opt_id) -> bool:
+    def __call__(self, log, hunter_opt_id, victim_opt_id) -> bool:
         return victim_opt_id == self.target
 
 
@@ -514,8 +517,8 @@ class TestManager:
                             "Last_x": self.current_x}
                     yaml.dump(data, file, default_flow_style=False)
 
-            def push_iter_result(self, itres):
-                self._results_queue.put(itres)
+            def push_iter_result(self, iters):
+                self._results_queue.put(iters)
 
         # Task
         def f(pt, delay=0):

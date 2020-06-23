@@ -14,7 +14,6 @@ import pytest
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from glompo.optimizers.cmawrapper import CMAOptimizer
 from glompo.optimizers.gflswrapper import GFLSOptimizer
-from glompo.optimizers.random import RandomOptimizer
 from glompo.optimizers.nevergrad import Nevergrad
 from glompo.common.namedtuples import IterationResult
 
@@ -148,7 +147,7 @@ class TestSubclassesGlompoCompatible:
             self.max_iter = max_iter
             self.called = 0
 
-        def __call__(self, *args, **kwrags):
+        def __call__(self, *args, **kwargs):
             self.called += 1
             if self.called > self.max_iter:
                 return "MaxIter"

@@ -63,14 +63,14 @@ class BaseProblem:
         self.sigma_me = sigma_me
         self.sigma_e = sigma_e
         self.sigmas = np.full(ntrain, sigma * npar)
-        self._pars = self._generate_reference_pars(npar, ntrain)
+        self._pars = self._generate_reference_pars(npar, ntrain, sigma_me)
         self.targets = self._engine_low(self._pars) + np.random.normal(
             0, self.sigma_me * npar, ntrain
         )
 
     @property
     def npar(self):
-        """Numner of parameters."""
+        """Number of parameters."""
         return len(self._pars)
 
     def engine(self, pars, noise=True):

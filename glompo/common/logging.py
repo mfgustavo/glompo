@@ -44,6 +44,7 @@ class SplitOptimizerLogs(logging.Filter):
             # Here DEBUG level messages will be logged to the files even though INFO level propagates to the console
             logging.getLogger("glompo.optimizers").setLevel('DEBUG')
         """
+        super().__init__('')
         self.opened = set()
         self.filepath = filepath + '/' if filepath else ""
         self.propagate = int(propagate)

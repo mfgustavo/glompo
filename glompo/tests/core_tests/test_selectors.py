@@ -41,8 +41,11 @@ class OptimizerB(BasicOptimizer):
 
 class BasicSelector(BaseSelector):
 
-    def select_optimizer(self, manager: 'GloMPOManager', log: OptimizerLogger) -> Tuple[Type[BaseOptimizer],
-                                                                                        Dict[str, Any], Dict[str, Any]]:
+    def select_optimizer(self,
+                         manager: 'GloMPOManager',
+                         log: OptimizerLogger,
+                         slots_available: int) -> Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]],
+                                                        None]:
         return self.avail_opts[0]
 
 
@@ -59,7 +62,7 @@ class TestSelectors:
                                             [(BasicOptimizer, {'a': 1}, {'b': 3}), BasicOptimizer]])
     def test_init(self, avail_opts):
         selector = BasicSelector(avail_opts)
-        ret = selector.select_optimizer(None, None)
+        ret = selector.select_optimizer(None, None, 1)
 
         assert len(ret) == 3
         assert isinstance(ret, tuple)

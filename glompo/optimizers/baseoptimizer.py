@@ -53,7 +53,7 @@ class BaseOptimizer(ABC):
     Attributes:
 
     needscaler : `bool`
-        Whether the optimizer requires parameter scaing or not.
+        Whether the optimizer requires parameter scaling or not.
 
         .. warning:: This variable **must** be defined with every optimizer.
 
@@ -70,10 +70,10 @@ class BaseOptimizer(ABC):
         signal_pipe: multiprocessing.connection.Connection = None
             Bidirectional pipe used to message management behaviour between the manager and optimizer.
         results_queue: queue.Queue = None
-            Threading queue into which optimizer iteration results are centralised accross all optimizers and sent to
+            Threading queue into which optimizer iteration results are centralised across all optimizers and sent to
             the manager.
         pause_flag: threading.Event = None
-            Event flag which can be used to pause the optimizer inbetween iterations.
+            Event flag which can be used to pause the optimizer between iterations.
         workers: int = 1
             The number of processing threads used by the optimizer. Defaults to one. The manager will only start the
             optimizer if there are sufficient slots available for it:

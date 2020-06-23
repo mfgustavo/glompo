@@ -13,8 +13,7 @@ __all__ = ("Result",
            "Bound",
            "OptimizerPackage",
            "IterationResult",
-           "ProcessPackage",
-           "RegressorCacheItem")
+           "ProcessPackage")
 
 
 class Result(NamedTuple):
@@ -57,9 +56,3 @@ class ProcessPackage(NamedTuple):
     signal_pipe: Connection
     allow_run_event: Event
     slots: int
-
-
-class RegressorCacheItem(NamedTuple):
-    """ Results obtained by the DataRegressor and a hash of the data used to get the result. """
-    hash: int
-    result: Union[Tuple[float, float, float], Sequence[Tuple[float, float, float]]]

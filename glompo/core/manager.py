@@ -27,7 +27,7 @@ from ..common.namedtuples import *
 from ..common.customwarnings import *
 from ..common.helpers import *
 from ..common.wrappers import process_print_redirect, task_args_wrapper
-from ..hunters import BaseHunter, PseudoConverged, TimeAnnealing, ValueAnnealing, ParameterDistance
+from ..hunters import BaseHunter, TimeAnnealing, ValueAnnealing, ParameterDistance
 from ..optimizers.baseoptimizer import BaseOptimizer
 from ..opt_selectors.baseselector import BaseSelector
 from .optimizerlogger import OptimizerLogger
@@ -119,7 +119,7 @@ class GloMPOManager:
             is ignored.
 
         convergence_checker: Optional[BaseChecker] = None
-            Criteria used for convergence. A collection of subclasses of BaseChecker are provided, tthese can be
+            Criteria used for convergence. A collection of subclasses of BaseChecker are provided, these can be
             used in combinations of and (&) and or (|) to tailor various conditions.
                 E.g.: convergence_criteria = MaxFuncCalls(20000) | KillsAfterConvergence(3, 1) & MaxSeconds(60*5)
                 In this case GloMPO will run until 20 000 function evaluations OR until 3 optimizers have been killed
@@ -141,7 +141,7 @@ class GloMPOManager:
                     3) and if fails an annealing type test based on how far the victim's value is from the best
                     optimizer's best value,
                     4) or the two optimizers are iterating very close to one another in parameter space
-                Default: (PseudoConverged(100, 0.01) & TimeAnnealing(2) & ValueAnnealing()) | ParameterDistance(0.1)
+                Default: TimeAnnealing() & ValueAnnealing() | ParameterDistance(0.01)
             Note, for performance and to allow conditionality between hunters conditions are evaluated 'lazily' i.e.
             x or y will return if x is True without evaluating y. x and y will return False if x is False without
             evaluating y.
@@ -332,8 +332,7 @@ class GloMPOManager:
             else:
                 raise TypeError(f"killing_conditions not an instance of a subclass of BaseHunter.")
         else:
-            self.killing_conditions = PseudoConverged(100, 0.01) & TimeAnnealing(2) & ValueAnnealing() | \
-                                      ParameterDistance(self.bounds, 0.05)
+            self.killing_conditions = TimeAnnealing() & ValueAnnealing() | ParameterDistance(self.bounds, 0.01)
             self.logger.info(f"Hunting conditions set to default: {self.killing_conditions}")
 
         # Setup backend
@@ -479,7 +478,7 @@ class GloMPOManager:
 
             processes = [pack.slots for pack in self.optimizer_packs.values() if pack.process.is_alive()]
             self.logger.info(f"Status: {len(processes)} optimizers alive, {sum(processes)}/{self.max_jobs} slots filled"
-                             f", {self.f_counter} function evaluations.")
+                             f", {self.f_counter} function evaluations, f_best = {self.result.fx:.3E}.")
 
     def _start_new_job(self, opt_id: int, optimizer: BaseOptimizer, call_kwargs: Dict[str, Any],
                        pipe: mp.connection.Connection, event: mp.Event, workers: int):
@@ -565,8 +564,7 @@ class GloMPOManager:
                     self.graveyard.add(opt_id)
                     self.conv_counter += 1
                 elif key == 1:
-                    # TODO Deal with 1 signals
-                    pass
+                    raise NotImplementedError
                 elif key == 9:
                     self.opt_log.put_message(opt_id, message)
                     self.logger.info(f"Message received: {message}")
@@ -584,7 +582,7 @@ class GloMPOManager:
 
         for opt_id in self.optimizer_packs:
 
-            # Find dead optimzer processes that did not properly signal their termination.
+            # Find dead optimizer processes that did not properly signal their termination.
             if opt_id not in self.graveyard and not self.optimizer_packs[opt_id].process.is_alive():
                 exitcode = self.optimizer_packs[opt_id].process.exitcode
                 if exitcode == 0:
@@ -723,7 +721,6 @@ class GloMPOManager:
             self.scope.update_kill(opt_id)
 
     def _find_best_result(self) -> Result:
-        # TODO Better answer selection esp in context of answer stability?
         best_fx = np.inf
         best_x = []
         best_stats = None

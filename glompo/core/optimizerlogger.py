@@ -97,7 +97,7 @@ class OptimizerLogger:
 
 
 class _OptimizerLogger:
-    """ Stores history and meta data of a single optimzier started by GloMPO. """
+    """ Stores history and meta data of a single optimizer started by GloMPO. """
     def __init__(self, opt_id: int, class_name: str, time_start: str):
         self.metadata = {"Optimizer ID": str(opt_id),
                          "Optimizer Type": class_name,

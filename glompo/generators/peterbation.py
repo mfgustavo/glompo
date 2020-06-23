@@ -8,12 +8,12 @@ from scipy.stats import truncnorm
 from .basegenerator import BaseGenerator
 
 
-__all__ = ("PerterbationGenerator",)
+__all__ = ("PerturbationGenerator",)
 
 
-class PerterbationGenerator(BaseGenerator):
+class PerturbationGenerator(BaseGenerator):
     """ Randomly generates parameter vectors by drawing from truncated normally distributed numbers centered around a
-        provided vector and bound by given bounds. Good for reparameterisation efforts where a good candidate is already
+        provided vector and bound by given bounds. Good for parametrisation efforts where a good candidate is already
         available, however, this may drastically limit the exploratory nature of GloMPO.
     """
 

@@ -5,29 +5,27 @@ import numpy as np
 
 from glompo.common.corebase import _CombiCore
 from glompo.hunters.basehunter import BaseHunter, _OrHunter, _AndHunter
-from glompo.hunters.confidencewidth import ConfidenceWidth
 from glompo.hunters.min_iterations import MinIterations
 from glompo.hunters.pseudoconv import PseudoConverged
 from glompo.hunters.parameterdistance import ParameterDistance
 from glompo.hunters.timeannealing import TimeAnnealing
 from glompo.hunters.valueannealing import ValueAnnealing
-from glompo.hunters.val_below_asymptote import ValBelowAsymptote
 from glompo.hunters.lastptsinvalid import LastPointsInvalid
 from glompo.core.optimizerlogger import OptimizerLogger
 
 
 class PlainHunter(BaseHunter):
-    def __call__(self, log, regressor, hunter_opt_id, victim_opt_id) -> bool:
+    def __call__(self, log, hunter_opt_id, victim_opt_id) -> bool:
         pass
 
 
 class TrueHunter(BaseHunter):
-    def __call__(self, log, regressor, hunter_opt_id, victim_opt_id) -> bool:
+    def __call__(self, log, hunter_opt_id, victim_opt_id) -> bool:
         return True
 
 
 class FalseHunter(BaseHunter):
-    def __call__(self, log, regressor, hunter_opt_id, victim_opt_id) -> bool:
+    def __call__(self, log, hunter_opt_id, victim_opt_id) -> bool:
         return False
 
 
@@ -37,7 +35,7 @@ class FancyHunter(BaseHunter):
         self.a = a
         self.b = b + c
 
-    def __call__(self, log, regressor, hunter_opt_id, victim_opt_id) -> bool:
+    def __call__(self, log, hunter_opt_id, victim_opt_id) -> bool:
         pass
 
 
@@ -97,32 +95,6 @@ class TestBase:
         assert hunter(*(None,) * 4) is True
 
 
-class TestConfidenceWidth:
-
-    class FakeRegressor:
-        @staticmethod
-        def get_mcmc_results(*args):
-            return 800.0, 750.0, 850.0
-
-    @pytest.mark.parametrize("threshold, output", [(0.01, False),
-                                                   (0.13, True),
-                                                   (0.125, False),
-                                                   (0.1251, True),
-                                                   (2.3, True)])
-    def test_condition(self, threshold, output):
-        cond = ConfidenceWidth(threshold)
-        assert cond(None, self.FakeRegressor(), None, None) == output
-
-    @pytest.mark.parametrize("threshold", [-5, -5.0, 0])
-    def test_init_crash(self, threshold):
-        with pytest.raises(ValueError):
-            ConfidenceWidth(threshold)
-
-    @pytest.mark.parametrize("threshold", [5, 5.0, 0.015, 0.863])
-    def test_init_pass(self, threshold):
-        ConfidenceWidth(threshold)
-
-
 class TestMinTraningPoints:
 
     class FakeLog:
@@ -140,7 +112,7 @@ class TestMinTraningPoints:
     def test_condition(self, n_pts, output):
         cond = MinIterations(5)
         log = self.FakeLog(n_pts)
-        assert cond(log, None, None, None) == output
+        assert cond(log, None, None) == output
 
     @pytest.mark.parametrize("threshold", [-5, -5.0, 0, 32.5, 0.25])
     def test_init_crash(self, threshold):
@@ -178,7 +150,7 @@ class TestPseudoConv:
                                                          (125, 0.91, True, 5)], indirect=("log",))
     def test_condition(self, iters, tol, output, log):
         cond = PseudoConverged(iters, tol)
-        assert cond(log, None, None, 1) is output
+        assert cond(log, None, 1) is output
 
 
 class TestParameterDistance:
@@ -223,7 +195,7 @@ class TestParameterDistance:
     def test_condition(self, paths, bounds, rel_dist, test_all, output):
         cond = ParameterDistance(bounds, rel_dist, test_all)
         log = FakeLog(*paths)
-        assert cond(log, None, 1, 2) == output
+        assert cond(log, 1, 2) == output
 
     @pytest.mark.parametrize("rel_dist", [-5, -5.0, 0])
     def test_init_crash(self, rel_dist):
@@ -248,7 +220,7 @@ class TestTimeAnnealing:
         np.random.seed(1825)
         cond = TimeAnnealing(crit_ratio)
         log = FakeLog(path1, path2)
-        assert cond(log, None, 1, 2) == output
+        assert cond(log, 1, 2) == output
 
     @pytest.mark.parametrize("rel_dist", [-5, -5.0, 0])
     def test_init_crash(self, rel_dist):
@@ -271,31 +243,7 @@ class TestValueAnnealing:
     def test_condition(self, path1, path2, output):
         cond = ValueAnnealing()
         log = FakeLog(path1, path2)
-        assert cond(log, None, 1, 2) == output
-
-
-class TestValBelowAsymptote:
-
-    class FakeRegressor:
-        def __init__(self, result):
-            self.result = result
-
-        def estimate_posterior(self, *args, **kwargs):
-            return self.result
-
-    @pytest.mark.parametrize("path1, path2, result, output", [(np.full(10, 100), np.ones(10), (105, 97, 120), False),
-                                                              (np.full(10, 100), np.ones(10), (99, 99, 101), False),
-                                                              (np.full(10, 100), np.ones(10), (5, 2, 5.5), False),
-                                                              (np.full(10, 100), np.ones(10), (5,), False),
-                                                              (np.full(0, 100),  np.ones(10), (5, 2, 5.5), False),
-                                                              (np.full(10, 100), np.ones(10), (101, 100.1, 101), True),
-                                                              (np.full(10, 100), np.ones(10), (200, 170, 200), True)
-                                                              ])
-    def test_condition(self, path1, path2, result, output):
-        cond = ValBelowAsymptote()
-        log = FakeLog(path1, path2)
-        reg = self.FakeRegressor(result)
-        assert cond(log, reg, 1, 2) == output
+        assert cond(log, 1, 2) == output
 
 
 class TestLastPointsInvalid:
@@ -311,4 +259,4 @@ class TestLastPointsInvalid:
     def test_condition(self, path, output):
         cond = LastPointsInvalid(5)
         log = FakeLog([], path)
-        assert cond(log, None, 1, 2) == output
+        assert cond(log, 1, 2) == output

@@ -46,7 +46,7 @@ def catch_user_interrupt(func):
 
 
 def decorate_all_methods(decorator):
-    """ Applys a decorator to every method in a class. """
+    """ Applies a decorator to every method in a class. """
     def apply_decorator(cls):
         for k, f in cls.__dict__.items():
             if inspect.isfunction(f):

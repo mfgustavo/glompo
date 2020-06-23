@@ -15,7 +15,7 @@ __all__ = ("nested_string_formatting",
 
 
 def nested_string_formatting(nested_str: str) -> str:
-    """ Reformats strings produced by the _CombiCore class (used by hunter and checkers) by indenting each level
+    """ Reformat strings produced by the _CombiCore class (used by hunter and checkers) by indenting each level
         depending on its nested level.
     """
 
@@ -68,7 +68,7 @@ def is_bounds_valid(bounds: Sequence[Tuple[float, float]], raise_invalid=True) -
     return True
 
 
-# Used by yaml to save soem block strings as literals
+# Used by yaml to save some block strings as literals
 class LiteralWrapper(str):
     pass
 

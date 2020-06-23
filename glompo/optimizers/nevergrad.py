@@ -30,8 +30,6 @@ class Nevergrad(BaseOptimizer):
             String key to the desired optimizer. See nevergrad documentation for a list of available algorithms.
         zero : float
             Will stop the optimization when this cost function value is reached.
-        optkw
-            Additional kwargs for the optimizer initialization.
         """
         super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers)
 

@@ -56,7 +56,7 @@ class GlompoParamsWrapper(BaseOptimizer):
     """ Wraps the GloMPO manager into a ParAMS optimizer. """
 
     def __init__(self, optimizer_selector: BaseSelector, **manager_kwargs):
-        """ Accepts GloMPO configurational information.
+        """ Accepts GloMPO configuration information.
 
             Parameters
             ----------
@@ -78,7 +78,6 @@ class GlompoParamsWrapper(BaseOptimizer):
 
         if GFLSOptimizer in optimizer_selector:
             self._loss = SSE()
-
 
     def minimize(self,
                  function: Callable,

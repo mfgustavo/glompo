@@ -35,9 +35,6 @@ class BaseHunter(_CoreBase):
             ----------
             log: OptimizerLogger
                 Instance of Logger class that contains the iteration history of every optimizer.
-            regressor: DataRegressor
-                Instance of the DataRegressor class which contains both frequentist and Bayesian methods to regress the
-                data against an exponential function.
             hunter_opt_id: int
                 ID number of the 'hunter' optimizer currently identified as the best performer.
             victim_opt_id: int

@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from glompo.generators.random import RandomGenerator
-from glompo.generators.peterbation import PerterbationGenerator
+from glompo.generators.peterbation import PerturbationGenerator
 from glompo.common.namedtuples import Bound
 
 
@@ -22,7 +22,7 @@ class TestRandom:
         gen = RandomGenerator(bounds)
 
         for _ in range(50):
-            call = gen.generate()
+            call = gen.generate(None)
             assert len(call) == len(bounds)
             for j, x in enumerate(call):
                 assert x >= bounds[j][0]
@@ -61,7 +61,7 @@ class TestPerturbation:
                               ])
     def test_invalid_bounds(self, x0, bounds, scale):
         with pytest.raises(ValueError):
-            PerterbationGenerator(x0, bounds, scale)
+            PerturbationGenerator(x0, bounds, scale)
 
     def test_call(self):
         np.random.seed(6)
@@ -69,10 +69,10 @@ class TestPerturbation:
         x0 = [0.01, -5, 954.54, 6.23e6, -3.45]
         bounds = [[0, 1], [-100, 100], [950, 1000], [0, 7e6], [-10, 0]]
         scale = [1, 25, 2, 1e6, 5]
-        gen = PerterbationGenerator(x0, bounds, scale)
+        gen = PerturbationGenerator(x0, bounds, scale)
 
         for _ in range(50):
-            call = gen.generate()
+            call = gen.generate(None)
             assert len(call) == len(bounds)
             for j, x in enumerate(call):
                 assert x >= bounds[j][0]
@@ -84,10 +84,10 @@ class TestPerturbation:
         x0 = [0.02, -5, 954.54, 6.23e6, -3.45]
         bounds = [[0, 1], [-100, 100], [950, 1000], [0, 7e6], [-10, 0]]
         scale = [0.01, 5, 10, 1e5, 1]
-        gen = PerterbationGenerator(x0, bounds, scale)
+        gen = PerturbationGenerator(x0, bounds, scale)
 
         calls = []
         for _ in range(5000):
-            calls.append(gen.generate())
+            calls.append(gen.generate(None))
 
         assert np.all(np.isclose(np.mean(calls, 0) / x0, 1, rtol=0.1))

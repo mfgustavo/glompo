@@ -5,13 +5,13 @@ from setuptools import setup, find_packages
 
 def get_readme():
     """Load README.rst for display on PyPI."""
-    with open("README") as fhandle:
+    with open("README.rst") as fhandle:
         return fhandle.read()
 
 
 setup(
     name="glompo",
-    version="0.0.0",
+    version="1.0.0",
     description="Globally managed parallel optimization",
     long_description=get_readme(),
     author="Michael Freitas Gustavo",
@@ -20,5 +20,5 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     package_dir={"glompo": "glompo"},
-    install_requires=["numpy", "matplotlib", "scipy", 'pytest', 'cma', 'PyYAML', 'emcee', 'nevergrad']
+    install_requires=['numpy', 'matplotlib', 'scipy', 'pytest', 'cma', 'PyYAML', 'emcee', 'nevergrad', 'scm']
 )

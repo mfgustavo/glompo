@@ -58,7 +58,7 @@ class GloMPOScope:
             constantly rescale the axis.
         log_scale: bool = False
             If True, the base 10 logarithm of y values are displayed on the scope. This can be used in conjunction
-            with the y_range option and will be interpretted in the opt_log-scale.
+            with the y_range option and will be interpreted in the opt_log-scale.
         record_movie: bool = False
             If True then a matplotlib.animation.FFMpegWriter instance is created to record the plot.
         interactive_mode: bool = False
@@ -217,7 +217,7 @@ class GloMPOScope:
 
         if opt_id in self.dead_streams:
             self.dead_streams.remove(opt_id)
-            self.logger.warning(f"Receiving data for opt{opt_id} previously identifed as truncated.")
+            self.logger.warning(f"Receiving data for opt{opt_id} previously identified as truncated.")
 
         if pt:
             x, y = pt
