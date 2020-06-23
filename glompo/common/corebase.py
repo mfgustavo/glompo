@@ -43,6 +43,9 @@ class _CoreBase(ABC):
         mess += f" = {self._last_result}"
         return mess
 
+    def reset(self):
+        self._last_result = None
+
 
 class _CombiCore(_CoreBase):
 
@@ -70,7 +73,10 @@ class _CombiCore(_CoreBase):
             Bases are thus reset before calls to prevent this.
         """
         self.base1._last_result = None
+        self.base1.reset()
+
         self.base2._last_result = None
+        self.base2.reset()
 
 
 class _OrCore(_CombiCore):
