@@ -20,5 +20,15 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     package_dir={"glompo": "glompo"},
-    install_requires=['numpy', 'matplotlib', 'scipy', 'pytest', 'cma', 'PyYAML', 'emcee', 'nevergrad', 'scm']
+    install_requires=['numpy', 'PyYAML'],
+    extras_require={
+        'Plotting': ['matplotlib'],
+        'Video': ['matplotlib>=3.0', 'ffmpeg', 'PySide2'],
+        'PerturbationGenerator': ['scipy'],
+        'UnitTesting': ['pytest'],
+        'CMAOptimizer': ['cma'],
+        'GFLSOptimizer': ['optsam', 'emcee'],
+        'Nevergrad': ['nevergrad'],
+        'ParAMSWrapper': ['scm']
+    }
 )
