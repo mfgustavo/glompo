@@ -115,8 +115,8 @@ class HangOnEndOptimizer(BaseOptimizer):
 
     needscaler = False
 
-    def __init__(self, opt_id: int = None, signal_pipe=None, results_queue=None, pause_flag=None):
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag)
+    def __init__(self, opt_id: int = None, signal_pipe=None, results_queue=None, pause_flag=None, workers=1):
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers)
         self.constant = opt_id
 
     def minimize(self, function: Callable, x0: Sequence[float], bounds: Sequence[Tuple[float, float]],
@@ -310,7 +310,7 @@ class TestManager:
         with pytest.warns(RuntimeWarning, match="terminated normally without sending a"):
             manager.start_manager()
 
-        with open("glompo_optimizer_logs/1_SilentOptimizer.yml", 'r') as stream:
+        with open("tests/temp_outputs/glompo_optimizer_logs/1_SilentOptimizer.yml", 'r') as stream:
             data = yaml.safe_load(stream)
             assert "Approximate Stop Time" in data['DETAILS']
             assert data['DETAILS']['End Condition'] == "Normal termination (Reason unknown)"
@@ -333,7 +333,7 @@ class TestManager:
             for record in warns:
                 assert "terminated normally without sending a" not in record.message
 
-        with open("glompo_optimizer_logs/1_MessagingOptimizer.yml", 'r') as stream:
+        with open("tests/temp_outputs/glompo_optimizer_logs/1_MessagingOptimizer.yml", 'r') as stream:
             data = yaml.safe_load(stream)
             assert "Approximate Stop Time" not in data['DETAILS']
             assert "Stop Time" in data['DETAILS']
@@ -366,7 +366,7 @@ class TestManager:
             with pytest.warns(RuntimeWarning, match="seems to be hanging. Forcing termination."):
                 manager.start_manager()
 
-            with open("glompo_optimizer_logs/1_HangingOptimizer.yml", 'r') as stream:
+            with open("tests/temp_outputs/glompo_optimizer_logs/1_HangingOptimizer.yml", 'r') as stream:
                 data = yaml.safe_load(stream)
                 assert "Approximate Stop Time" in data['DETAILS']
                 assert data['DETAILS']['End Condition'] == "Forced GloMPO Termination"
@@ -401,7 +401,7 @@ class TestManager:
             with pytest.warns(RuntimeWarning, match="Forced termination signal sent to optimizer"):
                 manager.start_manager()
 
-            with open("glompo_optimizer_logs/2_HangOnEndOptimizer.yml", 'r') as stream:
+            with open("tests/temp_outputs/glompo_optimizer_logs/2_HangOnEndOptimizer.yml", 'r') as stream:
                 data = yaml.safe_load(stream)
                 assert "Approximate Stop Time" in data['DETAILS']
                 assert data['DETAILS']['End Condition'] == "Forced GloMPO Termination"
@@ -424,7 +424,7 @@ class TestManager:
         with pytest.warns(RuntimeWarning, match="terminated in error"):
             manager.start_manager()
 
-        with open("glompo_optimizer_logs/1_ErrorOptimizer.yml", 'r') as stream:
+        with open("tests/temp_outputs/glompo_optimizer_logs/1_ErrorOptimizer.yml", 'r') as stream:
             data = yaml.safe_load(stream)
             assert "Approximate Stop Time" in data['DETAILS']
             assert "Error termination (exitcode" in data['DETAILS']['End Condition']
@@ -447,7 +447,7 @@ class TestManager:
                                                 "This is a test of the GloMPO error management system."):
             manager.start_manager()
 
-        with open("glompo_manager_log.yml", "r") as stream:
+        with open("tests/temp_outputs/glompo_manager_log.yml", "r") as stream:
             data = yaml.safe_load(stream)
             assert "Process Crash" in data['Solution']['exit cond.']
             sleep(1)  # Delay for process cleanup

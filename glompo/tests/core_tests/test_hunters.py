@@ -92,7 +92,7 @@ class TestBase:
 
     def test_kill_condition(self):
         hunter = FalseHunter() | FalseHunter() & TrueHunter() | TrueHunter() & (TrueHunter() | FalseHunter())
-        assert hunter(*(None,) * 4) is True
+        assert hunter(*(None,) * 3) is True
 
 
 class TestMinTraningPoints:

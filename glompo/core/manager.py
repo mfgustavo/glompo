@@ -477,8 +477,9 @@ class GloMPOManager:
                     is_possible = False
 
             processes = [pack.slots for pack in self.optimizer_packs.values() if pack.process.is_alive()]
+            f_best = f'{self.result.fx:.3E}' if self.result.fx is not None else None
             self.logger.info(f"Status: {len(processes)} optimizers alive, {sum(processes)}/{self.max_jobs} slots filled"
-                             f", {self.f_counter} function evaluations, f_best = {self.result.fx:.3E}.")
+                             f", {self.f_counter} function evaluations, f_best = {f_best}.")
 
     def _start_new_job(self, opt_id: int, optimizer: BaseOptimizer, call_kwargs: Dict[str, Any],
                        pipe: mp.connection.Connection, event: mp.Event, workers: int):
