@@ -24,7 +24,7 @@ class RandomOptimizer(BaseOptimizer):
         super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers)
         self.logger = logging.getLogger('glompo.optimizers')
         self.iters = iters
-        self.result = None
+        self.result = MinimizeResult()
         self.stop_called = False
         self.logger.debug("Setup optimizer")
 
@@ -62,7 +62,7 @@ class RandomOptimizer(BaseOptimizer):
                 best_f = fx
                 best_x = vector
                 self.logger.debug(f"Updating best")
-                self.result = (best_x, best_f)
+                self.result.x, self.result.fx = best_x, best_f
 
         self.result.success = True
         self.logger.debug("Termination successful")
