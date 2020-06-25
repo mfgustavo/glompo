@@ -80,10 +80,33 @@ class OptimizerLogger:
         else:
             os.makedirs(filename, exist_ok=True)
             os.chdir(filename)
+
+            sum_data = {}
             for optimizer in self._storage:
                 opt_id = self._storage[optimizer].metadata["Optimizer ID"]
                 opt_type = self._storage[optimizer].metadata["Optimizer Type"]
                 self._write_file(optimizer, f"{opt_id}_{opt_type}")
+
+                # Add optimizer to summary file
+                opt_history = self.get_history(optimizer)
+
+                i_tot = len(opt_history)
+                if i_tot > 0:
+                    last = opt_history[i_tot]
+
+                    i_best = last[3]
+                    best = opt_history[i_best]
+
+                    x_best = best[-1]
+                    f_best = best[2]
+
+                    sum_data[optimizer] = {'f_best': f_best, 'x_best': x_best}
+                else:
+                    sum_data[optimizer] = {'f_best': float('nan'), 'x_best': None}
+
+            with open(f"0_SummaryBest.yml", "w+") as file:
+                yaml.dump(sum_data, file, default_flow_style=False, sort_keys=False)
+
         os.chdir(orig_dir)
 
     def _write_file(self, opt_id, filename):
