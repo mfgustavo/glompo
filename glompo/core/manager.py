@@ -370,9 +370,9 @@ class GloMPOManager:
                 shutil.rmtree("glompo_best_optimizer_log", ignore_errors=True)
                 shutil.rmtree("glompo_optimizer_printstreams", ignore_errors=True)
                 self.logger.warning("Deleted old results.")
-        else:
-            raise FileExistsError("Previous results found. Remove, move or rename them. Alternatively, select another "
-                                  "working_dir or set overwrite_existing=True.")
+            else:
+                raise FileExistsError("Previous results found. Remove, move or rename them. Alternatively, select another "
+                                      "working_dir or set overwrite_existing=True.")
 
         if split_printstreams:
             os.makedirs("glompo_optimizer_printstreams", exist_ok=True)
