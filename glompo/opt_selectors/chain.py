@@ -29,6 +29,7 @@ class ChainSelector(BaseSelector):
         """
         super().__init__(avail_opts)
         self.fcall_thresholds = fcall_thresholds
+        assert len(avail_opts) == len(fcall_thresholds) + 1, "Must be one threshold less than available optimizers"
         self.toggle = 0
 
     def select_optimizer(self, manager: 'GloMPOManager', log: OptimizerLogger, slots_available: int) -> \
