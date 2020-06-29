@@ -55,9 +55,9 @@ class TestLogger:
     def test_history0(self):
         hist = self.log.get_history(0)
         assert [*hist][0] == 1
-        assert isinstance([*hist.values()][4], list)
-        assert [*hist.values()][3][2] == np.exp(4)
-        assert [*hist.values()][7][-1] == [8]
+        assert isinstance([*hist.values()][4], dict)
+        assert [*hist.values()][3]['fx'] == np.exp(4)
+        assert [*hist.values()][7]['x'] == [8]
 
     def test_history1(self):
         hist = self.log.get_history(1, "fx")

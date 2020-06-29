@@ -40,21 +40,28 @@ class OptimizerLogger:
         """
         self._storage[opt_id].append_message(message)
 
-    def get_history(self, opt_id, track: str = None) -> Union[List, Dict[int,
-                                                                         Tuple[float, int, float, Sequence[float]]]]:
+    def get_history(self, opt_id: int, track: Optional[str] = None) -> Union[List, Dict[int, Dict[str, float]]]:
         """ Returns a list of values for a given optimizer and track or returns the entire dictionary of all tracks
             if None.
+
+            Parameters
+            ----------
+            opt_id: int
+                Unique optimizer identifier.
+            track: Optional[str] = None
+                If specified returns only one series from the optimizer history. Available options:
+                    - 'f_call_overall': The overall number of function evaluations used by all optimizers after each
+                        iteration of opt_id,
+                    - 'f_call_opt': The number of function evaluations used by opt_id after each of its iterations,
+                    - 'fx': The function evaluations after each iteration,
+                    - 'i_best': The iteration number at which the best function evaluation was located,
+                    - 'fx_best': The best function evaluation value after each iteration,
+                    - 'x': The task input values trialed at each iteration.
         """
         extract = []
         if track:
-            track_num = {"f_call_overall": 0,
-                         "f_call_opt": 1,
-                         "fx": 2,
-                         "i_best": 3,
-                         "fx_best": 4,
-                         "x": 5}[track]
             for item in self._storage[opt_id].history.values():
-                extract.append(item[track_num])
+                extract.append(item[track])
         else:
             extract = self._storage[opt_id].history
         return extract
@@ -94,11 +101,11 @@ class OptimizerLogger:
                 if i_tot > 0:
                     last = opt_history[i_tot]
 
-                    i_best = last[3]
+                    i_best = last['i_best']
                     best = opt_history[i_best]
 
-                    x_best = best[-1]
-                    f_best = best[2]
+                    x_best = best['x']
+                    f_best = best['fx_best']
 
                     sum_data[optimizer] = {'f_best': f_best, 'x_best': x_best}
                 else:
@@ -114,7 +121,6 @@ class OptimizerLogger:
         with open(f"{filename}.yml", 'w') as file:
             data = {"DETAILS": self._storage[opt_id].metadata,
                     "MESSAGES": self._storage[opt_id].messages,
-                    "ITERATION_FORMAT": {'i': ['f_call_overall', 'f_call_opt', 'fx', 'i_best', 'fx_best', 'x']},
                     "ITERATION_HISTORY": self._storage[opt_id].history}
             yaml.dump(data, file, default_flow_style=False, sort_keys=False)
 
@@ -141,15 +147,20 @@ class _OptimizerLogger:
         if fx < self.fx_best:
             self.fx_best = fx
             self.i_best = i
+
+        ls = None
         try:
             iter(x)
             ls = [float(num) for num in x]
-            self.history[i] = [int(f_call_overall), int(f_call_opt), float(fx), int(self.i_best),
-                               float(self.fx_best), ls]
         except TypeError:
             ls = [float(num) for num in [x]]
-            self.history[i] = [int(f_call_overall), int(f_call_opt), float(fx), int(self.i_best),
-                               float(self.fx_best), ls]
+        finally:
+            self.history[i] = {'f_call_overall': int(f_call_overall),
+                               'f_call_opt': int(f_call_opt),
+                               'fx': float(fx),
+                               'i_best': int(self.i_best),
+                               'fx_best': float(self.fx_best),
+                               'x': ls}
 
     def append_message(self, message):
         """ Adds message to the optimizer history. """
