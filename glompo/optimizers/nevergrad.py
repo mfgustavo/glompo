@@ -35,8 +35,8 @@ class Nevergrad(BaseOptimizer):
 
         self.opt_algo = ng.optimizers.registry[optimizer]
         if self.opt_algo.no_parallelization is True:
-            warnings.warn(RuntimeWarning, "The selected algorithm does not support parallel execution,"
-                                          " workers overwritten and set to one.")
+            warnings.warn("The selected algorithm does not support parallel execution, workers overwritten and set to"
+                          " one.", RuntimeWarning)
             self.workers = 1
         self.zero = zero
         self.stop = False
