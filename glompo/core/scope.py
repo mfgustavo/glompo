@@ -9,7 +9,6 @@ import logging
 
 import matplotlib.animation as ani
 import matplotlib.lines as lines
-import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -89,21 +88,18 @@ class GloMPOScope:
         self.ax.set_title("GloMPO Scope")
         self.ax.set_xlabel("Total Function Calls")
         if self.log_scale:
-            self.ax.set_ylabel("Log10(Error)")
+            self.ax.set_ylabel("Log10(Function Evaluation)")
             self.logger.debug("Using log scale error values")
         else:
-            self.ax.set_ylabel("Error")
+            self.ax.set_ylabel("Function Evaluation")
             self.logger.debug("Using linear scale error values")
 
         # Create custom legend
         self.leg_elements = [lines.Line2D([], [], ls='-', c='black', label='Optimizer Evaluations'),
-                             lines.Line2D([], [], ls='', marker='o', c='black', label='Point in Training Set'),
                              lines.Line2D([], [], ls='', marker=6, c='black', label='Hunt Started'),
-                             lines.Line2D([], [], ls='', marker=7, c='black', label='Hunt Result'),
+                             lines.Line2D([], [], ls='', marker=7, c='black', label='Hunt Success'),
                              lines.Line2D([], [], ls='', marker='x', c='black', label='Optimizer Killed'),
-                             lines.Line2D([], [], ls='', marker='*', c='black', label='Optimizer Converged'),
-                             lines.Line2D([], [], ls='-.', c='black', label='Asymptote'),
-                             lines.Line2D([], [], ls=':', c='black', label='Asymptote Uncertainty')]
+                             lines.Line2D([], [], ls='', marker='*', c='black', label='Optimizer Converged')]
 
         self.ax.legend(loc='upper right', handles=self.leg_elements, bbox_to_anchor=(1.35, 1))
 
@@ -176,24 +172,19 @@ class GloMPOScope:
                     if opt_id not in self.dead_streams:
                         done = []
                         for line in self.streams[opt_id].values():
-                            if not isinstance(line, patches.Rectangle):
-                                x_vals = np.array(line.get_xdata())
-                                y_vals = np.array(line.get_ydata())
+                            x_vals = np.array(line.get_xdata())
+                            y_vals = np.array(line.get_ydata())
 
-                                if len(x_vals) > 0:
-                                    min_val = np.clip(self.x_max - self.truncated, 0, None)
-                                    if line is not self.streams[opt_id]['mean']:
-                                        bool_arr = x_vals >= min_val
-                                        x_vals = x_vals[bool_arr]
-                                        y_vals = y_vals[bool_arr]
+                            if len(x_vals) > 0:
+                                min_val = np.clip(self.x_max - self.truncated, 0, None)
 
-                                        line.set_xdata(x_vals)
-                                        line.set_ydata(y_vals)
-                                    else:
-                                        line.set_xdata((min_val, self.x_max))
-                                done.append(True) if len(x_vals) == 0 else done.append(False)
-                            else:
-                                line.xy = (np.clip(self.x_max - self.truncated, 0, None), line.xy[1])
+                                bool_arr = x_vals >= min_val
+                                x_vals = x_vals[bool_arr]
+                                y_vals = y_vals[bool_arr]
+
+                                line.set_xdata(x_vals)
+                                line.set_ydata(y_vals)
+                            done.append(True) if len(x_vals) == 0 else done.append(False)
                         if all(done):
                             self.dead_streams.add(opt_id)
                             self.logger.debug(f"Opt{opt_id} identified as out of scope.")
@@ -241,14 +232,11 @@ class GloMPOScope:
 
         self.n_streams += 1
         self.streams[opt_id] = {'all_opt': self.ax.plot([], [])[0],  # Follows every optimizer iteration
-                                'train_pts': self.ax.plot([], [], ls='', marker='o')[0],  # Points in training set
                                 'hunt_init': self.ax.plot([], [], ls='', marker=6)[0],  # Hunt start
                                 'hunt_up': self.ax.plot([], [], ls='', marker=7)[0],  # Hunt result
                                 'opt_kill': self.ax.plot([], [], ls='', marker='x', zorder=500)[0],  # Killed opt
                                 'opt_norm': self.ax.plot([], [], ls='', marker='*', zorder=500)[0],  # Converged opt
-                                'mean': self.ax.plot([], ls='--')[0],  # Plots the mean functions
-                                'st_dev': patches.Rectangle((0, 0), 0, 0, ls=':')}  # Plots the uncertainty on mean
-        self.ax.add_patch(self.streams[opt_id]['st_dev'])
+                                }
 
         # Match colors for a single optimisation
         if self.n_streams < 20:
@@ -276,11 +264,7 @@ class GloMPOScope:
 
         for line in self.streams[opt_id]:
             color = colors(self.n_streams - threshold)
-            if any([line == _ for _ in ['train_pts', 'hyper_init', 'hyper_up']]):
-                color = tuple([0.75, 0.75, 0.75, 1] * np.array(color))
-            elif line == 'st_dev':
-                color = tuple([1, 1, 1, 0.5] * np.array(color))
-            elif any([line == _ for _ in ['opt_kill', 'opt_norm']]):
+            if any([line == _ for _ in ['opt_kill', 'opt_norm']]):
                 color = 'red'
             self.streams[opt_id][line].set_color(color)
 
@@ -299,38 +283,6 @@ class GloMPOScope:
         self._update_point(opt_id, 'all_opt', pt)
         self._redraw_graph()
 
-    def update_scatter(self, opt_id: int, pt: tuple):
-        """ Given pt tuple is used to update the opt_id training data plot."""
-        self._update_point(opt_id, 'train_pts', pt)
-        self._redraw_graph()
-
-    def update_mean(self, opt_id: int, median: float, lower: float, upper: float):
-        """ Given median, lower and upper confidence levels are used to update the opt_id asymptote and uncertainty
-            plots.
-        """
-
-        if self.log_scale:
-            median = np.log10(median)
-            lower = np.log10(lower)
-            upper = np.log10(upper)
-            if np.any(np.isnan([median, lower, upper])):
-                self.logger.error("Log10 in update_mean returned NaN.")
-
-        # Mean line
-        line = self.streams[opt_id]['mean']
-        x_min = np.clip(self.x_max - self.truncated, 0, None) if self.truncated else 0
-        line.set_xdata((x_min, self.x_max))
-        line.set_ydata((median, median))
-
-        # Uncertainty Rectangle
-        rec = self.streams[opt_id]['st_dev']
-        rec.xy = (x_min, lower)
-        width = self.truncated if self.truncated else self.x_max
-        rec.set_width(width)
-        rec.set_height(upper - lower)
-
-        self._redraw_graph()
-
     def update_hunt_start(self, opt_id: int):
         """ Given pt tuple is used to update the opt_id start hunt plot."""
         self._update_point(opt_id, 'hunt_init')
@@ -344,29 +296,11 @@ class GloMPOScope:
     def update_kill(self, opt_id: int):
         """ The opt_id kill optimizer plot is updated at its final point. """
         self._update_point(opt_id, 'opt_kill')
-
-        rec = self.streams[opt_id]['st_dev']
-        rec.set_width(0)
-        rec.set_height(0)
-
-        line = self.streams[opt_id]['mean']
-        line.set_xdata([])
-        line.set_ydata([])
-
         self._redraw_graph()
 
     def update_norm_terminate(self, opt_id: int):
         """ The opt_id normal optimizer plot is updated at its final point. """
         self._update_point(opt_id, 'opt_norm')
-
-        rec = self.streams[opt_id]['st_dev']
-        rec.set_width(0)
-        rec.set_height(0)
-
-        line = self.streams[opt_id]['mean']
-        line.set_xdata([])
-        line.set_ydata([])
-
         self._redraw_graph()
 
     def generate_movie(self):

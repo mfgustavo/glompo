@@ -4,10 +4,11 @@ import sys
 import logging
 
 from glompo import GloMPOManager
-from glompo.optimizers import GFLSOptimizer, CMAOptimizer
+from glompo.optimizers.gflswrapper import GFLSOptimizer
+from glompo.optimizers.cmawrapper import CMAOptimizer
 from glompo.opt_selectors import CycleSelector
 from glompo.convergence import KillsAfterConvergence, MaxFuncCalls
-from glompo.generators import EvolutionaryStrategyGenerator
+from glompo.generators import ExploitExploreGenerator
 from glompo.hunters import ParameterDistance, PseudoConverged
 from examples.expproblem import ExpProblem
 
@@ -38,7 +39,7 @@ if __name__ == '__main__':
                             task_args=None,
                             task_kwargs=None,
                             convergence_checker=KillsAfterConvergence(2, 1) | MaxFuncCalls(10000),
-                            x0_generator=EvolutionaryStrategyGenerator(bounds, 1000),
+                            x0_generator=ExploitExploreGenerator(bounds, 10000),
                             killing_conditions=PseudoConverged(500, 0.05) | ParameterDistance(bounds, 0.05),
                             hunt_frequency=300,
                             region_stability_check=False,
