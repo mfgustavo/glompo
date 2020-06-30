@@ -361,9 +361,9 @@ class GloMPOManager:
 
         # Purge Old Results
         files = os.listdir(".")
-        if overwrite_existing:
-            if any([file in files for file in ["glompo_manager_log.yml", "glompo_optimizer_logs",
-                                               "glompo_best_optimizer_log"]]):
+        if any([file in files for file in ["glompo_manager_log.yml", "glompo_optimizer_logs",
+                                           "glompo_best_optimizer_log"]]):
+            if overwrite_existing:
                 self.logger.debug("Old results found")
                 shutil.rmtree("glompo_manager_log.yml", ignore_errors=True)
                 shutil.rmtree("glompo_optimizer_logs", ignore_errors=True)
