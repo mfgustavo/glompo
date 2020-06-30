@@ -130,7 +130,7 @@ class BaseOptimizer(ABC):
             - Messages to the GloMPO manager must be sent via the message_manager method. The keys for these messages
               are detailed in the _TO_MANAGER_SIGNAL_DICT dictionary.
             - A convergence termination message should be sent if the optimizer successfully converges.
-            - Messages from the mp_manager can be read by the check_messages method. See the _FROM_MANAGER_SIGNAL_DICT
+            - Messages from the manager can be read by the check_messages method. See the _FROM_MANAGER_SIGNAL_DICT
               for all the methods which must be implemented to interpret GloMPO signals correctly.
             - self._pause_signal.wait() must be implemented in the body of the iterative loop to allow the optimizer to
               be paused by the manager as needed.

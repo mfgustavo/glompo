@@ -98,7 +98,7 @@ class GloMPOManager:
             The maximum number of threads the manager may create. The number of threads created by a particular
             optimizer is given by optimizer.workers during its initialisation. An optimizer will not be started if
             the number of threads it creates will exceed max_jobs even if the manager is currently managing fewer
-            than the number of jobs available. Defaults to the number of CPUs available to the system.
+            than the number of jobs available. Defaults to one less than the number of CPUs available to the system.
 
         task_args: Optional[Tuple]] = None
             Optional arguments passed to task with every call.
@@ -151,12 +151,10 @@ class GloMPOManager:
             if they should be terminated.
 
         region_stability_check: bool = False
-            If True, local optimizers are started around a candidate solution which has been selected as a final
-            solution. This is used to measure its reproducibility. If the check fails, the mp_manager resumes looking
-            for another solution.
+            NotYetImplemented
 
         report_statistics: bool = False
-            If True, the mp_manager reports the statistical significance of the suggested solution.
+            NotYetImplemented
 
         enforce_elitism: bool = False
             If enforce_elitism is True, feedback from optimizers is filtered to only accept
@@ -199,7 +197,7 @@ class GloMPOManager:
         self.logger.info("Initializing Manager ... ")
 
         # Setup working directory
-        self.init_workdir = os.getcwd()
+        self._init_workdir = os.getcwd()
         if working_dir:
             try:
                 os.chdir(working_dir)
@@ -263,8 +261,8 @@ class GloMPOManager:
             else:
                 raise TypeError(f"Cannot parse max_jobs = {max_jobs}. Only positive integers are allowed.")
         else:
-            self.max_jobs = mp.cpu_count()
-            self.logger.info("max_jobs set to CPU count.")
+            self.max_jobs = mp.cpu_count() - 1
+            self.logger.info("max_jobs set to one less than CPU count.")
 
         # Save convergence criteria
         if convergence_checker:
@@ -337,7 +335,7 @@ class GloMPOManager:
 
         # Setup backend
         if any([backend == valid_opt for valid_opt in ('processes', 'threads')]):
-            self.proc_backend = backend == 'processes'
+            self._proc_backend = backend == 'processes'
         else:
             self.backend = 'processes'
             self.logger.warning(f"Unable to parse backend '{backend}'. 'processes' or 'threads' expected."
@@ -348,14 +346,14 @@ class GloMPOManager:
         self.graveyard: Set[int] = set()
         self.last_feedback: Dict[int, float] = {}
 
-        self.mp_manager = mp.Manager()
-        self.optimizer_queue = self.mp_manager.Queue()
+        self._mp_manager = mp.Manager()
+        self.optimizer_queue = self._mp_manager.Queue()
 
-        if self.split_printstreams and not self.proc_backend:
+        if self.split_printstreams and not self._proc_backend:
             sys.stdout = ThreadPrintRedirect(sys.stdout)
             sys.stderr = ThreadPrintRedirect(sys.stderr)
 
-        if self.allow_forced_terminations and not self.proc_backend:
+        if self.allow_forced_terminations and not self._proc_backend:
             warnings.warn("Cannot use force terminations with threading.", UserWarning)
             self.logger.warning("Cannot use force terminations with threading.")
 
@@ -451,11 +449,11 @@ class GloMPOManager:
             self.logger.debug("Saving summary file results")
             self._save_log(best_id, self.result, reason, caught_exception)
 
-            if not self.proc_backend and self.split_printstreams:
+            if not self._proc_backend and self.split_printstreams:
                 sys.stdout.close()
                 sys.stderr.close()
 
-            os.chdir(self.init_workdir)
+            os.chdir(self._init_workdir)
 
             self.logger.info("GloMPO Optimization Routine Done")
 
@@ -495,7 +493,7 @@ class GloMPOManager:
         # noinspection PyProtectedMember
         target = optimizer._minimize
 
-        if self.split_printstreams and self.proc_backend:
+        if self.split_printstreams and self._proc_backend:
             # noinspection PyProtectedMember
             target = process_print_redirect(opt_id, optimizer._minimize)
 
@@ -504,7 +502,7 @@ class GloMPOManager:
                   'kwargs': call_kwargs,
                   'name': f"Opt{opt_id}",
                   'daemon': True}
-        if self.proc_backend:
+        if self._proc_backend:
             process = mp.Process(**kwargs)
         else:
             process = CustomThread(redirect_print=self.split_printstreams, **kwargs)
@@ -533,7 +531,7 @@ class GloMPOManager:
         self.logger.info(f"Setting up optimizer {self.o_counter} of type {selected.__name__}")
 
         parent_pipe, child_pipe = mp.Pipe()
-        event = self.mp_manager.Event()
+        event = self._mp_manager.Event()
         event.set()
 
         optimizer = selected(opt_id=self.o_counter,
@@ -612,7 +610,7 @@ class GloMPOManager:
                     time() - self.last_feedback[opt_id] > self._TOO_LONG and \
                     self.allow_forced_terminations and \
                     opt_id not in self.hunt_victims and \
-                    self.proc_backend:
+                    self._proc_backend:
                 warnings.warn(f"Optimizer {opt_id} seems to be hanging. Forcing termination.", RuntimeWarning)
                 self.logger.error(f"Optimizer {opt_id} seems to be hanging. Forcing termination.")
                 self.graveyard.add(opt_id)
@@ -626,7 +624,7 @@ class GloMPOManager:
                self.allow_forced_terminations and \
                self.optimizer_packs[opt_id].process.is_alive() and \
                time() - self.hunt_victims[opt_id] > self._TOO_LONG and \
-               self.proc_backend:
+               self._proc_backend:
                 self.optimizer_packs[opt_id].process.terminate()
                 self.optimizer_packs[opt_id].process.join(3)
                 self.opt_log.put_message(opt_id, "Force terminated due to no feedback after kill signal "
@@ -798,7 +796,7 @@ class GloMPOManager:
             self.opt_log.put_metadata(opt_id, "End Condition", opt_reason)
             self.optimizer_packs[opt_id].process.join(10)
             if self.optimizer_packs[opt_id].process.is_alive():
-                if self.proc_backend:
+                if self._proc_backend:
                     self.optimizer_packs[opt_id].process.terminate()
                     self.logger.debug(f"Termination signal sent to optimizer {opt_id}")
                 else:

@@ -42,7 +42,7 @@ class TestScope:
                                 x_range=(0, 1000),
                                 y_range=(0, 1000),
                                 **kwargs)
-            scope.writer.cleanup()
+            scope._writer.cleanup()
 
     @pytest.mark.parametrize("i, palette", [(10, 1), (35, 2), (53, 3), (67, 4), (73, 5), (88, 6), (200, 7)])
     def test_colors(self, i, palette, scope):
@@ -118,7 +118,7 @@ class TestScope:
 
         assert len(x) == 0
         assert len(y) == 0
-        assert 1 in scope.dead_streams
+        assert 1 in scope._dead_streams
 
     @pytest.mark.filterwarnings("ignore:More than 20 figures")
     def test_generate_movie(self):

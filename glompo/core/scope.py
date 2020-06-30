@@ -74,13 +74,13 @@ class GloMPOScope:
         """
         self.logger = logging.getLogger('glompo.scope')
         self.streams = {}
-        self.dead_streams = set()
+        self._dead_streams = set()
         self.n_streams = 0
         self.t_last = 0
         self.x_max = 0
         self.log_scale = log_scale
         self.events_per_flush = events_per_flush
-        self.event_counter = 0
+        self._event_counter = 0
 
         plt.ion() if interactive_mode else plt.ioff()
 
@@ -140,11 +140,11 @@ class GloMPOScope:
         self.movie_name = None
         if record_movie:
             try:
-                self.writer = MyFFMpegWriter(**writer_kwargs) if writer_kwargs else MyFFMpegWriter()
+                self._writer = MyFFMpegWriter(**writer_kwargs) if writer_kwargs else MyFFMpegWriter()
             except TypeError:
                 warnings.warn("Unidentified key in writer_kwargs. Using default values.", UserWarning)
                 self.logger.warning("Unidentified key in writer_kwargs. Using default values.")
-                self.writer = MyFFMpegWriter()
+                self._writer = MyFFMpegWriter()
             if not movie_kwargs:
                 movie_kwargs = {}
             if 'outfile' not in movie_kwargs:
@@ -154,22 +154,22 @@ class GloMPOScope:
             else:
                 self.movie_name = movie_kwargs['outfile']
             try:
-                self.writer.setup(fig=self.fig, **movie_kwargs)
+                self._writer.setup(fig=self.fig, **movie_kwargs)
             except TypeError:
                 warnings.warn("Unidentified key in writer_kwargs. Using default values.", UserWarning)
                 self.logger.warning("Unidentified key in writer_kwargs. Using default values.")
-                self.writer.setup(fig=self.fig, outfile='glomporecording.mp4')
+                self._writer.setup(fig=self.fig, outfile='glomporecording.mp4')
         self.logger.debug("Scope initialised successfully")
 
     def _redraw_graph(self):
         """ Redraws the figure after new data has been added. Grabs a frame if a movie is being recorded. """
-        if self.event_counter > self.events_per_flush:
-            self.event_counter = 0
+        if self._event_counter > self.events_per_flush:
+            self._event_counter = 0
 
             # Purge old results
             if self.truncated:
                 for opt_id in self.streams:
-                    if opt_id not in self.dead_streams:
+                    if opt_id not in self._dead_streams:
                         done = []
                         for line in self.streams[opt_id].values():
                             x_vals = np.array(line.get_xdata())
@@ -186,7 +186,7 @@ class GloMPOScope:
                                 line.set_ydata(y_vals)
                             done.append(True) if len(x_vals) == 0 else done.append(False)
                         if all(done):
-                            self.dead_streams.add(opt_id)
+                            self._dead_streams.add(opt_id)
                             self.logger.debug(f"Opt{opt_id} identified as out of scope.")
 
             self.ax.relim()
@@ -195,10 +195,10 @@ class GloMPOScope:
             self.fig.canvas.flush_events()
             if self.record_movie:
                 self.logger.debug('Grabbing frame')
-                self.writer.grab_frame()
+                self._writer.grab_frame()
                 self.logger.debug('Frame grabbed')
         else:
-            self.event_counter += 1
+            self._event_counter += 1
 
     def _update_point(self, opt_id: int, track: str, pt: tuple = None):
         """ General method to add a point to a track for a specific optimizer. """
@@ -206,8 +206,8 @@ class GloMPOScope:
         pt_given = bool(pt)
         pt = self.get_farthest_pt(opt_id) if not pt_given else pt
 
-        if opt_id in self.dead_streams:
-            self.dead_streams.remove(opt_id)
+        if opt_id in self._dead_streams:
+            self._dead_streams.remove(opt_id)
             self.logger.warning(f"Receiving data for opt{opt_id} previously identified as truncated.")
 
         if pt:
@@ -307,7 +307,7 @@ class GloMPOScope:
         """ Final call to write the saved frames into a single movie. """
         if self.record_movie:
             try:
-                self.writer.finish()
+                self._writer.finish()
             except Exception as e:
                 self.logger.exception("generate_movie failed")
                 warnings.warn(f"Exception caught while trying to save movie: {e}", RuntimeWarning)

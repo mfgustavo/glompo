@@ -54,36 +54,36 @@ class _CombiCore(_CoreBase):
         for base in [base1, base2]:
             if not isinstance(base, _CoreBase):
                 raise TypeError("_CombiCore can only be initialised with instances of _CoreBase subclasses.")
-        self.base1 = base1
-        self.base2 = base2
+        self._base1 = base1
+        self._base2 = base2
 
     def __call__(self, *args, **kwargs):
         self.reset()
 
     def _combi_string_maker(self, keyword: str):
-        return f"[{self.base1} {keyword} \n{self.base2}]"
+        return f"[{self._base1} {keyword} \n{self._base2}]"
 
     def _combi_result_string_maker(self, keyword: str):
-        return f"[{self.base1.str_with_result()} {keyword} \n" \
-               f"{self.base2.str_with_result()}]"
+        return f"[{self._base1.str_with_result()} {keyword} \n" \
+               f"{self._base2.str_with_result()}]"
 
     def reset(self):
         """ Resets _last_result to None. Given that hunter and checkers are evaluated lazily, it is possible for
             misleading results to be returned by str_with_result indicating a hunt has been evaluated when it has not.
             Bases are thus reset before calls to prevent this.
         """
-        self.base1._last_result = None
-        self.base1.reset()
+        self._base1._last_result = None
+        self._base1.reset()
 
-        self.base2._last_result = None
-        self.base2.reset()
+        self._base2._last_result = None
+        self._base2.reset()
 
 
 class _OrCore(_CombiCore):
 
     def __call__(self, *args, **kwargs):
         super().__call__(*args, **kwargs)
-        self._last_result = self.base1(*args, **kwargs) or self.base2(*args, **kwargs)
+        self._last_result = self._base1(*args, **kwargs) or self._base2(*args, **kwargs)
         return self._last_result
 
     def __str__(self):
@@ -97,7 +97,7 @@ class _AndCore(_CombiCore):
 
     def __call__(self, *args, **kwargs):
         super().__call__(*args, **kwargs)
-        self._last_result = self.base1(*args, **kwargs) and self.base2(*args, **kwargs)
+        self._last_result = self._base1(*args, **kwargs) and self._base2(*args, **kwargs)
         return self._last_result
 
     def __str__(self):

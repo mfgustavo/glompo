@@ -104,7 +104,7 @@ class GFLSOptimizer(BaseOptimizer):
                           Callable[[OptimizerLogger, AlgoBase, Union[str, None]], Any]]
             A list of functions called after every iteration.
 
-            If GFLS is being used through the GloMPO mp_manager calls to send iteration results to the mp_manager and
+            If GFLS is being used through the GloMPO manager calls to send iteration results to the manager and
             check incoming signals from it are automatically added to this list. Only send functionality you want over
             and above this.
 
