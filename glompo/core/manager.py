@@ -323,7 +323,7 @@ class GloMPOManager:
         if any([backend == valid_opt for valid_opt in ('processes', 'threads')]):
             self._proc_backend = backend == 'processes'
         else:
-            self.backend = 'processes'
+            self._proc_backend = True
             self.logger.warning(f"Unable to parse backend '{backend}'. 'processes' or 'threads' expected."
                                 f"Defaulting to 'processes'.")
             warnings.warn(f"Unable to parse backend '{backend}'. 'processes' or 'threads' expected."

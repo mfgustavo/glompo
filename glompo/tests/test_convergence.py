@@ -3,6 +3,8 @@
 import pytest
 
 from glompo.common.corebase import _CombiCore
+from glompo.common.namedtuples import Result
+
 from glompo.convergence.basechecker import BaseChecker, _AndChecker, _OrChecker
 from glompo.convergence.tmax import MaxSeconds
 from glompo.convergence.fmax import MaxFuncCalls
@@ -10,6 +12,7 @@ from glompo.convergence.nconv import NOptConverged
 from glompo.convergence.nkills import MaxKills
 from glompo.convergence.omax import MaxOptsStarted
 from glompo.convergence.nkillsafterconv import KillsAfterConvergence
+from glompo.convergence.ftarget import TargetCost
 
 
 class PlainChecker(BaseChecker):
@@ -134,6 +137,7 @@ class TestOthers:
             self.o_counter = 10
             self.t_start = 1584521316.09197
             self.hunt_victims = {1, 2, 3, 5, 6, 7}
+            self.result = Result([0, 0], 0, None, None)
 
     @pytest.mark.parametrize("checker, output", [(MaxSeconds(60), True),
                                                  (MaxFuncCalls(200), True),
@@ -144,11 +148,13 @@ class TestOthers:
                                                  (MaxFuncCalls(900), False),
                                                  (NOptConverged(9), False),
                                                  (MaxKills(10), False),
-                                                 (MaxOptsStarted(20), False)
-                                                 ])
+                                                 (MaxOptsStarted(20), False),
+                                                 (TargetCost(0), True),
+                                                 (TargetCost(0.9e-6), True),
+                                                 (TargetCost(1e-5), False)])
     def test_conditions(self, checker, output):
         manager = self.Manager()
-        assert checker(manager) is output
+        assert checker(manager) == output
 
     def test_killsafterconv(self):
         checker = KillsAfterConvergence(4, 2)

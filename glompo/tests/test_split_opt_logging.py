@@ -11,8 +11,8 @@ from glompo.common.logging import SplitOptimizerLogs
 
 class TestSplitLogging:
 
-    def run_log(self, propogate):
-        opt_filter = SplitOptimizerLogs("diverted_logs", propagate=propogate)
+    def run_log(self, propogate, formatter=None):
+        opt_filter = SplitOptimizerLogs("diverted_logs", propagate=propogate, formatter=formatter)
         opt_handler = logging.FileHandler("propogate.txt", "w+")
         opt_handler.addFilter(opt_filter)
 
@@ -27,12 +27,23 @@ class TestSplitLogging:
     def test_split(self):
         self.run_log(False)
         with open('diverted_logs/optimizer_1.log', 'r') as file:
-            key = int(file.readline())
-            assert key == 8452
+            key = file.readline()
+            assert key == '8452\n'
 
         with open('diverted_logs/optimizer_2.log', 'r') as file:
-            key = int(file.readline())
-            assert key == 9216
+            key = file.readline()
+            assert key == '9216\n'
+
+    def test_formatting(self):
+        formatter = logging.Formatter("OPT :: %(message)s :: DONE")
+        self.run_log(False, formatter)
+        with open('diverted_logs/optimizer_1.log', 'r') as file:
+            key = file.readline()
+            assert key == "OPT :: 8452 :: DONE\n"
+
+        with open('diverted_logs/optimizer_2.log', 'r') as file:
+            key = file.readline()
+            assert key == "OPT :: 9216 :: DONE\n"
 
     @pytest.mark.parametrize("propogate", [True, False])
     def test_propogate(self, propogate):

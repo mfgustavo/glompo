@@ -207,6 +207,26 @@ class TestManager:
                     **kwargs}
             GloMPOManager(backend=backend, **keys)
 
+    @pytest.mark.parametrize("kwargs", [{'bounds': ((0, 0), (0, 1))},
+                                        {'bounds': ((1, 0), (0, 1))},
+                                        {'max_jobs': -1}])
+    def test_init_valerr(self, kwargs, backend):
+        with pytest.raises(ValueError):
+            keys = {**{'task': lambda x, y: x + y,
+                       'optimizer_selector': DummySelector([OptimizerTest1]),
+                       'bounds': ((0, 1), (0, 1)),
+                       'overwrite_existing': True},
+                    **kwargs}
+            GloMPOManager(backend=backend, **keys)
+
+    def test_invalid_backend(self, backend):
+        with pytest.warns(UserWarning, match="Unable to parse backend"):
+            keys = {'task': lambda x, y: x + y,
+                    'optimizer_selector': DummySelector([OptimizerTest1]),
+                    'bounds': ((0, 1), (0, 1)),
+                    'overwrite_existing': True}
+            GloMPOManager(backend='magic', **keys)
+
     def test_init_filexerr(self, backend):
         with open("glompo_manager_log.yml", "w+"):
             pass
