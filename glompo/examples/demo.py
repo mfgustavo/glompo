@@ -30,7 +30,6 @@ if __name__ == '__main__':
 
     bounds = ((-1.5, 1.5),) * 100
     manager = GloMPOManager(task=ExpProblem(0.1, 100, 50, sigma_e=0),
-                            n_parms=100,
                             optimizer_selector=CycleSelector([CMAOptimizer, GFLSOptimizer]),
                             bounds=bounds,
                             working_dir="demo_output",

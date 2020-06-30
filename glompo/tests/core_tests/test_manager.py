@@ -202,37 +202,23 @@ class TestManager:
         with pytest.raises(TypeError):
             keys = {**{'task': lambda x, y: x + y,
                        'optimizer_selector': DummySelector([OptimizerTest1]),
-                       'n_parms': 2,
-                       'bounds': ((0, 1), (0, 1)),
-                       'overwrite_existing': True},
-                    **kwargs}
-            GloMPOManager(backend=backend, **keys)
-
-    @pytest.mark.parametrize("kwargs", [{'n_parms': 6.0},
-                                        {'n_parms': -1},
-                                        {'n_parms': 0},
-                                        {'max_jobs': -1},
-                                        {'bounds': ((0, 1),)},
-                                        {'bounds': ((1, 1), (0, 1))},
-                                        {'bounds': ((2, 1), (0, 1))}])
-    def test_init_valerr(self, kwargs, backend):
-        with pytest.raises(ValueError):
-            keys = {**{'task': lambda x, y: x + y,
-                       'optimizer_selector': DummySelector([OptimizerTest1]),
-                       'n_parms': 2,
                        'bounds': ((0, 1), (0, 1)),
                        'overwrite_existing': True},
                     **kwargs}
             GloMPOManager(backend=backend, **keys)
 
     def test_init_filexerr(self, backend):
+        with open("glompo_manager_log.yml", "w+"):
+            pass
+
         with pytest.raises(FileExistsError):
             GloMPOManager(task=lambda x, y: x + y,
                           optimizer_selector=DummySelector([OptimizerTest1]),
-                          n_parms=2,
                           bounds=((0, 1), (0, 1)),
                           overwrite_existing=False,
                           backend=backend)
+
+        os.remove("glompo_manager_log.yml")
 
     @pytest.mark.parametrize("kwargs", [{},
                                         {'x0_generator': RandomGenerator(((0, 1), (0, 1)))},
@@ -242,7 +228,6 @@ class TestManager:
     def test_init(self, kwargs, backend):
         kwargs = {**{'task': lambda x, y: x + y,
                      'optimizer_selector': DummySelector([OptimizerTest1]),
-                     'n_parms': 2,
                      'bounds': ((0, 1), (0, 1)),
                      'overwrite_existing': True},
                   **kwargs}
@@ -251,7 +236,6 @@ class TestManager:
     @pytest.mark.parametrize("summary_files", [0, -5, 10, 23.56, 2.3])
     def test_init_clipping(self, summary_files, backend):
         opt = GloMPOManager(task=lambda x, y: x + y,
-                            n_parms=2,
                             optimizer_selector=DummySelector([OptimizerTest1]),
                             bounds=((0, 1), (0, 1)),
                             overwrite_existing=True,
@@ -261,10 +245,9 @@ class TestManager:
 
     def test_init_workingdir(self, backend):
         with pytest.warns(UserWarning, match="Cannot parse working_dir"):
-            GloMPOManager(lambda x, y: x + y,
-                          2,
-                          DummySelector([OptimizerTest1]),
-                          ((0, 1), (0, 1)),
+            GloMPOManager(task=lambda x, y: x + y,
+                          optimizer_selector=DummySelector([OptimizerTest1]),
+                          bounds=((0, 1), (0, 1)),
                           working_dir=5,
                           overwrite_existing=True,
                           backend=backend)
@@ -298,7 +281,6 @@ class TestManager:
 
     def test_no_messaging(self, backend):
         manager = GloMPOManager(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,
-                                n_parms=3,
                                 optimizer_selector=CycleSelector([SilentOptimizer]),
                                 bounds=((0, 1), (0, 1), (0, 1)),
                                 working_dir="tests/temp_outputs",
@@ -319,7 +301,6 @@ class TestManager:
 
     def test_messaging(self, backend):
         manager = GloMPOManager(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,
-                                n_parms=3,
                                 optimizer_selector=CycleSelector([MessagingOptimizer]),
                                 bounds=((0, 1), (0, 1), (0, 1)),
                                 working_dir="tests/temp_outputs",
@@ -351,7 +332,6 @@ class TestManager:
 
         with init_warning:
             manager = GloMPOManager(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,
-                                    n_parms=3,
                                     optimizer_selector=CycleSelector([HangingOptimizer]),
                                     bounds=((0, 1), (0, 1), (0, 1)),
                                     working_dir="tests/temp_outputs",
@@ -383,7 +363,6 @@ class TestManager:
 
         with init_warning:
             manager = GloMPOManager(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,
-                                    n_parms=3,
                                     optimizer_selector=CycleSelector([HangOnEndOptimizer]),
                                     bounds=((0, 1), (0, 1), (0, 1)),
                                     working_dir="tests/temp_outputs",
@@ -411,7 +390,6 @@ class TestManager:
 
     def test_opt_error(self, backend):
         manager = GloMPOManager(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,
-                                n_parms=3,
                                 optimizer_selector=CycleSelector([ErrorOptimizer]),
                                 bounds=((0, 1), (0, 1), (0, 1)),
                                 working_dir="tests/temp_outputs",
@@ -434,7 +412,6 @@ class TestManager:
 
     def test_manager_error(self, backend):
         manager = GloMPOManager(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,
-                                n_parms=3,
                                 optimizer_selector=CycleSelector([SilentOptimizer]),
                                 bounds=((0, 1), (0, 1), (0, 1)),
                                 working_dir="tests/temp_outputs",
@@ -556,7 +533,6 @@ class TestManager:
                 return x, y
 
         manager = GloMPOManager(task=f,
-                                n_parms=2,
                                 optimizer_selector=CycleSelector([(SteepestGradient, {'max_iters': 10000,
                                                                                       'precision': 1e-8,
                                                                                       'gamma': [100, 100000]}, None)]),

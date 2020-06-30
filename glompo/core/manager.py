@@ -44,9 +44,8 @@ class GloMPOManager:
 
     def __init__(self,
                  task: Callable[[Sequence[float]], float],
-                 n_parms: int,
-                 optimizer_selector: Optional[BaseSelector],
                  bounds: Sequence[Tuple[float, float]],
+                 optimizer_selector: BaseSelector,
                  working_dir: Optional[str] = None,
                  overwrite_existing: bool = False,
                  max_jobs: Optional[int] = None,
@@ -74,18 +73,15 @@ class GloMPOManager:
             Function to be minimized. Accepts a 1D sequence of parameter values and returns a single value.
             Note: Must be a standalone function which makes no modifications outside of itself.
 
-        n_parms: int
-            The number of parameters to be optimized.
-
-        optimizer_selector: Optional[BaseSelector]
-            Selection criteria for new optimizers, must be an instance of a BaseSelector subclass. BaseSelector
-            subclasses are initialised by default with a set of BaseOptimizer subclasses the user would like to make
-            available to the optimization. See BaseSelector and BaseOptimizer documentation for more details.
-
         bounds: Sequence[Tuple[float, float]]
             Sequence of tuples of the form (min, max) limiting the range of each parameter. Do not use bounds to fix
             a parameter value as this will raise an error. Rather supply fixed parameter values through task_args or
             task_kwargs.
+
+        optimizer_selector: BaseSelector
+            Selection criteria for new optimizers, must be an instance of a BaseSelector subclass. BaseSelector
+            subclasses are initialised by default with a set of BaseOptimizer subclasses the user would like to make
+            available to the optimization. See BaseSelector and BaseOptimizer documentation for more details.
 
         working_dir: Optional[str] = None
             If provided, GloMPO wil redirect its outputs to the given directory.
@@ -224,15 +220,6 @@ class GloMPOManager:
         self.task = task_args_wrapper(task, task_args, task_kwargs)
         self.logger.debug("Task wrapped successfully")
 
-        # Save n_parms
-        if isinstance(n_parms, int):
-            if n_parms > 0:
-                self.n_parms = n_parms
-            else:
-                raise ValueError(f"Cannot parse n_parms = {n_parms}. Only positive integers are allowed.")
-        else:
-            raise ValueError(f"Cannot parse n_parms = {n_parms}. Only integers are allowed.")
-
         # Save optimizer selection criteria
         if isinstance(optimizer_selector, BaseSelector):
             self.selector = optimizer_selector
@@ -241,8 +228,6 @@ class GloMPOManager:
 
         # Save bounds
         self.bounds: List[Bound] = []
-        if len(bounds) != n_parms:
-            raise ValueError(f"Number of parameters (n_parms) and number of bounds are not equal")
         for bnd in bounds:
             if bnd[0] == bnd[1]:
                 raise ValueError(f"Bounds min and max cannot be equal. Rather fix its value and remove it from the "
@@ -250,6 +235,7 @@ class GloMPOManager:
             if bnd[1] < bnd[0]:
                 raise ValueError(f"Bound min cannot be larger than max.")
             self.bounds.append(Bound(bnd[0], bnd[1]))
+        self.n_parms = len(self.bounds)
 
         # Save max_jobs
         if max_jobs:
