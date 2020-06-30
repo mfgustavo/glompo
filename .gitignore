@@ -2,4 +2,4 @@
 _tmp
 .pytest_cache
 glompo.egg-info
-.coverage.Michael
+.coverage

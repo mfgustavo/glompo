@@ -1,6 +1,7 @@
 [run]
 omit =
        */tests*
+       */benchmark_fncs
 
 [report]
 exclude_lines=
