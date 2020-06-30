@@ -12,10 +12,27 @@ import multiprocessing as mp
 import pytest
 
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
-from glompo.optimizers.cmawrapper import CMAOptimizer
-from glompo.optimizers.gflswrapper import GFLSOptimizer
-from glompo.optimizers.nevergrad import Nevergrad
 from glompo.common.namedtuples import IterationResult
+
+# Append new optimizer class names to this list to run tests for GloMPO compatibility
+available_classes = []
+try:
+    from glompo.optimizers.cmawrapper import CMAOptimizer
+    available_classes.append(CMAOptimizer)
+except ModuleNotFoundError:
+    pass
+
+try:
+    from glompo.optimizers.gflswrapper import GFLSOptimizer
+    available_classes.append(GFLSOptimizer)
+except ModuleNotFoundError:
+    pass
+
+try:
+    from glompo.optimizers.nevergrad import Nevergrad
+    available_classes.append(Nevergrad)
+except ModuleNotFoundError:
+    pass
 
 
 class PlainOptimizer(BaseOptimizer):
@@ -127,9 +144,6 @@ class TestBase:
 
 
 class TestSubclassesGlompoCompatible:
-
-    # Append new optimizer class names to this list to run tests for GloMPO compatibility
-    available_classes = [CMAOptimizer, GFLSOptimizer, Nevergrad]
 
     package = namedtuple("package", "queue p_pipe c_pipe event")
 

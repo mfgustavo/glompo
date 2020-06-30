@@ -6,11 +6,23 @@ import sys
 
 import pytest
 import numpy as np
-import matplotlib.pyplot as plt
 
-from glompo.core.scope import GloMPOScope
+has_matplotlib = False
+try:
+    from glompo.core.scope import GloMPOScope
+
+    import matplotlib
+    matplotlib.use('qt5agg')
+
+    import matplotlib.pyplot as plt
+    plt.ion()
+    if matplotlib.pyplot.isinteractive() and int(matplotlib.__version__.split('.')[0]) >= 3:
+        has_matplotlib = True
+except (ModuleNotFoundError, ImportError):
+    pass
 
 
+@pytest.mark.skipif(not has_matplotlib, reason="Interactive-enabled matplotlib>=3.0 required to test the scope.")
 class TestScope:
 
     @pytest.fixture()
@@ -129,12 +141,6 @@ class TestScope:
             scope.update_optimizer(1, (i, np.sin(i)))
             scope.update_optimizer(2, (i, np.cos(i)))
 
-            if i % 30:
-                scope.t_last = 0
-                scope.update_scatter(1, (i, np.sin(i)))
-                scope.update_scatter(2, (i, np.cos(i)))
-                scope.update_mean(1, 0, 0-i/100, 0+i/100)
-                scope.update_mean(2, 1, 1-i/100, 1+i/100)
             if i == 50:
                 scope.t_last = 0
                 scope.update_hunt_start(1)

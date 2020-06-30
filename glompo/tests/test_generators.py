@@ -4,8 +4,13 @@ import numpy as np
 import pytest
 
 from glompo.generators.random import RandomGenerator
-from glompo.generators.peterbation import PerturbationGenerator
 from glompo.common.namedtuples import Bound
+
+try:
+    from glompo.generators.peterbation import PerturbationGenerator
+    has_scipy = True
+except ModuleNotFoundError:
+    has_scipy = False
 
 
 class TestRandom:
@@ -43,6 +48,7 @@ class TestRandom:
             RandomGenerator(bounds)
 
 
+@pytest.mark.skipif(not has_scipy, reason="Requires scipy to test PerturbationGenerator")
 class TestPerturbation:
 
     @pytest.mark.parametrize("x0, bounds, scale",

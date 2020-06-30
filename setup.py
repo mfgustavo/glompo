@@ -25,9 +25,9 @@ setup(
         'Plotting': ['matplotlib'],
         'Video': ['matplotlib>=3.0', 'ffmpeg', 'PySide2'],
         'PerturbationGenerator': ['scipy'],
-        'UnitTesting': ['pytest'],
+        'UnitTesting': ['pytest>=4.4'],
         'CMAOptimizer': ['cma'],
-        'GFLSOptimizer': ['optsam', 'emcee'],
+        'GFLSOptimizer': ['optsam'],
         'Nevergrad': ['nevergrad'],
         'ParAMSWrapper': ['scm']
     }
