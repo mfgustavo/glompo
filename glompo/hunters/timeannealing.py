@@ -5,7 +5,6 @@ import random
 from .basehunter import BaseHunter
 from ..core.optimizerlogger import OptimizerLogger
 
-
 __all__ = ("TimeAnnealing",)
 
 

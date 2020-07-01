@@ -1,11 +1,10 @@
 
 
-from typing import *
+from typing import List, Union, Type, Tuple, Dict, Any
 
+from .baseselector import BaseSelector
 from ..core.optimizerlogger import OptimizerLogger
 from ..optimizers.baseoptimizer import BaseOptimizer
-from .baseselector import BaseSelector
-
 
 __all__ = ("ChainSelector",)
 

@@ -5,8 +5,8 @@
 
 import threading
 import sys
-import _io
 import warnings
+import _io
 
 
 class CustomThread(threading.Thread):
@@ -15,7 +15,7 @@ class CustomThread(threading.Thread):
         file if this has been setup before hand.
     """
 
-    def __init__(self, redirect_print: bool = False, *args, **kwargs):
+    def __init__(self, *args, redirect_print: bool = False, **kwargs):
         super().__init__(*args, **kwargs)
         self.exitcode = 0
         self.redirect = redirect_print
@@ -69,6 +69,7 @@ class ThreadPrintRedirect:
         self.threads[thread_id] = open(f"glompo_optimizer_printstreams/{opt_id}_printstream.{ext}", "w+")
 
     def write(self, message):
+        """ Sends message to the appropriate handler. """
         ident = threading.currentThread().ident
         if ident in self.threads and not self.threads[ident].closed:
             self.threads[ident].write(message)
@@ -77,9 +78,9 @@ class ThreadPrintRedirect:
 
     def flush(self):
         """ Required for Python 3 compatibility. """
-        pass
 
     def close(self, thread_id: int = None):
+        """ Closes all open files to which messages are being sent. """
         if thread_id:
             self.threads[thread_id].close()
         else:

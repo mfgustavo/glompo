@@ -1,7 +1,7 @@
 
 
-from typing import *
 import random
+from typing import Type, Tuple, Dict, Any
 
 from .baseselector import BaseSelector
 from ..core.optimizerlogger import OptimizerLogger

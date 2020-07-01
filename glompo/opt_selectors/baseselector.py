@@ -4,17 +4,21 @@
 
 
 import logging
-from typing import *
 from abc import ABC, abstractmethod
+from typing import List, Union, Type, Tuple, Dict, Any
 
-from ..optimizers.baseoptimizer import BaseOptimizer
 from ..core.optimizerlogger import OptimizerLogger
-
+from ..optimizers.baseoptimizer import BaseOptimizer
 
 __all__ = ("BaseSelector",)
 
 
 class BaseSelector(ABC):
+
+    """ Selectors are classes which return an optimizer and its configuration when asked by
+        the manager. This selection will then be used to start a new optimizer. The full manager
+        is supplied to the selector allowing sophisticated decisions to be designed.
+    """
 
     def __init__(self,
                  avail_opts: List[Union[Type[BaseOptimizer],

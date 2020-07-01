@@ -5,14 +5,14 @@ Base class from which all optimizers must inherit in order to be compatible with
 """
 
 
+import logging
+import traceback
+import warnings
+from abc import ABC, abstractmethod
 from multiprocessing.connection import Connection
 from queue import Queue
 from threading import Event
-from typing import *
-from abc import ABC, abstractmethod
-import warnings
-import logging
-import traceback
+from typing import Callable, Sequence, Tuple, Optional
 
 from ..common.helpers import LiteralWrapper
 

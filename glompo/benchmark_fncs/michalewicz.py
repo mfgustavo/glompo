@@ -1,9 +1,11 @@
 
 
-from time import sleep
 import warnings
+from time import sleep
+from typing import Sequence, Tuple
+
 import numpy as np
-from typing import *
+
 from ._base import BaseTestCase
 
 
@@ -61,13 +63,12 @@ class Michalewicz(BaseTestCase):
     def min_fx(self) -> float:
         if self._dims == 2:
             return -1.8013
-        elif self._dims == 5:
+        if self._dims == 5:
             return -4.687658
-        elif self._dims == 10:
+        if self._dims == 10:
             return -9.66015
-        else:
-            warnings.warn("Global minimum only known for d=2, 5 and 10")
-            return np.inf
+        warnings.warn("Global minimum only known for d=2, 5 and 10")
+        return np.inf
 
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:

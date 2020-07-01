@@ -1,27 +1,22 @@
 
 
-# Native Python
-from typing import *
+import collections
 import os
 import warnings
-import collections
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
+from typing import Callable, Sequence, Tuple, Optional, Union, Type, Any
 
 import numpy as np
-
-# Optsam Package
-from optsam.fwrap import ResidualsWrapper
-from optsam.codec import VectorCodec, BoxTanh
-from optsam.opt_gfls import GFLS
-from optsam.driver import driver
-from optsam.logger import Logger
 from optsam.algo_base import AlgoBase
+from optsam.codec import BoxTanh, VectorCodec
+from optsam.driver import driver
+from optsam.fwrap import ResidualsWrapper
+from optsam.logger import Logger
+from optsam.opt_gfls import GFLS
 
-# This Package
 from .baseoptimizer import BaseOptimizer, MinimizeResult
 from ..common.namedtuples import IterationResult
-
 
 __all__ = ("GFLSOptimizer",)
 
@@ -147,7 +142,7 @@ class GFLSOptimizer(BaseOptimizer):
 
         # noinspection PyUnresolvedReferences
         fw = ResidualsWrapper(function.__wrapped__.resids, self.vector_codec.decode)
-        self.logger.debug(f"Starting GFLS driver.")
+        self.logger.debug("Starting GFLS driver.")
         logger = driver(
             fw,
             self.vector_codec.encode(x0),

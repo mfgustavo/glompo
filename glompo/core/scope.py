@@ -3,7 +3,7 @@
 """ Contains the GloMPOScope class which is a useful extension allowing a user to visualize GloMPO's behaviour. """
 
 
-from typing import *
+from typing import Optional, Dict, Any, Tuple, Union
 import warnings
 import logging
 
@@ -184,7 +184,7 @@ class GloMPOScope:
 
                                 line.set_xdata(x_vals)
                                 line.set_ydata(y_vals)
-                            done.append(True) if len(x_vals) == 0 else done.append(False)
+                            done.append(len(x_vals) == 0)
                         if all(done):
                             self._dead_streams.add(opt_id)
                             self.logger.debug(f"Opt{opt_id} identified as out of scope.")

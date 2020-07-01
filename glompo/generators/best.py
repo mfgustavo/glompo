@@ -1,11 +1,12 @@
 
 
-from typing import *
+from typing import Sequence, Tuple
+
 import numpy as np
+
 from .basegenerator import BaseGenerator
 from ..common.helpers import is_bounds_valid
 from ..common.namedtuples import Result
-
 
 __all__ = ("IncumbentGenerator",)
 

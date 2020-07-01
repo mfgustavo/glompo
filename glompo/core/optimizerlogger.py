@@ -3,13 +3,13 @@
 """ Contains classes which save log information for GloMPO and its optimizers. """
 
 
-from typing import *
-from math import inf
 import os
+from math import inf
+from typing import Any, Dict, List, Optional, Sequence, Union
+
 import yaml
 
 from glompo.common.helpers import LiteralWrapper, literal_presenter
-
 
 __all__ = ("OptimizerLogger",)
 
@@ -111,7 +111,7 @@ class OptimizerLogger:
                 else:
                     sum_data[optimizer] = {'f_best': float('nan'), 'x_best': None}
 
-            with open(f"0_SummaryBest.yml", "w+") as file:
+            with open("0_SummaryBest.yml", "w+") as file:
                 yaml.dump(sum_data, file, default_flow_style=False, sort_keys=False)
 
         os.chdir(orig_dir)

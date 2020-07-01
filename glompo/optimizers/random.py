@@ -1,14 +1,13 @@
 
-from typing import *
 import logging
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
+from typing import Callable, Sequence, Tuple
 
 import numpy as np
 
-from .baseoptimizer import MinimizeResult, BaseOptimizer
+from .baseoptimizer import BaseOptimizer, MinimizeResult
 from ..common.namedtuples import IterationResult
-
 
 __all__ = ('RandomOptimizer',)
 
@@ -49,21 +48,21 @@ class RandomOptimizer(BaseOptimizer):
             vector = np.array(vector)
             self.logger.debug(f"Generated vector = {vector}")
 
-            self.logger.debug(f"Evaluating function.")
+            self.logger.debug("Evaluating function.")
             fx = function(vector)
             self.logger.debug(f"Function returned fx = {fx}")
 
             if self._results_queue:
-                self.logger.debug(f"Pushing result")
+                self.logger.debug("Pushing result")
                 self.push_iter_result(i, 1, vector, fx, False)
-                self.logger.debug(f"Checking messages")
+                self.logger.debug("Checking messages")
                 self.check_messages()
                 self._pause_signal.wait()
 
             if fx < best_f:
                 best_f = fx
                 best_x = vector
-                self.logger.debug(f"Updating best")
+                self.logger.debug("Updating best")
                 self.result.x, self.result.fx = best_x, best_f
 
             if callbacks():

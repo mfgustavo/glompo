@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from time import sleep
-from typing import *
+from typing import Sequence, Tuple
 
 
 class BaseTestCase(ABC):

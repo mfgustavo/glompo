@@ -1,12 +1,11 @@
 
 
-from typing import *
+from typing import Sequence, Tuple
 
 import numpy as np
 from scipy.stats import truncnorm
 
 from .basegenerator import BaseGenerator
-
 
 __all__ = ("PerturbationGenerator",)
 

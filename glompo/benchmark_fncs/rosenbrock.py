@@ -1,8 +1,9 @@
 
 
 from time import sleep
+from typing import Sequence, Tuple
+
 from ._base import BaseTestCase
-from typing import *
 
 
 class Rosenbrock(BaseTestCase):

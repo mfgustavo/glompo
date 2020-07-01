@@ -1,11 +1,11 @@
 
 
 from .basegenerator import BaseGenerator
+from .best import IncumbentGenerator
+from .exploit_explore import ExploitExploreGenerator
 from .peterbation import PerturbationGenerator
 from .random import RandomGenerator
-from .best import IncumbentGenerator
 from .single import SinglePointGenerator
-from .exploit_explore import ExploitExploreGenerator
 
 __all__ = ("BaseGenerator",
            "PerturbationGenerator",

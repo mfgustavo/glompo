@@ -1,10 +1,11 @@
 
 
-from typing import *
+from typing import Sequence, Tuple, Optional
+
 import numpy as np
+
 from .basegenerator import BaseGenerator
 from ..common.helpers import is_bounds_valid
-
 
 __all__ = ("SinglePointGenerator",)
 

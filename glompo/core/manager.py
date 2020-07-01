@@ -14,7 +14,7 @@ import socket
 import sys
 from datetime import datetime
 from time import time
-from typing import *
+from typing import Optional, Dict, Any, Sequence, Set, List, Callable, Tuple
 
 # Other Python packages
 import numpy as np
@@ -23,9 +23,9 @@ import yaml
 # Package imports
 from ..generators import BaseGenerator, RandomGenerator
 from ..convergence import BaseChecker, KillsAfterConvergence
-from ..common.namedtuples import *
-from ..common.customwarnings import *
-from ..common.helpers import *
+from ..common.namedtuples import Result, Bound, OptimizerPackage, ProcessPackage
+from ..common.customwarnings import NotImplementedWarning
+from ..common.helpers import LiteralWrapper, literal_presenter, nested_string_formatting
 from ..common.wrappers import process_print_redirect, task_args_wrapper
 from ..hunters import BaseHunter, TimeAnnealing, ValueAnnealing, ParameterDistance
 from ..optimizers.baseoptimizer import BaseOptimizer
@@ -224,16 +224,16 @@ class GloMPOManager:
         if isinstance(optimizer_selector, BaseSelector):
             self.selector = optimizer_selector
         else:
-            raise TypeError(f"optimizer_selector not an instance of a subclass of BaseSelector.")
+            raise TypeError("optimizer_selector not an instance of a subclass of BaseSelector.")
 
         # Save bounds
         self.bounds: List[Bound] = []
         for bnd in bounds:
             if bnd[0] == bnd[1]:
-                raise ValueError(f"Bounds min and max cannot be equal. Rather fix its value and remove it from the "
-                                 f"list of parameters. Fixed values can be supplied through task_args or task_kwargs.")
+                raise ValueError("Bounds min and max cannot be equal. Rather fix its value and remove it from the "
+                                 "list of parameters. Fixed values can be supplied through task_args or task_kwargs.")
             if bnd[1] < bnd[0]:
-                raise ValueError(f"Bound min cannot be larger than max.")
+                raise ValueError("Bound min cannot be larger than max.")
             self.bounds.append(Bound(bnd[0], bnd[1]))
         self.n_parms = len(self.bounds)
 
@@ -255,7 +255,7 @@ class GloMPOManager:
             if isinstance(convergence_checker, BaseChecker):
                 self.convergence_checker = convergence_checker
             else:
-                raise TypeError(f"convergence_checker not an instance of a subclass of BaseChecker.")
+                raise TypeError("convergence_checker not an instance of a subclass of BaseChecker.")
         else:
             self.convergence_checker = KillsAfterConvergence()
             self.logger.info("Convergence set to default: KillsAfterConvergence(0, 1)")
@@ -265,7 +265,7 @@ class GloMPOManager:
             if isinstance(x0_generator, BaseGenerator):
                 self.x0_generator = x0_generator
             else:
-                raise TypeError(f"x0_generator not an instance of a subclass of BaseGenerator.")
+                raise TypeError("x0_generator not an instance of a subclass of BaseGenerator.")
         else:
             self.x0_generator = RandomGenerator(self.bounds)
             self.logger.info("x0 generator set to default: RandomGenerator()")
@@ -284,7 +284,7 @@ class GloMPOManager:
 
         # Save behavioural args
         self.allow_forced_terminations = force_terminations_after > 0
-        self._TOO_LONG = force_terminations_after
+        self._too_long = force_terminations_after
         self.region_stability_check = bool(region_stability_check)
         self.report_statistics = bool(report_statistics)
         self.enforce_elitism = bool(enforce_elitism)
@@ -304,17 +304,17 @@ class GloMPOManager:
             self.scope = GloMPOScope(**visualisation_args) if visualisation_args else GloMPOScope()
         if region_stability_check:
             warnings.warn("region_stability_check not implemented. Ignoring.", NotImplementedWarning)
-            self.logger.warning(f"region_stability_check not yet implemented")
+            self.logger.warning("region_stability_check not yet implemented")
         if report_statistics:
             warnings.warn("report_statistics not implemented. Ignoring.", NotImplementedWarning)
-            self.logger.warning(f"report_statistics not yet implemented")
+            self.logger.warning("report_statistics not yet implemented")
 
         # Save killing conditions
         if killing_conditions:
             if isinstance(killing_conditions, BaseHunter):
                 self.killing_conditions = killing_conditions
             else:
-                raise TypeError(f"killing_conditions not an instance of a subclass of BaseHunter.")
+                raise TypeError("killing_conditions not an instance of a subclass of BaseHunter.")
         else:
             self.killing_conditions = TimeAnnealing() & ValueAnnealing() | ParameterDistance(self.bounds, 0.01)
             self.logger.info(f"Hunting conditions set to default: {self.killing_conditions}")
@@ -385,7 +385,7 @@ class GloMPOManager:
                 self.logger.debug("Checking optimizer signals")
                 for opt_id in self.optimizer_packs:
                     self._check_signals(opt_id)
-                self.logger.debug(f"Signal check done.")
+                self.logger.debug("Signal check done.")
 
                 self.logger.debug("Checking optimizer iteration results")
                 self._process_results()
@@ -403,7 +403,7 @@ class GloMPOManager:
 
                 self.converged = self.convergence_checker(self)
                 if self.converged:
-                    self.logger.info(f"Convergence Reached")
+                    self.logger.info("Convergence Reached")
 
             self.logger.info("Exiting manager loop")
             self.logger.info(f"Exit conditions met: \n"
@@ -593,7 +593,7 @@ class GloMPOManager:
 
             # Find hanging processes
             if self.optimizer_packs[opt_id].process.is_alive() and \
-                    time() - self.last_feedback[opt_id] > self._TOO_LONG and \
+                    time() - self.last_feedback[opt_id] > self._too_long and \
                     self.allow_forced_terminations and \
                     opt_id not in self.hunt_victims and \
                     self._proc_backend:
@@ -609,7 +609,7 @@ class GloMPOManager:
             if opt_id in self.hunt_victims and \
                self.allow_forced_terminations and \
                self.optimizer_packs[opt_id].process.is_alive() and \
-               time() - self.hunt_victims[opt_id] > self._TOO_LONG and \
+               time() - self.hunt_victims[opt_id] > self._too_long and \
                self._proc_backend:
                 self.optimizer_packs[opt_id].process.terminate()
                 self.optimizer_packs[opt_id].process.join(3)
@@ -667,7 +667,6 @@ class GloMPOManager:
                 self.scope.update_hunt_start(hunter_id)
 
             self.logger.debug("Starting hunt")
-            self.logger.debug("XXX", self.optimizer_packs, self.opt_log)
             for victim_id in self.optimizer_packs:
                 in_graveyard = victim_id in self.graveyard
                 has_points = len(self.opt_log.get_history(victim_id, "fx")) > 0
@@ -731,7 +730,7 @@ class GloMPOManager:
                 self.optimizer_packs[opt_id].signal_pipe.send(1)
                 self.graveyard.add(opt_id)
                 self.opt_log.put_metadata(opt_id, "Stop Time", datetime.now())
-                self.opt_log.put_metadata(opt_id, "End Condition", f"GloMPO Convergence")
+                self.opt_log.put_metadata(opt_id, "End Condition", "GloMPO Convergence")
                 self.optimizer_packs[opt_id].process.join(10)
                 self.logger.debug(f"Termination signal sent to optimizer {opt_id}")
 

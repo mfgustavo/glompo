@@ -1,9 +1,11 @@
 
 
-from time import sleep
 import warnings
+from time import sleep
+from typing import Sequence, Tuple
+
 import numpy as np
-from typing import *
+
 from ._base import BaseTestCase
 
 

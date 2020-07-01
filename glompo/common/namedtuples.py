@@ -3,11 +3,10 @@
 """ Named tuples used throughout the package to make code clearer. """
 
 
-from typing import *
-from threading import Thread
-from multiprocessing import Process, Event
+from multiprocessing import Event, Process
 from multiprocessing.connection import Connection
-
+from threading import Thread
+from typing import Any, Callable, Dict, NamedTuple, Sequence, Union
 
 __all__ = ("Result",
            "Bound",

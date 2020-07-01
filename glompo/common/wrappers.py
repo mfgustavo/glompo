@@ -3,9 +3,9 @@
 """ Decorators and wrappers used throughout GloMPO. """
 
 
-from functools import wraps
-import sys
 import inspect
+import sys
+from functools import wraps
 
 
 def process_print_redirect(opt_id, func):

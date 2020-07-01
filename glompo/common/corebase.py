@@ -3,9 +3,8 @@
 """ Abstract classes used to construct the hunter and convergence bases. """
 
 
-from abc import ABC, abstractmethod
 import inspect
-
+from abc import ABC, abstractmethod
 
 __all__ = ("_CoreBase", "_CombiCore", "_OrCore", "_AndCore")
 
@@ -44,6 +43,7 @@ class _CoreBase(ABC):
         return mess
 
     def reset(self):
+        """ Clears previous evaluation result to avoid misleading printing. """
         self._last_result = None
 
 

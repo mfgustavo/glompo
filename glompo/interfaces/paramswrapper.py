@@ -1,17 +1,17 @@
 
 
-from typing import *
+""" Provides support to use GloMPO as a ParAMS optimizer. """
+
 import warnings
+from typing import Callable, Sequence, Tuple, List
 
 import numpy as np
-
-from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
 from scm.params.core.lossfunctions import SSE
+from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
 
 from ..core.manager import GloMPOManager
 from ..opt_selectors.baseselector import BaseSelector
 from ..optimizers.gflswrapper import GFLSOptimizer
-
 
 __all__ = ("GlompoParamsWrapper",)
 
@@ -41,15 +41,14 @@ class _FunctionWrapper:
         resids = result.residuals
         dataset = result.dataset
 
-        if len(resids) > 0:
-            weights = dataset.get('weight')
-            sigmas = dataset.get('sigma')
-
-            resids = np.concatenate([(w/s)*r for w, s, r in zip(weights, sigmas, resids)])
-            print(resids)
-            return resids
-        else:
+        if len(resids) == 0:
             return np.array([np.inf])
+
+        weights = dataset.get('weight')
+        sigmas = dataset.get('sigma')
+
+        resids = np.concatenate([(w/s)*r for w, s, r in zip(weights, sigmas, resids)])
+        return resids
 
 
 class GlompoParamsWrapper(BaseOptimizer):
@@ -136,7 +135,6 @@ class GlompoParamsWrapper(BaseOptimizer):
             self.manager_kwargs['max_jobs'] = workers
 
         manager = GloMPOManager(task=_FunctionWrapper(function),
-                                n_parms=len(x0),
                                 optimizer_selector=self.selector,
                                 bounds=bounds,
                                 **self.manager_kwargs)

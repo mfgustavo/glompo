@@ -6,14 +6,14 @@
 
 
 from .basehunter import BaseHunter
+from .lastptsinvalid import LastPointsInvalid
+from .min_fcalls import MinFuncCalls
 from .min_iterations import MinIterations
+from .parameterdistance import ParameterDistance
 from .pseudoconv import PseudoConverged
 from .timeannealing import TimeAnnealing
-from .valueannealing import ValueAnnealing
-from .parameterdistance import ParameterDistance
-from .min_fcalls import MinFuncCalls
-from .lastptsinvalid import LastPointsInvalid
 from .type import TypeHunter
+from .valueannealing import ValueAnnealing
 
 __all__ = ("BaseHunter",
            "MinIterations",

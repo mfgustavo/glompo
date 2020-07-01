@@ -1,13 +1,12 @@
 
 
-from typing import *
+from typing import Sequence, Tuple
 
 import numpy as np
 
 from .basehunter import BaseHunter
-from ..core.optimizerlogger import OptimizerLogger
 from ..common.helpers import is_bounds_valid
-
+from ..core.optimizerlogger import OptimizerLogger
 
 __all__ = ("ParameterDistance",)
 

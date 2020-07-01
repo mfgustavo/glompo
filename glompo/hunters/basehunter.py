@@ -6,9 +6,8 @@
 import logging
 from abc import abstractmethod
 
+from ..common.corebase import _CoreBase, _AndCore, _OrCore
 from ..core.optimizerlogger import OptimizerLogger
-from ..common.corebase import *
-
 
 __all__ = ("BaseHunter",)
 

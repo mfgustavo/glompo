@@ -6,8 +6,7 @@
 import logging
 from abc import abstractmethod
 
-from ..common.corebase import _CoreBase, _OrCore, _AndCore
-
+from ..common.corebase import _AndCore, _CoreBase, _OrCore
 
 __all__ = ("BaseChecker",)
 
@@ -43,4 +42,3 @@ class _OrChecker(_OrCore, BaseChecker):
 class _AndChecker(_AndCore, BaseChecker):
     def __call__(self, manager: 'GloMPOManager') -> bool:
         return super().__call__(manager)
-

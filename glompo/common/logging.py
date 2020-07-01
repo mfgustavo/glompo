@@ -1,8 +1,10 @@
 
 
+""" Contains class to split the logs of individual optimizers for easy processing. """
+
 import logging
 import os
-from typing import *
+from typing import Optional
 
 
 class SplitOptimizerLogs(logging.Filter):

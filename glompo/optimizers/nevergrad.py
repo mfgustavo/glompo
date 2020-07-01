@@ -1,17 +1,16 @@
 
 
 import warnings
-from typing import *
 from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import Event, Queue
+from multiprocessing.connection import Connection
+from typing import Callable, Sequence, Union
 
 import nevergrad as ng
 import numpy as np
-from multiprocessing.connection import Connection
-from multiprocessing import Queue, Event
 
 from .baseoptimizer import BaseOptimizer, MinimizeResult
 from ..common.namedtuples import IterationResult
-
 
 __all__ = ('Nevergrad',)
 
@@ -123,9 +122,9 @@ class _NevergradCallbacksWrapper:
                 self.parent._pause_signal.wait()
                 self.parent.check_messages()
                 if not stop_cond and self.parent.stop:
-                    stop_cond = f"GloMPO termination signal."
+                    stop_cond = "GloMPO termination signal."
                 self.parent.logger.debug(f"Stop = {bool(stop_cond)} after message check from manager")
-                self.parent.logger.debug(f"Pushing result to queue")
+                self.parent.logger.debug("Pushing result to queue")
                 self.parent.push_iter_result(
                     IterationResult(opt_id=self.parent._opt_id,
                                     n_iter=opt.num_tell + 1,
@@ -136,7 +135,7 @@ class _NevergradCallbacksWrapper:
                 self.parent.logger.debug("Result pushed successfully")
                 self.i_fcalls = opt.num_tell + 1
                 if stop_cond:
-                    self.parent.logger.debug(f"Stop is True so shutting down optimizer.")
+                    self.parent.logger.debug("Stop is True so shutting down optimizer.")
                     self.parent.stop = True
                     opt._num_ask = opt.budget - 1
                     self.parent.message_manager(0, stop_cond)

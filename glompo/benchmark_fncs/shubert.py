@@ -1,8 +1,10 @@
 
 
 import warnings
+from typing import Sequence, Tuple
+
 import numpy as np
-from typing import *
+
 from ._base import BaseTestCase
 
 
@@ -87,7 +89,7 @@ class Shubert(BaseTestCase):
     @property
     def min_x(self) -> Sequence[float]:
         warnings.warn("Degenerate global minima")
-        return None
+        return
 
     @property
     def min_fx(self) -> float:
@@ -100,10 +102,9 @@ class Shubert(BaseTestCase):
 
         if self.style == 1:
             return -186.7309
-        elif self.style == 3:
+        if self.style == 3:
             return -24.062499
-        else:
-            return -29.016015
+        return -29.016015
 
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
