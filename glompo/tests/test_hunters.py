@@ -1,4 +1,4 @@
-
+from typing import Callable, Sequence, Tuple
 
 import pytest
 import numpy as np
@@ -11,7 +11,10 @@ from glompo.hunters.parameterdistance import ParameterDistance
 from glompo.hunters.timeannealing import TimeAnnealing
 from glompo.hunters.valueannealing import ValueAnnealing
 from glompo.hunters.lastptsinvalid import LastPointsInvalid
+from glompo.hunters.min_fcalls import MinFuncCalls
+from glompo.hunters.type import TypeHunter
 from glompo.core.optimizerlogger import OptimizerLogger
+from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 
 
 class PlainHunter(BaseHunter):
@@ -58,6 +61,26 @@ class FakeLog:
         if track != "f_call_opt":
             return self.path[opt_id - 1]
         return list(range(1, len(self.path[opt_id-1])+1))
+
+    @staticmethod
+    def get_metadata(*args):
+        return {2: "FakeOpt", 8: "XXXOpt"}[args[0]]
+
+
+class FakeOpt(BaseOptimizer):
+
+    def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],
+                 bounds: Sequence[Tuple[float, float]], callbacks: Callable = None, **kwargs) -> MinimizeResult:
+        pass
+
+    def push_iter_result(self, *args):
+        pass
+
+    def callstop(self, *args):
+        pass
+
+    def save_state(self, *args):
+        pass
 
 
 class TestBase:
@@ -260,3 +283,26 @@ class TestLastPointsInvalid:
         cond = LastPointsInvalid(5)
         log = FakeLog([], path)
         assert cond(log, 1, 2) == output
+
+
+class TestMinFCalls:
+
+    @pytest.mark.parametrize("path, output",
+                             [([12, 12, 12, 12, 12], True),
+                              ([1, 1, 1], True),
+                              ([3, 3], False)])
+    def test_condition(self, path, output):
+        cond = MinFuncCalls(3)
+        log = FakeLog([], path)
+        assert cond(log, 1, 2) == output
+
+
+class TestTypeHunter:
+
+    @pytest.mark.parametrize("vic, output",
+                             [(2, True),
+                              (8, False)])
+    def test_condition(self, vic, output):
+        cond = TypeHunter(FakeOpt)
+        log = FakeLog([], [])
+        assert cond(log, 1, vic) == output

@@ -455,7 +455,7 @@ class TestManager:
 
             needscaler = False
 
-            def __init__(self, max_iters, gamma, precision,
+            def __init__(self, max_iters, gamma, precision, workers=1,
                          opt_id=None, signal_pipe=None, results_queue=None,
                          pause_flag=None):
                 super().__init__(opt_id, signal_pipe, results_queue, pause_flag)

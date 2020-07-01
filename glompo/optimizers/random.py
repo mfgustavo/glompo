@@ -37,10 +37,12 @@ class RandomOptimizer(BaseOptimizer):
         vector = []
         fx = np.inf
         best_f = np.inf
-        for i in range(self.iters):
+        i = 0
+        while i < self.iters:
             if self.stop_called:
                 break
 
+            i += 1
             vector = []
             for bnd in bounds:
                 vector.append(np.random.uniform(bnd[0], bnd[1]))
@@ -53,7 +55,7 @@ class RandomOptimizer(BaseOptimizer):
 
             if self._results_queue:
                 self.logger.debug(f"Pushing result")
-                self.push_iter_result(i+1, 1, vector, fx, False)
+                self.push_iter_result(i, 1, vector, fx, False)
                 self.logger.debug(f"Checking messages")
                 self.check_messages()
                 self._pause_signal.wait()
@@ -64,10 +66,13 @@ class RandomOptimizer(BaseOptimizer):
                 self.logger.debug(f"Updating best")
                 self.result.x, self.result.fx = best_x, best_f
 
+            if callbacks():
+                break
+
         self.result.success = True
         self.logger.debug("Termination successful")
         if self._results_queue:
-            self.push_iter_result(self.iters, 1, vector, fx, True)
+            self.push_iter_result(i, 1, vector, fx, True)
             self.logger.debug("Messaging manager")
             self.message_manager(0, "Optimizer convergence")
             self.check_messages()

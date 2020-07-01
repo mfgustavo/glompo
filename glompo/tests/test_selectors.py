@@ -4,8 +4,11 @@ from typing import *
 import pytest
 
 from glompo.core.optimizerlogger import OptimizerLogger
-from glompo.opt_selectors.baseselector import BaseSelector
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
+from glompo.opt_selectors.baseselector import BaseSelector
+from glompo.opt_selectors.cycle import CycleSelector
+from glompo.opt_selectors.chain import ChainSelector
+from glompo.opt_selectors.random import RandomSelector
 
 
 class BasicOptimizer(BaseOptimizer):
@@ -77,3 +80,93 @@ class TestSelectors:
     def test_contains(self, avail_opts, test, result):
         selector = BasicSelector(avail_opts)
         assert (test in selector) == result
+
+
+class TestCycleSelector:
+
+    def test_select(self):
+        selector = CycleSelector([OptimizerA, OptimizerB])
+
+        for i in range(5):
+            selection = selector.select_optimizer(None, None, 1)
+            assert selection[0] == [OptimizerA, OptimizerB][i % 2]
+
+    def test_no_space(self):
+        selector = CycleSelector([(OptimizerA, {'workers': 2}, None), OptimizerB])
+
+        selection = selector.select_optimizer(None, None, 1)
+        assert selection is None
+
+        selection = selector.select_optimizer(None, None, 1)
+        assert selection is None
+
+        selection = selector.select_optimizer(None, None, 2)
+        assert selection[0] is OptimizerA
+
+        selection = selector.select_optimizer(None, None, 1)
+        assert selection[0] is OptimizerB
+
+        selection = selector.select_optimizer(None, None, 1)
+        assert selection is None
+
+        selection = selector.select_optimizer(None, None, 2)
+        assert selection[0] is OptimizerA
+
+
+class TestChain:
+
+    def test_selection(self):
+
+        class Manager:
+            f_counter = 0
+
+        selector = ChainSelector([OptimizerA,
+                                  (OptimizerB, {'workers': 2}, None),
+                                  OptimizerA,
+                                  OptimizerB], [10, 20, 30])
+        manager = Manager()
+
+        selection = selector.select_optimizer(manager, None, 1)
+        assert selection[0] == OptimizerA
+
+        manager.f_counter = 3
+        selection = selector.select_optimizer(manager, None, 1)
+        assert selection[0] == OptimizerA
+
+        manager.f_counter = 12
+        selection = selector.select_optimizer(manager, None, 1)
+        assert selection is None
+
+        manager.f_counter = 15
+        selection = selector.select_optimizer(manager, None, 2)
+        assert selection[0] == OptimizerB
+
+        manager.f_counter = 29
+        selection = selector.select_optimizer(manager, None, 1)
+        assert selection[0] == OptimizerA
+
+        manager.f_counter = 30
+        selection = selector.select_optimizer(manager, None, 1)
+        assert selection[0] == OptimizerB
+
+        manager.f_counter = 300
+        selection = selector.select_optimizer(manager, None, 10)
+        assert selection[0] == OptimizerB
+
+
+class TestRandom:
+
+    def test_no_space(self):
+        selector = RandomSelector([OptimizerA, (OptimizerB, {'workers': 2}, None)])
+
+        for i in range(100):
+            assert selector.select_optimizer(None, None, 1)[0] == OptimizerA
+
+    def test_selection(self):
+        selector = RandomSelector([OptimizerA, OptimizerB])
+
+        selected = set()
+        for i in range(100):
+            selected.add(selector.select_optimizer(None, None, 1)[0])
+
+        assert selected == {OptimizerA, OptimizerB}

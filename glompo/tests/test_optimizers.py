@@ -12,10 +12,11 @@ import multiprocessing as mp
 import pytest
 
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
+from glompo.optimizers.random import RandomOptimizer
 from glompo.common.namedtuples import IterationResult
 
 # Append new optimizer class names to this list to run tests for GloMPO compatibility
-available_classes = []
+available_classes = [RandomOptimizer]
 try:
     from glompo.optimizers.cmawrapper import CMAOptimizer
     available_classes.append(CMAOptimizer)

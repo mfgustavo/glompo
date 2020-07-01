@@ -35,7 +35,7 @@ class ChainSelector(BaseSelector):
     def select_optimizer(self, manager: 'GloMPOManager', log: OptimizerLogger, slots_available: int) -> \
             Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]], None]:
 
-        if self.toggle < len(self.fcall_thresholds) and manager.f_counter > self.fcall_thresholds[self.toggle]:
+        if self.toggle < len(self.fcall_thresholds) and manager.f_counter >= self.fcall_thresholds[self.toggle]:
             self.toggle += 1
 
         selected = self.avail_opts[self.toggle]
