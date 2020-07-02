@@ -31,7 +31,7 @@ class Michalewicz(BaseTestCase):
             Delay in seconds after the function is called before results are returned.
             Useful to simulate harder problems.
         m: float
-            Parameterization of the function. Lower values make the valleys more informative at pointing to the minimum.
+            Parametrization of the function. Lower values make the valleys more informative at pointing to the minimum.
             High values (+-10) create a needle-in-a-haystack function where there is no information pointing to the
             minimum.
         """

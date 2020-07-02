@@ -1,6 +1,7 @@
 <component name="ProjectDictionaryState">
   <dictionary name="mfgustavo">
     <words>
+      <w>ackley</w>
       <w>algo</w>
       <w>bnds</w>
       <w>callbackstop</w>
@@ -16,17 +17,21 @@
       <w>customopts</w>
       <w>customtermination</w>
       <w>dataset</w>
+      <w>easom</w>
       <w>fbest</w>
       <w>fcall</w>
       <w>fcalls</w>
       <w>filenameprefix</w>
       <w>fmax</w>
+      <w>fncs</w>
       <w>gfls</w>
       <w>glompo</w>
       <w>imax</w>
       <w>iters</w>
       <w>komissarov</w>
+      <w>langermann</w>
       <w>maxiter</w>
+      <w>michalewicz</w>
       <w>minsigma</w>
       <w>nevergrad</w>
       <w>omax</w>
@@ -34,9 +39,13 @@
       <w>optsam</w>
       <w>parms</w>
       <w>popsize</w>
+      <w>rastrigin</w>
       <w>reax</w>
       <w>resids</w>
+      <w>rosenbrock</w>
       <w>rüger</w>
+      <w>schwefel</w>
+      <w>shubert</w>
       <w>stagnationcounter</w>
       <w>tmax</w>
       <w>tolfun</w>

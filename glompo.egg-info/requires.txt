@@ -1,7 +1,0 @@
-numpy
-matplotlib
-scipy
-pytest
-cma
-PyYAML
-emcee

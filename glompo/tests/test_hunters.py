@@ -118,7 +118,7 @@ class TestBase:
         assert hunter(*(None,) * 3) is True
 
 
-class TestMinTraningPoints:
+class TestMinTrainingPoints:
 
     class FakeLog:
         def __init__(self, n_pts):
