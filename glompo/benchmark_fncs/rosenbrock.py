@@ -1,5 +1,3 @@
-
-
 from time import sleep
 from typing import Sequence, Tuple
 
@@ -30,8 +28,8 @@ class Rosenbrock(BaseTestCase):
 
     def __call__(self, x):
         total = 0
-        for i in range(self.dims-1):
-            total += 100 * (x[i+1] - x[i] ** 2) ** 2 + (1 - x[i]) ** 2
+        for i in range(self.dims - 1):
+            total += 100 * (x[i + 1] - x[i] ** 2) ** 2 + (1 - x[i]) ** 2
         sleep(self.delay)
         return total
 

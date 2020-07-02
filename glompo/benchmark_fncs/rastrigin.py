@@ -1,5 +1,3 @@
-
-
 from time import sleep
 from typing import Sequence, Tuple
 
@@ -34,7 +32,7 @@ class Rastrigin(BaseTestCase):
         x = np.array(x)
 
         calc = 10 * self.dims
-        calc += np.sum(x ** 2 - 10*np.cos(2*np.pi * x))
+        calc += np.sum(x ** 2 - 10 * np.cos(2 * np.pi * x))
 
         sleep(self.delay)
         return calc

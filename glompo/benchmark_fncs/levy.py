@@ -1,5 +1,3 @@
-
-
 from time import sleep
 from typing import Sequence, Tuple
 
@@ -35,7 +33,7 @@ class Levy(BaseTestCase):
         term1 = np.sin(np.pi * w[0]) ** 2
 
         term2 = (w - 1) ** 2
-        term2 *= 1 + 10*np.sin(np.pi * w + 1) ** 2
+        term2 *= 1 + 10 * np.sin(np.pi * w + 1) ** 2
         term2 = np.sum(term2)
 
         term3 = (w[-1] - 1) ** 2

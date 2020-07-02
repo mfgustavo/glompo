@@ -1,5 +1,3 @@
-
-
 import warnings
 from typing import Sequence, Tuple
 

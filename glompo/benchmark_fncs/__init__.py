@@ -1,5 +1,3 @@
-
-
 from ._base import BaseTestCase
 from .ackley import Ackley
 from .deceptive import Deceptive

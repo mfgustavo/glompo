@@ -1,5 +1,3 @@
-
-
 from time import sleep
 from typing import Sequence, Tuple
 
@@ -39,7 +37,7 @@ class Deceptive(BaseTestCase):
         sleep(self.delay)
         x = np.array(x)
 
-        calc = - (1/self.dims * np.sum(self.g(x))) ** self.b
+        calc = - (1 / self.dims * np.sum(self.g(x))) ** self.b
 
         if self.shift:
             return calc + 1
@@ -51,13 +49,13 @@ class Deceptive(BaseTestCase):
 
         for i, x in enumerate(vec):
             ai = self._min_x[i]
-            if 0 <= x <= 0.8*ai:
-                gx[i] = 0.8 - x/ai
-            elif 0.8*ai < x <= ai:
-                gx[i] = 5*x/ai - 4
-            elif ai < x <= (1 + 4*ai)/5:
+            if 0 <= x <= 0.8 * ai:
+                gx[i] = 0.8 - x / ai
+            elif 0.8 * ai < x <= ai:
+                gx[i] = 5 * x / ai - 4
+            elif ai < x <= (1 + 4 * ai) / 5:
                 gx[i] = (5 * (x - ai)) / (ai - 1) + 1
-            elif (1 + 4*ai)/5 < x <= 1:
+            elif (1 + 4 * ai) / 5 < x <= 1:
                 gx[i] = (x - 1) / (1 - ai) + 0.8
 
         return gx

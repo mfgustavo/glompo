@@ -1,5 +1,3 @@
-
-
 from time import sleep
 from typing import Sequence, Tuple
 
@@ -11,7 +9,7 @@ from ._base import BaseTestCase
 class Ackley(BaseTestCase):
     """ When called returns evaluations of the Ackley function. """
 
-    def __init__(self, dims: int = 2, delay: int = 0, a: float = 20, b: float = 0.2, c: float = 2*np.pi):
+    def __init__(self, dims: int = 2, delay: int = 0, a: float = 20, b: float = 0.2, c: float = 2 * np.pi):
         """
         Implementation of the Ackley optimization test function.
         Recommended bounds: [-32.768, 32.768] * dims
@@ -40,16 +38,16 @@ class Ackley(BaseTestCase):
     def __call__(self, x) -> float:
         x = np.array(x)
         term1 = -self.a
-        sos = 1/self.dims * np.sum(x ** 2)
+        sos = 1 / self.dims * np.sum(x ** 2)
         term1 *= np.exp(-self.b * np.sqrt(sos))
 
-        cos = 1/self.dims * np.sum(np.cos(self.c * x))
+        cos = 1 / self.dims * np.sum(np.cos(self.c * x))
         term2 = -np.exp(cos)
 
         term34 = self.a + np.e
 
         sleep(self.delay)
-        return term1+term2+term34
+        return term1 + term2 + term34
 
     @property
     def dims(self) -> int:

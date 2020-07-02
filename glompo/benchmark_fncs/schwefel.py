@@ -1,5 +1,3 @@
-
-
 from time import sleep
 from typing import Sequence, Tuple
 
@@ -40,7 +38,7 @@ class Schwefel(BaseTestCase):
         calc = np.sum(-x * np.sin(np.sqrt(np.abs(x))))
 
         if self.shift:
-            return calc + 418.9830*self.dims
+            return calc + 418.9830 * self.dims
 
         return calc
 
@@ -54,7 +52,7 @@ class Schwefel(BaseTestCase):
 
     @property
     def min_fx(self) -> float:
-        return -418.9829 * self.dims if not self.shift else 0.0001*self.dims
+        return -418.9829 * self.dims if not self.shift else 0.0001 * self.dims
 
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:

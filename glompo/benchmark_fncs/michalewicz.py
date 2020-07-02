@@ -1,5 +1,3 @@
-
-
 import warnings
 from time import sleep
 from typing import Sequence, Tuple
@@ -42,11 +40,11 @@ class Michalewicz(BaseTestCase):
     def __call__(self, x):
         sleep(self.delay)
 
-        i = np.arange(1, len(x)+1)
+        i = np.arange(1, len(x) + 1)
         x = np.array(x)
 
         calc = np.sin(x)
-        calc *= np.sin(i*x**2 / np.pi) ** (2*self.m)
+        calc *= np.sin(i * x ** 2 / np.pi) ** (2 * self.m)
 
         return -np.sum(calc)
 
