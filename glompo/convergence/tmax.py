@@ -1,5 +1,3 @@
-
-
 from time import time
 
 from .basechecker import BaseChecker

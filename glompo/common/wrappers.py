@@ -1,7 +1,4 @@
-
-
 """ Decorators and wrappers used throughout GloMPO. """
-
 
 import inspect
 import sys
@@ -47,9 +44,11 @@ def catch_user_interrupt(func):
 
 def decorate_all_methods(decorator):
     """ Applies a decorator to every method in a class. """
+
     def apply_decorator(cls):
         for k, f in cls.__dict__.items():
             if inspect.isfunction(f):
                 setattr(cls, k, decorator(f))
         return cls
+
     return apply_decorator

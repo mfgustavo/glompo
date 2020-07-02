@@ -1,9 +1,7 @@
-
-
 """ Provides support to use GloMPO as a ParAMS optimizer. """
 
 import warnings
-from typing import Callable, Sequence, Tuple, List
+from typing import Callable, List, Sequence, Tuple
 
 import numpy as np
 from scm.params.core.lossfunctions import SSE
@@ -47,7 +45,7 @@ class _FunctionWrapper:
         weights = dataset.get('weight')
         sigmas = dataset.get('sigma')
 
-        resids = np.concatenate([(w/s)*r for w, s, r in zip(weights, sigmas, resids)])
+        resids = np.concatenate([(w / s) * r for w, s, r in zip(weights, sigmas, resids)])
         return resids
 
 

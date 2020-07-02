@@ -1,7 +1,4 @@
-
-
 """ Abstract checker classes used to construct the convergence criteria. """
-
 
 import logging
 from abc import abstractmethod

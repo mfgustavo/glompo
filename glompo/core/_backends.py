@@ -1,16 +1,12 @@
-
-
 """ Contains code to support using both multiprocessing and threading within the GloMPO manager. """
 
-
-import threading
-import sys
-import warnings
 import _io
+import sys
+import threading
+import warnings
 
 
 class CustomThread(threading.Thread):
-
     """ Adds an exitcode property to the Thread base class as well as code to redirect the thread printstream to a
         file if this has been setup before hand.
     """
@@ -44,7 +40,6 @@ class CustomThread(threading.Thread):
 # Adapted from https://stackoverflow.com/questions/14890997/redirect-stdout-to-a-file-only-for-a-specific-thread
 # Author: Golgot
 class ThreadPrintRedirect:
-
     """ Redirects individual threads to their own print stream.
 
         Notes

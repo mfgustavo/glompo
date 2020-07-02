@@ -1,7 +1,4 @@
-
-
 from .basechecker import BaseChecker
-
 
 __all__ = ("MaxFuncCalls",)
 

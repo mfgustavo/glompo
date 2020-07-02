@@ -1,7 +1,4 @@
-
-
 """ Useful static functions used throughout GloMPO. """
-
 
 from typing import Sequence, Tuple
 

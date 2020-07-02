@@ -1,11 +1,8 @@
-
-
 """ Contains the GloMPOScope class which is a useful extension allowing a user to visualize GloMPO's behaviour. """
 
-
-from typing import Optional, Dict, Any, Tuple, Union
-import warnings
 import logging
+import warnings
+from typing import Any, Dict, Optional, Tuple, Union
 
 import matplotlib.animation as ani
 import matplotlib.lines as lines
@@ -14,7 +11,6 @@ import numpy as np
 
 from ..common.wrappers import catch_user_interrupt, decorate_all_methods
 
-
 __all__ = ("GloMPOScope",)
 
 
@@ -22,6 +18,7 @@ class MyFFMpegWriter(ani.FFMpegWriter):
     """ Overwrites a method in the matplotlib.animation.FFMpegWriter class which caused it to hang during movie
         generation.
     """
+
     def cleanup(self):
         """ Clean-up and collect the process used to write the movie file. """
         self._frame_sink().close()

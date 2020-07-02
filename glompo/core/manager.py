@@ -1,38 +1,32 @@
-
 """ Contains GloMPOManager class which is the main user interface for GloMPO. """
 
-
-# Native Python imports
-import logging
-import shutil
-import warnings
-import multiprocessing as mp
-import traceback
-import os
 import getpass
+import logging
+import multiprocessing as mp
+import os
+import shutil
 import socket
 import sys
+import traceback
+import warnings
 from datetime import datetime
 from time import time
-from typing import Optional, Dict, Any, Sequence, Set, List, Callable, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
-# Other Python packages
 import numpy as np
 import yaml
 
-# Package imports
-from ..generators import BaseGenerator, RandomGenerator
-from ..convergence import BaseChecker, KillsAfterConvergence
-from ..common.namedtuples import Result, Bound, OptimizerPackage, ProcessPackage
+from ._backends import CustomThread, ThreadPrintRedirect
+from .optimizerlogger import OptimizerLogger
 from ..common.customwarnings import NotImplementedWarning
 from ..common.helpers import LiteralWrapper, literal_presenter, nested_string_formatting
+from ..common.namedtuples import Bound, OptimizerPackage, ProcessPackage, Result
 from ..common.wrappers import process_print_redirect, task_args_wrapper
-from ..hunters import BaseHunter, TimeAnnealing, ValueAnnealing, ParameterDistance
-from ..optimizers.baseoptimizer import BaseOptimizer
+from ..convergence import BaseChecker, KillsAfterConvergence
+from ..generators import BaseGenerator, RandomGenerator
+from ..hunters import BaseHunter, ParameterDistance, TimeAnnealing, ValueAnnealing
 from ..opt_selectors.baseselector import BaseSelector
-from .optimizerlogger import OptimizerLogger
-from ._backends import CustomThread, ThreadPrintRedirect
-
+from ..optimizers.baseoptimizer import BaseOptimizer
 
 __all__ = ("GloMPOManager",)
 
@@ -607,10 +601,10 @@ class GloMPOManager:
 
             # Force kill zombies
             if opt_id in self.hunt_victims and \
-               self.allow_forced_terminations and \
-               self.optimizer_packs[opt_id].process.is_alive() and \
-               time() - self.hunt_victims[opt_id] > self._too_long and \
-               self._proc_backend:
+                    self.allow_forced_terminations and \
+                    self.optimizer_packs[opt_id].process.is_alive() and \
+                    time() - self.hunt_victims[opt_id] > self._too_long and \
+                    self._proc_backend:
                 self.optimizer_packs[opt_id].process.terminate()
                 self.optimizer_packs[opt_id].process.join(3)
                 self.opt_log.put_message(opt_id, "Force terminated due to no feedback after kill signal "

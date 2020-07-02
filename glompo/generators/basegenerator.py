@@ -1,5 +1,3 @@
-
-
 """ Base generator from which all generators must inherit to be compatible with GloMPO. """
 
 import logging

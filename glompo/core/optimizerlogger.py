@@ -1,14 +1,10 @@
-
-
 """ Contains classes which save log information for GloMPO and its optimizers. """
-
 
 import os
 from math import inf
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 import yaml
-
 from glompo.common.helpers import LiteralWrapper, literal_presenter
 
 __all__ = ("OptimizerLogger",)
@@ -16,6 +12,7 @@ __all__ = ("OptimizerLogger",)
 
 class OptimizerLogger:
     """ Stores progress of GloMPO optimizers. """
+
     def __init__(self):
         self._storage: Dict[int, _OptimizerLogger] = {}
 
@@ -127,6 +124,7 @@ class OptimizerLogger:
 
 class _OptimizerLogger:
     """ Stores history and meta data of a single optimizer started by GloMPO. """
+
     def __init__(self, opt_id: int, class_name: str, time_start: str):
         self.metadata = {"Optimizer ID": str(opt_id),
                          "Optimizer Type": class_name,

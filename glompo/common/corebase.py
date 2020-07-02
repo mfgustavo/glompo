@@ -1,7 +1,4 @@
-
-
 """ Abstract classes used to construct the hunter and convergence bases. """
-
 
 import inspect
 from abc import ABC, abstractmethod

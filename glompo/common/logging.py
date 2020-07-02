@@ -1,5 +1,3 @@
-
-
 """ Contains class to split the logs of individual optimizers for easy processing. """
 
 import logging
@@ -8,7 +6,6 @@ from typing import Optional
 
 
 class SplitOptimizerLogs(logging.Filter):
-
     """ If this filter is applied to a Handler on the 'glompo.optimizers' logger it will automatically separate the
         single 'glompo.optimizers' logging stream into one for each individual optimizer.
     """

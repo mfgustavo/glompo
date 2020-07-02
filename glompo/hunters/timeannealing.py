@@ -1,5 +1,3 @@
-
-
 import random
 
 from .basehunter import BaseHunter

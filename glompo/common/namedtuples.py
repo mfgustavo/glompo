@@ -1,7 +1,4 @@
-
-
 """ Named tuples used throughout the package to make code clearer. """
-
 
 from multiprocessing import Event, Process
 from multiprocessing.connection import Connection

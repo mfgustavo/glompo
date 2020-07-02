@@ -1,12 +1,9 @@
-
-
 """ Abstract hunter classes used to construct the convergence criteria. """
-
 
 import logging
 from abc import abstractmethod
 
-from ..common.corebase import _CoreBase, _AndCore, _OrCore
+from ..common.corebase import _AndCore, _CoreBase, _OrCore
 from ..core.optimizerlogger import OptimizerLogger
 
 __all__ = ("BaseHunter",)
