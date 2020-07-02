@@ -1,11 +1,9 @@
-
-
 import collections
 import os
 import warnings
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
-from typing import Callable, Sequence, Tuple, Optional, Union, Type, Any
+from typing import Any, Callable, Optional, Sequence, Tuple, Type, Union
 
 import numpy as np
 from optsam.algo_base import AlgoBase

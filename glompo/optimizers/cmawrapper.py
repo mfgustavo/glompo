@@ -1,10 +1,7 @@
-
-
 """ Implementation of CMA-ES as a GloMPO compatible optimizer.
         Adapted from:   SCM ParAMS
         Authors:        Robert Rüger, Leonid Komissarov
 """
-
 
 import os
 import pickle
@@ -93,7 +90,7 @@ class CMAOptimizer(BaseOptimizer):
         if not os.path.isdir(self.dir):
             os.makedirs(self.dir)
 
-        self.opts.update({'verb_filenameprefix': self.dir+'cma_'})
+        self.opts.update({'verb_filenameprefix': self.dir + 'cma_'})
         self.opts.update({'bounds': np.transpose(bounds).tolist()})
         self.logger.debug("Updated options")
 
@@ -162,7 +159,7 @@ class CMAOptimizer(BaseOptimizer):
             self.logger.debug("Final message check")
             self.check_messages()
 
-        with open(self.dir+'cma_results.pkl', 'wb') as f:
+        with open(self.dir + 'cma_results.pkl', 'wb') as f:
             self.logger.debug(f"Pickling results")
             pickle.dump(es.result, f, -1)
 

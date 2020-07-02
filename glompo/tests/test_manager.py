@@ -1,25 +1,23 @@
-
-
-from typing import *
-from time import sleep
+import multiprocessing as mp
+import os
 import shutil
 import sys
-import os
-import multiprocessing as mp
+from time import sleep
+from typing import Any, Callable, Dict, Sequence, Tuple, Type, Union
 
 import numpy as np
-import yaml
 import pytest
+import yaml
 
+from glompo.common.namedtuples import IterationResult
+from glompo.common.wrappers import process_print_redirect, task_args_wrapper
+from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxFuncCalls, MaxOptsStarted, MaxSeconds
 from glompo.core.manager import GloMPOManager
 from glompo.core.optimizerlogger import OptimizerLogger
-from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
-from glompo.generators import RandomGenerator, BaseGenerator
-from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxOptsStarted, MaxFuncCalls, MaxSeconds
+from glompo.generators import BaseGenerator, RandomGenerator
 from glompo.hunters import BaseHunter, MinIterations
-from glompo.common.namedtuples import *
-from glompo.common.wrappers import process_print_redirect, task_args_wrapper
 from glompo.opt_selectors import BaseSelector, CycleSelector
+from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 
 
 class DummySelector(BaseSelector):
@@ -55,7 +53,6 @@ class OptimizerTest2:
 
 
 class MessagingOptimizer(BaseOptimizer):
-
     needscaler = False
 
     def minimize(self, function: Callable, x0: Sequence[float], bounds: Sequence[Tuple[float, float]],
@@ -75,7 +72,6 @@ class MessagingOptimizer(BaseOptimizer):
 
 
 class SilentOptimizer(BaseOptimizer):
-
     needscaler = False
 
     def minimize(self, function: Callable, x0: Sequence[float], bounds: Sequence[Tuple[float, float]],
@@ -93,7 +89,6 @@ class SilentOptimizer(BaseOptimizer):
 
 
 class HangingOptimizer(BaseOptimizer):
-
     needscaler = False
 
     def minimize(self, function: Callable, x0: Sequence[float], bounds: Sequence[Tuple[float, float]],
@@ -112,7 +107,6 @@ class HangingOptimizer(BaseOptimizer):
 
 
 class HangOnEndOptimizer(BaseOptimizer):
-
     needscaler = False
 
     def __init__(self, opt_id: int = None, signal_pipe=None, results_queue=None, pause_flag=None, workers=1):
@@ -126,7 +120,8 @@ class HangOnEndOptimizer(BaseOptimizer):
             i += 1
             self.check_messages()
             sleep(0.1)
-            self.push_iter_result(IterationResult(self._opt_id, i, 1, [i], np.sin(i/(2*np.pi))+self.constant, False))
+            self.push_iter_result(
+                IterationResult(self._opt_id, i, 1, [i], np.sin(i / (2 * np.pi)) + self.constant, False))
 
     def push_iter_result(self, ir):
         self._results_queue.put(ir)
@@ -141,7 +136,6 @@ class HangOnEndOptimizer(BaseOptimizer):
 
 
 class ErrorOptimizer(BaseOptimizer):
-
     needscaler = False
 
     def minimize(self, function: Callable, x0: Sequence[float], bounds: Sequence[Tuple[float, float]],
@@ -174,7 +168,6 @@ class ErrorChecker(BaseChecker):
 
 @pytest.mark.parametrize('backend', ['processes', 'threads'])
 class TestManager:
-
     base_wd = os.getcwd()
 
     def setup_method(self):

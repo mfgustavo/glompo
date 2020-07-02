@@ -1,4 +1,3 @@
-
 import logging
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection

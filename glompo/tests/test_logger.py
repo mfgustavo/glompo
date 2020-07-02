@@ -1,19 +1,16 @@
-
-
 import datetime
 import shutil
 
-import pytest
 import numpy as np
+import pytest
 
 from glompo.core.optimizerlogger import OptimizerLogger
-from glompo.optimizers.gflswrapper import GFLSOptimizer
-from glompo.optimizers.cmawrapper import CMAOptimizer
 from glompo.optimizers.baseoptimizer import BaseOptimizer
+from glompo.optimizers.cmawrapper import CMAOptimizer
+from glompo.optimizers.gflswrapper import GFLSOptimizer
 
 
 class TestLogger:
-
     log = OptimizerLogger()
 
     opt0 = GFLSOptimizer(0)
@@ -64,7 +61,7 @@ class TestLogger:
         assert hist[3] == np.sin(4)
 
     def test_history2(self):
-        self.log.put_iteration(1, 30, 30, 30, [30, 30**2], -5)
+        self.log.put_iteration(1, 30, 30, 30, [30, 30 ** 2], -5)
 
         hist = self.log.get_history(1, "i_best")
         assert hist[29] == 30

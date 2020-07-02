@@ -1,18 +1,15 @@
-
-
 import pytest
 
 from glompo.common.corebase import _CombiCore
 from glompo.common.namedtuples import Result
-
 from glompo.convergence.basechecker import BaseChecker, _AndChecker, _OrChecker
-from glompo.convergence.tmax import MaxSeconds
 from glompo.convergence.fmax import MaxFuncCalls
+from glompo.convergence.ftarget import TargetCost
 from glompo.convergence.nconv import NOptConverged
 from glompo.convergence.nkills import MaxKills
-from glompo.convergence.omax import MaxOptsStarted
 from glompo.convergence.nkillsafterconv import KillsAfterConvergence
-from glompo.convergence.ftarget import TargetCost
+from glompo.convergence.omax import MaxOptsStarted
+from glompo.convergence.tmax import MaxSeconds
 
 
 class PlainChecker(BaseChecker):

@@ -1,17 +1,15 @@
-
-
 import numpy as np
 import pytest
 
-from glompo.generators.random import RandomGenerator
+from glompo.common.namedtuples import Bound, Result
 from glompo.generators.best import IncumbentGenerator
 from glompo.generators.exploit_explore import ExploitExploreGenerator
+from glompo.generators.random import RandomGenerator
 from glompo.generators.single import SinglePointGenerator
-
-from glompo.common.namedtuples import Bound, Result
 
 try:
     from glompo.generators.peterbation import PerturbationGenerator
+
     has_scipy = True
 except ModuleNotFoundError:
     has_scipy = False
@@ -110,12 +108,13 @@ class TestBest:
         class Manager:
             def __init__(self, result):
                 self.result = Result(result, 56, None, None)
+
         return request.param, Manager(request.param)
 
     @pytest.mark.parametrize("manager", [None, [0, 0]], indirect=["manager"])
     def test_call(self, manager):
         point, man = manager
-        gen = IncumbentGenerator(((1, 2),)*2)
+        gen = IncumbentGenerator(((1, 2),) * 2)
         call = gen.generate(man)
 
         assert len(call) == 2
@@ -127,7 +126,6 @@ class TestBest:
 
 
 class TestExploitExplore:
-
     history_normal = {1:
                           {1: {'f_call_overall': 9,
                                'f_call_opt': 9,
@@ -159,7 +157,7 @@ class TestExploitExplore:
                                'i_best': 5,
                                'fx_best': 2.595,
                                'x': [5.60, 2.48]},
-                          },
+                           },
                       2:
                           {1: {'f_call_overall': 9,
                                'f_call_opt': 9,
@@ -196,7 +194,6 @@ class TestExploitExplore:
 
     @pytest.fixture()
     def manager(self, request):
-
         class OptLog:
             def __init__(self, history):
                 self.history = history
@@ -214,19 +211,19 @@ class TestExploitExplore:
 
     # Test if only one opt
 
-    @pytest.mark.parametrize("bounds, max_calls, focus, err", [(((-50, 4),)*2, 5000,    0, ValueError),
-                                                               (((-50, 4),)*2, 5000, -1.3, ValueError),
-                                                               (((-50, 4),)*2,    1,    1, ValueError),
-                                                               (((-50, 4),)*2,  2.3,    1, TypeError),
-                                                               ((( 50, 4),)*2, 5000,    1, ValueError),
-                                                               (((-50, 4),)*2,    0,    1, ValueError)])
+    @pytest.mark.parametrize("bounds, max_calls, focus, err", [(((-50, 4),) * 2, 5000, 0, ValueError),
+                                                               (((-50, 4),) * 2, 5000, -1.3, ValueError),
+                                                               (((-50, 4),) * 2, 1, 1, ValueError),
+                                                               (((-50, 4),) * 2, 2.3, 1, TypeError),
+                                                               (((50, 4),) * 2, 5000, 1, ValueError),
+                                                               (((-50, 4),) * 2, 0, 1, ValueError)])
     def test_init(self, bounds, max_calls, focus, err):
         with pytest.raises(err):
             ExploitExploreGenerator(bounds, max_calls, focus)
 
     @pytest.mark.parametrize("manager", [(0, history_normal)], indirect=["manager"])
     def test_generate_random(self, manager):
-        gen = ExploitExploreGenerator(((-1, 0),)*2, 100, 1)
+        gen = ExploitExploreGenerator(((-1, 0),) * 2, 100, 1)
         call = gen.generate(manager)
 
         assert all([-1 < i < 0 for i in call])
@@ -250,7 +247,7 @@ class TestExploitExplore:
         c = call
 
         assert np.isclose(np.cross(b, c), 0)
-        assert np.all(np.isclose(c/b, alpha))
+        assert np.all(np.isclose(c / b, alpha))
 
     @pytest.mark.parametrize("focus, manager, alpha", [(1.0, (50, {1: history_normal[1]}), 0.50),
                                                        (1.0, (50, {1: {}}), 0.50)],
@@ -267,7 +264,7 @@ class TestSingle:
     @pytest.mark.parametrize("x, out", [(None, [1, 0]),
                                         ([2, 3], [2, 3])])
     def test_generate(self, x, out):
-        gen = SinglePointGenerator(((1, 1+1e-10), (0, 1e-10)), x)
+        gen = SinglePointGenerator(((1, 1 + 1e-10), (0, 1e-10)), x)
         call = gen.generate(None)
 
         assert np.all(np.isclose(call, out))

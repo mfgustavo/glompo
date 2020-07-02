@@ -1,9 +1,6 @@
-
-
 """
 Base class from which all optimizers must inherit in order to be compatible with GloMPO.
 """
-
 
 import logging
 import traceback
@@ -12,7 +9,7 @@ from abc import ABC, abstractmethod
 from multiprocessing.connection import Connection
 from queue import Queue
 from threading import Event
-from typing import Callable, Sequence, Tuple, Optional
+from typing import Callable, Optional, Sequence, Tuple
 
 from ..common.helpers import LiteralWrapper
 

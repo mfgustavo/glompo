@@ -1,6 +1,4 @@
-
-
-from glompo.common.helpers import *
+from glompo.common.helpers import nested_string_formatting
 
 
 class TestHelpers:

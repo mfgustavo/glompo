@@ -1,18 +1,16 @@
-
-from typing import *
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Type, Union
 
 import pytest
 
 from glompo.core.optimizerlogger import OptimizerLogger
-from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from glompo.opt_selectors.baseselector import BaseSelector
-from glompo.opt_selectors.cycle import CycleSelector
 from glompo.opt_selectors.chain import ChainSelector
+from glompo.opt_selectors.cycle import CycleSelector
 from glompo.opt_selectors.random import RandomSelector
+from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 
 
 class BasicOptimizer(BaseOptimizer):
-
     needscaler = False
 
     def __init__(self, a: int = 0, b: Optional[Sequence[float]] = None, c: Dict[str, Any] = None):
@@ -116,7 +114,6 @@ class TestCycleSelector:
 class TestChain:
 
     def test_selection(self):
-
         class Manager:
             f_counter = 0
 

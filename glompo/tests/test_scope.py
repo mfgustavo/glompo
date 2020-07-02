@@ -1,20 +1,20 @@
-
-
 import os
 import shutil
 import sys
 
-import pytest
 import numpy as np
+import pytest
 
 has_matplotlib = False
 try:
     from glompo.core.scope import GloMPOScope
 
     import matplotlib
+
     matplotlib.use('qt5agg')
 
     import matplotlib.pyplot as plt
+
     plt.ion()
     if matplotlib.pyplot.isinteractive() and int(matplotlib.__version__.split('.')[0]) >= 3:
         has_matplotlib = True
@@ -87,9 +87,9 @@ class TestScope:
             colors = plt.get_cmap("Dark2")
             threshold = 89
             group = 7
-        color = colors(i-threshold)
+        color = colors(i - threshold)
 
-        scope.n_streams = i-1
+        scope.n_streams = i - 1
         scope.add_stream(0)
         assert color == scope.streams[0]['all_opt'].get_color()
         assert group == palette

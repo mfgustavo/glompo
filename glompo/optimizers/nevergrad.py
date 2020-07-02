@@ -1,5 +1,3 @@
-
-
 import warnings
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Event, Queue
@@ -80,7 +78,6 @@ class Nevergrad(BaseOptimizer):
 
 
 class _NevergradCallbacksWrapper:
-
     """ Wraps all the components needed by GloMPO to be called after each iteration into a single object which can be
         registered as a nevergrad callback.
     """

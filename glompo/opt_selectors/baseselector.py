@@ -1,11 +1,8 @@
-
-
 """ Abstract class for the construction of selectors used in selecting new optimizers. """
-
 
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Union, Type, Tuple, Dict, Any
+from typing import Any, Dict, List, Tuple, Type, Union
 
 from ..core.optimizerlogger import OptimizerLogger
 from ..optimizers.baseoptimizer import BaseOptimizer
@@ -14,7 +11,6 @@ __all__ = ("BaseSelector",)
 
 
 class BaseSelector(ABC):
-
     """ Selectors are classes which return an optimizer and its configuration when asked by
         the manager. This selection will then be used to start a new optimizer. The full manager
         is supplied to the selector allowing sophisticated decisions to be designed.

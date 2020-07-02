@@ -1,43 +1,43 @@
-
-
-from functools import wraps
-from typing import Callable, Sequence, Tuple
-from time import time, sleep
-from collections import namedtuple
-import os
-import shutil
 import logging
 import multiprocessing as mp
+import os
+import shutil
+from collections import namedtuple
+from functools import wraps
+from time import sleep, time
+from typing import Callable, Sequence, Tuple
 
 import pytest
 
+from glompo.common.namedtuples import IterationResult
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from glompo.optimizers.random import RandomOptimizer
-from glompo.common.namedtuples import IterationResult
 
 # Append new optimizer class names to this list to run tests for GloMPO compatibility
 available_classes = [RandomOptimizer]
 try:
     from glompo.optimizers.cmawrapper import CMAOptimizer
+
     available_classes.append(CMAOptimizer)
 except ModuleNotFoundError:
     pass
 
 try:
     from glompo.optimizers.gflswrapper import GFLSOptimizer
+
     available_classes.append(GFLSOptimizer)
 except ModuleNotFoundError:
     pass
 
 try:
     from glompo.optimizers.nevergrad import Nevergrad
+
     available_classes.append(Nevergrad)
 except ModuleNotFoundError:
     pass
 
 
 class PlainOptimizer(BaseOptimizer):
-
     needscaler = False
 
     def __init__(self, opt_id: int = None, signal_pipe: mp.connection.Connection = None, results_queue: mp.Queue = None,
@@ -72,7 +72,6 @@ class PlainOptimizer(BaseOptimizer):
 
 
 class TestBase:
-
     package = namedtuple("package", "opti queue p_pipe event")
 
     @pytest.fixture()
@@ -145,7 +144,6 @@ class TestBase:
 
 
 class TestSubclassesGlompoCompatible:
-
     package = namedtuple("package", "queue p_pipe c_pipe event")
 
     @pytest.fixture()
@@ -182,6 +180,7 @@ class TestSubclassesGlompoCompatible:
             @wraps(func)
             def wrapper(x):
                 return func(x)
+
             return wrapper
 
         return task_wrapper(self.Task())

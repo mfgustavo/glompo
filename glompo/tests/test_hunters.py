@@ -1,19 +1,19 @@
 from typing import Callable, Sequence, Tuple
 
-import pytest
 import numpy as np
+import pytest
 
 from glompo.common.corebase import _CombiCore
-from glompo.hunters.basehunter import BaseHunter, _OrHunter, _AndHunter
-from glompo.hunters.min_iterations import MinIterations
-from glompo.hunters.pseudoconv import PseudoConverged
-from glompo.hunters.parameterdistance import ParameterDistance
-from glompo.hunters.timeannealing import TimeAnnealing
-from glompo.hunters.valueannealing import ValueAnnealing
+from glompo.core.optimizerlogger import OptimizerLogger
+from glompo.hunters.basehunter import BaseHunter, _AndHunter, _OrHunter
 from glompo.hunters.lastptsinvalid import LastPointsInvalid
 from glompo.hunters.min_fcalls import MinFuncCalls
+from glompo.hunters.min_iterations import MinIterations
+from glompo.hunters.parameterdistance import ParameterDistance
+from glompo.hunters.pseudoconv import PseudoConverged
+from glompo.hunters.timeannealing import TimeAnnealing
 from glompo.hunters.type import TypeHunter
-from glompo.core.optimizerlogger import OptimizerLogger
+from glompo.hunters.valueannealing import ValueAnnealing
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 
 
@@ -60,7 +60,7 @@ class FakeLog:
     def get_history(self, opt_id, track):
         if track != "f_call_opt":
             return self.path[opt_id - 1]
-        return list(range(1, len(self.path[opt_id-1])+1))
+        return list(range(1, len(self.path[opt_id - 1]) + 1))
 
     @staticmethod
     def get_metadata(*args):
@@ -119,7 +119,6 @@ class TestBase:
 
 
 class TestMinTrainingPoints:
-
     class FakeLog:
         def __init__(self, n_pts):
             self.history = np.ones(n_pts)
@@ -154,11 +153,11 @@ class TestPseudoConv:
         log.add_optimizer(1, None, None)
         calls_per_iter = request.param
         for i in range(10):
-            log.put_iteration(1, i, calls_per_iter*i, calls_per_iter*i, i, 10)
+            log.put_iteration(1, i, calls_per_iter * i, calls_per_iter * i, i, 10)
         for i in range(10, 20):
-            log.put_iteration(1, i, calls_per_iter*i, calls_per_iter*i, i, 1)
+            log.put_iteration(1, i, calls_per_iter * i, calls_per_iter * i, i, 1)
         for i in range(20, 30):
-            log.put_iteration(1, i, calls_per_iter*i, calls_per_iter*i, i, 0.9)
+            log.put_iteration(1, i, calls_per_iter * i, calls_per_iter * i, i, 0.9)
         return log
 
     @pytest.mark.parametrize("iters, tol, output, log", [(10, 0, False, 1),
@@ -182,19 +181,19 @@ class TestParameterDistance:
                                                                              [[1, 0], [1, 1], [1, 2]]),
                                                                             [(0, 2)] * 3, 0.1, False, False),
                                                                            (([[0, 0], [0, 1], [0, 2]],
-                                                                            [[1, 0], [1, 1], [1, 2]]),
+                                                                             [[1, 0], [1, 1], [1, 2]]),
                                                                             [(0, 2)] * 3, 0.5, False, True),
                                                                            (([[0, 0], [0, 1], [1, 2]],
-                                                                            [[1, 0], [1, 1], [1, 2]]),
+                                                                             [[1, 0], [1, 1], [1, 2]]),
                                                                             [(0, 2)] * 3, 0.1, False, True),
                                                                            (([[0, 0], [10, 10], [20, 20]],
-                                                                            [[20, 18], [20, 19], [20, 21]]),
+                                                                             [[20, 18], [20, 19], [20, 21]]),
                                                                             [(0, 20)] * 3, 0.1, False, True),
                                                                            (([[0, 0], [0, 0.1], [0, 0.2]],
-                                                                            [[0, 0], [10, 10], [0, 0.25]]),
+                                                                             [[0, 0], [10, 10], [0, 0.25]]),
                                                                             [(0, 10)] * 3, 0.1, False, True),
                                                                            (([[0, 0], [100, 100], [0, 1]],
-                                                                            [[1, 0], [1, 1], [0, 1.1]]),
+                                                                             [[1, 0], [1, 1], [0, 1.1]]),
                                                                             [(0, 100)] * 3, 0.11, False, True),
                                                                            (([[0, 0], [0, 1], [0, 2]],
                                                                              [[1, 0], [1, 1], [1, 2]],

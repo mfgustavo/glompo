@@ -1,6 +1,4 @@
-
-
-from typing import List, Union, Type, Tuple, Dict, Any
+from typing import Any, Dict, List, Tuple, Type, Union
 
 from .baseselector import BaseSelector
 from ..core.optimizerlogger import OptimizerLogger
