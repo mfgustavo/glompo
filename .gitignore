@@ -1,5 +1,5 @@
 /glompo/.coverage
 _tmp
 .pytest_cache
-glompo.egg-info
+*egg-info
 .coverage
