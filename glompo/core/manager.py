@@ -445,15 +445,17 @@ class GloMPOManager:
         count = sum(processes)
 
         is_possible = True  # Flag if no optimizer can fit in the slots available due to its configuration
-        if count < self.max_jobs:
-            while count < self.max_jobs and is_possible:
-                opt = self._setup_new_optimizer(self.max_jobs - count)
-                if opt:
-                    self._start_new_job(*opt)
-                    count += opt.slots
-                else:
-                    is_possible = False
+        started_new = False
+        while count < self.max_jobs and is_possible:
+            opt = self._setup_new_optimizer(self.max_jobs - count)
+            if opt:
+                self._start_new_job(*opt)
+                count += opt.slots
+                started_new = True
+            else:
+                is_possible = False
 
+        if started_new:
             processes = [pack.slots for pack in self.optimizer_packs.values() if pack.process.is_alive()]
             f_best = f'{self.result.fx:.3E}' if self.result.fx is not None else None
             self.logger.info(f"Status: {len(processes)} optimizers alive, {sum(processes)}/{self.max_jobs} slots filled"
