@@ -3,10 +3,10 @@ import sys
 
 from glompo import GloMPOManager
 from glompo.benchmark_fncs import Michalewicz
-from glompo.opt_selectors import ChainSelector
 from glompo.convergence import MaxFuncCalls, TargetCost
-from glompo.hunters import TypeHunter, ParameterDistance, PseudoConverged, ValueAnnealing
 from glompo.generators import ExploitExploreGenerator
+from glompo.hunters import ParameterDistance, PseudoConverged, TypeHunter, ValueAnnealing
+from glompo.opt_selectors import ChainSelector
 
 try:
     from glompo.optimizers.cmawrapper import CMAOptimizer
@@ -90,7 +90,7 @@ if __name__ == '__main__':
     max_jobs = 32  # OR os.cpu_count()
 
     # BaseHunter objects are setup in a similar way to BaseChecker objects and control the conditions in which
-    # optimizers are shutdown by the manager.
+    # optimizers are shutdown by the manager. Each hunter is individually documented in ..hunters.
     #
     # In this example we want two different sets of conditions:
     #   1. We want to kill CMA optimizers early and not let them spend many iterations converging. We also want to

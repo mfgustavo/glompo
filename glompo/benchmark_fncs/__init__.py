@@ -10,6 +10,9 @@ from .rosenbrock import Rosenbrock
 from .schwefel import Schwefel
 from .shekel import Shekel
 from .shubert import Shubert
+from .trigonometric02 import Trigonometric
+from .vincent import Vincent
+from .zerosum import ZeroSum
 
 __all__ = ("BaseTestCase",
            "Ackley",
@@ -22,4 +25,7 @@ __all__ = ("BaseTestCase",
            "Rosenbrock",
            "Schwefel",
            "Shekel",
-           "Shubert")
+           "Shubert",
+           "Trigonometric",
+           "Vincent",
+           "ZeroSum")
