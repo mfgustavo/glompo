@@ -1,27 +1,20 @@
-
-
-# Native Python
-from typing import *
+import collections
 import os
 import warnings
-import collections
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
+from typing import Any, Callable, Optional, Sequence, Tuple, Type, Union
 
 import numpy as np
-
-# Optsam Package
-from optsam.fwrap import ResidualsWrapper
-from optsam.codec import VectorCodec, BoxTanh
-from optsam.opt_gfls import GFLS
-from optsam.driver import driver
-from optsam.logger import Logger
 from optsam.algo_base import AlgoBase
+from optsam.codec import BoxTanh, VectorCodec
+from optsam.driver import driver
+from optsam.fwrap import ResidualsWrapper
+from optsam.logger import Logger
+from optsam.opt_gfls import GFLS
 
-# This Package
 from .baseoptimizer import BaseOptimizer, MinimizeResult
 from ..common.namedtuples import IterationResult
-
 
 __all__ = ("GFLSOptimizer",)
 
@@ -33,6 +26,7 @@ class GFLSOptimizer(BaseOptimizer):
                  signal_pipe: Connection = None,
                  results_queue: Queue = None,
                  pause_flag: Event = None,
+                 workers: int = 1,
                  tmax: Optional[int] = None,
                  imax: Optional[int] = None,
                  fmax: Optional[int] = None,
@@ -64,7 +58,7 @@ class GFLSOptimizer(BaseOptimizer):
         gfls_kwargs
             Arguments passed to the setup of the GFLS class. See opt_gfls.py or documentation.
         """
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag)
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers)
         self.tmax = tmax
         self.imax = imax
         self.fmax = fmax
@@ -103,7 +97,7 @@ class GFLSOptimizer(BaseOptimizer):
                           Callable[[OptimizerLogger, AlgoBase, Union[str, None]], Any]]
             A list of functions called after every iteration.
 
-            If GFLS is being used through the GloMPO mp_manager calls to send iteration results to the mp_manager and
+            If GFLS is being used through the GloMPO manager calls to send iteration results to the manager and
             check incoming signals from it are automatically added to this list. Only send functionality you want over
             and above this.
 
@@ -146,7 +140,7 @@ class GFLSOptimizer(BaseOptimizer):
 
         # noinspection PyUnresolvedReferences
         fw = ResidualsWrapper(function.__wrapped__.resids, self.vector_codec.decode)
-        self.logger.debug(f"Starting GFLS driver.")
+        self.logger.debug("Starting GFLS driver.")
         logger = driver(
             fw,
             self.vector_codec.encode(x0),

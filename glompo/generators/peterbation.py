@@ -1,19 +1,16 @@
-
-
-from typing import *
+from typing import Sequence, Tuple
 
 import numpy as np
 from scipy.stats import truncnorm
 
 from .basegenerator import BaseGenerator
 
+__all__ = ("PerturbationGenerator",)
 
-__all__ = ("PerterbationGenerator",)
 
-
-class PerterbationGenerator(BaseGenerator):
+class PerturbationGenerator(BaseGenerator):
     """ Randomly generates parameter vectors by drawing from truncated normally distributed numbers centered around a
-        provided vector and bound by given bounds. Good for reparameterisation efforts where a good candidate is already
+        provided vector and bound by given bounds. Good for parametrisation efforts where a good candidate is already
         available, however, this may drastically limit the exploratory nature of GloMPO.
     """
 

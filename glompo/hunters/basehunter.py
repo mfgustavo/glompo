@@ -1,15 +1,10 @@
-
-
 """ Abstract hunter classes used to construct the convergence criteria. """
-
 
 import logging
 from abc import abstractmethod
 
+from ..common.corebase import _AndCore, _CoreBase, _OrCore
 from ..core.optimizerlogger import OptimizerLogger
-from ..core.regression import DataRegressor
-from ..common.corebase import *
-
 
 __all__ = ("BaseHunter",)
 
@@ -24,7 +19,6 @@ class BaseHunter(_CoreBase):
     @abstractmethod
     def __call__(self,
                  log: OptimizerLogger,
-                 regressor: DataRegressor,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
         """ When called, this method may check any values within the logs or GPRs of both hunter or the victim
@@ -37,9 +31,6 @@ class BaseHunter(_CoreBase):
             ----------
             log: OptimizerLogger
                 Instance of Logger class that contains the iteration history of every optimizer.
-            regressor: DataRegressor
-                Instance of the DataRegressor class which contains both frequentist and Bayesian methods to regress the
-                data against an exponential function.
             hunter_opt_id: int
                 ID number of the 'hunter' optimizer currently identified as the best performer.
             victim_opt_id: int

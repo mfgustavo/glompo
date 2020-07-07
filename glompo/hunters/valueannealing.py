@@ -1,10 +1,7 @@
-
 import random
 
 from .basehunter import BaseHunter
 from ..core.optimizerlogger import OptimizerLogger
-from ..core.regression import DataRegressor
-
 
 __all__ = ("ValueAnnealing",)
 
@@ -17,7 +14,6 @@ class ValueAnnealing(BaseHunter):
 
     def __call__(self,
                  log: OptimizerLogger,
-                 regressor: DataRegressor,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
         f_hunter = log.get_history(hunter_opt_id, "fx_best")[-1]

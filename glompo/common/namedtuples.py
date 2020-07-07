@@ -1,20 +1,15 @@
-
-
 """ Named tuples used throughout the package to make code clearer. """
 
-
-from typing import *
-from threading import Thread
-from multiprocessing import Process, Event
+from multiprocessing import Event, Process
 from multiprocessing.connection import Connection
-
+from threading import Thread
+from typing import Any, Callable, Dict, NamedTuple, Sequence, Union
 
 __all__ = ("Result",
            "Bound",
            "OptimizerPackage",
            "IterationResult",
-           "ProcessPackage",
-           "RegressorCacheItem")
+           "ProcessPackage")
 
 
 class Result(NamedTuple):
@@ -38,6 +33,7 @@ class OptimizerPackage(NamedTuple):
     call_kwargs: Dict[str, Any]
     signal_pipe: Connection
     allow_run_event: Event
+    slots: int
 
 
 class IterationResult(NamedTuple):
@@ -55,9 +51,4 @@ class ProcessPackage(NamedTuple):
     process: Union[Process, Thread]
     signal_pipe: Connection
     allow_run_event: Event
-
-
-class RegressorCacheItem(NamedTuple):
-    """ Results obtained by the DataRegressor and a hash of the data used to get the result. """
-    hash: int
-    result: Union[Tuple[float, float, float], Sequence[Tuple[float, float, float]]]
+    slots: int

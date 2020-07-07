@@ -1,17 +1,14 @@
-
-
 import warnings
-from typing import *
 from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import Event, Queue
+from multiprocessing.connection import Connection
+from typing import Callable, Sequence, Union
 
 import nevergrad as ng
 import numpy as np
-from multiprocessing.connection import Connection
-from multiprocessing import Queue, Event
 
 from .baseoptimizer import BaseOptimizer, MinimizeResult
 from ..common.namedtuples import IterationResult
-
 
 __all__ = ('Nevergrad',)
 
@@ -22,8 +19,7 @@ class Nevergrad(BaseOptimizer):
     """
 
     def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
-                 pause_flag: Event = None, optimizer: str = 'TBPSA', zero: float = -float('inf'),
-                 **optkw):
+                 pause_flag: Event = None, workers: int = 1, optimizer: str = 'TBPSA', zero: float = -float('inf')):
         """
         Parameters
         ----------
@@ -31,37 +27,35 @@ class Nevergrad(BaseOptimizer):
             String key to the desired optimizer. See nevergrad documentation for a list of available algorithms.
         zero : float
             Will stop the optimization when this cost function value is reached.
-        optkw
-            Additional kwargs for the optimizer initialization.
         """
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag)
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers)
 
         self.opt_algo = ng.optimizers.registry[optimizer]
+        if self.opt_algo.no_parallelization is True:
+            warnings.warn("The selected algorithm does not support parallel execution, workers overwritten and set to"
+                          " one.", RuntimeWarning)
+            self.workers = 1
         self.zero = zero
         self.stop = False
-        self.kwargs = optkw
 
-    def minimize(self, function, x0, bounds, workers=1, callbacks=None) -> MinimizeResult:
-        if self.opt_algo.no_parallelization is True:
-            workers = 1
-
+    def minimize(self, function, x0, bounds, callbacks=None, **kwargs) -> MinimizeResult:
         lower, upper = np.transpose(bounds)
         parametrization = ng.p.Array(init=x0)
         parametrization.set_bounds(lower, upper)
 
-        optimizer = self.opt_algo(parametrization=parametrization, budget=int(4e5), num_workers=workers, **self.kwargs)
+        optimizer = self.opt_algo(parametrization=parametrization, budget=int(4e50), num_workers=self.workers, **kwargs)
         self.logger.debug("Created nevergrad optimizer object")
 
         ng_callbacks = _NevergradCallbacksWrapper(self, callbacks)
         self.logger.debug("Created callbacks object")
         optimizer.register_callback('tell', ng_callbacks)
         self.logger.debug("Callbacks registered with optimizer")
-        if workers > 1:
-            with ThreadPoolExecutor(max_workers=workers) as executor:
-                self.logger.debug("Starting minimization in the thread pool.")
+        if self.workers > 1:
+            with ThreadPoolExecutor(max_workers=self.workers) as executor:
+                self.logger.debug(f"Executing within thread pool with {self.workers} workers")
                 opt_vec = optimizer.minimize(function, executor=executor, batch_mode=False)
         else:
-            self.logger.debug("Starting minimization outside of the thread pool")
+            self.logger.debug("Executing serially.")
             opt_vec = optimizer.minimize(function, batch_mode=False)
 
         self.logger.debug("Optimization complete. Formatting into MinimizeResult instance")
@@ -84,7 +78,6 @@ class Nevergrad(BaseOptimizer):
 
 
 class _NevergradCallbacksWrapper:
-
     """ Wraps all the components needed by GloMPO to be called after each iteration into a single object which can be
         registered as a nevergrad callback.
     """
@@ -126,9 +119,9 @@ class _NevergradCallbacksWrapper:
                 self.parent._pause_signal.wait()
                 self.parent.check_messages()
                 if not stop_cond and self.parent.stop:
-                    stop_cond = f"GloMPO termination signal."
+                    stop_cond = "GloMPO termination signal."
                 self.parent.logger.debug(f"Stop = {bool(stop_cond)} after message check from manager")
-                self.parent.logger.debug(f"Pushing result to queue")
+                self.parent.logger.debug("Pushing result to queue")
                 self.parent.push_iter_result(
                     IterationResult(opt_id=self.parent._opt_id,
                                     n_iter=opt.num_tell + 1,
@@ -139,7 +132,7 @@ class _NevergradCallbacksWrapper:
                 self.parent.logger.debug("Result pushed successfully")
                 self.i_fcalls = opt.num_tell + 1
                 if stop_cond:
-                    self.parent.logger.debug(f"Stop is True so shutting down optimizer.")
+                    self.parent.logger.debug("Stop is True so shutting down optimizer.")
                     self.parent.stop = True
                     opt._num_ask = opt.budget - 1
                     self.parent.message_manager(0, stop_cond)

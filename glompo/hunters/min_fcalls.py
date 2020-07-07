@@ -1,8 +1,5 @@
-
 from .basehunter import BaseHunter
 from ..core.optimizerlogger import OptimizerLogger
-from ..core.regression import DataRegressor
-
 
 __all__ = ("MinFuncCalls",)
 
@@ -19,7 +16,6 @@ class MinFuncCalls(BaseHunter):
 
     def __call__(self,
                  log: OptimizerLogger,
-                 regressor: DataRegressor,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
 

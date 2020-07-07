@@ -1,12 +1,9 @@
-
-
 """ Base generator from which all generators must inherit to be compatible with GloMPO. """
 
-from abc import ABC, abstractmethod
 import logging
+from abc import ABC, abstractmethod
 
 import numpy as np
-
 
 __all__ = ("BaseGenerator",)
 

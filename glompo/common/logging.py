@@ -1,12 +1,11 @@
-
+""" Contains class to split the logs of individual optimizers for easy processing. """
 
 import logging
 import os
-from typing import *
+from typing import Optional
 
 
 class SplitOptimizerLogs(logging.Filter):
-
     """ If this filter is applied to a Handler on the 'glompo.optimizers' logger it will automatically separate the
         single 'glompo.optimizers' logging stream into one for each individual optimizer.
     """
@@ -44,6 +43,7 @@ class SplitOptimizerLogs(logging.Filter):
             # Here DEBUG level messages will be logged to the files even though INFO level propagates to the console
             logging.getLogger("glompo.optimizers").setLevel('DEBUG')
         """
+        super().__init__('')
         self.opened = set()
         self.filepath = filepath + '/' if filepath else ""
         self.propagate = int(propagate)

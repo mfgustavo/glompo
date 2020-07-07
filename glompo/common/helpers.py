@@ -1,12 +1,9 @@
-
-
 """ Useful static functions used throughout GloMPO. """
 
+from typing import Sequence, Tuple
 
-from typing import *
-import yaml
 import numpy as np
-
+import yaml
 
 __all__ = ("nested_string_formatting",
            "is_bounds_valid",
@@ -15,7 +12,7 @@ __all__ = ("nested_string_formatting",
 
 
 def nested_string_formatting(nested_str: str) -> str:
-    """ Reformats strings produced by the _CombiCore class (used by hunter and checkers) by indenting each level
+    """ Reformat strings produced by the _CombiCore class (used by hunter and checkers) by indenting each level
         depending on its nested level.
     """
 
@@ -68,10 +65,10 @@ def is_bounds_valid(bounds: Sequence[Tuple[float, float]], raise_invalid=True) -
     return True
 
 
-# Used by yaml to save soem block strings as literals
 class LiteralWrapper(str):
-    pass
+    """ Used by yaml to save some block strings as literals """
 
 
 def literal_presenter(dumper: yaml.Dumper, data: str):
+    """ Wrapper around string for correct presentation in YAML file. """
     return dumper.represent_scalar('tag:yaml.org,2002:str', data.replace(' \n', '\n'), style='|')

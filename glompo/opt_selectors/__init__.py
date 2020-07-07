@@ -1,12 +1,9 @@
-
-
 from .baseselector import BaseSelector
-from .random import RandomSelector
+from .chain import ChainSelector
 from .cycle import CycleSelector
-from .fcount import FCallsSelector
-
+from .random import RandomSelector
 
 __all__ = ("BaseSelector",
            "RandomSelector",
            "CycleSelector",
-           "FCallsSelector")
+           "ChainSelector")

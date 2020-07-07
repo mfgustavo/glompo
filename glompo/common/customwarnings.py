@@ -1,5 +1,3 @@
-
-
 """ Custom warning classes used in several places in the package for better debugging control. """
 
 __all__ = ("NotImplementedWarning",)

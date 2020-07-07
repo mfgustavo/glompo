@@ -1,14 +1,10 @@
-
-
-from typing import *
+from typing import Sequence, Tuple
 
 import numpy as np
 
 from .basehunter import BaseHunter
-from ..core.optimizerlogger import OptimizerLogger
-from ..core.regression import DataRegressor
 from ..common.helpers import is_bounds_valid
-
+from ..core.optimizerlogger import OptimizerLogger
 
 __all__ = ("ParameterDistance",)
 
@@ -33,7 +29,7 @@ class ParameterDistance(BaseHunter):
             Bounds of each parameter.
         relative_distance: float
             The fraction of the maximum distance in the space (from the point at all lower bounds to the point at all
-            upper bounds) below which the optimizers are deemed too close and the vicitm will be killed.
+            upper bounds) below which the optimizers are deemed too close and the victim will be killed.
         test_all: bool = False
             If True the distance between victim and all other optimizers is tested, else only the hunter and victim are
             compared.
@@ -52,11 +48,10 @@ class ParameterDistance(BaseHunter):
 
     def __call__(self,
                  log: OptimizerLogger,
-                 regressor: DataRegressor,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
         if self.test_all:
-            compare_to = range(1, len(log)+1)
+            compare_to = range(1, len(log) + 1)
         else:
             compare_to = [hunter_opt_id]
 

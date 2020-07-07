@@ -1,11 +1,10 @@
+from typing import Sequence, Tuple
 
-
-from typing import *
 import numpy as np
+
 from .basegenerator import BaseGenerator
 from ..common.helpers import is_bounds_valid
 from ..common.namedtuples import Result
-
 
 __all__ = ("IncumbentGenerator",)
 
@@ -24,7 +23,7 @@ class IncumbentGenerator(BaseGenerator):
 
     def generate(self, manager: 'GloMPOManager') -> np.ndarray:
         best: Result = manager.result
-        if best.x is not None:
+        if best.x is None:
             return (self.bounds[:, 1] - self.bounds[:, 0]) * np.random.random(self.n_params) + self.bounds[:, 0]
 
         return best.x

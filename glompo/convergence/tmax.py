@@ -1,8 +1,6 @@
-
-
 from time import time
-from .basechecker import BaseChecker
 
+from .basechecker import BaseChecker
 
 __all__ = ("MaxSeconds",)
 

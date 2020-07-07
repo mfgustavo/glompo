@@ -1,10 +1,9 @@
+from typing import Sequence, Tuple
 
-
-from typing import *
 import numpy as np
+
 from .basegenerator import BaseGenerator
 from ..common.helpers import is_bounds_valid
-
 
 __all__ = ("RandomGenerator",)
 

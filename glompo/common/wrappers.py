@@ -1,11 +1,8 @@
-
-
 """ Decorators and wrappers used throughout GloMPO. """
 
-
-from functools import wraps
-import sys
 import inspect
+import sys
+from functools import wraps
 
 
 def process_print_redirect(opt_id, func):
@@ -46,10 +43,12 @@ def catch_user_interrupt(func):
 
 
 def decorate_all_methods(decorator):
-    """ Applys a decorator to every method in a class. """
+    """ Applies a decorator to every method in a class. """
+
     def apply_decorator(cls):
         for k, f in cls.__dict__.items():
             if inspect.isfunction(f):
                 setattr(cls, k, decorator(f))
         return cls
+
     return apply_decorator

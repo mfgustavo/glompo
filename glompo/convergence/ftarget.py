@@ -1,9 +1,6 @@
-
-
 import numpy as np
 
 from .basechecker import BaseChecker
-
 
 __all__ = ("TargetCost",)
 

@@ -1,20 +1,20 @@
-
-
 """ Abstract class for the construction of selectors used in selecting new optimizers. """
 
-
 import logging
-from typing import *
 from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Tuple, Type, Union
 
-from ..optimizers.baseoptimizer import BaseOptimizer
 from ..core.optimizerlogger import OptimizerLogger
-
+from ..optimizers.baseoptimizer import BaseOptimizer
 
 __all__ = ("BaseSelector",)
 
 
 class BaseSelector(ABC):
+    """ Selectors are classes which return an optimizer and its configuration when asked by
+        the manager. This selection will then be used to start a new optimizer. The full manager
+        is supplied to the selector allowing sophisticated decisions to be designed.
+    """
 
     def __init__(self,
                  avail_opts: List[Union[Type[BaseOptimizer],
@@ -29,10 +29,8 @@ class BaseSelector(ABC):
                 1) Subclasses (not instances) of BaseOptimizer.
                 2) Tuples of:
                     a) BaseOptimizer subclasses as above;
-                    b) Dictionary of kwargs used to initialise a BaseOptimizer instance (if there are no arguments
-                       use an empty dictionary not None);
-                    c) Dictionary of kwargs for calling the BaseOptimizer().minimize() method (if there are no arguments
-                       use an empty dictionary not None).
+                    b) Dictionary of kwargs used to initialise a BaseOptimizer instance;
+                    c) Dictionary of kwargs for calling the BaseOptimizer().minimize() method.
         """
         self.logger = logging.getLogger('glompo.selector')
         if not isinstance(avail_opts, list):
@@ -53,12 +51,15 @@ class BaseSelector(ABC):
                         call_dict = {}
                     assert isinstance(call_dict, dict)
 
+                    if 'workers' not in init_dict:
+                        init_dict['workers'] = 1
+
                     self.avail_opts.append((opt, init_dict, call_dict))
 
                 else:
                     opt = item
                     assert issubclass(opt, BaseOptimizer)
-                    self.avail_opts.append((opt, {}, {}))
+                    self.avail_opts.append((opt, {'workers': 1}, {}))
 
             except AssertionError:
                 raise ValueError(f"Cannot parse {item}. Expected:  Union[Type[BaseOptimizer], Tuple[BaseOptimizer, "
@@ -80,7 +81,9 @@ class BaseSelector(ABC):
     @abstractmethod
     def select_optimizer(self,
                          manager: 'GloMPOManager',
-                         log: OptimizerLogger) -> Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]]:
+                         log: OptimizerLogger,
+                         slots_available: int) -> Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]],
+                                                        None]:
         """ Provided with the manager object and opt_log file of all optimizers, returns a optimizer class
             followed by a dictionary of initialisation keyword arguments and then a dictionary of call kwargs for the
             BaseOptimizer().minimize() method.
@@ -91,6 +94,11 @@ class BaseSelector(ABC):
                 Running manager instance, can be used to read certain counters and state variables.
             log: OptimizerLogger
                 Contains the details and iteration history of ever optimizer started thus far.
+            slots_available: int
+                Number of threads the manager is allowed to start according to its max_jobs attribute and the number of
+                existing threads.
+                GloMPO API assumes that the selector will attempt to this parameter and return an optimizer which
+                requires less threads than slots_available. If this is not possible then None is returned
         """
 
     def __contains__(self, item):

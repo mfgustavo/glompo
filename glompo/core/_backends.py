@@ -1,21 +1,17 @@
-
-
 """ Contains code to support using both multiprocessing and threading within the GloMPO manager. """
 
-
-import threading
-import sys
 import _io
+import sys
+import threading
 import warnings
 
 
 class CustomThread(threading.Thread):
-
     """ Adds an exitcode property to the Thread base class as well as code to redirect the thread printstream to a
         file if this has been setup before hand.
     """
 
-    def __init__(self, redirect_print: bool = False, *args, **kwargs):
+    def __init__(self, *args, redirect_print: bool = False, **kwargs):
         super().__init__(*args, **kwargs)
         self.exitcode = 0
         self.redirect = redirect_print
@@ -44,7 +40,6 @@ class CustomThread(threading.Thread):
 # Adapted from https://stackoverflow.com/questions/14890997/redirect-stdout-to-a-file-only-for-a-specific-thread
 # Author: Golgot
 class ThreadPrintRedirect:
-
     """ Redirects individual threads to their own print stream.
 
         Notes
@@ -69,6 +64,7 @@ class ThreadPrintRedirect:
         self.threads[thread_id] = open(f"glompo_optimizer_printstreams/{opt_id}_printstream.{ext}", "w+")
 
     def write(self, message):
+        """ Sends message to the appropriate handler. """
         ident = threading.currentThread().ident
         if ident in self.threads and not self.threads[ident].closed:
             self.threads[ident].write(message)
@@ -77,9 +73,9 @@ class ThreadPrintRedirect:
 
     def flush(self):
         """ Required for Python 3 compatibility. """
-        pass
 
     def close(self, thread_id: int = None):
+        """ Closes all open files to which messages are being sent. """
         if thread_id:
             self.threads[thread_id].close()
         else:

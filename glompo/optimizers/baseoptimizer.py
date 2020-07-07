@@ -1,18 +1,15 @@
-
-
 """
 Base class from which all optimizers must inherit in order to be compatible with GloMPO.
 """
 
-
+import logging
+import traceback
+import warnings
+from abc import ABC, abstractmethod
 from multiprocessing.connection import Connection
 from queue import Queue
 from threading import Event
-from typing import *
-from abc import ABC, abstractmethod
-import warnings
-import logging
-import traceback
+from typing import Callable, Optional, Sequence, Tuple
 
 from ..common.helpers import LiteralWrapper
 
@@ -53,7 +50,7 @@ class BaseOptimizer(ABC):
     Attributes:
 
     needscaler : `bool`
-        Whether the optimizer requires parameter scaing or not.
+        Whether the optimizer requires parameter scaling or not.
 
         .. warning:: This variable **must** be defined with every optimizer.
 
@@ -61,7 +58,26 @@ class BaseOptimizer(ABC):
     """
 
     def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
-                 pause_flag: Event = None, **kwargs):
+                 pause_flag: Event = None, workers: int = 1, **kwargs):
+        """
+        Parameters
+        ----------
+        opt_id: int = None
+            Unique identifier automatically assigned within the GloMPO manager framework.
+        signal_pipe: multiprocessing.connection.Connection = None
+            Bidirectional pipe used to message management behaviour between the manager and optimizer.
+        results_queue: queue.Queue = None
+            Threading queue into which optimizer iteration results are centralised across all optimizers and sent to
+            the manager.
+        pause_flag: threading.Event = None
+            Event flag which can be used to pause the optimizer between iterations.
+        workers: int = 1
+            The number of processing threads used by the optimizer. Defaults to one. The manager will only start the
+            optimizer if there are sufficient slots available for it:
+                workers <= manager.max_jobs - manager.n_slots_occupied.
+        kwargs
+            Optimizer specific initialization arguments.
+        """
         self.logger = logging.getLogger(f'glompo.optimizers.opt{opt_id}')
         self._opt_id = opt_id
         self._signal_pipe = signal_pipe
@@ -73,6 +89,7 @@ class BaseOptimizer(ABC):
         self._TO_MANAGER_SIGNAL_DICT = {0: "Normal Termination",
                                         1: "Numerical Errors Detected",
                                         9: "Other Message (Saved to Log)"}
+        self.workers = workers
 
     def _minimize(self,
                   function: Callable[[Sequence[float]], float],
@@ -110,7 +127,7 @@ class BaseOptimizer(ABC):
             - Messages to the GloMPO manager must be sent via the message_manager method. The keys for these messages
               are detailed in the _TO_MANAGER_SIGNAL_DICT dictionary.
             - A convergence termination message should be sent if the optimizer successfully converges.
-            - Messages from the mp_manager can be read by the check_messages method. See the _FROM_MANAGER_SIGNAL_DICT
+            - Messages from the manager can be read by the check_messages method. See the _FROM_MANAGER_SIGNAL_DICT
               for all the methods which must be implemented to interpret GloMPO signals correctly.
             - self._pause_signal.wait() must be implemented in the body of the iterative loop to allow the optimizer to
               be paused by the manager as needed.
