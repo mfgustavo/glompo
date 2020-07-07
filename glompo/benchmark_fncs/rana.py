@@ -31,12 +31,12 @@ class Rana(BaseTestCase):
         x = np.array(x)
 
         term1 = x
-        term1 *= np.sin(np.sqrt(np.abs(x[0] - x + 1)))
-        term1 *= np.cos(np.sqrt(np.abs(x[0] + x + 1)))
+        term1 = term1 * np.sin(np.sqrt(np.abs(x[0] - x + 1)))
+        term1 = term1 * np.cos(np.sqrt(np.abs(x[0] + x + 1)))
 
         term2 = x[0] + 1
-        term2 *= np.sin(np.sqrt(np.abs(x[0] + x + 1)))
-        term2 *= np.cos(np.sqrt(np.abs(x[0] - x + 1)))
+        term2 = term2 * np.sin(np.sqrt(np.abs(x[0] + x + 1)))
+        term2 = term2 * np.cos(np.sqrt(np.abs(x[0] - x + 1)))
 
         return np.sum(term1 + term2)
 
@@ -50,7 +50,7 @@ class Rana(BaseTestCase):
 
     @property
     def min_fx(self) -> float:
-        return -928.5478
+        return self.__call__(self.min_x)
 
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:

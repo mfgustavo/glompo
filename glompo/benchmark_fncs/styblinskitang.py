@@ -32,7 +32,7 @@ class StyblinskiTang(BaseTestCase):
 
         calc = x ** 4 - 16 * x ** 2 + 5 * x
 
-        return np.sum(calc)
+        return 0.5 * np.sum(calc)
 
     @property
     def dims(self) -> int:

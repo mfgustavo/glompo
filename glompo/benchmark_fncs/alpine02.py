@@ -32,7 +32,7 @@ class Alpine02(BaseTestCase):
         calc = np.sin(x)
         calc *= np.sqrt(x)
 
-        return np.prod(calc)
+        return -np.prod(calc)
 
     @property
     def dims(self) -> int:
@@ -44,7 +44,7 @@ class Alpine02(BaseTestCase):
 
     @property
     def min_fx(self) -> float:
-        return -6.1295
+        return 2.808 ** self.dims
 
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:

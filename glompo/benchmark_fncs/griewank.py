@@ -35,7 +35,7 @@ class Griewank(BaseTestCase):
         term2 = x / np.sqrt(np.arange(1, len(x) + 1))
         term2 = np.prod(np.cos(term2))
 
-        return 1 + term1 + term2
+        return 1 + term1 - term2
 
     @property
     def dims(self) -> int:
