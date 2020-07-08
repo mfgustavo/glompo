@@ -129,7 +129,8 @@ class CMAOptimizer(BaseOptimizer):
                 print(f"@ iter = {i} fx={self.result.fx:.2E}")
 
             if self._results_queue:
-                self.push_iter_result(es.countiter, len(x), self.result.x, self.result.fx, False)
+                i_best = np.argmin(fx)
+                self.push_iter_result(es.countiter, len(x), x[i_best], fx[i_best], False)
                 self.logger.debug("Pushed result to queue")
                 self.check_messages()
                 self.logger.debug("Checked messages")
