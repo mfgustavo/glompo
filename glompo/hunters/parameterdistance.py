@@ -3,7 +3,7 @@ from typing import Sequence, Tuple
 import numpy as np
 
 from .basehunter import BaseHunter
-from ..common.helpers import is_bounds_valid
+from ..common.helpers import distance, is_bounds_valid
 from ..core.optimizerlogger import OptimizerLogger
 
 __all__ = ("ParameterDistance",)
@@ -42,7 +42,7 @@ class ParameterDistance(BaseHunter):
 
         if is_bounds_valid(bounds):
             lower_pt, upper_pt = tuple(np.transpose(bounds))
-            self.trans_space_dist = self.distance(lower_pt, upper_pt)
+            self.trans_space_dist = distance(lower_pt, upper_pt)
 
         self.test_all = test_all
 
@@ -63,7 +63,7 @@ class ParameterDistance(BaseHunter):
                     self.logger.debug(f"Unable to compare to Opt{opt_id}, no points in log")
                     continue
                 v1 = np.array(log.get_history(victim_opt_id, 'x')[-1])
-                opt_dist = np.sqrt(np.sum((v1 - h1) ** 2))
+                opt_dist = distance(h1, v1)
                 ratio = opt_dist / self.trans_space_dist
 
                 self._last_result = ratio <= self.relative_distance
@@ -81,7 +81,3 @@ class ParameterDistance(BaseHunter):
 
         self._last_result = False
         return self._last_result
-
-    @staticmethod
-    def distance(pt1: Sequence[float], pt2: Sequence[float]):
-        return np.sqrt(np.sum((np.array(pt1) - np.array(pt2)) ** 2))
