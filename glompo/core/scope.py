@@ -2,7 +2,7 @@
 
 import logging
 import warnings
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Set, Tuple, Union
 
 import matplotlib.animation as ani
 import matplotlib.lines as lines
@@ -35,6 +35,7 @@ class GloMPOScope:
                  record_movie: bool = False,
                  interactive_mode: bool = False,
                  events_per_flush: int = 10,
+                 elitism: bool = False,
                  writer_kwargs: Optional[Dict[str, Any]] = None,
                  movie_kwargs: Optional[Dict[str, Any]] = None):
         """
@@ -63,6 +64,8 @@ class GloMPOScope:
             The number of 'events' or updates and changes to the scope before the changes are flushed and the plot is
             redrawn. A lower number provides a smoother visualisation but is expensive and, if recorded,
             takes a larger amount of space.
+        elitism: bool = False
+            If True the scope will only display values which improve on the best optimizer value.
         writer_kwargs: Optional[Dict[str, Any]] = None
             Optional dictionary of arguments to be sent to the initialisation of the matplotlib.animation.FFMpegWriter
             class.
@@ -70,13 +73,14 @@ class GloMPOScope:
             Optional dictionary of arguments to be sent to matplotlib.animation.FFMpegWriter.setup().
         """
         self.logger = logging.getLogger('glompo.scope')
-        self.streams = {}
-        self._dead_streams = set()
+        self.streams: Dict[int, Dict[str, plt.Axes.plot]] = {}
+        self._dead_streams: Set[int] = set()
         self.n_streams = 0
         self.t_last = 0
         self.x_max = 0
         self.log_scale = log_scale
         self.events_per_flush = events_per_flush
+        self.elitism = bool(elitism)
         self._event_counter = 0
 
         plt.ion() if interactive_mode else plt.ioff()
@@ -277,7 +281,15 @@ class GloMPOScope:
 
     def update_optimizer(self, opt_id: int, pt: tuple):
         """ Given pt tuple is used to update the opt_id optimizer plot."""
-        self._update_point(opt_id, 'all_opt', pt)
+        x, y = pt
+        if self.elitism:
+            y_vals = self.streams[opt_id]['all_opt'].get_ydata()
+            if len(y_vals) > 0:
+                last = 10 ** y_vals[-1] if self.log_scale else y_vals[-1]
+                if last < y:
+                    y = last
+
+        self._update_point(opt_id, 'all_opt', (x, y))
         self._redraw_graph()
 
     def update_hunt_start(self, opt_id: int):

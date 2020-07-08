@@ -133,6 +133,19 @@ class TestScope:
         assert 1 in scope._dead_streams
 
     @pytest.mark.filterwarnings("ignore:More than 20 figures")
+    @pytest.mark.parametrize("path, log", [([1, 100, 100, 100], True), ([1, 100, 100, 100], False)])
+    def test_deletion(self, path, log, scope):
+        scope.elitism = True
+        scope.log_scale = log
+        scope.add_stream(1)
+        for x, y in enumerate(path):
+            scope.update_optimizer(1, (x, y))
+
+        y_vals = scope.streams[1]['all_opt'].get_ydata()
+
+        assert all([y == int(not log) for y in y_vals])
+
+    @pytest.mark.filterwarnings("ignore:More than 20 figures")
     def test_generate_movie(self):
         scope = GloMPOScope(record_movie=True)
         scope.add_stream(1)

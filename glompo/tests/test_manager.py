@@ -381,7 +381,6 @@ class TestManager:
                                     working_dir="tests/temp_outputs",
                                     overwrite_existing=True,
                                     max_jobs=2,
-                                    enforce_elitism=True,
                                     summary_files=3,
                                     convergence_checker=MaxOptsStarted(3),
                                     killing_conditions=TrueHunter(2),

@@ -52,7 +52,6 @@ class GloMPOManager:
                  hunt_frequency: int = 100,
                  region_stability_check: bool = False,
                  report_statistics: bool = False,
-                 enforce_elitism: bool = False,
                  summary_files: int = 0,
                  visualisation: bool = False,
                  visualisation_args: Optional[Dict[str, Any]] = None,
@@ -145,10 +144,6 @@ class GloMPOManager:
 
         report_statistics: bool = False
             NotYetImplemented
-
-        enforce_elitism: bool = False
-            If enforce_elitism is True, feedback from optimizers is filtered to only accept
-            results which improve upon the incumbent.
 
         summary_files: int = 0
             Indicates the level of saving the user would like:
@@ -281,7 +276,6 @@ class GloMPOManager:
         self._too_long = force_terminations_after
         self.region_stability_check = bool(region_stability_check)
         self.report_statistics = bool(report_statistics)
-        self.enforce_elitism = bool(enforce_elitism)
         self.summary_files = np.clip(int(summary_files), 0, 3)
         if self.summary_files != summary_files:
             self.logger.warning(f"summary_files argument given as {summary_files} clipped to {self.summary_files}")
@@ -632,19 +626,11 @@ class GloMPOManager:
                 opt_fcalls = res.i_fcalls
 
             if res.opt_id not in self.hunt_victims:
-
-                # Apply elitism
-                fx = res.fx
-                if self.enforce_elitism:
-                    history = self.opt_log.get_history(res.opt_id, "fx_best")
-                    if len(history) > 0 and history[-1] < fx:
-                        fx = history[-1]
-
-                self.opt_log.put_iteration(res.opt_id, res.n_iter, self.f_counter, opt_fcalls, list(res.x), fx)
-                self.logger.debug(f"Result from {res.opt_id} @ iter {res.n_iter} fx = {fx}")
+                self.opt_log.put_iteration(res.opt_id, res.n_iter, self.f_counter, opt_fcalls, list(res.x), res.fx)
+                self.logger.debug(f"Result from {res.opt_id} @ iter {res.n_iter} fx = {res.fx}")
 
                 if self.visualisation:
-                    self.scope.update_optimizer(res.opt_id, (self.f_counter, fx))
+                    self.scope.update_optimizer(res.opt_id, (self.f_counter, res.fx))
                     if res.final:
                         self.scope.update_norm_terminate(res.opt_id)
             else:
