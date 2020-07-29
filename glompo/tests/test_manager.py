@@ -554,8 +554,7 @@ class TestManager:
                                 max_jobs=3,
                                 task_kwargs={'delay': 0.1},
                                 backend=backend,
-                                convergence_checker=KillsAfterConvergence(2, 1) | MaxFuncCalls(10000) | MaxSeconds(
-                                    5 * 60),
+                                convergence_checker=KillsAfterConvergence(2, 1) | MaxFuncCalls(10000) | MaxSeconds(60),
                                 x0_generator=IntervalGenerator(),
                                 killing_conditions=MinIterations(1000),
                                 summary_files=3,
@@ -574,8 +573,12 @@ class TestManager:
             shutil.rmtree("tests/temp_outputs", ignore_errors=True)
             shutil.rmtree("glompo_optimizer_printstreams", ignore_errors=True)
             is_save = '--save-outs' in sys.argv
-            is_mini = '--run-minimize' in sys.argv
+            is_mini = ('--run-minimize' in sys.argv) or ('-M' in sys.argv)
             if is_mini and not is_save:
                 shutil.rmtree("tests/outputs", ignore_errors=True)
+                try:
+                    os.rmdir('tests')
+                except OSError:
+                    pass
         except FileNotFoundError:
             pass
