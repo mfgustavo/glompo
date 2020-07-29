@@ -25,13 +25,13 @@ class ExpLeastSquaresCost(BaseTestCase):
             g_train(p) := g(p, u_train)
             where u_train are randomly selected and saved evaluation points at initialisation.
 
-            Parameters
-            ----------
-            dims: int = 2
-                Number of dimensions of the problem
-            delay: int = 0
-                Delay in seconds after the function is called before results are returned.
-                Useful to simulate harder problems.
+        Parameters
+        ----------
+        dims: int = 2
+            Number of dimensions of the problem
+        delay: int = 0
+            Delay in seconds after the function is called before results are returned.
+            Useful to simulate harder problems.
         n_train: int = 10
             Number of training points used in the construction of the error function.
         sigma_eval: float = 0
@@ -48,6 +48,12 @@ class ExpLeastSquaresCost(BaseTestCase):
             the training points.
         p_range: Tuple[float, float] = [-2, 2]
             Range between which the true parameter values will be drawn.
+
+        Notes
+        -----
+        The properties min_fx and min_x are only guaranteed for sigma_fixed = 0; otherwise they are only estimates. This
+        is because the added random noise may create a better fit of the data an unknown vector.
+
         """
         self._dims = dims
         self._delay = delay
