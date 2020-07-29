@@ -1,7 +1,7 @@
 """ Provides support to use GloMPO as a ParAMS optimizer. """
 
 import warnings
-from typing import Callable, List, Sequence, Tuple
+from typing import Callable, Sequence, Tuple
 
 import numpy as np
 from scm.params.core.lossfunctions import SSE
@@ -25,16 +25,20 @@ class _FunctionWrapper:
 
     def __init__(self, func):
         self.func = func
+        if self.func.cbs:
+            warnings.warn("Callbacks provided through the Optimization class are ignored. Callbacks to individual "
+                          "optimizers can be passed to GloMPO through BaseSelector objects. Callbacks to control the "
+                          "manager itself are passed using GloMPO BaseChecker objects, some conditions should be sent "
+                          "as BaseHunter objects.")
+            self.func.cbs = None
 
     def __call__(self, pars) -> float:
-        result = self.func(pars)
-        fx = result[0].fx
-        return fx
+        return self.func(pars)
 
     def resids(self, pars):
         """ Method added to conform the function to optsam API and allow the GFLS algorithm to be used. """
 
-        result = self.func(pars)[0]
+        result = self.func(pars, full=True)
 
         resids = result.residuals
         dataset = result.dataset
@@ -80,8 +84,7 @@ class GlompoParamsWrapper(BaseOptimizer):
                  function: Callable,
                  x0: Sequence[float],
                  bounds: Sequence[Tuple[float, float]],
-                 workers: int = 1,
-                 callbacks: List[Callable] = None) -> MinimizeResult:
+                 workers: int = 1) -> MinimizeResult:
         """
         Passes 'function' to GloMPO to be minimized. Returns and instance of MinimizeResult.
 
@@ -104,15 +107,6 @@ class GlompoParamsWrapper(BaseOptimizer):
             Represents the maximum number of optimizers run in parallel. Passed to GloMPO as its 'max_jobs' parameter
             if 'max_jobs' has not been sent during initialisation via manager_kwargs otherwise ignored. If allowed to
             default this will usually result in the number of optimizers as there are cores available.
-        callbacks: List[Callable]
-            GloMPO ignores the callbacks parameter as it is ambiguous in this context. To control the termination of
-            the manager itself use BaseChecker objects passed to GloMPO's convergence_criteria parameter.
-
-            To control individual optimizers with callbacks, pass callback functions through BaseSelector objects to
-            GloMPO's optimizer_selector parameter. Callbacks in this sense, however, are discouraged as it defeats
-            the purpose of GloMPO's monitored optimization.
-
-            In some cases it may be preferable to pass callback conditions as BaseHunter objects instead.
 
         Notes
         -----
@@ -124,10 +118,6 @@ class GlompoParamsWrapper(BaseOptimizer):
 
         warnings.warn("The x0 parameter is ignored by GloMPO. To control the starting locations of optimizers within "
                       "GloMPO make use of its BaseGenerator objects.", RuntimeWarning)
-        if callbacks:
-            warnings.warn("Callbacks provided to the minimize function are ignored. Callbacks to individual "
-                          "optimizers can be passed to GloMPO through BaseSelector objects. Callbacks to control the "
-                          "manager itself are passed using GloMPO BaseChecker objects.")
 
         if 'max_jobs' not in self.manager_kwargs:
             self.manager_kwargs['max_jobs'] = workers
