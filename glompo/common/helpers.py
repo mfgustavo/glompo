@@ -72,3 +72,7 @@ class LiteralWrapper(str):
 def literal_presenter(dumper: yaml.Dumper, data: str):
     """ Wrapper around string for correct presentation in YAML file. """
     return dumper.represent_scalar('tag:yaml.org,2002:str', data.replace(' \n', '\n'), style='|')
+
+
+def distance(pt1: Sequence[float], pt2: Sequence[float]):
+    return np.sqrt(np.sum((np.array(pt1) - np.array(pt2)) ** 2))

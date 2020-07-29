@@ -8,6 +8,7 @@ from .min_fcalls import MinFuncCalls
 from .min_iterations import MinIterations
 from .parameterdistance import ParameterDistance
 from .pseudoconv import PseudoConverged
+from .stepsize import StepSize
 from .timeannealing import TimeAnnealing
 from .type import TypeHunter
 from .valueannealing import ValueAnnealing
@@ -20,4 +21,5 @@ __all__ = ("BaseHunter",
            "ParameterDistance",
            "MinFuncCalls",
            "LastPointsInvalid",
-           "TypeHunter")
+           "TypeHunter",
+           "StepSize")
