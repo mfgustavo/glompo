@@ -1,5 +1,5 @@
 import warnings
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
 from typing import Callable, Sequence, Union
@@ -19,7 +19,8 @@ class Nevergrad(BaseOptimizer):
     """
 
     def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
-                 pause_flag: Event = None, workers: int = 1, optimizer: str = 'TBPSA', zero: float = -float('inf')):
+                 pause_flag: Event = None, workers: int = 1, backend: str = 'processes', optimizer: str = 'TBPSA',
+                 zero: float = -float('inf')):
         """
         Parameters
         ----------
@@ -28,7 +29,7 @@ class Nevergrad(BaseOptimizer):
         zero : float
             Will stop the optimization when this cost function value is reached.
         """
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers)
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
 
         self.opt_algo = ng.optimizers.registry[optimizer]
         if self.opt_algo.no_parallelization is True:
@@ -51,9 +52,13 @@ class Nevergrad(BaseOptimizer):
         optimizer.register_callback('tell', ng_callbacks)
         self.logger.debug("Callbacks registered with optimizer")
         if self.workers > 1:
-            with ThreadPoolExecutor(max_workers=self.workers) as executor:
-                self.logger.debug(f"Executing within thread pool with {self.workers} workers")
-                opt_vec = optimizer.minimize(function, executor=executor, batch_mode=False)
+            self.logger.debug(f"Executing within pool with {self.workers} workers")
+            if self._backend == 'processes':
+                with ProcessPoolExecutor(max_workers=self.workers) as executor:
+                    opt_vec = optimizer.minimize(function, executor=executor, batch_mode=False)
+            else:
+                with ThreadPoolExecutor(max_workers=self.workers) as executor:
+                    opt_vec = optimizer.minimize(function, executor=executor, batch_mode=False)
         else:
             self.logger.debug("Executing serially.")
             opt_vec = optimizer.minimize(function, batch_mode=False)

@@ -27,6 +27,7 @@ class GFLSOptimizer(BaseOptimizer):
                  results_queue: Queue = None,
                  pause_flag: Event = None,
                  workers: int = 1,
+                 backend: str = 'processes',
                  tmax: Optional[int] = None,
                  imax: Optional[int] = None,
                  fmax: Optional[int] = None,
@@ -58,7 +59,7 @@ class GFLSOptimizer(BaseOptimizer):
         gfls_kwargs
             Arguments passed to the setup of the GFLS class. See opt_gfls.py or documentation.
         """
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers)
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
         self.tmax = tmax
         self.imax = imax
         self.fmax = fmax

@@ -6,7 +6,7 @@
 import os
 import pickle
 import warnings
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
 from typing import Callable, Sequence, Tuple
@@ -28,7 +28,7 @@ class CMAOptimizer(BaseOptimizer):
     """
 
     def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
-                 pause_flag: Event = None, workers: int = 1,
+                 pause_flag: Event = None, workers: int = 1, backend: str = 'processes',
                  sigma: float = 0.5, sampler: str = 'full', verbose=True,
                  **cmasettings):
         """ Parameters
@@ -47,7 +47,7 @@ class CMAOptimizer(BaseOptimizer):
                 available options. Most useful keys are: `timeout`, `tolstagnation`, `popsize`. Additionally,
                 the key `minsigma` is supported: Termination if ``sigma < minsigma``.
         """
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers)
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
         self.sigma = sigma
         self.verbose = verbose
         self.sampler = sampler
@@ -108,9 +108,13 @@ class CMAOptimizer(BaseOptimizer):
             self.logger.debug("Parameter vectors generated")
 
             if self.workers > 1:
-                self.logger.debug(f"Executing within thread pool with {self.workers} workers")
-                with ThreadPoolExecutor(max_workers=self.workers) as executor:
-                    fx = list(executor.map(function, x))
+                self.logger.debug(f"Executing within pool with {self.workers} workers")
+                if self._backend == 'processes':
+                    with ProcessPoolExecutor(max_workers=self.workers) as executor:
+                        fx = list(executor.map(function, x))
+                else:
+                    with ThreadPoolExecutor(max_workers=self.workers) as executor:
+                        fx = list(executor.map(function, x))
             else:
                 self.logger.debug("Executing serially")
                 fx = [function(i) for i in x]

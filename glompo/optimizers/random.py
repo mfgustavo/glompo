@@ -17,9 +17,9 @@ class RandomOptimizer(BaseOptimizer):
     """
 
     def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
-                 pause_flag: Event = None, workers: int = 1, iters: int = 100):
+                 pause_flag: Event = None, workers: int = 1, backend: str = 'processes', iters: int = 100):
         """ Initialize with the above parameters. """
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers)
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
         self.logger = logging.getLogger('glompo.optimizers')
         self.iters = iters
         self.result = MinimizeResult()

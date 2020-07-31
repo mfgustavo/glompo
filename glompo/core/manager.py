@@ -21,7 +21,7 @@ from .optimizerlogger import OptimizerLogger
 from ..common.customwarnings import NotImplementedWarning
 from ..common.helpers import LiteralWrapper, literal_presenter, nested_string_formatting
 from ..common.namedtuples import Bound, OptimizerPackage, ProcessPackage, Result
-from ..common.wrappers import process_print_redirect, task_args_wrapper
+from ..common.wrappers import process_print_redirect
 from ..convergence import BaseChecker, KillsAfterConvergence
 from ..generators import BaseGenerator, RandomGenerator
 from ..hunters import BaseHunter, ParameterDistance, TimeAnnealing, ValueAnnealing
@@ -29,6 +29,16 @@ from ..opt_selectors.baseselector import BaseSelector
 from ..optimizers.baseoptimizer import BaseOptimizer
 
 __all__ = ("GloMPOManager",)
+
+
+class TaskWrapper:
+    def __init__(self, func, args, kwargs):
+        self.func = func
+        self.args = args
+        self.kwargs = kwargs
+
+    def __call__(self, x, *args, **kwargs):
+        return self.func(x, *args, *self.args, **kwargs, **self.kwargs)
 
 
 class GloMPOManager:
@@ -206,7 +216,8 @@ class GloMPOManager:
             task_args = ()
         if not task_kwargs:
             task_kwargs = {}
-        self.task = task_args_wrapper(task, task_args, task_kwargs)
+        # self.task = task_args_wrapper(task, task_args, task_kwargs)
+        self.task = TaskWrapper(task, task_args, task_kwargs)
         self.logger.debug("Task wrapped successfully")
 
         # Save optimizer selection criteria
@@ -514,6 +525,7 @@ class GloMPOManager:
                              signal_pipe=child_pipe,
                              results_queue=self.optimizer_queue,
                              pause_flag=event,
+                             backend='processes',  # if self._proc_backend else 'threads',
                              **init_kwargs)
 
         self.opt_log.add_optimizer(self.o_counter, type(optimizer).__name__, datetime.now())
@@ -722,7 +734,7 @@ class GloMPOManager:
                 reason = f"Process Crash: {caught_exception}"
             with open("glompo_manager_log.yml", "w") as file:
 
-                data = {"Assignment": {"Task": type(self.task.__wrapped__).__name__,
+                data = {"Assignment": {"Task": type(self.task).__name__,
                                        "Working Dir": os.getcwd(),
                                        "Username": getpass.getuser(),
                                        "Hostname": socket.gethostname(),

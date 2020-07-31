@@ -58,7 +58,7 @@ class BaseOptimizer(ABC):
     """
 
     def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
-                 pause_flag: Event = None, workers: int = 1, **kwargs):
+                 pause_flag: Event = None, workers: int = 1, backend: str = 'processes', **kwargs):
         """
         Parameters
         ----------
@@ -72,9 +72,12 @@ class BaseOptimizer(ABC):
         pause_flag: threading.Event = None
             Event flag which can be used to pause the optimizer between iterations.
         workers: int = 1
-            The number of processing threads used by the optimizer. Defaults to one. The manager will only start the
-            optimizer if there are sufficient slots available for it:
+            The number of concurrent calculations used by the optimizer. Defaults to one. The manager will only start
+            the optimizer if there are sufficient slots available for it:
                 workers <= manager.max_jobs - manager.n_slots_occupied.
+        backend: str = 'threads'
+            The type of concurrency used by the optimizers (processes or threads). This is not necessarily applicable to
+            all optimizers. GloMPO will forward its 'backend' setting to this argument for each optimizer it starts.
         kwargs
             Optimizer specific initialization arguments.
         """
@@ -83,6 +86,7 @@ class BaseOptimizer(ABC):
         self._signal_pipe = signal_pipe
         self._results_queue = results_queue
         self._pause_signal = pause_flag  # If set allow run, if cleared wait.
+        self._backend = backend
 
         self._FROM_MANAGER_SIGNAL_DICT = {0: self.save_state,
                                           1: self.callstop}
