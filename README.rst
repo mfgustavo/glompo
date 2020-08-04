@@ -147,3 +147,63 @@ An example configuration may look like:
 
   manager = GloMPOManager(...)
   manager.start_manager(...)
+
+Resource Balancing
+==================
+
+Resource balancing is critical to GloMPO's success. The typical GloMPO execution
+hierarchy takes the following form:
+
+.. image:: _png/hierarchy.png
+
+The first level of parallelization is done at the manager level and controls how the
+optimizer routines are spun-off from the manager. This can be done using multiprocessing
+or multithreading and is controlled by sending 'processes' or 'threads' to
+the `backend` parameter of the GloMPOManager initialisation method. Processes are
+preferable to threads as they sidestep Python's Global Interpreter Lock but there are
+scenarios where this is inappropriate.
+
+The second level of parallelization is optimizer specific and present in swarm type
+optimizers like CMA which require multiple function evaluations per optimizer iteration.
+These too can generally be evaluated in parallel theoretically using processes or threads.
+This can be configured by sending `common.futures.BaseExecutor` classes to the
+`executor` parameter of `BaseOptimizer` objects during initialisation. To avoid crashes
+(see table below) GloMPO defaults to threading at this level.
+
+In the case where the function being minimized is in pure python (and there are no
+calls to processes outside of python or calculations based on I/O calls) then load
+balancing will become challenging due to Python's own limitations:
+
+=========  =========  =====
+Parallelization       Setup
+--------------------  -----
+Level 1    Level 2
+=========  =========  =====
+Threads    Threads    Total lock within a single Python process due to the GIL. No parallelism can be achieved unless the bulk of the calculation time is spent in an external subprocess.
+Threads    Processes  Heavy burden on single process to run the manager and optimizer routines but the load can be adequately distributed over all available resources if the function evaluations are slow enough that the single manager / optimizers process does not become a bottleneck.
+Processes  Threads    Not advisable. Processes are launched for each optimizer but parallel function evaluations (which should be more expensive than the optimization routine itself) is threaded to no benefit due to the GIL.
+Processes  Processes  Theoretically the ideal scenario which guarantees perfect parallelism and full use of available resources. However, Python does not allow daemonic processes (optimizers) to spawn children (parallel function evaluations).
+=========  =========  =====
+
+Achieving Full Parallelism
+--------------------------
+
+As explained in the above table achieving process parallelism at both levels is not
+straightforward but GloMPO does support two avenues to do this:
+
+  1. Spawn non-daemonic optimizers, GloMPO provides the `spawn_non_daemonic`
+     parameter during initialisation which will spawn optimizer processes as
+     non-daemonic.
+
+     .. warning::
+        This method is **not recommended**. It is unsafe to spawn non-daemonic
+        processes since these expensive routines will not be shutdown if the manager
+        were to crash. The user would have to terminate them manually.
+
+  2. `scoop` is task module which allows for concurrent parallelism. If this is installed
+     in your python library it can be used to run the second parallelization level.
+     However, the script **must** be started within the scoop framework:
+
+     .. code-block:: bash
+
+        python -m scoop my_script.py
