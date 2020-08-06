@@ -157,7 +157,6 @@ if __name__ == '__main__':
                             x0_generator=generator,
                             killing_conditions=all_killers,
                             hunt_frequency=500,  # Task eval. frequency manager applies kill conditions.
-                            enforce_elitism=True,  # If True, only the best so far of each optimizer is saved.
                             summary_files=3,  # Maximum file saving, all logs and printstreams are retained
                             visualisation=visualisation,
                             visualisation_args=visualisation_args,

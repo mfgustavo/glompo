@@ -758,7 +758,7 @@ class GloMPOManager:
                                      "Hunt Conditions": LiteralWrapper(nested_string_formatting(str(
                                          self.killing_conditions))),
                                      "Optimizer Selector": self.selector.glompo_log_repr(),
-                                     "Max Parallel Optimizers": self.max_jobs},
+                                     "Max Jobs": self.max_jobs},
                         "Counters": {"Function Evaluations": self.f_counter,
                                      "Hunts Started": self.hunt_counter,
                                      "Optimizers": {"Started": self.o_counter,
