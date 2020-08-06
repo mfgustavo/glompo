@@ -17,18 +17,6 @@ def process_print_redirect(opt_id, func):
     return wrapper
 
 
-def task_args_wrapper(func, args, kwargs):
-    """ Wraps a task's args and kwargs into it so that it becomes only a function of one variable (the vector
-        of parameter values).
-    """
-
-    @wraps(func)
-    def wrapper(x):
-        return func(x, *args, **kwargs)
-
-    return wrapper
-
-
 def catch_user_interrupt(func):
     """ Catches a user interrupt signal and exits gracefully. """
 

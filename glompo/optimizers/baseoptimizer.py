@@ -58,7 +58,7 @@ class BaseOptimizer(ABC):
     """
 
     def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
-                 pause_flag: Event = None, workers: int = 1, backend: str = 'processes', **kwargs):
+                 pause_flag: Event = None, workers: int = 1, backend: str = 'threads', **kwargs):
         """
         Parameters
         ----------
@@ -77,7 +77,8 @@ class BaseOptimizer(ABC):
                 workers <= manager.max_jobs - manager.n_slots_occupied.
         backend: str = 'threads'
             The type of concurrency used by the optimizers (processes or threads). This is not necessarily applicable to
-            all optimizers. GloMPO will forward its 'backend' setting to this argument for each optimizer it starts.
+            all optimizers. This will default to threads unless forced to used processes (see GloMPOManger backend
+            argument for details).
         kwargs
             Optimizer specific initialization arguments.
         """
