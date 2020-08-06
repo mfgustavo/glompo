@@ -21,7 +21,7 @@ from .optimizerlogger import OptimizerLogger
 from ..common.customwarnings import NotImplementedWarning
 from ..common.helpers import LiteralWrapper, literal_presenter, nested_string_formatting
 from ..common.namedtuples import Bound, OptimizerPackage, ProcessPackage, Result
-from ..common.wrappers import process_print_redirect, task_args_wrapper
+from ..common.wrappers import process_print_redirect
 from ..convergence import BaseChecker, KillsAfterConvergence
 from ..generators import BaseGenerator, RandomGenerator
 from ..hunters import BaseHunter, ParameterDistance, TimeAnnealing, ValueAnnealing
@@ -29,6 +29,20 @@ from ..opt_selectors.baseselector import BaseSelector
 from ..optimizers.baseoptimizer import BaseOptimizer
 
 __all__ = ("GloMPOManager",)
+
+
+class TaskWrapper:
+    """ Wraps the manager task to build-in the task args and kwargs.
+        Defined here at top level in order to be pickable.
+    """
+
+    def __init__(self, func, args, kwargs):
+        self.func = func
+        self.args = args
+        self.kwargs = kwargs
+
+    def __call__(self, x, *args, **kwargs):
+        return self.func(x, *args, *self.args, **kwargs, **self.kwargs)
 
 
 class GloMPOManager:
@@ -106,6 +120,12 @@ class GloMPOManager:
             If threads are used, make sure the task is thread-safe! Also note that forced terminations are not
             possible in this case and hanging optimizers will not be killed. The 'force_terminations_after' parameter
             is ignored.
+
+            A third option is possible by sending 'processes_forced' but is **strongly discouraged**. In cases where two
+            levels of parallelism exist (i.e. the optimizers and multiple parallel function evaluations therein). Then
+            both levels can be configured to use processes to ensure adequate resource distribution by launching
+            optimizers non-daemonically. By default the second parallelism level is threaded (see README for more
+            details on this topic).
 
         convergence_checker: Optional[BaseChecker] = None
             Criteria used for convergence. A collection of subclasses of BaseChecker are provided, these can be
@@ -206,7 +226,8 @@ class GloMPOManager:
             task_args = ()
         if not task_kwargs:
             task_kwargs = {}
-        self.task = task_args_wrapper(task, task_args, task_kwargs)
+        # self.task = task_args_wrapper(task, task_args, task_kwargs)
+        self.task = TaskWrapper(task, task_args, task_kwargs)
         self.logger.debug("Task wrapped successfully")
 
         # Save optimizer selection criteria
@@ -308,10 +329,12 @@ class GloMPOManager:
             self.logger.info(f"Hunting conditions set to default: {self.killing_conditions}")
 
         # Setup backend
-        if any([backend == valid_opt for valid_opt in ('processes', 'threads')]):
-            self._proc_backend = backend == 'processes'
+        if any([backend == valid_opt for valid_opt in ('processes', 'threads', 'processes_forced')]):
+            self._proc_backend = 'processes' in backend
+            self.opts_daemonic = not ('processes_forced' == backend)
         else:
             self._proc_backend = True
+            self.opts_daemonic = True
             self.logger.warning(f"Unable to parse backend '{backend}'. 'processes' or 'threads' expected."
                                 f"Defaulting to 'processes'.")
             warnings.warn(f"Unable to parse backend '{backend}'. 'processes' or 'threads' expected."
@@ -477,7 +500,7 @@ class GloMPOManager:
                   'args': (task, x0, bounds),
                   'kwargs': call_kwargs,
                   'name': f"Opt{opt_id}",
-                  'daemon': True}
+                  'daemon': self.opts_daemonic}
         if self._proc_backend:
             process = mp.Process(**kwargs)
         else:
@@ -514,6 +537,7 @@ class GloMPOManager:
                              signal_pipe=child_pipe,
                              results_queue=self.optimizer_queue,
                              pause_flag=event,
+                             backend='threads' if self.opts_daemonic else 'processes',
                              **init_kwargs)
 
         self.opt_log.add_optimizer(self.o_counter, type(optimizer).__name__, datetime.now())
@@ -722,7 +746,7 @@ class GloMPOManager:
                 reason = f"Process Crash: {caught_exception}"
             with open("glompo_manager_log.yml", "w") as file:
 
-                data = {"Assignment": {"Task": type(self.task.__wrapped__).__name__,
+                data = {"Assignment": {"Task": type(self.task).__name__,
                                        "Working Dir": os.getcwd(),
                                        "Username": getpass.getuser(),
                                        "Hostname": socket.gethostname(),
