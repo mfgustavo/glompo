@@ -31,20 +31,6 @@ from ..optimizers.baseoptimizer import BaseOptimizer
 __all__ = ("GloMPOManager",)
 
 
-class TaskWrapper:
-    """ Wraps the manager task to build-in the task args and kwargs.
-        Defined here at top level in order to be pickable.
-    """
-
-    def __init__(self, func, args, kwargs):
-        self.func = func
-        self.args = args
-        self.kwargs = kwargs
-
-    def __call__(self, x, *args, **kwargs):
-        return self.func(x, *args, *self.args, **kwargs, **self.kwargs)
-
-
 class GloMPOManager:
     """ Attempts to minimize a given function using numerous optimizers in parallel, based on their performance and
         decision criteria, will stop and intelligently restart others.
@@ -57,8 +43,6 @@ class GloMPOManager:
                  working_dir: Optional[str] = None,
                  overwrite_existing: bool = False,
                  max_jobs: Optional[int] = None,
-                 task_args: Optional[Tuple] = None,
-                 task_kwargs: Optional[Dict] = None,
                  backend: str = 'processes',
                  convergence_checker: Optional[BaseChecker] = None,
                  x0_generator: Optional[BaseGenerator] = None,
@@ -102,12 +86,6 @@ class GloMPOManager:
             optimizer is given by optimizer.workers during its initialisation. An optimizer will not be started if
             the number of threads it creates will exceed max_jobs even if the manager is currently managing fewer
             than the number of jobs available. Defaults to one less than the number of CPUs available to the system.
-
-        task_args: Optional[Tuple]] = None
-            Optional arguments passed to task with every call.
-
-        task_kwargs: Optional[Dict] = None
-            Optional keyword arguments passed to task with every call.
 
         backend: str = 'processes'
             Indicates the form of parallelism used by the optimizers. 'processes' will bundle each optimizer into a
@@ -217,17 +195,7 @@ class GloMPOManager:
         # Save and wrap task
         if not callable(task):
             raise TypeError(f"{task} is not callable.")
-        if not isinstance(task_args, list) and task_args is not None:
-            raise TypeError(f"{task_args} cannot be parsed, list needed.")
-        if not isinstance(task_kwargs, dict) and task_kwargs is not None:
-            raise TypeError(f"{task_kwargs} cannot be parsed, dict needed.")
-
-        if not task_args:
-            task_args = ()
-        if not task_kwargs:
-            task_kwargs = {}
-        # self.task = task_args_wrapper(task, task_args, task_kwargs)
-        self.task = TaskWrapper(task, task_args, task_kwargs)
+        self.task = task
         self.logger.debug("Task wrapped successfully")
 
         # Save optimizer selection criteria

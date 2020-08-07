@@ -3,7 +3,6 @@ import multiprocessing as mp
 import os
 import shutil
 from collections import namedtuple
-from functools import wraps
 from time import sleep, time
 from typing import Callable, Sequence, Tuple
 
@@ -175,23 +174,16 @@ class TestSubclassesGlompoCompatible:
             return pars
 
     @pytest.fixture()
-    def wrapped_task(self):
-        def task_wrapper(func):
-            @wraps(func)
-            def wrapper(x):
-                return func(x)
-
-            return wrapper
-
-        return task_wrapper(self.Task())
+    def task(self):
+        return self.Task()
 
     @pytest.mark.parametrize("opti", available_classes)
-    def test_result_in_queue(self, opti, mp_package, wrapped_task):
+    def test_result_in_queue(self, opti, mp_package, task):
         opti = opti(results_queue=mp_package.queue,
                     signal_pipe=mp_package.p_pipe,
                     pause_flag=mp_package.event)
 
-        opti.minimize(function=wrapped_task,
+        opti.minimize(function=task,
                       x0=(0.5, 0.5, 0.5),
                       bounds=((0, 1), (0, 1), (0, 1)),
                       callbacks=self.MaxIter(10))
@@ -200,12 +192,12 @@ class TestSubclassesGlompoCompatible:
         assert isinstance(mp_package.queue.get_nowait(), IterationResult)
 
     @pytest.mark.parametrize("opti", available_classes)
-    def test_final(self, opti, mp_package, wrapped_task):
+    def test_final(self, opti, mp_package, task):
         opti = opti(results_queue=mp_package.queue,
                     signal_pipe=mp_package.c_pipe,
                     pause_flag=mp_package.event)
 
-        opti.minimize(function=wrapped_task,
+        opti.minimize(function=task,
                       x0=(0.5, 0.5, 0.5),
                       bounds=((0, 1), (0, 1), (0, 1)),
                       callbacks=self.MaxIter(10))
@@ -223,13 +215,13 @@ class TestSubclassesGlompoCompatible:
         assert mp_package.p_pipe.recv()[0] == 0
 
     @pytest.mark.parametrize("opti", available_classes)
-    def test_callstop(self, opti, mp_package, wrapped_task):
+    def test_callstop(self, opti, mp_package, task):
         opti = opti(results_queue=mp_package.queue,
                     signal_pipe=mp_package.c_pipe,
                     pause_flag=mp_package.event)
 
         mp_package.p_pipe.send(1)
-        opti.minimize(function=wrapped_task,
+        opti.minimize(function=task,
                       x0=(0.5, 0.5, 0.5),
                       bounds=((0, 1), (0, 1), (0, 1)),
                       callbacks=self.MaxIter(10))
@@ -238,13 +230,13 @@ class TestSubclassesGlompoCompatible:
             assert mp_package.queue.get_nowait().n_iter < 10
 
     @pytest.mark.parametrize("opti", available_classes)
-    def test_pause(self, opti, mp_package, wrapped_task):
+    def test_pause(self, opti, mp_package, task):
         opti = opti(results_queue=mp_package.queue,
                     signal_pipe=mp_package.c_pipe,
                     pause_flag=mp_package.event)
 
         p = mp.Process(target=opti.minimize,
-                       kwargs={'function': wrapped_task,
+                       kwargs={'function': task,
                                'x0': (0.5, 0.5, 0.5),
                                'bounds': ((0, 1), (0, 1), (0, 1)),
                                'callbacks': self.MaxIter(10)})

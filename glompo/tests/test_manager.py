@@ -10,7 +10,7 @@ import pytest
 import yaml
 
 from glompo.common.namedtuples import IterationResult
-from glompo.common.wrappers import process_print_redirect, task_args_wrapper
+from glompo.common.wrappers import process_print_redirect
 from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxFuncCalls, MaxOptsStarted, MaxSeconds
 from glompo.core.manager import GloMPOManager
 from glompo.core.optimizerlogger import OptimizerLogger
@@ -109,8 +109,9 @@ class HangingOptimizer(BaseOptimizer):
 class HangOnEndOptimizer(BaseOptimizer):
     needscaler = False
 
-    def __init__(self, opt_id: int = None, signal_pipe=None, results_queue=None, pause_flag=None, workers=1):
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers)
+    def __init__(self, opt_id: int = None, signal_pipe=None, results_queue=None, pause_flag=None, workers=1,
+                 backend='processes'):
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
         self.constant = opt_id
 
     def minimize(self, function: Callable, x0: Sequence[float], bounds: Sequence[Tuple[float, float]],
@@ -264,17 +265,6 @@ class TestManager:
                           working_dir=5,
                           overwrite_existing=True,
                           backend=backend)
-
-    def test_task_wrapper(self, backend):
-        def task(x, *args, calculate=False):
-            if calculate:
-                return sum([*args]) ** x
-            return None
-
-        wrapped_task = task_args_wrapper(task, (1, 2, 3, 4), {'calculate': True})
-
-        for i in range(5):
-            assert wrapped_task(i) == 10 ** i
 
     def test_redirect(self, backend):
         def func():
@@ -510,7 +500,7 @@ class TestManager:
                 self._results_queue.put(iters)
 
         # Task
-        def f(pt, delay=0):
+        def f(pt, delay=0.1):
             x, y = pt
             calc = -np.cos(0.2 * x)
             calc *= np.exp(-x ** 2 / 5000)
@@ -552,7 +542,6 @@ class TestManager:
                                 working_dir='tests/outputs',
                                 overwrite_existing=True,
                                 max_jobs=3,
-                                task_kwargs={'delay': 0.1},
                                 backend=backend,
                                 convergence_checker=KillsAfterConvergence(2, 1) | MaxFuncCalls(10000) | MaxSeconds(60),
                                 x0_generator=IntervalGenerator(),

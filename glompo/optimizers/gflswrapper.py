@@ -110,8 +110,8 @@ class GFLSOptimizer(BaseOptimizer):
         """
 
         # noinspection PyUnresolvedReferences
-        if not hasattr(function.__wrapped__, 'resids') and \
-                isinstance(function.__wrapped__.resids, collections.Callable):
+        if not hasattr(function, 'resids') and \
+                isinstance(function.resids, collections.Callable):
             raise NotImplementedError("GFLS requires function to include a resids() method.")
 
         self.logger.debug(f"GFLS minimizing with:\n"
@@ -140,7 +140,7 @@ class GFLSOptimizer(BaseOptimizer):
             callbacks = callbacks + [self.check_pause_flag, self.check_messages, self.push_iter_result]
 
         # noinspection PyUnresolvedReferences
-        fw = ResidualsWrapper(function.__wrapped__.resids, self.vector_codec.decode)
+        fw = ResidualsWrapper(function.resids, self.vector_codec.decode)
         self.logger.debug("Starting GFLS driver.")
         logger = driver(
             fw,
