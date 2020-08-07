@@ -533,11 +533,17 @@ class GloMPOManager:
         event = self._mp_manager.Event()
         event.set()
 
+        if 'backend' in init_kwargs:
+            backend = init_kwargs['backend']
+            del init_kwargs['backend']
+        else:
+            backend = 'threads' if self.opts_daemonic else 'processes'
+
         optimizer = selected(opt_id=self.o_counter,
                              signal_pipe=child_pipe,
                              results_queue=self.optimizer_queue,
                              pause_flag=event,
-                             backend='threads' if self.opts_daemonic else 'processes',
+                             backend=backend,
                              **init_kwargs)
 
         self.opt_log.add_optimizer(self.o_counter, type(optimizer).__name__, datetime.now())
