@@ -65,8 +65,11 @@ class GFLSOptimizer(BaseOptimizer):
         self.fmax = fmax
         self.verbose = verbose
         self.save_logger = save_logger
-        self.algorithm = GFLS(**gfls_kwargs) if gfls_kwargs else GFLS(tr_max=1)
         self.vector_codec = None
+
+        gfls_kwargs = gfls_kwargs if gfls_kwargs else {}
+        gfls_kwargs['tr_max'] = 1 if 'tr_max' not in gfls_kwargs else gfls_kwargs['tr_max']
+        self.algorithm = GFLS(**gfls_kwargs)
 
     # noinspection PyMethodOverriding
     def minimize(self,
