@@ -95,18 +95,17 @@ class OptimizerLogger:
                 opt_history = self.get_history(optimizer)
 
                 i_tot = len(opt_history)
-                if i_tot > 0:
+                x_best = None
+                f_best = float('nan')
+                if i_tot > 0 and opt_history[i_tot]['i_best'] > -1:
                     last = opt_history[i_tot]
-
                     i_best = last['i_best']
+
                     best = opt_history[i_best]
 
                     x_best = best['x']
                     f_best = best['fx_best']
-
-                    sum_data[optimizer] = {'f_best': f_best, 'x_best': x_best}
-                else:
-                    sum_data[optimizer] = {'f_best': float('nan'), 'x_best': None}
+                sum_data[optimizer] = {'f_best': f_best, 'x_best': x_best}
 
             with open("0_SummaryBest.yml", "w+") as file:
                 yaml.dump(sum_data, file, default_flow_style=False, sort_keys=False)

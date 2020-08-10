@@ -38,7 +38,7 @@ class _FunctionWrapper:
     def resids(self, pars):
         """ Method added to conform the function to optsam API and allow the GFLS algorithm to be used. """
 
-        result = self.func(pars, full=True)
+        result = self.func(pars, full=True)[0]
 
         resids = result.residuals
         dataset = result.dataset
