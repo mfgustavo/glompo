@@ -44,7 +44,7 @@ class Alpine02(BaseTestCase):
 
     @property
     def min_fx(self) -> float:
-        return 2.808 ** self.dims
+        return -2.808 ** self.dims
 
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
