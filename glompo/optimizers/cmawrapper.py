@@ -5,6 +5,7 @@
 
 import os
 import pickle
+import shutil
 import warnings
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from multiprocessing import Event, Queue
@@ -13,6 +14,7 @@ from typing import Callable, Sequence, Tuple
 
 import cma
 import numpy as np
+from cma.restricted_gaussian_sampler import GaussVDSampler, GaussVkDSampler
 
 from .baseoptimizer import BaseOptimizer, MinimizeResult
 from ..common.namedtuples import IterationResult
@@ -29,7 +31,7 @@ class CMAOptimizer(BaseOptimizer):
 
     def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
                  pause_flag: Event = None, workers: int = 1, backend: str = 'processes',
-                 sigma: float = 0.5, sampler: str = 'full', verbose=True,
+                 sigma: float = 0.5, sampler: str = 'full', verbose: bool = True, keep_files: bool = False,
                  **cmasettings):
         """ Parameters
             ----------
@@ -42,6 +44,10 @@ class CMAOptimizer(BaseOptimizer):
                 Be talkative (1) or not (0)
             workers: int = 1
                 The number of parallel evaluators used by this instance of CMA.
+            keep_files: bool = False
+                If True the files produced by CMA are retained otherwise they are deleted. Deletion is the default
+                behaviour since, when using GloMPO, GloMPO log files are created. Note, however, that GloMPO log files
+                are different from CMA ones.
             cmasettings : Optional[Dict[str, Any]]
                 cma module-specific settings as ``k,v`` pairs. See ``cma.s.pprint(cma.CMAOptions())`` for a list of
                 available options. Most useful keys are: `timeout`, `tolstagnation`, `popsize`. Additionally,
@@ -55,6 +61,7 @@ class CMAOptimizer(BaseOptimizer):
         self.dir = ''
         self.es = None
         self.result = None
+        self.keep_files = keep_files
 
         # Sort all non-native CMA options into the custom cmaoptions key 'vv':
         customkeys = [i for i in cmasettings if i not in cma.CMAOptions().keys()]
@@ -82,11 +89,12 @@ class CMAOptimizer(BaseOptimizer):
         if self.workers > 1 and 'popsize' not in self.opts:
             self.opts['popsize'] = self.workers
         if self.sampler == 'vd':
-            self.opts = cma.restricted_gaussian_sampler.GaussVDSampler.extend_cma_options(self.opts)
+            self.opts = GaussVDSampler.extend_cma_options(self.opts)
         elif self.sampler == 'vkd':
-            self.opts = cma.restricted_gaussian_sampler.GaussVkDSampler.extend_cma_options(self.opts)
+            self.opts = GaussVkDSampler.extend_cma_options(self.opts)
 
-        self.dir = os.path.abspath('.') + os.sep + 'cmadata' + os.sep
+        folder_name = 'cmadata' if not self._opt_id else f'cmadata_{self._opt_id}'
+        self.dir = os.path.abspath('.') + os.sep + folder_name + os.sep
         if not os.path.isdir(self.dir):
             os.makedirs(self.dir)
 
@@ -164,9 +172,13 @@ class CMAOptimizer(BaseOptimizer):
             self.logger.debug("Final message check")
             self.check_messages()
 
-        with open(self.dir + 'cma_results.pkl', 'wb') as f:
-            self.logger.debug(f"Pickling results")
-            pickle.dump(es.result, f, -1)
+        if self.keep_files:
+            with open(self.dir + 'cma_results.pkl', 'wb') as f:
+                self.logger.debug(f"Pickling results")
+                pickle.dump(es.result, f, -1)
+
+        if not self.keep_files:
+            shutil.rmtree(folder_name, ignore_errors=True)
 
         return self.result
 
