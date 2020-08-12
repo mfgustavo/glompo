@@ -8,7 +8,8 @@ import yaml
 __all__ = ("nested_string_formatting",
            "is_bounds_valid",
            "LiteralWrapper",
-           "literal_presenter")
+           "literal_presenter",
+           "distance")
 
 
 def nested_string_formatting(nested_str: str) -> str:
