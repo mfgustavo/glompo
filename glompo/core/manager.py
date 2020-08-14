@@ -24,7 +24,7 @@ from ..common.namedtuples import Bound, OptimizerPackage, ProcessPackage, Result
 from ..common.wrappers import process_print_redirect
 from ..convergence import BaseChecker, KillsAfterConvergence
 from ..generators import BaseGenerator, RandomGenerator
-from ..hunters import BaseHunter, ParameterDistance, TimeAnnealing, ValueAnnealing
+from ..hunters import BaseHunter
 from ..opt_selectors.baseselector import BaseSelector
 from ..optimizers.baseoptimizer import BaseOptimizer
 
@@ -128,7 +128,7 @@ class GloMPOManager:
                     3) and if fails an annealing type test based on how far the victim's value is from the best
                     optimizer's best value,
                     4) or the two optimizers are iterating very close to one another in parameter space
-                Default: TimeAnnealing() & ValueAnnealing() | ParameterDistance(0.01)
+                Default (None): Killing is not used, i.e. the optimizer will not terminate optimizers.
             Note, for performance and to allow conditionality between hunters conditions are evaluated 'lazily' i.e.
             x or y will return if x is True without evaluating y. x and y will return False if x is False without
             evaluating y.
@@ -293,8 +293,8 @@ class GloMPOManager:
             else:
                 raise TypeError("killing_conditions not an instance of a subclass of BaseHunter.")
         else:
-            self.killing_conditions = TimeAnnealing() & ValueAnnealing() | ParameterDistance(self.bounds, 0.01)
-            self.logger.info(f"Hunting conditions set to default: {self.killing_conditions}")
+            self.killing_conditions = None
+            self.logger.info(f"Hunting will not be used by the manager.")
 
         # Setup backend
         if any([backend == valid_opt for valid_opt in ('processes', 'threads', 'processes_forced')]):
@@ -374,7 +374,7 @@ class GloMPOManager:
                 if self.result.origin and 'opt_id' in self.result.origin:
                     best_id = self.result.origin['opt_id']
 
-                if best_id > 0:
+                if best_id > 0 and self.killing_conditions:
                     self._start_hunt(best_id)
 
                 self.logger.debug("Checking for hanging processes")
@@ -730,7 +730,8 @@ class GloMPOManager:
                                      "Convergence Checker": LiteralWrapper(nested_string_formatting(str(
                                          self.convergence_checker))),
                                      "Hunt Conditions": LiteralWrapper(nested_string_formatting(str(
-                                         self.killing_conditions))),
+                                         self.killing_conditions))) if self.killing_conditions else
+                                     self.killing_conditions,
                                      "Optimizer Selector": self.selector.glompo_log_repr(),
                                      "Max Jobs": self.max_jobs},
                         "Counters": {"Function Evaluations": self.f_counter,
