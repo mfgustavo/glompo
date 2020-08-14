@@ -35,14 +35,14 @@ class StepSize(BaseHunter):
         if fcalls[0] > self.calls:
             for i, fcall in enumerate(fcalls[1:], 1):
                 if fcalls[0] - fcall < self.calls:
-                    dists.append(distance(trials[0], trials[i]))
+                    dists.append(distance(trials[i - 1], trials[i]))
                 else:
                     break
 
         if len(dists) > 0:
             mean_dist = np.mean(dists)
-            self._last_result = mean_dist / self.trans_space_dist <= self.tol
-            self.logger.debug(f"Distances: {dists}\n"
+            self._last_result = mean_dist <= self.tol * self.trans_space_dist
+            self.logger.debug(f"{hunter_opt_id} -> {victim_opt_id}\n"
                               f"Mean: {mean_dist}\n"
                               f"Maximum Trans Space Distance: {self.trans_space_dist}\n"
                               f"Returning: {self._last_result}")
