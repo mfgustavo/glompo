@@ -1,6 +1,8 @@
 from typing import Callable, Sequence, Tuple
 
 import numpy as np
+
+np.random.seed(86)
 import pytest
 
 from glompo.common.corebase import _CombiCore
@@ -257,12 +259,12 @@ class TestTimeAnnealing:
 class TestValueAnnealing:
 
     @pytest.mark.parametrize("path1, path2, output", [([1000], [1], False),
-                                                      ([1000], [10], False),
-                                                      ([1000], [100], False),
-                                                      ([1000], [500], False),
-                                                      ([1000], [999], False)
-                                                      ])
+                                                      ([1000], [999], False),
+                                                      ([1000], [2000], False),
+                                                      ([1000], [3400], True),
+                                                      ([-50], [120], True)])
     def test_condition(self, path1, path2, output):
+        np.random.seed(86)
         cond = ValueAnnealing()
         log = FakeLog(path1, path2)
         assert cond(log, 1, 2) == output
