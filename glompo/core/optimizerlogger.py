@@ -86,10 +86,12 @@ class OptimizerLogger:
             os.chdir(filename)
 
             sum_data = {}
+            digits = len(str(max(self._storage)))
             for optimizer in self._storage:
-                opt_id = self._storage[optimizer].metadata["Optimizer ID"]
+                opt_id = int(self._storage[optimizer].metadata["Optimizer ID"])
                 opt_type = self._storage[optimizer].metadata["Optimizer Type"]
-                self._write_file(optimizer, f"{opt_id}_{opt_type}")
+                title = f"{opt_id:0{digits}}_{opt_type}"
+                self._write_file(optimizer, title)
 
                 # Add optimizer to summary file
                 opt_history = self.get_history(optimizer)
@@ -107,7 +109,7 @@ class OptimizerLogger:
                     f_best = best['fx_best']
                 sum_data[optimizer] = {'f_best': f_best, 'x_best': x_best}
 
-            with open("0_SummaryBest.yml", "w+") as file:
+            with open(f"{'0' * digits}_SummaryBest.yml", "w+") as file:
                 yaml.dump(sum_data, file, default_flow_style=False, sort_keys=False)
 
         os.chdir(orig_dir)
