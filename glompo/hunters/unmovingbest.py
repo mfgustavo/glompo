@@ -1,10 +1,10 @@
 from .basehunter import BaseHunter
 from ..core.optimizerlogger import OptimizerLogger
 
-__all__ = ("PseudoConverged",)
+__all__ = ("BestUnmoving",)
 
 
-class PseudoConverged(BaseHunter):
+class BestUnmoving(BaseHunter):
 
     def __init__(self, calls: int, tol: float = 0):
         """ Returns True if the victim's best value has not changed by more than tol fraction in the last 'calls'

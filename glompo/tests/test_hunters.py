@@ -1,10 +1,7 @@
 from typing import Callable, Sequence, Tuple
 
 import numpy as np
-
-np.random.seed(86)
 import pytest
-
 from glompo.common.corebase import _CombiCore
 from glompo.core.optimizerlogger import OptimizerLogger
 from glompo.hunters.basehunter import BaseHunter, _AndHunter, _OrHunter
@@ -12,9 +9,9 @@ from glompo.hunters.lastptsinvalid import LastPointsInvalid
 from glompo.hunters.min_fcalls import MinFuncCalls
 from glompo.hunters.min_iterations import MinIterations
 from glompo.hunters.parameterdistance import ParameterDistance
-from glompo.hunters.pseudoconv import PseudoConverged
 from glompo.hunters.timeannealing import TimeAnnealing
 from glompo.hunters.type import TypeHunter
+from glompo.hunters.unmovingbest import BestUnmoving
 from glompo.hunters.valueannealing import ValueAnnealing
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 
@@ -148,7 +145,7 @@ class TestMinTrainingPoints:
         MinIterations(threshold)
 
 
-class TestPseudoConv:
+class TestBestUnmoving:
     @pytest.fixture
     def log(self, request):
         log = OptimizerLogger()
@@ -173,7 +170,7 @@ class TestPseudoConv:
                                                          (30, 0, False, 3),
                                                          (125, 0.91, True, 5)], indirect=("log",))
     def test_condition(self, iters, tol, output, log):
-        cond = PseudoConverged(iters, tol)
+        cond = BestUnmoving(iters, tol)
         assert cond(log, None, 1) is output
 
 

@@ -3,23 +3,25 @@
 """
 
 from .basehunter import BaseHunter
+from .evalsunmoving import EvaluationsUnmoving
 from .lastptsinvalid import LastPointsInvalid
 from .min_fcalls import MinFuncCalls
 from .min_iterations import MinIterations
 from .parameterdistance import ParameterDistance
-from .pseudoconv import PseudoConverged
 from .stepsize import StepSize
 from .timeannealing import TimeAnnealing
 from .type import TypeHunter
+from .unmovingbest import BestUnmoving
 from .valueannealing import ValueAnnealing
 
 __all__ = ("BaseHunter",
            "MinIterations",
-           "PseudoConverged",
+           "BestUnmoving",
            "ValueAnnealing",
            "TimeAnnealing",
            "ParameterDistance",
            "MinFuncCalls",
            "LastPointsInvalid",
            "TypeHunter",
-           "StepSize")
+           "StepSize",
+           "EvaluationsUnmoving")

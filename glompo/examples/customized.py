@@ -5,7 +5,7 @@ from glompo import GloMPOManager
 from glompo.benchmark_fncs import Michalewicz
 from glompo.convergence import MaxFuncCalls, TargetCost
 from glompo.generators import ExploitExploreGenerator
-from glompo.hunters import ParameterDistance, PseudoConverged, TypeHunter, ValueAnnealing
+from glompo.hunters import BestUnmoving, ParameterDistance, TypeHunter, ValueAnnealing
 from glompo.opt_selectors import ChainSelector
 
 try:
@@ -96,12 +96,12 @@ if __name__ == '__main__':
     #   1. We want to kill CMA optimizers early and not let them spend many iterations converging. We also want to
     #      kill optimizers that come too close together so that we are not wasting iterations exploring the same region
     #      repeatedly:
-    cma_killers = TypeHunter(CMAOptimizer) & (PseudoConverged(calls=1000, tol=0.05) |
+    cma_killers = TypeHunter(CMAOptimizer) & (BestUnmoving(calls=1000, tol=0.05) |
                                               ParameterDistance(bounds=task.bounds, relative_distance=0.05,
                                                                 test_all=True))
     #   2. We want to give DE optimizers more time to find the answer, we also want to avoid killing optimizers with
     #      function values that are very close together even though they are far apart.
-    de_killers = TypeHunter(Nevergrad) & (PseudoConverged(calls=2000, tol=0.01) & ValueAnnealing() |
+    de_killers = TypeHunter(Nevergrad) & (BestUnmoving(calls=2000, tol=0.01) & ValueAnnealing() |
                                           ParameterDistance(bounds=task.bounds, relative_distance=0.01, test_all=True))
 
     all_killers = cma_killers | de_killers
@@ -150,8 +150,6 @@ if __name__ == '__main__':
                             working_dir="customized_example_outputs",  # Directory to save result files
                             overwrite_existing=True,  # Deletes any previous results in working_dir
                             max_jobs=max_jobs,  # Maximum number of threads optimizers can use
-                            task_args=None,  # Optional arguments needed for task.__call__()
-                            task_kwargs=None,    # Optional keyword arguments needed for task.__call__()
                             backend=backend,
                             convergence_checker=checker,
                             x0_generator=generator,
