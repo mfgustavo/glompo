@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Tuple, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 from .baseselector import BaseSelector
 from ..core.optimizerlogger import OptimizerLogger
@@ -12,8 +12,9 @@ class CycleSelector(BaseSelector):
 
     def __init__(self,
                  avail_opts: List[Union[Type[BaseOptimizer],
-                                        Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]]]]):
-        super().__init__(avail_opts)
+                                        Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]]]],
+                 allow_spawn: Optional[Callable] = None):
+        super().__init__(avail_opts, allow_spawn)
         self.i = -1
         self.old = -1
 
@@ -21,7 +22,11 @@ class CycleSelector(BaseSelector):
                          manager: 'GloMPOManager',
                          log: OptimizerLogger,
                          slots_available: int) -> Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]],
-                                                        None]:
+                                                        None, bool]:
+
+        if not self.allow_spawn(manager):
+            return False
+
         self.old = self.i
         self.i = (self.i + 1) % len(self.avail_opts)
         selected = self.avail_opts[self.i]

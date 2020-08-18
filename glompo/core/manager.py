@@ -120,7 +120,7 @@ class GloMPOManager:
         killing_conditions: Optional[BaseHunter] = None
             Criteria used for killing optimizers. A collection of subclasses of BaseHunter are provided, these can be
             used in combinations of and (&) and or (|) to tailor various conditions.
-                E.g.: killing_conditions = (PseudoConverged(100, 0.01) & TimeAnnealing(2) & ValueAnnealing()) |
+                E.g.: killing_conditions = (BestUnmoving(100, 0.01) & TimeAnnealing(2) & ValueAnnealing()) |
                                            ParameterDistance(0.1)
                 In this case GloMPO will only allow a hunt to terminate an optimizer if
                     1) an optimizer's best value has not improved by more than 1% in 100 function calls,
@@ -273,6 +273,7 @@ class GloMPOManager:
         self.split_printstreams = split_printstreams
         self.visualisation = visualisation
         self.hunt_frequency = hunt_frequency
+        self.spawning_opts = True
 
         # Initialise support classes
         self.opt_log = OptimizerLogger()
@@ -380,14 +381,21 @@ class GloMPOManager:
                 self.logger.debug("Checking for hanging processes")
                 self._inspect_children()
 
-                self.converged = self.convergence_checker(self)
+                all_dead = len([p for p in self.optimizer_packs.values() if p.process.is_alive()]) == 0
+                checker_condition = self.convergence_checker(self)
+
+                if checker_condition:
+                    reason = nested_string_formatting(self.convergence_checker.str_with_result())
+                else:
+                    reason = "No optimizers alive, spawning stopped."
+
+                self.converged = checker_condition or (all_dead and not self.spawning_opts)
                 if self.converged:
                     self.logger.info("Convergence Reached")
 
             self.logger.info("Exiting manager loop")
             self.logger.info(f"Exit conditions met: \n"
-                             f"{nested_string_formatting(self.convergence_checker.str_with_result())}")
-            reason = self.convergence_checker.str_with_result()
+                             f"{reason}")
 
             self.logger.debug("Cleaning up multiprocessing")
             self._stop_all_children()
@@ -431,7 +439,7 @@ class GloMPOManager:
 
         is_possible = True  # Flag if no optimizer can fit in the slots available due to its configuration
         started_new = False
-        while count < self.max_jobs and is_possible:
+        while count < self.max_jobs and is_possible and self.spawning_opts:
             opt = self._setup_new_optimizer(self.max_jobs - count)
             if opt:
                 self._start_new_job(*opt)
@@ -489,7 +497,10 @@ class GloMPOManager:
 
         selector_return = self.selector.select_optimizer(self, self.opt_log, slots_available)
 
-        if selector_return is None:
+        if not selector_return:
+            if selector_return is False:
+                self.logger.info("Optimizer spawning deactivated.")
+                self.spawning_opts = False
             return None
 
         selected, init_kwargs, call_kwargs = selector_return

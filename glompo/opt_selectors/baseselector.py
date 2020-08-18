@@ -2,7 +2,7 @@
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Tuple, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 from ..core.optimizerlogger import OptimizerLogger
 from ..optimizers.baseoptimizer import BaseOptimizer
@@ -18,7 +18,8 @@ class BaseSelector(ABC):
 
     def __init__(self,
                  avail_opts: List[Union[Type[BaseOptimizer],
-                                        Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]]]]):
+                                        Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]]]],
+                 allow_spawn: Optional[Callable[['GloMPOManager'], bool]] = None):
         """ Parameters
             ----------
             avail_opts: Set[Union[Type[BaseOptimizer], Tuple[BaseOptimizer, Dict[str, Any], Dict[str, Any]]]]
@@ -31,6 +32,10 @@ class BaseSelector(ABC):
                     a) BaseOptimizer subclasses as above;
                     b) Dictionary of kwargs used to initialise a BaseOptimizer instance;
                     c) Dictionary of kwargs for calling the BaseOptimizer().minimize() method.
+
+            allow_spawn: Optional[Callable[['GloMPOManager'], bool]]
+                Optional function sent to the selector which is called with the manager object as argument. If it
+                returns False the manager will no longer spawn optimizers.
         """
         self.logger = logging.getLogger('glompo.selector')
         if not isinstance(avail_opts, list):
@@ -65,6 +70,11 @@ class BaseSelector(ABC):
                 raise ValueError(f"Cannot parse {item}. Expected:  Union[Type[BaseOptimizer], Tuple[BaseOptimizer, "
                                  f"Dict[str, Any], Dict[str, Any]]] expected.")
 
+        if callable(allow_spawn):
+            self.allow_spawn = allow_spawn
+        else:
+            self.allow_spawn = lambda x: True
+
     def glompo_log_repr(self):
         """ Returns a representation of this class in dictionary format which is human-readable and can be saved as
             part of the GloMPO manager opt_log yaml file.
@@ -83,7 +93,7 @@ class BaseSelector(ABC):
                          manager: 'GloMPOManager',
                          log: OptimizerLogger,
                          slots_available: int) -> Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]],
-                                                        None]:
+                                                        None, bool]:
         """ Provided with the manager object and opt_log file of all optimizers, returns a optimizer class
             followed by a dictionary of initialisation keyword arguments and then a dictionary of call kwargs for the
             BaseOptimizer().minimize() method.
@@ -99,6 +109,18 @@ class BaseSelector(ABC):
                 existing threads.
                 GloMPO API assumes that the selector will attempt to this parameter and return an optimizer which
                 requires less threads than slots_available. If this is not possible then None is returned
+
+            Returns
+            -------
+            Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]] / None / False
+                Optimizer class and configuration parameters. Manager will use this to initialise and start a new
+                optimizer.
+
+                None is returned in the case that no available optimizer configurations can satisfy the number of worker
+                slots available.
+
+                False is a special return which flags the optimizer to never try and start another optimizer for the
+                remainder of the optimization.
         """
 
     def __contains__(self, item):

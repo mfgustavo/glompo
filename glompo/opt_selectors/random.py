@@ -1,5 +1,5 @@
 import random
-from typing import Any, Dict, Tuple, Type
+from typing import Any, Dict, Tuple, Type, Union
 
 from .baseselector import BaseSelector
 from ..core.optimizerlogger import OptimizerLogger
@@ -12,7 +12,11 @@ class RandomSelector(BaseSelector):
     def select_optimizer(self,
                          manager: 'GloMPOManager',
                          log: OptimizerLogger,
-                         slots_available: int) -> Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]]:
+                         slots_available: int) -> Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]],
+                                                        None, bool]:
+
+        if not self.allow_spawn(manager):
+            return False
 
         viable = []
         for opt in self.avail_opts:
