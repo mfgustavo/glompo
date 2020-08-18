@@ -107,7 +107,9 @@ class OptimizerLogger:
 
                     x_best = best['x']
                     f_best = best['fx_best']
-                sum_data[optimizer] = {'f_best': f_best, 'x_best': x_best}
+                sum_data[optimizer] = {'end_cond': self._storage[optimizer].metadata["End Condition"],
+                                       'f_best': f_best,
+                                       'x_best': x_best}
 
             with open(f"{'0' * digits}_SummaryBest.yml", "w+") as file:
                 yaml.dump(sum_data, file, default_flow_style=False, sort_keys=False)
