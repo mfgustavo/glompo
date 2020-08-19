@@ -262,7 +262,7 @@ class GloMPOScope:
         for line in self.streams[opt_id]:
             color = colors(self.n_streams - threshold)
             if any([line == _ for _ in ['opt_kill', 'opt_norm']]):
-                color = 'red'
+                color = 'black'
             self.streams[opt_id][line].set_color(color)
 
         if opt_type:
