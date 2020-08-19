@@ -622,7 +622,8 @@ class GloMPOManager:
 
     def _process_results(self):
         """ Retrieve results from the queue and process them into the opt_log. """
-        i_count = 0
+
+        # Pause / restart optimizers based on the status of the queue
         if self.optimizer_queue.qsize() > 10 and not self.opts_paused:
             self.logger.debug(f"Results queue swamped ({self.optimizer_queue.qsize()} results). Pausing optimizers.")
             self.opts_paused = True
@@ -636,6 +637,7 @@ class GloMPOManager:
                 if pack.process.is_alive():
                     pack.allow_run_event.set()
 
+        i_count = 0
         while not self.optimizer_queue.empty() and i_count < 10:
             res = self.optimizer_queue.get_nowait()
             i_count += 1
