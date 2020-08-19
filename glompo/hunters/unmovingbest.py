@@ -1,3 +1,5 @@
+import numpy as np
+
 from .basehunter import BaseHunter
 from ..core.optimizerlogger import OptimizerLogger
 
@@ -21,26 +23,11 @@ class BestUnmoving(BaseHunter):
         vals = log.get_history(victim_opt_id, "fx_best")
         fcalls = log.get_history(victim_opt_id, "f_call_opt")
 
-        if fcalls[-1] <= self.calls:
+        i_crit = np.searchsorted(fcalls - np.max(fcalls) + self.calls, 0) - 1
+        if i_crit == -1:
+            # If there are insufficient iterations the hunter will return False
             self._last_result = False
             return self._last_result
 
-        fbest_current = vals[-1]
-
-        i = -1
-        nearest_iter = fcalls[-1]
-        while fcalls[-1] - nearest_iter < self.calls:
-            i += 1
-            try:
-                nearest_iter = fcalls[-2 - i]
-            except IndexError:
-                # Some optimizers with multiple calls per iteration may fall out here since they can't iterate back
-                # further but still have not found a match.
-                self._last_result = False
-                return self._last_result
-        i += 2
-
-        fbest_calls = vals[-i]
-
-        self._last_result = abs(fbest_current - fbest_calls) <= abs(fbest_calls * self.tol)
+        self._last_result = abs(vals[-1] - vals[i_crit]) <= abs(vals[i_crit] * self.tol)
         return self._last_result
