@@ -630,16 +630,10 @@ class GloMPOManager:
         # Pause / restart optimizers based on the status of the queue
         if self.optimizer_queue.qsize() > 10 and not self.opts_paused:
             self.logger.debug(f"Results queue swamped ({self.optimizer_queue.qsize()} results). Pausing optimizers.")
-            self.opts_paused = True
-            for pack in self.optimizer_packs.values():
-                if pack.process.is_alive():
-                    pack.allow_run_event.clear()
+            self._toggle_optimizers(0)
         elif self.optimizer_queue.qsize() <= 10 and self.opts_paused:
             self.logger.debug("Resuming optimizers.")
-            self.opts_paused = False
-            for pack in self.optimizer_packs.values():
-                if pack.process.is_alive():
-                    pack.allow_run_event.set()
+            self._toggle_optimizers(1)
 
         i_count = 0
         while not self.optimizer_queue.empty() and i_count < 10:
@@ -734,6 +728,8 @@ class GloMPOManager:
         for opt_id in self.optimizer_packs:
             if self.optimizer_packs[opt_id].process.is_alive():
                 self.optimizer_packs[opt_id].signal_pipe.send(1)
+                if self.opts_paused:
+                    self._toggle_optimizers(1)
                 self.graveyard.add(opt_id)
                 self.opt_log.put_metadata(opt_id, "Stop Time", datetime.now())
                 self.opt_log.put_metadata(opt_id, "End Condition", "GloMPO Convergence")
@@ -794,3 +790,16 @@ class GloMPOManager:
                 else:
                     self.logger.warning(f"Could not join optimizer {opt_id}. May crash out with it still running and "
                                         f"thus generate errors.")
+
+    def _toggle_optimizers(self, on_off: int):
+        """ Sends pause or resume signals to all optimizers based on the on_off parameter:
+            0 -> Optimizers off
+            1 -> Optimizers on
+        """
+        self.opts_paused = not on_off
+        for pack in self.optimizer_packs.values():
+            if pack.process.is_alive():
+                if on_off == 1:
+                    pack.allow_run_event.set()
+                else:
+                    pack.allow_run_event.clear()
