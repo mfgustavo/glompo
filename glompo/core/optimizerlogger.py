@@ -5,7 +5,6 @@ from math import inf
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 import yaml
-
 from glompo.common.helpers import FileNameHandler, LiteralWrapper, literal_presenter
 
 __all__ = ("OptimizerLogger",)
@@ -99,15 +98,18 @@ class OptimizerLogger:
                 i_tot = len(opt_history)
                 x_best = None
                 f_best = float('nan')
+                f_calls = None
                 if i_tot > 0 and opt_history[i_tot]['i_best'] > -1:
                     last = opt_history[i_tot]
                     i_best = last['i_best']
+                    f_calls = last['f_call_opt']
 
                     best = opt_history[i_best]
 
                     x_best = best['x']
                     f_best = best['fx_best']
                 sum_data[optimizer] = {'end_cond': self._storage[optimizer].metadata["End Condition"],
+                                       'f_calls': f_calls,
                                        'f_best': f_best,
                                        'x_best': x_best}
 
