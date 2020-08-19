@@ -390,7 +390,7 @@ class GloMPOManager:
                 checker_condition = self.convergence_checker(self)
 
                 if checker_condition:
-                    reason = nested_string_formatting(self.convergence_checker.str_with_result())
+                    reason = self.convergence_checker.str_with_result()
                 else:
                     reason = "No optimizers alive, spawning stopped."
 
@@ -400,7 +400,7 @@ class GloMPOManager:
 
             self.logger.info("Exiting manager loop")
             self.logger.info(f"Exit conditions met: \n"
-                             f"{reason}")
+                             f"{nested_string_formatting(reason)}")
 
             self.logger.debug("Cleaning up multiprocessing")
             self._stop_all_children()
@@ -426,6 +426,11 @@ class GloMPOManager:
 
             self.logger.debug("Saving summary file results")
             self._save_log(self.result, reason, caught_exception)
+
+            self.result = Result(self.result.x,
+                                 self.result.fx,
+                                 {**self.result.stats, 'end_cond': reason},
+                                 self.result.origin)
 
             if not self._proc_backend and self.split_printstreams:
                 sys.stdout.close()
@@ -707,7 +712,6 @@ class GloMPOManager:
     def _find_best_result(self) -> Result:
         best_fx = np.inf
         best_x = []
-        best_stats = None
         best_origin = None
 
         for opt_id in self.optimizer_packs:
@@ -721,6 +725,12 @@ class GloMPOManager:
                     best_origin = {"opt_id": opt_id,
                                    "type": self.opt_log.get_metadata(opt_id, "Optimizer Type")}
                     self.logger.debug("Updated best result")
+
+        best_stats = {'f_evals': self.f_counter,
+                      'opts_started': self.o_counter,
+                      'opts_killed': len(self.hunt_victims),
+                      'opts_conv': self.conv_counter,
+                      'end_cond': None}
 
         return Result(best_x, best_fx, best_stats, best_origin)
 
@@ -762,7 +772,6 @@ class GloMPOManager:
                                                     "Killed": len(self.hunt_victims),
                                                     "Converged": self.conv_counter}},
                         "Solution": {"fx": result.fx,
-                                     "stats": result.stats,
                                      "origin": result.origin,
                                      "exit cond.": LiteralWrapper(nested_string_formatting(reason)),
                                      "x": result.x},

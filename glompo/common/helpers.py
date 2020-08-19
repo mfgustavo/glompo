@@ -90,9 +90,7 @@ class FileNameHandler:
             os.chdir(path)
 
     def __enter__(self):
-        print(f"Enter: {os.getcwd()}")
         return self.filename
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         os.chdir(self.orig_dir)
-        print(f"Exit: {os.getcwd()}")
