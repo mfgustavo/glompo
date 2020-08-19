@@ -97,8 +97,6 @@ class GloMPOScope:
 
         # Create custom legend
         self.leg_elements = [lines.Line2D([], [], ls='-', c='black', label='Optimizer Evaluations'),
-                             lines.Line2D([], [], ls='', marker=6, c='black', label='Hunt Started'),
-                             lines.Line2D([], [], ls='', marker=7, c='black', label='Hunt Success'),
                              lines.Line2D([], [], ls='', marker='x', c='black', label='Optimizer Killed'),
                              lines.Line2D([], [], ls='', marker='*', c='black', label='Optimizer Converged')]
 
@@ -233,8 +231,6 @@ class GloMPOScope:
 
         self.n_streams += 1
         self.streams[opt_id] = {'all_opt': self.ax.plot([], [])[0],  # Follows every optimizer iteration
-                                'hunt_init': self.ax.plot([], [], ls='', marker=6)[0],  # Hunt start
-                                'hunt_up': self.ax.plot([], [], ls='', marker=7)[0],  # Hunt result
                                 'opt_kill': self.ax.plot([], [], ls='', marker='x', zorder=500)[0],  # Killed opt
                                 'opt_norm': self.ax.plot([], [], ls='', marker='*', zorder=500)[0],  # Converged opt
                                 }
@@ -290,16 +286,6 @@ class GloMPOScope:
                     y = last
 
         self._update_point(opt_id, 'all_opt', (x, y))
-        self._redraw_graph()
-
-    def update_hunt_start(self, opt_id: int):
-        """ Given pt tuple is used to update the opt_id start hunt plot."""
-        self._update_point(opt_id, 'hunt_init')
-        self._redraw_graph()
-
-    def update_hunt_end(self, opt_id: int):
-        """ Given pt tuple is used to update the opt_id end hunt plot."""
-        self._update_point(opt_id, 'hunt_up')
         self._redraw_graph()
 
     def update_kill(self, opt_id: int):

@@ -668,9 +668,6 @@ class GloMPOManager:
             self.hunt_counter += 1
             self.last_hunt = self.f_counter
 
-            if self.visualisation:
-                self.scope.update_hunt_start(hunter_id)
-
             self.logger.debug("Starting hunt")
             for victim_id in self.optimizer_packs:
                 in_graveyard = victim_id in self.graveyard
@@ -688,8 +685,6 @@ class GloMPOManager:
                         if victim_id not in self.graveyard:
                             self._shutdown_job(victim_id, hunter_id, reason)
 
-                        if self.visualisation:
-                            self.scope.update_hunt_end(hunter_id)
             self.logger.debug("Hunting complete")
 
     def _shutdown_job(self, opt_id: int, hunter_id: int, reason: str):
