@@ -1,13 +1,14 @@
 """ Useful static functions used throughout GloMPO. """
-
+import os
 from typing import Sequence, Tuple
 
 import numpy as np
 import yaml
 
-__all__ = ("nested_string_formatting",
+__all__ = ("LiteralWrapper",
+           "FileNameHandler",
+           "nested_string_formatting",
            "is_bounds_valid",
-           "LiteralWrapper",
            "literal_presenter",
            "distance")
 
@@ -66,10 +67,6 @@ def is_bounds_valid(bounds: Sequence[Tuple[float, float]], raise_invalid=True) -
     return True
 
 
-class LiteralWrapper(str):
-    """ Used by yaml to save some block strings as literals """
-
-
 def literal_presenter(dumper: yaml.Dumper, data: str):
     """ Wrapper around string for correct presentation in YAML file. """
     return dumper.represent_scalar('tag:yaml.org,2002:str', data.replace(' \n', '\n'), style='|')
@@ -77,3 +74,25 @@ def literal_presenter(dumper: yaml.Dumper, data: str):
 
 def distance(pt1: Sequence[float], pt2: Sequence[float]):
     return np.sqrt(np.sum((np.array(pt1) - np.array(pt2)) ** 2))
+
+
+class LiteralWrapper(str):
+    """ Used by yaml to save some block strings as literals """
+
+
+class FileNameHandler:
+    def __init__(self, name: str):
+        self.filename = name
+        self.orig_dir = os.getcwd()
+        if '/' in name:
+            path, self.filename = name.rsplit('/', 1)
+            os.makedirs(path, exist_ok=True)
+            os.chdir(path)
+
+    def __enter__(self):
+        print(f"Enter: {os.getcwd()}")
+        return self.filename
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        os.chdir(self.orig_dir)
+        print(f"Exit: {os.getcwd()}")

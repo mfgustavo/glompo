@@ -173,7 +173,7 @@ class TestManager:
 
     def setup_method(self):
         os.chdir(self.base_wd)
-        shutil.rmtree("tests/temp_outputs", ignore_errors=True)
+        shutil.rmtree("_tmp/temp_outputs", ignore_errors=True)
 
     @pytest.mark.parametrize("kwargs", [{'task': None},
                                         {'optimizer_selector': {'default': OptimizerTest2}},
@@ -286,7 +286,7 @@ class TestManager:
         manager = GloMPOManager(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,
                                 optimizer_selector=CycleSelector([SilentOptimizer]),
                                 bounds=((0, 1), (0, 1), (0, 1)),
-                                working_dir="tests/temp_outputs",
+                                working_dir="_tmp/temp_outputs",
                                 overwrite_existing=True,
                                 max_jobs=1,
                                 summary_files=3,
@@ -295,7 +295,7 @@ class TestManager:
         with pytest.warns(RuntimeWarning, match="terminated normally without sending a"):
             manager.start_manager()
 
-        with open("tests/temp_outputs/glompo_optimizer_logs/1_SilentOptimizer.yml", 'r') as stream:
+        with open("_tmp/temp_outputs/glompo_optimizer_logs/1_SilentOptimizer.yml", 'r') as stream:
             data = yaml.safe_load(stream)
             assert "Approximate Stop Time" in data['DETAILS']
             assert data['DETAILS']['End Condition'] == "Normal termination (Reason unknown)"
@@ -306,7 +306,7 @@ class TestManager:
         manager = GloMPOManager(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,
                                 optimizer_selector=CycleSelector([MessagingOptimizer]),
                                 bounds=((0, 1), (0, 1), (0, 1)),
-                                working_dir="tests/temp_outputs",
+                                working_dir="_tmp/temp_outputs",
                                 overwrite_existing=True,
                                 max_jobs=1,
                                 summary_files=3,
@@ -317,7 +317,7 @@ class TestManager:
             for record in warns:
                 assert "terminated normally without sending a" not in record.message
 
-        with open("tests/temp_outputs/glompo_optimizer_logs/1_MessagingOptimizer.yml", 'r') as stream:
+        with open("_tmp/temp_outputs/glompo_optimizer_logs/1_MessagingOptimizer.yml", 'r') as stream:
             data = yaml.safe_load(stream)
             assert "Approximate Stop Time" not in data['DETAILS']
             assert "Stop Time" in data['DETAILS']
@@ -337,7 +337,7 @@ class TestManager:
             manager = GloMPOManager(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,
                                     optimizer_selector=CycleSelector([HangingOptimizer]),
                                     bounds=((0, 1), (0, 1), (0, 1)),
-                                    working_dir="tests/temp_outputs",
+                                    working_dir="_tmp/temp_outputs",
                                     overwrite_existing=True,
                                     max_jobs=1,
                                     summary_files=3,
@@ -349,7 +349,7 @@ class TestManager:
             with pytest.warns(RuntimeWarning, match="seems to be hanging. Forcing termination."):
                 manager.start_manager()
 
-            with open("tests/temp_outputs/glompo_optimizer_logs/1_HangingOptimizer.yml", 'r') as stream:
+            with open("_tmp/temp_outputs/glompo_optimizer_logs/1_HangingOptimizer.yml", 'r') as stream:
                 data = yaml.safe_load(stream)
                 assert "Approximate Stop Time" in data['DETAILS']
                 assert data['DETAILS']['End Condition'] == "Forced GloMPO Termination"
@@ -368,7 +368,7 @@ class TestManager:
             manager = GloMPOManager(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,
                                     optimizer_selector=CycleSelector([HangOnEndOptimizer]),
                                     bounds=((0, 1), (0, 1), (0, 1)),
-                                    working_dir="tests/temp_outputs",
+                                    working_dir="_tmp/temp_outputs",
                                     overwrite_existing=True,
                                     max_jobs=2,
                                     summary_files=3,
@@ -382,7 +382,7 @@ class TestManager:
             with pytest.warns(RuntimeWarning, match="Forced termination signal sent to optimizer"):
                 manager.start_manager()
 
-            with open("tests/temp_outputs/glompo_optimizer_logs/2_HangOnEndOptimizer.yml", 'r') as stream:
+            with open("_tmp/temp_outputs/glompo_optimizer_logs/2_HangOnEndOptimizer.yml", 'r') as stream:
                 data = yaml.safe_load(stream)
                 assert "Approximate Stop Time" in data['DETAILS']
                 assert data['DETAILS']['End Condition'] == "Forced GloMPO Termination"
@@ -394,7 +394,7 @@ class TestManager:
         manager = GloMPOManager(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,
                                 optimizer_selector=CycleSelector([ErrorOptimizer]),
                                 bounds=((0, 1), (0, 1), (0, 1)),
-                                working_dir="tests/temp_outputs",
+                                working_dir="_tmp/temp_outputs",
                                 overwrite_existing=True,
                                 max_jobs=1,
                                 summary_files=3,
@@ -404,7 +404,7 @@ class TestManager:
         with pytest.warns(RuntimeWarning, match="terminated in error"):
             manager.start_manager()
 
-        with open("tests/temp_outputs/glompo_optimizer_logs/1_ErrorOptimizer.yml", 'r') as stream:
+        with open("_tmp/temp_outputs/glompo_optimizer_logs/1_ErrorOptimizer.yml", 'r') as stream:
             data = yaml.safe_load(stream)
             assert "Approximate Stop Time" in data['DETAILS']
             assert "Error termination (exitcode" in data['DETAILS']['End Condition']
@@ -416,7 +416,7 @@ class TestManager:
         manager = GloMPOManager(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,
                                 optimizer_selector=CycleSelector([SilentOptimizer]),
                                 bounds=((0, 1), (0, 1), (0, 1)),
-                                working_dir="tests/temp_outputs",
+                                working_dir="_tmp/temp_outputs",
                                 overwrite_existing=True,
                                 max_jobs=1,
                                 summary_files=1,
@@ -426,7 +426,7 @@ class TestManager:
                                                 "This is a test of the GloMPO error management system."):
             manager.start_manager()
 
-        with open("tests/temp_outputs/glompo_manager_log.yml", "r") as stream:
+        with open("_tmp/temp_outputs/glompo_manager_log.yml", "r") as stream:
             data = yaml.safe_load(stream)
             assert "Process Crash" in data['Solution']['exit cond.']
             sleep(1)  # Delay for process cleanup
@@ -539,7 +539,7 @@ class TestManager:
                                                                                       'precision': 1e-8,
                                                                                       'gamma': [100, 100000]}, None)]),
                                 bounds=((-100, 100), (-100, 100)),
-                                working_dir='tests/outputs',
+                                working_dir='_tmp/mini_test',
                                 overwrite_existing=True,
                                 max_jobs=3,
                                 backend=backend,
@@ -559,14 +559,12 @@ class TestManager:
     def teardown_class(cls):
         os.chdir(cls.base_wd)
         try:
-            shutil.rmtree("tests/temp_outputs", ignore_errors=True)
+            shutil.rmtree("_tmp/temp_outputs", ignore_errors=True)
             shutil.rmtree("glompo_optimizer_printstreams", ignore_errors=True)
             is_save = '--save-outs' in sys.argv
-            is_mini = ('--run-minimize' in sys.argv) or ('-M' in sys.argv)
-            if is_mini and not is_save:
-                shutil.rmtree("tests/outputs", ignore_errors=True)
+            if not is_save:
                 try:
-                    os.rmdir('tests')
+                    os.rmdir('_tmp')
                 except OSError:
                     pass
         except FileNotFoundError:

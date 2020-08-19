@@ -147,9 +147,8 @@ class GloMPOManager:
             Indicates the level of saving the user would like:
                 0 - No opt_log files are saved.
                 1 - Only the manager summary file is saved.
-                2 - The manager summary file and opt_log file of the optimizer from which the final solution was
-                    extracted are saved.
-                3 - The manager summary file and the opt_log files of every started optimizer are saved.
+                2 - The manager summary log and combined optimizers summary files are saved.
+                3 - All of the above plus all the individual optimizer log files are saved.
 
         visualisation: bool = False
             If True then a dynamic plot is generated to demonstrate the performance of the optimizers. Further options
@@ -326,13 +325,18 @@ class GloMPOManager:
 
         # Purge Old Results
         files = os.listdir(".")
-        if any([file in files for file in ["glompo_manager_log.yml", "glompo_optimizer_logs",
-                                           "glompo_best_optimizer_log"]]):
+        if any([file in files for file in ["glompo_manager_log.yml", "glompo_optimizer_logs"]]):
             if overwrite_existing:
                 self.logger.debug("Old results found")
-                shutil.rmtree("glompo_manager_log.yml", ignore_errors=True)
+                try:
+                    os.remove("glompo_manager_log.yml")
+                except FileNotFoundError:
+                    pass
+                try:
+                    os.remove("opt_best_summary.yml")
+                except FileNotFoundError:
+                    pass
                 shutil.rmtree("glompo_optimizer_logs", ignore_errors=True)
-                shutil.rmtree("glompo_best_optimizer_log", ignore_errors=True)
                 shutil.rmtree("glompo_optimizer_printstreams", ignore_errors=True)
                 self.logger.warning("Deleted old results.")
             else:
@@ -421,7 +425,7 @@ class GloMPOManager:
                 self.scope.generate_movie()
 
             self.logger.debug("Saving summary file results")
-            self._save_log(best_id, self.result, reason, caught_exception)
+            self._save_log(self.result, reason, caught_exception)
 
             if not self._proc_backend and self.split_printstreams:
                 sys.stdout.close()
@@ -736,7 +740,7 @@ class GloMPOManager:
                 self.optimizer_packs[opt_id].process.join(10)
                 self.logger.debug(f"Termination signal sent to optimizer {opt_id}")
 
-    def _save_log(self, best_id: int, result: Result, reason: str, caught_exception: bool):
+    def _save_log(self, result: Result, reason: str, caught_exception: bool):
         if self.summary_files > 0:
             if caught_exception:
                 reason = f"Process Crash: {caught_exception}"
@@ -770,12 +774,12 @@ class GloMPOManager:
                 self.logger.debug("Saving manager summary file.")
                 yaml.dump(data, file, default_flow_style=False, sort_keys=False)
 
+            if self.summary_files >= 2:
+                self.logger.debug("Saving optimizers summary file.")
+                self.opt_log.save_summary(f"opt_best_summary.yml")
             if self.summary_files == 3:
-                self.logger.debug("Saving optimizer summary files.")
-                self.opt_log.save("glompo_optimizer_logs")
-            elif self.summary_files == 2 and best_id > 0:
-                self.logger.debug("Saving optimizer summary file.")
-                self.opt_log.save("glompo_best_optimizer_log", best_id)
+                self.logger.debug("Saving optimizer log files.")
+                self.opt_log.save_optimizer("glompo_optimizer_logs")
 
     def _cleanup_crash(self, opt_reason: str):
         for opt_id in self.optimizer_packs:

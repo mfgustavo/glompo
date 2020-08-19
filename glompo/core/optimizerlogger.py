@@ -5,7 +5,8 @@ from math import inf
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 import yaml
-from glompo.common.helpers import LiteralWrapper, literal_presenter
+
+from glompo.common.helpers import FileNameHandler, LiteralWrapper, literal_presenter
 
 __all__ = ("OptimizerLogger",)
 
@@ -67,33 +68,32 @@ class OptimizerLogger:
         """ Returns metadata of a given optimizer and key. """
         return self._storage[opt_id].metadata[key]
 
-    def save(self, name: str, opt_id: int = None):
+    def save_optimizer(self, name: str, opt_id: Optional[int] = None):
         """ Saves the contents of the logger into yaml files. If an opt_id is provided only that optimizer will be
             saved using the provided name. Else all optimizers are saved by their opt_id numbers and type in a directory
-            called name. """
+            called name.
+        """
+        with FileNameHandler(name) as filename:
+            if opt_id:
+                self._write_file(opt_id, filename)
+            else:
+                os.makedirs(filename, exist_ok=True)
+                os.chdir(filename)
 
-        filename = name
-        orig_dir = os.getcwd()
-        if '/' in name:
-            path, filename = name.rsplit('/', 1)
-            os.makedirs(path, exist_ok=True)
-            os.chdir(path)
+                digits = len(str(max(self._storage)))
+                for optimizer in self._storage:
+                    opt_id = int(self._storage[optimizer].metadata["Optimizer ID"])
+                    opt_type = self._storage[optimizer].metadata["Optimizer Type"]
+                    title = f"{opt_id:0{digits}}_{opt_type}"
+                    self._write_file(optimizer, title)
 
-        if opt_id:
-            self._write_file(opt_id, filename)
-        else:
-            os.makedirs(filename, exist_ok=True)
-            os.chdir(filename)
-
+    def save_summary(self, name: str):
+        """ Generates a summary file containing the best found point of each optimizer and the reason for their
+            termination. name is the path and filename of the summary file.
+        """
+        with FileNameHandler(name) as filename:
             sum_data = {}
-            digits = len(str(max(self._storage)))
             for optimizer in self._storage:
-                opt_id = int(self._storage[optimizer].metadata["Optimizer ID"])
-                opt_type = self._storage[optimizer].metadata["Optimizer Type"]
-                title = f"{opt_id:0{digits}}_{opt_type}"
-                self._write_file(optimizer, title)
-
-                # Add optimizer to summary file
                 opt_history = self.get_history(optimizer)
 
                 i_tot = len(opt_history)
@@ -111,10 +111,8 @@ class OptimizerLogger:
                                        'f_best': f_best,
                                        'x_best': x_best}
 
-            with open(f"{'0' * digits}_SummaryBest.yml", "w+") as file:
+            with open(filename, "w+") as file:
                 yaml.dump(sum_data, file, default_flow_style=False, sort_keys=False)
-
-        os.chdir(orig_dir)
 
     def _write_file(self, opt_id, filename):
         yaml.add_representer(LiteralWrapper, literal_presenter)

@@ -39,15 +39,15 @@ class TestLogger:
     log.put_message(1, "This is a test of the logger message system")
 
     def test_save(self):
-        self.log.save("outputs/success", 1)
-        self.log.save("outputs/all")
+        self.log.save_optimizer("_tmp/success", 1)
+        self.log.save_optimizer("_tmp/all")
 
-        open("outputs/all/0_GFLSOptimizer.yml", "r")
-        open("outputs/all/1_CMAOptimizer.yml", "r")
-        open("outputs/all/2_ABCMeta.yml", "r")
-        open("outputs/success.yml", "r")
+        open("_tmp/all/0_GFLSOptimizer.yml", "r")
+        open("_tmp/all/1_CMAOptimizer.yml", "r")
+        open("_tmp/all/2_ABCMeta.yml", "r")
+        open("_tmp/success.yml", "r")
 
-        shutil.rmtree("outputs", ignore_errors=True)
+        shutil.rmtree("_tmp", ignore_errors=True)
 
     def test_history0(self):
         hist = self.log.get_history(0)
