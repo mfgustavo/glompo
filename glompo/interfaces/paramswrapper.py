@@ -133,6 +133,6 @@ class GlompoParamsWrapper(BaseOptimizer):
         params_res = MinimizeResult()
         params_res.x = result.x
         params_res.fx = result.fx
-        params_res.success = manager.converged
+        params_res.success = manager.converged and len(result.x) > 0
 
         return params_res
