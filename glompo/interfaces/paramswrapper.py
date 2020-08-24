@@ -66,12 +66,12 @@ class GlompoParamsWrapper(BaseOptimizer):
                 glompo.opt_selectors.BaseSelector for detailed documentation.
             **manager_kwargs
                 Optional arguments to the GloMPOManager initialisation function.
-                Note that all arguments are accepted but required GloMPO arguments 'task', 'n_parms',  and 'bounds'
+                Note that all arguments are accepted but required GloMPO arguments 'task' and 'bounds'
                 will be overwritten as they are passed by the 'minimize' function in accordance with ParAMS API.
         """
 
         self.manager_kwargs = manager_kwargs
-        for kw in ['task', 'n_parms', 'bounds']:
+        for kw in ['task', 'bounds']:
             if kw in self.manager_kwargs:
                 del self.manager_kwargs[kw]
 
