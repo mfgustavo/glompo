@@ -557,8 +557,6 @@ class GloMPOManager:
                     self.opt_log.put_metadata(opt_id, "End Condition", message)
                     self.graveyard.add(opt_id)
                     self.conv_counter += 1
-                elif key == 1:
-                    raise NotImplementedError
                 elif key == 9:
                     self.opt_log.put_message(opt_id, message)
                     self.logger.info(f"Message received: {message}")

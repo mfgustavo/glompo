@@ -92,7 +92,6 @@ class BaseOptimizer(ABC):
         self._FROM_MANAGER_SIGNAL_DICT = {0: self.save_state,
                                           1: self.callstop}
         self._TO_MANAGER_SIGNAL_DICT = {0: "Normal Termination",
-                                        1: "Numerical Errors Detected",
                                         9: "Other Message (Saved to Log)"}
         self.workers = workers
 
