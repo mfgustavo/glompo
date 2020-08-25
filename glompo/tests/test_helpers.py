@@ -1,4 +1,9 @@
-from glompo.common.helpers import nested_string_formatting
+import os
+import shutil
+
+import pytest
+
+from glompo.common.helpers import FileNameHandler, distance, is_bounds_valid, nested_string_formatting
 
 
 class TestHelpers:
@@ -50,3 +55,26 @@ class TestHelpers:
                " OR\n" \
                " FalseHunter() = None\n" \
                "]"
+
+    @pytest.mark.parametrize('bnds, output', [([(0, 1)] * 5, True),
+                                              ([(1, -1)] * 5, False),
+                                              ([(0, float('inf'))] * 5, False)])
+    def test_bounds(self, bnds, output):
+        assert is_bounds_valid(bnds, raise_invalid=False) == output
+        if not output:
+            with pytest.raises(ValueError):
+                is_bounds_valid(bnds, raise_invalid=True)
+
+    def test_distance(self):
+        assert distance([1] * 9, [-1] * 9) == 6
+
+    def test_file_name_handler(self):
+        start_direc = os.getcwd()
+        with FileNameHandler('_tmp/fnh') as name:
+            assert os.getcwd() == start_direc + os.sep + '_tmp'
+            assert name == 'fnh'
+        assert os.getcwd() == start_direc
+
+    @classmethod
+    def teardown_class(cls):
+        shutil.rmtree("_tmp", ignore_errors=True)

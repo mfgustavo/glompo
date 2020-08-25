@@ -2,13 +2,16 @@ from typing import Callable, Sequence, Tuple
 
 import numpy as np
 import pytest
+
 from glompo.common.corebase import _CombiCore
 from glompo.core.optimizerlogger import OptimizerLogger
 from glompo.hunters.basehunter import BaseHunter, _AndHunter, _OrHunter
+from glompo.hunters.evalsunmoving import EvaluationsUnmoving
 from glompo.hunters.lastptsinvalid import LastPointsInvalid
 from glompo.hunters.min_fcalls import MinFuncCalls
 from glompo.hunters.min_iterations import MinIterations
 from glompo.hunters.parameterdistance import ParameterDistance
+from glompo.hunters.stepsize import StepSize
 from glompo.hunters.timeannealing import TimeAnnealing
 from glompo.hunters.type import TypeHunter
 from glompo.hunters.unmovingbest import BestUnmoving
@@ -304,3 +307,55 @@ class TestTypeHunter:
         cond = TypeHunter(FakeOpt)
         log = FakeLog([], [])
         assert cond(log, 1, vic) == output
+
+
+class TestStepSize:
+    np.random.seed(64)
+    history = {1: {'f_call_opt': [i * 4 for i in range(1, 201)], 'x': np.random.random((200, 2))}}
+
+    class FakeLog:
+        def __init__(self, hist):
+            self.hist = hist
+
+        def get_history(self, opt_id, track):
+            return self.hist[opt_id][track]
+
+    log = FakeLog(history)
+
+    @pytest.mark.parametrize('bnds, calls, tol, output', [([(0, 10)] * 2, 100, 0.1, True),
+                                                          ([(0, 10)] * 2, 100, 0.01, False),
+                                                          ([(0, 1)] * 2, 100, 0.1, False),
+                                                          ([(0, 10)] * 2, 200, 0.1, True),
+                                                          ([(0, 10)] * 2, 900, 0.1, False),
+                                                          ([(0, 10)] * 2, 3, 0.1, False)])
+    def test_condition(self, bnds, calls, tol, output):
+        cond = StepSize(bnds, calls, tol)
+        assert cond(self.log, None, 1) == output
+
+
+class TestEvaluationsUnmoving:
+    np.random.seed(35)
+    history = {1: {'f_call_opt': [i * 4 for i in range(1, 201)],
+                   'fx': [1 / i * np.random.random() + 1 for i in range(1, 201)]},
+               2: {'f_call_opt': [5, 10],
+                   'fx': [float('inf')] * 2}}
+
+    class FakeLog:
+        def __init__(self, hist):
+            self.hist = hist
+
+        def get_history(self, opt_id, track):
+            return self.hist[opt_id][track]
+
+    log = FakeLog(history)
+
+    @pytest.mark.parametrize('calls, tol, opt_id, output', [(900, 0.1, 1, False),
+                                                            (100, 0.01, 1, True),
+                                                            (500, 0.01, 1, True),
+                                                            (780, 0.01, 1, False),
+                                                            (3, 0.01, 2, False)])
+    def test_condition(self, calls, tol, opt_id, output):
+        cond = EvaluationsUnmoving(calls, tol)
+        warn = None if opt_id == 1 else RuntimeWarning
+        with pytest.warns(warn):
+            assert cond(self.log, None, opt_id) == output
