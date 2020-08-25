@@ -32,12 +32,13 @@ class StepSize(BaseHunter):
         fcalls = log.get_history(victim_opt_id, "f_call_opt")[::-1]
 
         dists = []
+        self._last_result = False
         if fcalls[0] > self.calls:
-            for i, fcall in enumerate(fcalls[1:], 1):
-                if fcalls[0] - fcall < self.calls:
-                    dists.append(distance(trials[i - 1], trials[i]))
-                else:
-                    break
+            generator = enumerate(fcalls[1:], 1)
+            i, fcall = next(generator)
+            while fcalls[0] - fcall < self.calls:
+                dists.append(distance(trials[i - 1], trials[i]))
+                i, fcall = next(generator)
 
         if len(dists) > 0:
             mean_dist = np.mean(dists)
@@ -46,7 +47,5 @@ class StepSize(BaseHunter):
                               f"Mean: {mean_dist}\n"
                               f"Maximum Trans Space Distance: {self.trans_space_dist}\n"
                               f"Returning: {self._last_result}")
-        else:
-            self._last_result = False
 
         return self._last_result
