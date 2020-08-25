@@ -116,11 +116,12 @@ class CMAOptimizer(BaseOptimizer):
             self.logger.debug("Parameter vectors generated")
 
             if self.workers > 1:
-                self.logger.debug(f"Executing within pool with {self.workers} workers")
                 if self._backend == 'processes':
+                    self.logger.debug(f"Executing within process pool with {self.workers} workers")
                     with ProcessPoolExecutor(max_workers=self.workers) as executor:
                         fx = list(executor.map(function, x))
                 else:
+                    self.logger.debug(f"Executing within thread pool with {self.workers} workers")
                     with ThreadPoolExecutor(max_workers=self.workers) as executor:
                         fx = list(executor.map(function, x))
             else:
