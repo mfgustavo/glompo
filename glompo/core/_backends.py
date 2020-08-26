@@ -31,7 +31,7 @@ class CustomThread(threading.Thread):
                 sys.stdout.close(threading.currentThread().ident)
                 sys.stderr.close(threading.currentThread().ident)
             except Exception as e:
-                warnings.warn(f"Closing prinstream files failed. Caught exception: {e}", RuntimeWarning)
+                warnings.warn(f"Closing printstream files failed. Caught exception: {e}", RuntimeWarning)
         except Exception as e:
             self.exitcode = -1
             raise e

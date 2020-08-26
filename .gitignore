@@ -2,4 +2,4 @@
 _tmp
 .pytest_cache
 *egg-info
-.coverage
+.coverage*

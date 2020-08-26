@@ -242,11 +242,11 @@ class TestSubclassesGlompoCompatible:
                                'callbacks': self.MaxIter(10)})
         p.start()
         mp_package.event.clear()
-        sleep(0.5)
+        sleep(0.1)
         assert p.is_alive()
 
         mp_package.event.set()
-        sleep(0.5)
+        sleep(0.9)
         assert not p.is_alive()
 
     @pytest.mark.parametrize("opti", available_classes)

@@ -27,11 +27,13 @@ class TestScope:
 
     @pytest.fixture()
     def scope(self):
-        return GloMPOScope(x_range=None,
-                           y_range=None,
-                           events_per_flush=0,
-                           record_movie=False,
-                           interactive_mode=False)
+        scp = GloMPOScope(x_range=None,
+                          y_range=None,
+                          events_per_flush=0,
+                          record_movie=False,
+                          interactive_mode=False)
+        yield scp
+        scp.close_fig()
 
     @pytest.mark.parametrize("kwargs", [{'x_range': -5},
                                         {'x_range': (500, 0)},
@@ -114,12 +116,11 @@ class TestScope:
         assert max(x) == max_val - 10
         assert max(y) == (max_val - 10) ** 2 / 6
 
-    @pytest.mark.filterwarnings("ignore:More than 20 figures")
     @pytest.mark.parametrize("max_val", [0, 100, 200, 300])
     def test_deletion(self, max_val, scope):
         scope.truncated = 300
         scope.add_stream(1)
-        scope.add_stream(2)
+        scope.add_stream(2, "CustomOptimizer")
         for i in range(0, max_val, 10):
             scope.update_optimizer(1, (i, i ** 2 / 6))
         scope.update_optimizer(2, (600, 1))
@@ -132,9 +133,11 @@ class TestScope:
         assert len(y) == 0
         assert 1 in scope._dead_streams
 
-    @pytest.mark.filterwarnings("ignore:More than 20 figures")
+        scope.update_optimizer(1, (max_val, max_val ** 2 / 6))
+        assert 1 not in scope._dead_streams
+
     @pytest.mark.parametrize("path, log", [([1, 100, 100, 100], True), ([1, 100, 100, 100], False)])
-    def test_deletion(self, path, log, scope):
+    def test_log_scale(self, path, log, scope):
         scope.elitism = True
         scope.log_scale = log
         scope.add_stream(1)
@@ -145,25 +148,30 @@ class TestScope:
 
         assert all([y == int(not log) for y in y_vals])
 
-    @pytest.mark.filterwarnings("ignore:More than 20 figures")
     def test_generate_movie(self):
-        scope = GloMPOScope(record_movie=True)
+        os.chdir("_tmp")
+
+        scope = GloMPOScope(log_scale=True,
+                            record_movie=True)
         scope.add_stream(1)
         scope.add_stream(2)
         for i in range(0, 510, 10):
-            scope.update_optimizer(1, (i, np.sin(i)))
-            scope.update_optimizer(2, (i, np.cos(i)))
+            scope.update_optimizer(1, (i, np.sin(i) + 3))
+            scope.update_optimizer(2, (i, np.cos(i) + 3))
+        scope.update_kill(1)
+        scope.update_norm_terminate(2)
 
         scope.generate_movie()
 
         assert os.path.exists("glomporecording.mp4")
 
+        os.chdir("..")
+
     @classmethod
     def teardown_class(cls):
-        try:
+        if "glomporecording.mp4" in os.listdir("_tmp"):
             if '--save-outs' not in sys.argv:
-                os.remove("glomporecording.mp4")
+                os.remove("_tmp/glomporecording.mp4")
             else:
-                shutil.move("glomporecording.mp4", "_tmp/glompo_test_recording.mp4")
-        except FileNotFoundError:
-            pass
+                os.makedirs("saved_test_outputs", exist_ok=True)
+                shutil.move("_tmp/glomporecording.mp4", "saved_test_outputs/glomporecording.mp4")

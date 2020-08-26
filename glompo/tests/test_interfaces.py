@@ -1,0 +1,2 @@
+class TestParamsInterface:
+    pass

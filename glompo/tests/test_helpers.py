@@ -70,11 +70,11 @@ class TestHelpers:
 
     def test_file_name_handler(self):
         start_direc = os.getcwd()
-        with FileNameHandler('_tmp/fnh') as name:
-            assert os.getcwd() == start_direc + os.sep + '_tmp'
+        with FileNameHandler('_tmp/test_helpers/fnh') as name:
+            assert os.getcwd() == start_direc + os.sep + '_tmp/test_helpers'
             assert name == 'fnh'
         assert os.getcwd() == start_direc
 
     @classmethod
     def teardown_class(cls):
-        shutil.rmtree("_tmp", ignore_errors=True)
+        shutil.rmtree("_tmp/test_helpers", ignore_errors=True)

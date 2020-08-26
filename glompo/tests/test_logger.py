@@ -3,6 +3,7 @@ import shutil
 
 import numpy as np
 import pytest
+import yaml
 
 from glompo.core.optimizerlogger import OptimizerLogger
 from glompo.optimizers.baseoptimizer import BaseOptimizer
@@ -24,30 +25,35 @@ class TestLogger:
     for i in range(1, 30):
         log.put_iteration(0, i, i, i, i, np.exp(i))
     log.put_metadata(0, "Stop Time", datetime.datetime.now())
-    log.put_metadata(0, "Exit Condition", "tmax condition met")
+    log.put_metadata(0, "End Condition", "tmax condition met")
 
     for i in range(1, 30):
         log.put_iteration(1, i, i, i, [i, i ** 2], np.sin(i))
     log.put_metadata(1, "Stop Time", datetime.datetime.now())
-    log.put_metadata(1, "Exit Condition", "xtol condition met")
+    log.put_metadata(1, "End Condition", "xtol condition met")
 
     for i in range(1, 30):
         log.put_iteration(2, i, i, i, np.array([i ** 2, i / 2 + 3.14]), np.tan(i))
     log.put_metadata(2, "Stop Time", datetime.datetime.now())
-    log.put_metadata(2, "Exit Condition", "fmax condition met")
+    log.put_metadata(2, "End Condition", "fmax condition met")
 
     log.put_message(1, "This is a test of the logger message system")
 
     def test_save(self):
-        self.log.save_optimizer("_tmp/success", 1)
-        self.log.save_optimizer("_tmp/all")
+        self.log.save_optimizer("_tmp/test_logger/success", 1)
+        self.log.save_optimizer("_tmp/test_logger/all")
 
-        open("_tmp/all/0_GFLSOptimizer.yml", "r")
-        open("_tmp/all/1_CMAOptimizer.yml", "r")
-        open("_tmp/all/2_ABCMeta.yml", "r")
-        open("_tmp/success.yml", "r")
+        open("_tmp/test_logger/all/0_GFLSOptimizer.yml", "r")
+        open("_tmp/test_logger/all/1_CMAOptimizer.yml", "r")
+        open("_tmp/test_logger/all/2_ABCMeta.yml", "r")
+        open("_tmp/test_logger/success.yml", "r")
 
-        shutil.rmtree("_tmp", ignore_errors=True)
+    def test_save_summary(self):
+        self.log.save_summary("_tmp/test_logger/summary.yml")
+        with open("_tmp/test_logger/summary.yml", "r") as file:
+            data = yaml.safe_load(file)
+        assert len(data) == 3
+        assert all([kw in data[0] for kw in ('end_cond', 'f_calls', 'f_best', 'x_best')])
 
     def test_history0(self):
         hist = self.log.get_history(0)
@@ -79,3 +85,13 @@ class TestLogger:
 
     def test_message(self):
         assert self.log._storage[1].messages[0] == "This is a test of the logger message system"
+
+    def test_len(self):
+        assert len(self.log) == 3
+
+    def test_metadata(self):
+        assert self.log.get_metadata(0, "End Condition") == "tmax condition met"
+
+    @classmethod
+    def teardown_class(cls):
+        shutil.rmtree("_tmp/test_logger", ignore_errors=True)

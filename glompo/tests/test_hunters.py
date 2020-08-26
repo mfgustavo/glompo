@@ -356,6 +356,7 @@ class TestEvaluationsUnmoving:
                                                             (3, 0.01, 2, False)])
     def test_condition(self, calls, tol, opt_id, output):
         cond = EvaluationsUnmoving(calls, tol)
+        np.seterr(invalid='warn')
         warn = None if opt_id == 1 else RuntimeWarning
         with pytest.warns(warn):
             assert cond(self.log, None, opt_id) == output
