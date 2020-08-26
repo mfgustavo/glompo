@@ -324,7 +324,7 @@ class GloMPOManager:
     def start_manager(self) -> Result:
         """ Begins the optimization routine and returns the selected minimum in an instance of MinimizeResult. """
 
-        reason = ""
+        reason = "None"
         caught_exception = None
         best_id = -1
 
@@ -406,6 +406,7 @@ class GloMPOManager:
         except KeyboardInterrupt:
             caught_exception = "User Interrupt"
             self.logger.error("Caught User Interrupt, closing GloMPO gracefully.")
+            warnings.warn(f"Optimization failed. Caught User Interrupt", RuntimeWarning)
             self._cleanup_crash("User Interrupt")
 
         except Exception as e:
@@ -418,9 +419,11 @@ class GloMPOManager:
 
             self.logger.info("Cleaning up and closing GloMPO")
 
-            if self.visualisation and self.scope.record_movie and not caught_exception:
-                self.logger.debug("Generating movie")
-                self.scope.generate_movie()
+            if self.visualisation:
+                if self.scope.record_movie and not caught_exception:
+                    self.logger.debug("Generating movie")
+                    self.scope.generate_movie()
+                self.scope.close_fig()
 
             self.logger.debug("Saving summary file results")
             self._save_log(self.result, reason, caught_exception)

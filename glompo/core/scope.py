@@ -228,7 +228,7 @@ class GloMPOScope:
 
     def add_stream(self, opt_id: int, opt_type: Optional[str] = None):
         """ Registers and sets up a new optimizer in the scope. """
-
+        print(opt_type)
         self.n_streams += 1
         self.streams[opt_id] = {'all_opt': self.ax.plot([], [])[0],  # Follows every optimizer iteration
                                 'opt_kill': self.ax.plot([], [], ls='', marker='x', zorder=500)[0],  # Killed opt
@@ -320,3 +320,10 @@ class GloMPOScope:
             return None
 
         return x, y
+
+    def close_fig(self):
+        """ Matplotlib will keep a figure alive in its memory for the duration a process is alive. This can lead to
+            many figures being open if GloMPO is looped in some way. The manager will explicitly call this method to
+            close the matplotlib figure at the end of the optimization routine to stop figures building up in this way.
+        """
+        plt.close(self.fig)
