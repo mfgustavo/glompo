@@ -40,7 +40,7 @@ class GloMPOManager:
                  task: Callable[[Sequence[float]], float],
                  bounds: Sequence[Tuple[float, float]],
                  optimizer_selector: BaseSelector,
-                 working_dir: Optional[str] = None,
+                 working_dir: str = ".",
                  overwrite_existing: bool = False,
                  max_jobs: Optional[int] = None,
                  backend: str = 'processes',
@@ -74,7 +74,7 @@ class GloMPOManager:
             subclasses are initialised by default with a set of BaseOptimizer subclasses the user would like to make
             available to the optimization. See BaseSelector and BaseOptimizer documentation for more details.
 
-        working_dir: Optional[str] = None
+        working_dir: str = "."
             If provided, GloMPO wil redirect its outputs to the given directory.
 
         overwrite_existing: bool = False
@@ -180,16 +180,11 @@ class GloMPOManager:
 
         # Setup working directory
         self._init_workdir = os.getcwd()
-        if working_dir:
-            try:
-                os.chdir(working_dir)
-            except (FileNotFoundError, NotADirectoryError):
-                try:
-                    os.makedirs(working_dir)
-                    os.chdir(working_dir)
-                except TypeError:
-                    warnings.warn(f"Cannot parse working_dir = {working_dir}. str or bytes expected. Using current "
-                                  f"work directory.", UserWarning)
+        if not isinstance(working_dir, str):
+            warnings.warn(f"Cannot parse working_dir = {working_dir}. str or bytes expected. Using current "
+                          f"work directory.", UserWarning)
+            working_dir = "."
+        self._workdir = working_dir
 
         # Save and wrap task
         if not callable(task):
@@ -269,7 +264,8 @@ class GloMPOManager:
             self.logger.warning(f"summary_files argument given as {summary_files} clipped to {self.summary_files}")
         if summary_files:
             yaml.add_representer(LiteralWrapper, literal_presenter)
-        self.split_printstreams = split_printstreams
+        self.split_printstreams = bool(split_printstreams)
+        self.overwrite_existing = bool(overwrite_existing)
         self.visualisation = visualisation
         self.hunt_frequency = hunt_frequency
         self.spawning_opts = True
@@ -323,29 +319,6 @@ class GloMPOManager:
             warnings.warn("Cannot use force terminations with threading.", UserWarning)
             self.logger.warning("Cannot use force terminations with threading.")
 
-        # Purge Old Results
-        files = os.listdir(".")
-        if any([file in files for file in ["glompo_manager_log.yml", "glompo_optimizer_logs"]]):
-            if overwrite_existing:
-                self.logger.debug("Old results found")
-                try:
-                    os.remove("glompo_manager_log.yml")
-                except FileNotFoundError:
-                    pass
-                try:
-                    os.remove("opt_best_summary.yml")
-                except FileNotFoundError:
-                    pass
-                shutil.rmtree("glompo_optimizer_logs", ignore_errors=True)
-                shutil.rmtree("glompo_optimizer_printstreams", ignore_errors=True)
-                self.logger.warning("Deleted old results.")
-            else:
-                raise FileExistsError("Previous results found. Remove, move or rename them. Alternatively, select "
-                                      "another working_dir or set overwrite_existing=True.")
-
-        if split_printstreams:
-            os.makedirs("glompo_optimizer_printstreams", exist_ok=True)
-
         self.logger.info("Initialization Done")
 
     def start_manager(self) -> Result:
@@ -354,6 +327,31 @@ class GloMPOManager:
         reason = ""
         caught_exception = None
         best_id = -1
+
+        # Move into or make working dir
+        os.makedirs(self._workdir, exist_ok=True)
+        os.chdir(self._workdir)
+
+        # Purge Old Results
+        files = os.listdir()
+        if any([file in files for file in ["glompo_manager_log.yml", "glompo_optimizer_logs"]]):
+            if self.overwrite_existing:
+                self.logger.debug("Old results found")
+                for old in ("glompo_manager_log.yml", "opt_best_summary.yml"):
+                    try:
+                        os.remove(old)
+                    except FileNotFoundError:
+                        continue
+                shutil.rmtree("glompo_optimizer_logs", ignore_errors=True)
+                shutil.rmtree("glompo_optimizer_printstreams", ignore_errors=True)
+                self.logger.warning("Deleted old results.")
+            else:
+                raise FileExistsError(
+                    "Previous results found. Remove, move or rename them. Alternatively, select "
+                    "another working_dir or set overwrite_existing=True.")
+
+        if self.split_printstreams:
+            os.makedirs("glompo_optimizer_printstreams", exist_ok=True)
 
         try:
             self.logger.info("Starting GloMPO Optimization Routine")
