@@ -7,7 +7,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 from ..core.optimizerlogger import OptimizerLogger
 from ..optimizers.baseoptimizer import BaseOptimizer
 
-__all__ = ("BaseSelector",)
+__all__ = ("BaseSelector",
+           "IterSpawnStop")
 
 
 class BaseSelector(ABC):
@@ -126,3 +127,15 @@ class BaseSelector(ABC):
     def __contains__(self, item):
         opts = (opt[0] for opt in self.avail_opts)
         return item in opts
+
+
+class IterSpawnStop:
+    """ A useful stub which controls spawning based on the number of function calls used thus far. """
+
+    def __init__(self, max_calls: int):
+        self.max_calls = max_calls
+
+    def __call__(self, mng: 'GloMPOManager'):
+        if mng.f_counter >= self.max_calls:
+            return False
+        return True
