@@ -128,15 +128,11 @@ class TestMinTrainingPoints:
         def get_history(self, *args):
             return self.history
 
-    @pytest.mark.parametrize("n_pts, output", [(1, False),
-                                               (2, False),
-                                               (3, False),
-                                               (5, True),
-                                               (6, True)])
-    def test_condition(self, n_pts, output):
+    @pytest.mark.parametrize("n_pts", [1, 2, 3, 5, 6])
+    def test_condition(self, n_pts):
         cond = MinIterations(5)
         log = self.FakeLog(n_pts)
-        assert cond(log, None, None) == output
+        assert cond(log, None, None) == (n_pts >= 5)
 
     @pytest.mark.parametrize("threshold", [-5, -5.0, 0, 32.5, 0.25])
     def test_init_crash(self, threshold):
@@ -310,17 +306,19 @@ class TestTypeHunter:
 
 
 class TestStepSize:
-    np.random.seed(64)
-    history = {1: {'f_call_opt': [i * 4 for i in range(1, 201)], 'x': np.random.random((200, 2))}}
+    @pytest.fixture()
+    def log(self):
+        np.random.seed(64)
+        history = {1: {'f_call_opt': [i * 4 for i in range(1, 201)], 'x': np.random.random((200, 2))}}
 
-    class FakeLog:
-        def __init__(self, hist):
-            self.hist = hist
+        class FakeLog:
+            def __init__(self, hist):
+                self.hist = hist
 
-        def get_history(self, opt_id, track):
-            return self.hist[opt_id][track]
+            def get_history(self, opt_id, track):
+                return self.hist[opt_id][track]
 
-    log = FakeLog(history)
+        return FakeLog(history)
 
     @pytest.mark.parametrize('bnds, calls, tol, output', [([(0, 10)] * 2, 100, 0.1, True),
                                                           ([(0, 10)] * 2, 100, 0.01, False),
@@ -328,35 +326,38 @@ class TestStepSize:
                                                           ([(0, 10)] * 2, 200, 0.1, True),
                                                           ([(0, 10)] * 2, 900, 0.1, False),
                                                           ([(0, 10)] * 2, 3, 0.1, False)])
-    def test_condition(self, bnds, calls, tol, output):
+    def test_condition(self, log, bnds, calls, tol, output):
         cond = StepSize(bnds, calls, tol)
-        assert cond(self.log, None, 1) == output
+        assert cond(log, None, 1) == output
 
 
 class TestEvaluationsUnmoving:
-    np.random.seed(35)
-    history = {1: {'f_call_opt': [i * 4 for i in range(1, 201)],
-                   'fx': [1 / i * np.random.random() + 1 for i in range(1, 201)]},
-               2: {'f_call_opt': [5, 10],
-                   'fx': [float('inf')] * 2}}
 
-    class FakeLog:
-        def __init__(self, hist):
-            self.hist = hist
+    @pytest.fixture()
+    def log(self):
+        np.random.seed(35)
+        history = {1: {'f_call_opt': [i * 4 for i in range(1, 201)],
+                       'fx': [1 / i * np.random.random() + 1 for i in range(1, 201)]},
+                   2: {'f_call_opt': [5, 10],
+                       'fx': [float('inf')] * 2}}
 
-        def get_history(self, opt_id, track):
-            return self.hist[opt_id][track]
+        class FakeLog:
+            def __init__(self, hist):
+                self.hist = hist
 
-    log = FakeLog(history)
+            def get_history(self, opt_id, track):
+                return self.hist[opt_id][track]
+
+        return FakeLog(history)
 
     @pytest.mark.parametrize('calls, tol, opt_id, output', [(900, 0.1, 1, False),
                                                             (100, 0.01, 1, True),
                                                             (500, 0.01, 1, True),
                                                             (780, 0.01, 1, False),
                                                             (3, 0.01, 2, False)])
-    def test_condition(self, calls, tol, opt_id, output):
+    def test_condition(self, log, calls, tol, opt_id, output):
         cond = EvaluationsUnmoving(calls, tol)
         np.seterr(invalid='warn')
         warn = None if opt_id == 1 else RuntimeWarning
         with pytest.warns(warn):
-            assert cond(self.log, None, opt_id) == output
+            assert cond(log, None, opt_id) == output

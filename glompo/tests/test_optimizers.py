@@ -1,7 +1,6 @@
 import logging
 import multiprocessing as mp
 import os
-import shutil
 from collections import namedtuple
 from time import sleep, time
 from typing import Callable, Sequence, Tuple
@@ -142,6 +141,7 @@ class TestBase:
         os.remove("savestate.txt")
 
 
+@pytest.mark.parametrize("opti", available_classes)
 class TestSubclassesGlompoCompatible:
     package = namedtuple("package", "queue p_pipe c_pipe event")
 
@@ -166,18 +166,17 @@ class TestSubclassesGlompoCompatible:
 
             return None
 
-    class Task:
-        def __call__(self, x):
-            return x[0] ** 2 + 3 * x[1] ** 4 - x[2] ** 0.5
-
-        def resids(self, pars, noise=True):
-            return pars
-
-    @pytest.fixture()
+    @pytest.fixture
     def task(self):
-        return self.Task()
+        class Task:
+            def __call__(self, x):
+                return x[0] ** 2 + 3 * x[1] ** 4 - x[2] ** 0.5
 
-    @pytest.mark.parametrize("opti", available_classes)
+            def resids(self, pars, noise=True):
+                return pars
+
+        return Task()
+
     def test_result_in_queue(self, opti, mp_package, task):
         opti = opti(results_queue=mp_package.queue,
                     signal_pipe=mp_package.p_pipe,
@@ -191,7 +190,6 @@ class TestSubclassesGlompoCompatible:
         assert not mp_package.queue.empty()
         assert isinstance(mp_package.queue.get_nowait(), IterationResult)
 
-    @pytest.mark.parametrize("opti", available_classes)
     def test_final(self, opti, mp_package, task):
         opti = opti(results_queue=mp_package.queue,
                     signal_pipe=mp_package.c_pipe,
@@ -214,7 +212,6 @@ class TestSubclassesGlompoCompatible:
         assert mp_package.p_pipe.poll()
         assert mp_package.p_pipe.recv()[0] == 0
 
-    @pytest.mark.parametrize("opti", available_classes)
     def test_callstop(self, opti, mp_package, task):
         opti = opti(results_queue=mp_package.queue,
                     signal_pipe=mp_package.c_pipe,
@@ -229,7 +226,7 @@ class TestSubclassesGlompoCompatible:
         while not mp_package.queue.empty():
             assert mp_package.queue.get_nowait().n_iter < 10
 
-    @pytest.mark.parametrize("opti", available_classes)
+    @pytest.mark.parametrize("task", [10], indirect=["task"])
     def test_pause(self, opti, mp_package, task):
         opti = opti(results_queue=mp_package.queue,
                     signal_pipe=mp_package.c_pipe,
@@ -242,14 +239,13 @@ class TestSubclassesGlompoCompatible:
                                'callbacks': self.MaxIter(10)})
         p.start()
         mp_package.event.clear()
-        sleep(0.1)
+        sleep(0.9)
         assert p.is_alive()
 
         mp_package.event.set()
-        sleep(0.9)
+        sleep(0.2)
         assert not p.is_alive()
 
-    @pytest.mark.parametrize("opti", available_classes)
     def test_haslogger(self, opti, mp_package):
         opti = opti(results_queue=mp_package.queue,
                     signal_pipe=mp_package.c_pipe,
@@ -257,11 +253,3 @@ class TestSubclassesGlompoCompatible:
 
         assert hasattr(opti, 'logger')
         assert isinstance(opti.logger, logging.Logger)
-
-    @classmethod
-    def teardown_class(cls):
-        try:
-            shutil.rmtree("cmadata", ignore_errors=True)
-            shutil.rmtree("tests/cmadata", ignore_errors=True)
-        except FileNotFoundError:
-            pass

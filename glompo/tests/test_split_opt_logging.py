@@ -1,6 +1,5 @@
 import logging
 import os
-import shutil
 
 import pytest
 
@@ -9,9 +8,9 @@ from glompo.common.logging import SplitOptimizerLogs
 
 class TestSplitLogging:
 
-    def run_log(self, propogate, formatter=None):
+    def run_log(self, propogate, formatter=logging.Formatter()):
         opt_filter = SplitOptimizerLogs("diverted_logs", propagate=propogate, formatter=formatter)
-        opt_handler = logging.FileHandler("propogate.txt", "w+")
+        opt_handler = logging.FileHandler("propogate.txt", "w")
         opt_handler.addFilter(opt_filter)
 
         opt_handler.setLevel('DEBUG')
@@ -48,16 +47,11 @@ class TestSplitLogging:
         self.run_log(propogate)
         with open("propogate.txt", "r") as file:
             lines = file.readlines()
-            if propogate:
-                assert lines[0] == '8452\n'
-                assert lines[1] == '9216\n'
-                assert len(lines) == 2
-            else:
-                assert len(lines) == 0
 
-    def teardown_method(self):
-        try:
+        if propogate:
+            assert lines[0] == '8452\n'
+            assert lines[1] == '9216\n'
+            assert len(lines) == 2
             os.remove("propogate.txt")
-            shutil.rmtree("diverted_logs", ignore_errors=True)
-        except FileNotFoundError:
-            pass
+        else:
+            assert len(lines) == 0

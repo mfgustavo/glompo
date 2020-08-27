@@ -6,7 +6,6 @@ from glompo.common.wrappers import catch_user_interrupt, decorate_all_methods, p
 
 
 def test_redirect():
-    os.chdir("_tmp")
     os.makedirs("glompo_optimizer_printstreams", exist_ok=True)
 
     def func():
@@ -25,7 +24,6 @@ def test_redirect():
         assert any(["redirect_test_error" in line for line in file.readlines()])
 
     shutil.rmtree("glompo_optimizer_printstreams")
-    os.chdir("..")
 
 
 def test_user_interrupt(capsys):

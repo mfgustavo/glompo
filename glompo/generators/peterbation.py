@@ -4,6 +4,7 @@ import numpy as np
 from scipy.stats import truncnorm
 
 from .basegenerator import BaseGenerator
+from ..common.helpers import is_bounds_valid
 
 __all__ = ("PerturbationGenerator",)
 
@@ -34,18 +35,10 @@ class PerturbationGenerator(BaseGenerator):
         if len(bounds) != self.n_params:
             raise ValueError("Bounds and x0 not the same length")
 
-        for i, bnd in enumerate(bounds):
-            if bnd[0] >= bnd[1]:
-                raise ValueError("Invalid bounds encountered. Min and max bounds may not be equal nor may they be in"
-                                 "the opposite order. ")
-            if not np.all(np.isfinite(bnd)):
-                raise ValueError("Non-finite bounds found.")
-            if self.loc[i] <= bnd[0] or self.loc[i] >= bnd[1]:
-                raise ValueError("Value in x0 out of bounds.")
-
-        bnds = np.array(bounds)
-        self.min = bnds[:, 0]
-        self.max = bnds[:, 1]
+        if is_bounds_valid(bounds):
+            bnds = np.array(bounds)
+            self.min = bnds[:, 0]
+            self.max = bnds[:, 1]
 
         self.scale = np.array(scale)
 

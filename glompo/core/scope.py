@@ -235,7 +235,6 @@ class GloMPOScope:
 
     def add_stream(self, opt_id: int, opt_type: Optional[str] = None):
         """ Registers and sets up a new optimizer in the scope. """
-        print(opt_type)
         self.n_streams += 1
         self.streams[opt_id] = {'all_opt': self.ax.plot([], [])[0],  # Follows every optimizer iteration
                                 'opt_kill': self.ax.plot([], [], ls='', marker='x', zorder=500)[0],  # Killed opt

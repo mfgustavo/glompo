@@ -1,6 +1,4 @@
 import os
-import shutil
-import sys
 
 import numpy as np
 import pytest
@@ -27,11 +25,7 @@ class TestScope:
 
     @pytest.fixture()
     def scope(self):
-        scp = GloMPOScope(x_range=None,
-                          y_range=None,
-                          events_per_flush=0,
-                          record_movie=False,
-                          interactive_mode=False)
+        scp = GloMPOScope()
         yield scp
         scp.close_fig()
 
@@ -124,7 +118,7 @@ class TestScope:
         for i in range(0, max_val, 10):
             scope.update_optimizer(1, (i, i ** 2 / 6))
         scope.update_optimizer(2, (600, 1))
-        scope._redraw_graph()
+        scope._redraw_graph(True)
 
         x = scope.streams[1]['all_opt'].get_xdata()
         y = scope.streams[1]['all_opt'].get_ydata()
@@ -149,8 +143,6 @@ class TestScope:
         assert all([y == int(not log) for y in y_vals])
 
     def test_generate_movie(self):
-        os.chdir("_tmp")
-
         scope = GloMPOScope(log_scale=True,
                             record_movie=True)
         scope.add_stream(1)
@@ -164,14 +156,3 @@ class TestScope:
         scope.generate_movie()
 
         assert os.path.exists("glomporecording.mp4")
-
-        os.chdir("..")
-
-    @classmethod
-    def teardown_class(cls):
-        if "glomporecording.mp4" in os.listdir("_tmp"):
-            if '--save-outs' not in sys.argv:
-                os.remove("_tmp/glomporecording.mp4")
-            else:
-                os.makedirs("saved_test_outputs", exist_ok=True)
-                shutil.move("_tmp/glomporecording.mp4", "saved_test_outputs/glomporecording.mp4")
