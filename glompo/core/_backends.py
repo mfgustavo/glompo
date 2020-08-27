@@ -27,11 +27,12 @@ class CustomThread(threading.Thread):
                     warnings.warn("Prinstream redirect failed. Print stream will only redirect if ThreadPrintRedirect "
                                   "is setup beforehand.", RuntimeWarning)
             super().run()
-            try:
-                sys.stdout.close(threading.currentThread().ident)
-                sys.stderr.close(threading.currentThread().ident)
-            except Exception as e:
-                warnings.warn(f"Closing printstream files failed. Caught exception: {e}", RuntimeWarning)
+            if self.redirect:
+                try:
+                    sys.stdout.close(threading.currentThread().ident)
+                    sys.stderr.close(threading.currentThread().ident)
+                except Exception as e:
+                    warnings.warn(f"Closing printstream files failed. Caught exception: {e}", RuntimeWarning)
         except Exception as e:
             self.exitcode = -1
             raise e
