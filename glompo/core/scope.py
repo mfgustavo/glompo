@@ -113,26 +113,31 @@ class GloMPOScope:
         elif isinstance(x_range, tuple):
             if x_range[0] >= x_range[1]:
                 self.logger.critical("Cannot parse x_range, min >= max.")
+                self.close_fig()
                 raise ValueError(f"Cannot parse x_range = {x_range}. Min must be less than and not equal to max.")
             self.ax.set_xlim(x_range[0], x_range[1])
         elif isinstance(x_range, int):
             if x_range < 2:
                 self.logger.critical("Cannot parse x_range, x_range < 2")
+                self.close_fig()
                 raise ValueError(f"Cannot parse x_range = {x_range}. Value larger than 1 required.")
             self.truncated = x_range
         else:
             self.logger.critical("Cannot parse x_range. Unsupported type. None, int or tuple expected.")
+            self.close_fig()
             raise TypeError(f"Cannot parse x_range = {x_range}. Only int, NoneType and tuple can be used.")
 
         if isinstance(y_range, tuple):
             if y_range[0] >= y_range[1]:
                 self.logger.critical("Cannot parse y_range, min >= max")
+                self.close_fig()
                 raise ValueError(f"Cannot parse y_range = {y_range}. Min must be less than and not equal to max.")
             self.ax.set_ylim(y_range[0], y_range[1])
         elif y_range is None:
             self.ax.set_autoscaley_on(True)
         else:
             self.logger.critical("Cannot parse y_range. Unsupported type. None or tuple expected.")
+            self.close_fig()
             raise TypeError(f"Cannot parse y_range = {y_range}. Only a tuple can be used.")
 
         self.record_movie = record_movie
@@ -160,10 +165,12 @@ class GloMPOScope:
                 self._writer.setup(fig=self.fig, outfile='glomporecording.mp4')
         self.logger.debug("Scope initialised successfully")
 
-    def _redraw_graph(self):
-        """ Redraws the figure after new data has been added. Grabs a frame if a movie is being recorded. """
-        if self._event_counter > self.events_per_flush:
-            self._event_counter = 0
+    def _redraw_graph(self, force=False):
+        """ Redraws the figure after new data has been added. Grabs a frame if a movie is being recorded.
+            force=True overrides the normal flush counter and forces an explict reconstruction of the graph.
+        """
+        if self._event_counter >= self.events_per_flush or force:
+            self._event_counter = 1
 
             # Purge old results
             if self.truncated:
@@ -300,6 +307,7 @@ class GloMPOScope:
 
     def generate_movie(self):
         """ Final call to write the saved frames into a single movie. """
+        self._redraw_graph(True)
         if self.record_movie:
             try:
                 self._writer.finish()
