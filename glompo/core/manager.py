@@ -743,7 +743,13 @@ class GloMPOManager:
                 self.opt_log.put_metadata(opt_id, "Stop Time", datetime.now())
                 self.opt_log.put_metadata(opt_id, "End Condition", "GloMPO Convergence")
                 self.optimizer_packs[opt_id].process.join(10)
-                self.logger.debug(f"Termination signal sent to optimizer {opt_id}")
+                if self.optimizer_packs[opt_id].process.is_alive():
+                    if self._proc_backend:
+                        self.logger.info(f"Termination signal sent to optimizer {opt_id}")
+                        self.optimizer_packs[opt_id].process.terminate()
+                    else:
+                        self.logger.warning(f"Optimizer {opt_id} still alive after join attempt. GloMPO will end while "
+                                            f"it is alive. Terminations cannot be sent to threads.")
 
     def _save_log(self, result: Result, reason: str, caught_exception: bool):
         if self.summary_files > 0:
