@@ -54,6 +54,7 @@ class GloMPOManager:
                  visualisation: bool = False,
                  visualisation_args: Optional[Dict[str, Any]] = None,
                  force_terminations_after: int = -1,
+                 end_timeout: Optional[int] = None,
                  split_printstreams: bool = True):
         """
         Generates the environment for a globally managed parallel optimization job.
@@ -164,6 +165,17 @@ class GloMPOManager:
 
             Use with caution: This runs the risk of corrupting the results queue but ensures resources are not wasted on
             hanging processes.
+
+        end_timeout: Optional[int] = None
+            The amount of time the manager will wait trying to smoothly join each child optimizer at the end of the run.
+            After this timeout, if the optimizer is still alive and a process, GloMPO will send a terminate signal to
+            force it to close. However, threads cannot be terminated in this way and the manager can leave dangling
+            threads at the end of its routine. Note that if the script ends after a GloMPO routine then all its children
+            will be automatically garbage collected (provided processes_forced backend has not been used).
+
+            By default, this timeout is 10s if a process backend is used and infinite of a threaded backend is used.
+            This is the cleanest approach for threads but can cause very long wait times or deadlocks if the optimizer
+            does not respond to close signals and does not converge.
 
         split_printstreams: bool = True
             If True, optimizer print messages will be intercepted and saved to separate files.
@@ -318,6 +330,14 @@ class GloMPOManager:
         if self.allow_forced_terminations and not self._proc_backend:
             warnings.warn("Cannot use force terminations with threading.", UserWarning)
             self.logger.warning("Cannot use force terminations with threading.")
+
+        if end_timeout:
+            self.end_timeout = end_timeout
+        else:
+            if self._proc_backend:
+                self.end_timeout = 10
+            else:
+                self.end_timeout = None
 
         self.logger.info("Initialization Done")
 
@@ -742,7 +762,7 @@ class GloMPOManager:
                 self.graveyard.add(opt_id)
                 self.opt_log.put_metadata(opt_id, "Stop Time", datetime.now())
                 self.opt_log.put_metadata(opt_id, "End Condition", "GloMPO Convergence")
-                self.optimizer_packs[opt_id].process.join(10)
+                self.optimizer_packs[opt_id].process.join(self.end_timeout)
                 if self.optimizer_packs[opt_id].process.is_alive():
                     if self._proc_backend:
                         self.logger.info(f"Termination signal sent to optimizer {opt_id}")
