@@ -122,6 +122,9 @@ class GlompoParamsWrapper(BaseOptimizer):
         if 'max_jobs' not in self.manager_kwargs:
             self.manager_kwargs['max_jobs'] = workers
 
+        # Silence function printing
+        function.v = False
+
         manager = GloMPOManager(task=_FunctionWrapper(function),
                                 optimizer_selector=self.selector,
                                 bounds=bounds,
