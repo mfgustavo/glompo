@@ -169,7 +169,7 @@ class CMAOptimizer(BaseOptimizer):
             self.logger.debug("Pushing final result")
             self.push_iter_result(es.countiter, len(x), self.result.x, self.result.fx, True)
             self.logger.debug("Messaging termination to manager.")
-            self.message_manager(0, "Optimizer convergence")
+            self.message_manager(0, f"Optimizer convergence {es.stop()}")
             self.logger.debug("Final message check")
             self.check_messages()
 
