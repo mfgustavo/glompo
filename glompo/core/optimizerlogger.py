@@ -5,6 +5,12 @@ from math import inf
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 import yaml
+
+try:
+    from yaml import CDumper as Dumper
+except ModuleNotFoundError:
+    from yaml import Dumper as Dumper
+
 from glompo.common.helpers import FileNameHandler, LiteralWrapper, literal_presenter
 
 __all__ = ("OptimizerLogger",)
@@ -114,7 +120,7 @@ class OptimizerLogger:
                                        'x_best': x_best}
 
             with open(filename, "w+") as file:
-                yaml.dump(sum_data, file, default_flow_style=False, sort_keys=False)
+                yaml.dump(sum_data, file, Dumper=Dumper, default_flow_style=False, sort_keys=False)
 
     def _write_file(self, opt_id, filename):
         yaml.add_representer(LiteralWrapper, literal_presenter)
@@ -122,7 +128,7 @@ class OptimizerLogger:
             data = {"DETAILS": self._storage[opt_id].metadata,
                     "MESSAGES": self._storage[opt_id].messages,
                     "ITERATION_HISTORY": self._storage[opt_id].history}
-            yaml.dump(data, file, default_flow_style=False, sort_keys=False)
+            yaml.dump(data, file, Dumper=Dumper, default_flow_style=False, sort_keys=False)
 
 
 class _OptimizerLogger:

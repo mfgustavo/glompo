@@ -18,6 +18,10 @@ import numpy as np
 import yaml
 
 try:
+    from yaml import CDumper as Dumper
+except ModuleNotFoundError:
+    from yaml import Dumper as Dumper
+try:
     import psutil
 
     has_psutil = True
@@ -833,7 +837,7 @@ class GloMPOManager:
                                      "x": result.x},
                         }
                 self.logger.debug("Saving manager summary file.")
-                yaml.dump(data, file, default_flow_style=False, sort_keys=False)
+                yaml.dump(data, file, Dumper=Dumper, default_flow_style=False, sort_keys=False)
 
             if self.summary_files >= 2:
                 self.logger.debug("Saving optimizers summary file.")
