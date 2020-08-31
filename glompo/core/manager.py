@@ -1,5 +1,6 @@
 """ Contains GloMPOManager class which is the main user interface for GloMPO. """
 
+import copy
 import getpass
 import logging
 import multiprocessing as mp
@@ -535,6 +536,12 @@ class GloMPOManager:
             return None
 
         selected, init_kwargs, call_kwargs = selector_return
+        if not self._proc_backend:
+            # Callbacks need to be copied in the case of threaded backends because otherwise they will behave
+            # globally rather than on individual optimizers as expected. All kwargs are copied in this way to prevent
+            # any strange race conditions and multithreading artifacts.
+            init_kwargs = copy.deepcopy(init_kwargs)
+            call_kwargs = copy.deepcopy(call_kwargs)
         self.o_counter += 1
 
         self.logger.info(f"Setting up optimizer {self.o_counter} of type {selected.__name__}")
