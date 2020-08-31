@@ -19,7 +19,7 @@ import yaml
 
 try:
     from yaml import CDumper as Dumper
-except ModuleNotFoundError:
+except ImportError:
     from yaml import Dumper as Dumper
 try:
     import psutil

@@ -8,7 +8,7 @@ import yaml
 
 try:
     from yaml import CDumper as Dumper
-except ModuleNotFoundError:
+except ImportError:
     from yaml import Dumper as Dumper
 
 from glompo.common.helpers import FileNameHandler, LiteralWrapper, literal_presenter
