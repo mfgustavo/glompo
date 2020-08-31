@@ -1,6 +1,6 @@
 
 
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 
 def get_readme():
@@ -29,6 +29,7 @@ setup(
         'CMAOptimizer': ['cma'],
         'GFLSOptimizer': ['optsam'],
         'Nevergrad': ['nevergrad'],
-        'ParAMSWrapper': ['scm']
+        'ParAMSWrapper': ['scm'],
+        'ResourceUsageStatusPrinting': ['psutil'],
     }
 )

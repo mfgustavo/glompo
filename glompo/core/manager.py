@@ -17,6 +17,13 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 import numpy as np
 import yaml
 
+try:
+    import psutil
+
+    has_psutil = True
+except ModuleNotFoundError:
+    has_psutil = False
+
 from ._backends import CustomThread, ThreadPrintRedirect
 from .optimizerlogger import OptimizerLogger
 from ..common.customwarnings import NotImplementedWarning
@@ -283,6 +290,7 @@ class GloMPOManager:
         self.hunt_frequency = hunt_frequency
         self.spawning_opts = True
         self.opts_paused = False
+        self.last_status = 0
 
         # Initialise support classes
         self.opt_log = OptimizerLogger()
@@ -378,6 +386,7 @@ class GloMPOManager:
             self.logger.info("Starting GloMPO Optimization Routine")
 
             self.t_start = time()
+            self.last_status = self.t_start
             self.dt_start = datetime.now()
 
             while not self.converged:
@@ -416,6 +425,21 @@ class GloMPOManager:
                 self.converged = checker_condition or (all_dead and not self.spawning_opts)
                 if self.converged:
                     self.logger.info("Convergence Reached")
+
+                if time() - self.last_status > 600:
+                    self.last_status = time()
+                    processes = [pack.slots for pack in self.optimizer_packs.values() if pack.process.is_alive()]
+                    f_best = f'{self.result.fx:.3E}' if self.result.fx is not None else None
+                    status_mess = f"Status: \n" \
+                                  f"\t{'Time Elapsed:':21} {datetime.now() - self.dt_start}\n" \
+                                  f"\t{'Optimizers Alive:':21} {len(processes)}\n" \
+                                  f"\t{'Slots Filled:':21} {sum(processes)}/{self.max_jobs}\n" \
+                                  f"\t{'Function Evaluations:':21} {self.f_counter}\n" \
+                                  f"\t{'f_best:':21} {f_best}\n"
+                    if has_psutil:
+                        status_mess += f"\t{'CPU Usage:':21} {psutil.cpu_percent()}%\n"
+                        status_mess += f"\t{'Virtual Memory:':21} {psutil.virtual_memory().percent}%\n"
+                    self.logger.info(status_mess)
 
             self.logger.info("Exiting manager loop")
             self.logger.info(f"Exit conditions met: \n"
