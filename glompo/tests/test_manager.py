@@ -488,6 +488,30 @@ class TestManager:
             data = yaml.safe_load(stream)
             assert reason in data['Solution']['exit cond.']
 
+    def test_backend_prop(self, backend):
+        backend = [backend] if backend == "threads" else [backend, "processes_forced"]
+        for b in backend:
+            if "forced" not in b:
+                opt_backend = "threads"
+                is_daemon = True
+            else:
+                opt_backend = "processes"
+                is_daemon = False
+
+            manager = GloMPOManager(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,
+                                    optimizer_selector=CycleSelector([SilentOptimizer]),
+                                    bounds=((0, 1), (0, 1), (0, 1)),
+                                    working_dir="test_manager",
+                                    overwrite_existing=True,
+                                    split_printstreams=False,
+                                    summary_files=0,
+                                    backend=b)
+            opt_pack = manager._setup_new_optimizer(1)
+            assert opt_pack.optimizer._backend == opt_backend
+
+            manager._start_new_job(*opt_pack)
+            assert manager.optimizer_packs[1].process.daemon == is_daemon
+
     @pytest.mark.mini
     def test_mwe(self, backend):
         class SteepestGradient(BaseOptimizer):
