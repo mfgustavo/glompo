@@ -123,7 +123,7 @@ class OptimizerLogger:
                 yaml.dump(sum_data, file, Dumper=Dumper, default_flow_style=False, sort_keys=False)
 
     def _write_file(self, opt_id, filename):
-        yaml.add_representer(LiteralWrapper, literal_presenter)
+        yaml.add_representer(LiteralWrapper, literal_presenter, Dumper=Dumper)
         with open(f"{filename}.yml", 'w') as file:
             data = {"DETAILS": self._storage[opt_id].metadata,
                     "MESSAGES": self._storage[opt_id].messages,

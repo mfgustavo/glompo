@@ -6,7 +6,6 @@ from time import sleep, time
 from typing import Callable, Sequence, Tuple
 
 import pytest
-
 from glompo.common.namedtuples import IterationResult
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from glompo.optimizers.random import RandomOptimizer
@@ -239,11 +238,11 @@ class TestSubclassesGlompoCompatible:
                                'callbacks': self.MaxIter(10)})
         p.start()
         mp_package.event.clear()
-        sleep(0.9)
+        p.join(1.5)
         assert p.is_alive()
 
         mp_package.event.set()
-        sleep(0.2)
+        p.join()
         assert not p.is_alive()
 
     def test_haslogger(self, opti, mp_package):
@@ -253,3 +252,4 @@ class TestSubclassesGlompoCompatible:
 
         assert hasattr(opti, 'logger')
         assert isinstance(opti.logger, logging.Logger)
+        assert "glompo.optimizers.opt" in opti.logger.name

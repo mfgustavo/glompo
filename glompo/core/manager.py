@@ -287,7 +287,7 @@ class GloMPOManager:
         if self.summary_files != summary_files:
             self.logger.warning(f"summary_files argument given as {summary_files} clipped to {self.summary_files}")
         if summary_files:
-            yaml.add_representer(LiteralWrapper, literal_presenter)
+            yaml.add_representer(LiteralWrapper, literal_presenter, Dumper=Dumper)
         self.split_printstreams = bool(split_printstreams)
         self.overwrite_existing = bool(overwrite_existing)
         self.visualisation = visualisation

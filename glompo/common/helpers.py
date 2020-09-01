@@ -84,8 +84,8 @@ class FileNameHandler:
     def __init__(self, name: str):
         self.filename = name
         self.orig_dir = os.getcwd()
-        if '/' in name:
-            path, self.filename = name.rsplit('/', 1)
+        if os.sep in name:
+            path, self.filename = name.rsplit(os.sep, 1)
             os.makedirs(path, exist_ok=True)
             os.chdir(path)
 

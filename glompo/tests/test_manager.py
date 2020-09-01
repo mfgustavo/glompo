@@ -1,11 +1,11 @@
 import os
+from os.path import join as pjoin
 from time import sleep
 from typing import Any, Callable, Dict, Sequence, Tuple, Type, Union
 
 import numpy as np
 import pytest
 import yaml
-
 from glompo.common.namedtuples import IterationResult, ProcessPackage, Result
 from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxFuncCalls, MaxOptsStarted, MaxSeconds
 from glompo.core.manager import GloMPOManager
@@ -243,10 +243,10 @@ class TestManager:
                           backend=backend)
 
     def test_overwrite(self, backend):
-        os.makedirs("overwrite/cmadata", exist_ok=True)
-        os.makedirs("overwrite/glompo_optimizer_logs", exist_ok=True)
-        os.makedirs("overwrite/glompo_optimizer_printstreams", exist_ok=True)
-        open("overwrite/glompo_manager_log.yml", "w+")
+        os.makedirs(pjoin("overwrite", "cmadata"), exist_ok=True)
+        os.makedirs(pjoin("overwrite", "glompo_optimizer_logs"), exist_ok=True)
+        os.makedirs(pjoin("overwrite", "glompo_optimizer_printstreams"), exist_ok=True)
+        open(pjoin("overwrite", "glompo_manager_log.yml"), "w+")
 
         man = GloMPOManager(task=lambda x, y: x / 0,
                             optimizer_selector=DummySelector([OptimizerTest1]),
@@ -354,7 +354,7 @@ class TestManager:
         with pytest.warns(RuntimeWarning, match="terminated normally without sending a"):
             manager.start_manager()
 
-        with open("test_manager/glompo_optimizer_logs/1_SilentOptimizer.yml", 'r') as stream:
+        with open(pjoin("test_manager", "glompo_optimizer_logs", "1_SilentOptimizer.yml"), 'r') as stream:
             data = yaml.safe_load(stream)
             assert "Approximate Stop Time" in data['DETAILS']
             assert data['DETAILS']['End Condition'] == "Normal termination (Reason unknown)"
@@ -374,7 +374,7 @@ class TestManager:
             for record in warns:
                 assert "terminated normally without sending a" not in record.message
 
-        with open("test_manager/glompo_optimizer_logs/1_MessagingOptimizer.yml", 'r') as stream:
+        with open(pjoin("test_manager", "glompo_optimizer_logs", "1_MessagingOptimizer.yml"), 'r') as stream:
             data = yaml.safe_load(stream)
             assert "Approximate Stop Time" not in data['DETAILS']
             assert "Stop Time" in data['DETAILS']
@@ -404,7 +404,7 @@ class TestManager:
             with pytest.warns(RuntimeWarning, match="seems to be hanging. Forcing termination."):
                 manager.start_manager()
 
-            with open("test_manager/glompo_optimizer_logs/1_HangingOptimizer.yml", 'r') as stream:
+            with open(pjoin("test_manager", "glompo_optimizer_logs", "1_HangingOptimizer.yml"), 'r') as stream:
                 data = yaml.safe_load(stream)
                 assert "Approximate Stop Time" in data['DETAILS']
                 assert data['DETAILS']['End Condition'] == "Forced GloMPO Termination"
@@ -435,7 +435,7 @@ class TestManager:
             with pytest.warns(RuntimeWarning, match="Forced termination signal sent to optimizer"):
                 manager.start_manager()
 
-            with open("test_manager/glompo_optimizer_logs/2_HangOnEndOptimizer.yml", 'r') as stream:
+            with open(pjoin("test_manager", "glompo_optimizer_logs", "2_HangOnEndOptimizer.yml"), 'r') as stream:
                 data = yaml.safe_load(stream)
                 assert "Approximate Stop Time" in data['DETAILS']
                 assert data['DETAILS']['End Condition'] == "Forced GloMPO Termination"
@@ -456,7 +456,7 @@ class TestManager:
         with pytest.warns(RuntimeWarning, match="terminated in error"):
             manager.start_manager()
 
-        with open("test_manager/glompo_optimizer_logs/1_ErrorOptimizer.yml", 'r') as stream:
+        with open(pjoin("test_manager", "glompo_optimizer_logs", "1_ErrorOptimizer.yml"), 'r') as stream:
             data = yaml.safe_load(stream)
             assert "Approximate Stop Time" in data['DETAILS']
             assert "Error termination (exitcode" in data['DETAILS']['End Condition']
@@ -484,7 +484,7 @@ class TestManager:
         with pytest.warns(RuntimeWarning, match=match):
             manager.start_manager()
 
-        with open("test_manager/glompo_manager_log.yml", "r") as stream:
+        with open(pjoin("test_manager", "glompo_manager_log.yml"), "r") as stream:
             data = yaml.safe_load(stream)
             assert reason in data['Solution']['exit cond.']
 

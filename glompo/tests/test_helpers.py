@@ -1,7 +1,7 @@
 import os
+from os.path import join as pjoin
 
 import pytest
-
 from glompo.common.helpers import FileNameHandler, distance, is_bounds_valid, nested_string_formatting
 
 
@@ -69,7 +69,7 @@ class TestHelpers:
 
     def test_file_name_handler(self):
         start_direc = os.getcwd()
-        with FileNameHandler('test_helpers/fnh') as name:
-            assert os.getcwd() == start_direc + os.sep + 'test_helpers'
+        with FileNameHandler(pjoin("test_helpers", "fnh")) as name:
+            assert os.getcwd() == pjoin(start_direc, 'test_helpers')
             assert name == 'fnh'
         assert os.getcwd() == start_direc

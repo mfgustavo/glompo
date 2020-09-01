@@ -45,7 +45,7 @@ class SplitOptimizerLogs(logging.Filter):
         """
         super().__init__('')
         self.opened = set()
-        self.filepath = filepath + '/' if filepath else ""
+        self.filepath = filepath + os.sep if filepath else ""
         self.propagate = int(propagate)
         self.fomatter = formatter
 

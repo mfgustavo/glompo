@@ -1,6 +1,7 @@
 import multiprocessing as mp
 import os
 import shutil
+from os.path import join as pjoin
 
 from glompo.common.wrappers import catch_user_interrupt, decorate_all_methods, process_print_redirect
 
@@ -17,10 +18,10 @@ def test_redirect():
     p.start()
     p.join()
 
-    with open("glompo_optimizer_printstreams/1_printstream.out", "r") as file:
+    with open(pjoin("glompo_optimizer_printstreams", "1_printstream.out"), "r") as file:
         assert file.readline() == "redirect_test\n"
 
-    with open("glompo_optimizer_printstreams/1_printstream.err", "r") as file:
+    with open(pjoin("glompo_optimizer_printstreams", "1_printstream.err"), "r") as file:
         assert any(["redirect_test_error" in line for line in file.readlines()])
 
     shutil.rmtree("glompo_optimizer_printstreams")

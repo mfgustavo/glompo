@@ -1,9 +1,9 @@
 import datetime
+from os.path import join as pjoin
 
 import numpy as np
 import pytest
 import yaml
-
 from glompo.core.optimizerlogger import OptimizerLogger
 from glompo.optimizers.baseoptimizer import BaseOptimizer
 from glompo.optimizers.cmawrapper import CMAOptimizer
@@ -43,17 +43,17 @@ class TestLogger:
         return log
 
     def test_save(self, filled_log):
-        filled_log.save_optimizer("test_logger/success", 1)
-        filled_log.save_optimizer("test_logger/all")
+        filled_log.save_optimizer(pjoin("test_logger", "success"), 1)
+        filled_log.save_optimizer(pjoin("test_logger", "all"))
 
-        open("test_logger/all/0_GFLSOptimizer.yml", "r")
-        open("test_logger/all/1_CMAOptimizer.yml", "r")
-        open("test_logger/all/2_ABCMeta.yml", "r")
-        open("test_logger/success.yml", "r")
+        open(pjoin("test_logger", "all", "0_GFLSOptimizer.yml"), "r")
+        open(pjoin("test_logger", "all", "1_CMAOptimizer.yml"), "r")
+        open(pjoin("test_logger", "all", "2_ABCMeta.yml"), "r")
+        open(pjoin("test_logger", "success.yml"), "r")
 
     def test_save_summary(self, filled_log):
-        filled_log.save_summary("test_logger/summary.yml")
-        with open("test_logger/summary.yml", "r") as file:
+        filled_log.save_summary(pjoin("test_logger", "summary.yml"))
+        with open(pjoin("test_logger", "summary.yml"), "r") as file:
             data = yaml.safe_load(file)
         assert len(data) == 3
         assert all([kw in data[0] for kw in ('end_cond', 'f_calls', 'f_best', 'x_best')])

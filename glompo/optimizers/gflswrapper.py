@@ -156,8 +156,8 @@ class GFLSOptimizer(BaseOptimizer):
             callbacks
         )
         if self.save_logger:
-            if "/" in self.save_logger:
-                path, name = tuple(self.save_logger.rsplit("/", 1))
+            if os.sep in self.save_logger:
+                path, name = tuple(self.save_logger.rsplit(os.sep, 1))
                 os.makedirs(path)
             else:
                 name = self.save_logger
@@ -205,8 +205,8 @@ class GFLSOptimizer(BaseOptimizer):
             return mess
 
     def save_state(self, logger: Logger, algorithm, stopcond, file_name: str):
-        if "/" in file_name:
-            path, name = tuple(file_name.rsplit("/", 1))
+        if os.sep in file_name:
+            path, name = tuple(file_name.rsplit(os.sep, 1))
             os.makedirs(path)
         else:
             name = file_name

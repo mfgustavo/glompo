@@ -1,4 +1,3 @@
-import logging
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
 from typing import Callable, Sequence, Tuple
@@ -20,7 +19,6 @@ class RandomOptimizer(BaseOptimizer):
                  pause_flag: Event = None, workers: int = 1, backend: str = 'processes', iters: int = 100):
         """ Initialize with the above parameters. """
         super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
-        self.logger = logging.getLogger('glompo.optimizers')
         self.iters = iters
         self.result = MinimizeResult()
         self.stop_called = False

@@ -1,8 +1,8 @@
 import logging
 import os
+from os.path import join as pjoin
 
 import pytest
-
 from glompo.common.logging import SplitOptimizerLogs
 
 
@@ -23,22 +23,22 @@ class TestSplitLogging:
 
     def test_split(self):
         self.run_log(False)
-        with open('diverted_logs/optimizer_1.log', 'r') as file:
+        with open(pjoin("diverted_logs", "optimizer_1.log"), 'r') as file:
             key = file.readline()
             assert key == '8452\n'
 
-        with open('diverted_logs/optimizer_2.log', 'r') as file:
+        with open(pjoin("diverted_logs", "optimizer_2.log"), 'r') as file:
             key = file.readline()
             assert key == '9216\n'
 
     def test_formatting(self):
         formatter = logging.Formatter("OPT :: %(message)s :: DONE")
         self.run_log(False, formatter)
-        with open('diverted_logs/optimizer_1.log', 'r') as file:
+        with open(pjoin("diverted_logs", "optimizer_1.log"), 'r') as file:
             key = file.readline()
             assert key == "OPT :: 8452 :: DONE\n"
 
-        with open('diverted_logs/optimizer_2.log', 'r') as file:
+        with open(pjoin("diverted_logs", "optimizer_2.log"), 'r') as file:
             key = file.readline()
             assert key == "OPT :: 9216 :: DONE\n"
 
