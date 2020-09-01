@@ -3,7 +3,6 @@ import os
 import numpy as np
 import pytest
 
-has_matplotlib = False
 try:
     from glompo.core.scope import GloMPOScope
 
@@ -15,12 +14,14 @@ try:
 
     plt.ion()
     if matplotlib.pyplot.isinteractive() and int(matplotlib.__version__.split('.')[0]) >= 3:
-        has_matplotlib = True
+        HAS_MATPLOTLIB = True
+    else:
+        HAS_MATPLOTLIB = False
 except (ModuleNotFoundError, ImportError):
-    pass
+    HAS_MATPLOTLIB = False
 
 
-@pytest.mark.skipif(not has_matplotlib, reason="Interactive-enabled matplotlib>=3.0 required to test the scope.")
+@pytest.mark.skipif(not HAS_MATPLOTLIB, reason="Interactive-enabled matplotlib>=3.0 required to test the scope.")
 class TestScope:
 
     @pytest.fixture()

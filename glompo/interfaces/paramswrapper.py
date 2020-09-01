@@ -29,7 +29,7 @@ class _FunctionWrapper:
             warnings.warn("Callbacks provided through the Optimization class are ignored. Callbacks to individual "
                           "optimizers can be passed to GloMPO through BaseSelector objects. Callbacks to control the "
                           "manager itself are passed using GloMPO BaseChecker objects, some conditions should be sent "
-                          "as BaseHunter objects.")
+                          "as BaseHunter objects.", UserWarning)
             self.func.cbs = None
 
     def __call__(self, pars) -> float:
