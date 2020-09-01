@@ -154,7 +154,7 @@ class CMAOptimizer(BaseOptimizer):
                 self.callstop("Callbacks termination.")
             self.logger.debug("callbacks called")
 
-        self.logger.debug(f"Exited optimization loop")
+        self.logger.debug("Exited optimization loop")
         self.result.x, self.result.fx = es.result[:2]
         self.result.success = np.isfinite(self.result.fx)
         if self.result.fx == float('inf'):
@@ -175,7 +175,7 @@ class CMAOptimizer(BaseOptimizer):
 
         if self.keep_files:
             with open(self.dir + 'cma_results.pkl', 'wb') as f:
-                self.logger.debug(f"Pickling results")
+                self.logger.debug("Pickling results")
                 pickle.dump(es.result, f, -1)
 
         if not self.keep_files:

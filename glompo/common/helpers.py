@@ -73,6 +73,7 @@ def literal_presenter(dumper: yaml.Dumper, data: str):
 
 
 def distance(pt1: Sequence[float], pt2: Sequence[float]):
+    """ Calculate the straight line distance between two points in Euclidean space. """
     return np.sqrt(np.sum((np.array(pt1) - np.array(pt2)) ** 2))
 
 
@@ -81,7 +82,13 @@ class LiteralWrapper(str):
 
 
 class FileNameHandler:
+    """ Context manager to manage the creation of new files in a different directory from the working one. """
+
     def __init__(self, name: str):
+        """ Decomposes name into a path to a new directory. The final leaf (directory or file) is returned when the
+            context manager is created and the working directory is changed to one level up from this final leaf while
+            within the context manager. The working directory is returned when exiting the manager.
+        """
         self.filename = name
         self.orig_dir = os.getcwd()
         if os.sep in name:

@@ -35,9 +35,9 @@ def decorate_all_methods(decorator):
     """ Applies a decorator to every method in a class. """
 
     def apply_decorator(cls):
-        for k, f in cls.__dict__.items():
-            if inspect.isfunction(f):
-                setattr(cls, k, decorator(f))
+        for key, func in cls.__dict__.items():
+            if inspect.isfunction(func):
+                setattr(cls, key, decorator(func))
         return cls
 
     return apply_decorator

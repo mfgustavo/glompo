@@ -24,9 +24,9 @@ except ImportError:
 try:
     import psutil
 
-    has_psutil = True
+    HAS_PSUTIL = True
 except ModuleNotFoundError:
-    has_psutil = False
+    HAS_PSUTIL = False
 
 from ._backends import CustomThread, ThreadPrintRedirect
 from .optimizerlogger import OptimizerLogger
@@ -316,12 +316,12 @@ class GloMPOManager:
                 raise TypeError("killing_conditions not an instance of a subclass of BaseHunter.")
         else:
             self.killing_conditions = None
-            self.logger.info(f"Hunting will not be used by the manager.")
+            self.logger.info("Hunting will not be used by the manager.")
 
         # Setup backend
         if any([backend == valid_opt for valid_opt in ('processes', 'threads', 'processes_forced')]):
             self._proc_backend = 'processes' in backend
-            self.opts_daemonic = not ('processes_forced' == backend)
+            self.opts_daemonic = backend != 'processes_forced'
         else:
             self._proc_backend = True
             self.opts_daemonic = True
@@ -440,7 +440,7 @@ class GloMPOManager:
                                   f"\t{'Slots Filled:':21} {sum(processes)}/{self.max_jobs}\n" \
                                   f"\t{'Function Evaluations:':21} {self.f_counter}\n" \
                                   f"\t{'f_best:':21} {f_best}\n"
-                    if has_psutil:
+                    if HAS_PSUTIL:
                         status_mess += f"\t{'CPU Usage:':21} {psutil.cpu_percent()}%\n"
                         status_mess += f"\t{'Virtual Memory:':21} {psutil.virtual_memory().percent}%\n"
                     self.logger.info(status_mess)
@@ -455,7 +455,7 @@ class GloMPOManager:
         except KeyboardInterrupt:
             caught_exception = "User Interrupt"
             self.logger.error("Caught User Interrupt, closing GloMPO gracefully.")
-            warnings.warn(f"Optimization failed. Caught User Interrupt", RuntimeWarning)
+            warnings.warn("Optimization failed. Caught User Interrupt", RuntimeWarning)
             self._cleanup_crash("User Interrupt")
 
         except Exception as e:
@@ -841,7 +841,7 @@ class GloMPOManager:
 
             if self.summary_files >= 2:
                 self.logger.debug("Saving optimizers summary file.")
-                self.opt_log.save_summary(f"opt_best_summary.yml")
+                self.opt_log.save_summary("opt_best_summary.yml")
             if self.summary_files == 3:
                 self.logger.debug("Saving optimizer log files.")
                 self.opt_log.save_optimizer("glompo_optimizer_logs")
