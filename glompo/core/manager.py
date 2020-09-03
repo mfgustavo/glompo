@@ -2,6 +2,7 @@
 
 import copy
 import getpass
+import glob
 import logging
 import multiprocessing as mp
 import os
@@ -157,11 +158,14 @@ class GloMPOManager:
             NotYetImplemented
 
         summary_files: int = 0
-            Indicates the level of saving the user would like:
-                0 - No opt_log files are saved.
-                1 - Only the manager summary file is saved.
-                2 - The manager summary log and combined optimizers summary files are saved.
-                3 - All of the above plus all the individual optimizer log files are saved.
+            Indicates the level of saving the user would like in terms of datafiles and plots:
+                0 - No opt_log files are saved;
+                1 - Only the manager summary file is saved;
+                2 - The manager summary log and combined optimizers summary files are saved;
+                3 - All of the above plus all the individual optimizer log files are saved;
+                4 - All of the above plus plot of the optimizer trajectories
+                5 - All of the above plus plots of trailed parameters as a function of optimizer iteration for each
+                    optimizer.
 
         visualisation: bool = False
             If True then a dynamic plot is generated to demonstrate the performance of the optimizers. Further options
@@ -283,7 +287,7 @@ class GloMPOManager:
         self._too_long = force_terminations_after
         self.region_stability_check = bool(region_stability_check)
         self.report_statistics = bool(report_statistics)
-        self.summary_files = np.clip(int(summary_files), 0, 3)
+        self.summary_files = np.clip(int(summary_files), 0, 5)
         if self.summary_files != summary_files:
             self.logger.warning(f"summary_files argument given as {summary_files} clipped to {self.summary_files}")
         if summary_files:
@@ -370,7 +374,10 @@ class GloMPOManager:
         if any([file in files for file in ["glompo_manager_log.yml", "glompo_optimizer_logs"]]):
             if self.overwrite_existing:
                 self.logger.debug("Old results found")
-                for old in ("glompo_manager_log.yml", "opt_best_summary.yml"):
+                to_remove = ["glompo_manager_log.yml", "opt_best_summary.yml"]
+                to_remove += glob.glob("trajectories*.png", recursive=False)
+                to_remove += glob.glob("opt*_parms.png", recursive=False)
+                for old in to_remove:
                     try:
                         os.remove(old)
                     except FileNotFoundError:
@@ -842,9 +849,34 @@ class GloMPOManager:
             if self.summary_files >= 2:
                 self.logger.debug("Saving optimizers summary file.")
                 self.opt_log.save_summary("opt_best_summary.yml")
-            if self.summary_files == 3:
+            if self.summary_files >= 3:
                 self.logger.debug("Saving optimizer log files.")
                 self.opt_log.save_optimizer("glompo_optimizer_logs")
+            if self.summary_files >= 4:
+                self.logger.debug("Saving trajectory plot.")
+                signs = set()
+                large = 0
+                small = float('inf')
+                for opt_id in self.optimizer_packs:
+                    fx = self.opt_log.get_history(opt_id, 'fx')
+                    [signs.add(i) for i in set(np.sign(fx))]
+                    if len(fx) > 0:
+                        large = max(fx) if max(fx) > large else large
+                        small = min(fx) if min(fx) < small else small
+
+                all_sign = len(signs) == 1
+                range_large = large - small > 1e5
+                log_scale = all_sign and range_large
+                for best_fx in (True, False):
+                    name = "trajectories_"
+                    name += "log_" if log_scale else ""
+                    name += "best_" if best_fx else ""
+                    name = name[:-1] if name.endswith("_") else name
+                    name += ".png"
+                    self.opt_log.plot_trajectory(name, log_scale, best_fx)
+            if self.summary_files == 5:
+                self.logger.debug("Saving optimizer parameter trials.")
+                self.opt_log.plot_optimizer_trials()
 
     def _cleanup_crash(self, opt_reason: str):
         for opt_id in self.optimizer_packs:

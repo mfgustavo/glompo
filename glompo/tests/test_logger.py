@@ -1,6 +1,8 @@
 import datetime
+import os
 from os.path import join as pjoin
 
+import glompo.core.optimizerlogger
 import numpy as np
 import pytest
 import yaml
@@ -94,3 +96,30 @@ class TestLogger:
 
     def test_metadata(self, filled_log):
         assert filled_log.get_metadata(0, "End Condition") == "tmax condition met"
+
+    @pytest.mark.skipif(not glompo.core.optimizerlogger.HAS_MATPLOTLIB,
+                        reason="Matplotlib package needed to use these features.")
+    def test_plot_no_matplotlib(self, filled_log, monkeypatch):
+        monkeypatch.setattr(glompo.core.optimizerlogger, "HAS_MATPLOTLIB", False)
+        with pytest.warns(ImportWarning, match="Matplotlib not present cannot create plots."):
+            filled_log.plot_trajectory("")
+
+        with pytest.warns(ImportWarning, match="Matplotlib not present cannot create plots."):
+            filled_log.plot_optimizer_trials()
+
+    @pytest.mark.skipif(not glompo.core.optimizerlogger.HAS_MATPLOTLIB,
+                        reason="Matplotlib package needed to use these features.")
+    def test_plot_traj(self, filled_log):
+        os.makedirs("optlogger_plots", exist_ok=True)
+        filled_log.plot_trajectory("optlogger_plots/traj.png")
+        assert os.path.exists("optlogger_plots/traj.png")
+
+    @pytest.mark.skipif(not glompo.core.optimizerlogger.HAS_MATPLOTLIB,
+                        reason="Matplotlib package needed to use these features.")
+    def test_plot_opts(self, filled_log):
+        os.makedirs("optlogger_plots", exist_ok=True)
+        os.chdir("optlogger_plots")
+        print(os.getcwd())
+        filled_log.plot_optimizer_trials()
+        for i in range(3):
+            assert os.path.exists(f"opt{i}_parms.png")

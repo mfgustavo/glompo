@@ -1,15 +1,24 @@
 """ Contains classes which save log information for GloMPO and its optimizers. """
 
 import os
+import warnings
 from math import inf
 from typing import Any, Dict, List, Optional, Sequence, Union
 
+import numpy as np
 import yaml
 
 try:
     from yaml import CDumper as Dumper
 except ImportError:
     from yaml import Dumper as Dumper
+try:
+    import matplotlib.pyplot as plt
+    import matplotlib.lines as lines
+
+    HAS_MATPLOTLIB = True
+except (ModuleNotFoundError, ImportError):
+    HAS_MATPLOTLIB = False
 
 from glompo.common.helpers import FileNameHandler, LiteralWrapper, literal_presenter
 
@@ -121,6 +130,94 @@ class OptimizerLogger:
 
             with open(filename, "w+") as file:
                 yaml.dump(sum_data, file, Dumper=Dumper, default_flow_style=False, sort_keys=False)
+
+    def plot_optimizer_trials(self, opt_id: Optional[int] = None):
+        if not HAS_MATPLOTLIB:
+            warnings.warn("Matplotlib not present cannot create plots.", ImportWarning)
+            return
+
+        is_interactive = plt.isinteractive()
+        if is_interactive:
+            plt.ioff()
+
+        opt_id = [opt_id] if opt_id else self._storage.keys()
+        for opt in opt_id:
+            x_all = self.get_history(opt, 'x')
+
+            fig, ax = plt.subplots(figsize=(12, 8))
+            fig: plt.Figure
+            ax: plt.Axes
+
+            ax.plot(x_all)
+            ax.set_xlabel('Iteration')
+            ax.set_ylabel('Parameter Value')
+            ax.set_title('Parameter values as a function of optimizer iteration number')
+
+            fig.savefig(f'opt{opt}_parms.png')
+            plt.close(fig)
+
+        if is_interactive:
+            plt.ion()
+
+    def plot_trajectory(self, title: str, log_scale: bool = False, best_fx: bool = False):
+        if not HAS_MATPLOTLIB:
+            warnings.warn("Matplotlib not present cannot create plots.", ImportWarning)
+            return
+
+        is_interactive = plt.isinteractive()
+        if is_interactive:
+            plt.ioff()
+
+        fig, ax = plt.subplots(figsize=(12, 8))
+        fig: plt.Figure
+        ax: plt.Axes
+
+        leg_elements = [lines.Line2D([], [], ls='-', c='black', label='Optimizer Evaluations'),
+                        lines.Line2D([], [], ls='', marker='x', c='black', label='Optimizer Killed'),
+                        lines.Line2D([], [], ls='', marker='*', c='black', label='Optimizer Converged')]
+
+        track = 'fx_best' if best_fx else 'fx'
+        y_lab = "Best Function Evaluation" if best_fx else "Function Evaluation"
+        for opt_id in self._storage.keys():
+            f_calls = self.get_history(opt_id, 'f_call_overall')
+            traj = self.get_history(opt_id, track)
+
+            if log_scale:
+                traj = np.sign(traj) * np.log10(np.abs(traj))
+                stub = "fx_best" if best_fx else "fx"
+                y_lab = f"sign({stub}) * log10(|{stub}|)"
+
+            ax.plot(f_calls, traj)
+            color = ax.get_lines()[-1].get_color()
+            leg_elements.append(lines.Line2D([], [], ls='-', c=color,
+                                             label=f"{opt_id}: {self.get_metadata(opt_id, 'Optimizer Type')}"))
+
+            try:
+                end_cond = self.get_metadata(opt_id, "End Condition")
+                if "GloMPO Termination" in end_cond:
+                    marker = 'x'
+                elif "Optimizer convergence" in end_cond:
+                    marker = '*'
+                else:
+                    marker = ''
+                ax.plot(f_calls[-1], traj[-1], marker=marker, color='black')
+            except KeyError:
+                pass
+
+        ax.set_xlabel('Function Calls')
+        ax.set_ylabel(y_lab)
+        ax.set_title("Optimizer function evaluations over time as a function of cumulative function calls.")
+
+        # Apply Legend
+        ax.legend(loc='upper right', handles=leg_elements, bbox_to_anchor=(1.35, 1))
+        box = ax.get_position()
+        ax.set_position([0.85 * box.x0, box.y0, 0.85 * box.width, box.height])
+
+        fig.savefig(title)
+        plt.close(fig)
+
+        if is_interactive:
+            plt.ion()
 
     def _write_file(self, opt_id, filename):
         yaml.add_representer(LiteralWrapper, literal_presenter, Dumper=Dumper)

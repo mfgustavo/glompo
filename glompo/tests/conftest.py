@@ -28,8 +28,9 @@ def make_tmp(request):
     # Teardown
     os.chdir(home_dir)
     if request.config.getoption('-S'):
+        shutil.rmtree("saved_test_outputs", ignore_errors=True)
         os.makedirs("saved_test_outputs", exist_ok=True)
-        for data in ('glomporecording.mp4', 'mini_test'):
+        for data in ('glomporecording.mp4', 'mini_test', 'optlogger_plots'):
             try:
                 shutil.move("_tmp" + os.sep + data, "saved_test_outputs" + os.sep + data)
             except FileNotFoundError:

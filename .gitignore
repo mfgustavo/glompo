@@ -3,3 +3,4 @@ _tmp
 .pytest_cache
 *egg-info
 .coverage*
+saved_test_outputs

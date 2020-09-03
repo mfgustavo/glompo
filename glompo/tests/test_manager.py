@@ -231,7 +231,7 @@ class TestManager:
                             overwrite_existing=True,
                             summary_files=summary_files,
                             backend=backend)
-        assert opt.summary_files == int(np.clip(int(summary_files), 0, 3))
+        assert opt.summary_files == int(np.clip(int(summary_files), 0, 5))
 
     def test_init_workingdir(self, backend):
         with pytest.warns(UserWarning, match="Cannot parse working_dir"):
@@ -247,6 +247,9 @@ class TestManager:
         os.makedirs(pjoin("overwrite", "glompo_optimizer_logs"), exist_ok=True)
         os.makedirs(pjoin("overwrite", "glompo_optimizer_printstreams"), exist_ok=True)
         open(pjoin("overwrite", "glompo_manager_log.yml"), "w+")
+        open(pjoin("overwrite", "trajectories.png"), "w+")
+        open(pjoin("overwrite", "trajectories_log_best.png"), "w+")
+        open(pjoin("overwrite", "opt123_parms.png"), "w+")
 
         man = GloMPOManager(task=lambda x, y: x / 0,
                             optimizer_selector=DummySelector([OptimizerTest1]),
@@ -512,6 +515,46 @@ class TestManager:
             manager._start_new_job(*opt_pack)
             assert manager.optimizer_packs[1].process.daemon == is_daemon
 
+    @pytest.mark.parametrize("fx, is_log", [(range(1000, 10), False),
+                                            (range(10000, 100), False),
+                                            (range(1000, 1000200, 1000), True),
+                                            (range(-100, 100), False),
+                                            (range(-10, 100000), False)])
+    def test_plot_construction(self, backend, monkeypatch, fx, is_log):
+
+        gathered = []
+
+        def mock_save_traj(name, log_scale, best_fx):
+            gathered.append(name)
+
+        def pass_meth(*args):
+            pass
+
+        man = GloMPOManager(task=lambda x, y: x + y,
+                            max_jobs=10,
+                            optimizer_selector=CycleSelector([OptimizerTest1]),
+                            bounds=((0, 1), (0, 1)),
+                            working_dir="test_manager",
+                            split_printstreams=False,
+                            summary_files=5,
+                            backend=backend)
+
+        monkeypatch.setattr(man.opt_log, "plot_trajectory", mock_save_traj)
+        monkeypatch.setattr(man.opt_log, "save_summary", pass_meth)
+        monkeypatch.setattr(man.opt_log, "save_optimizer", pass_meth)
+
+        man.optimizer_packs[1] = None
+        man.opt_log.add_optimizer(1, OptimizerTest1.__name__, 0)
+        for i, f in enumerate(fx):
+            man.opt_log.put_iteration(1, i, i, i, [0.5, 0.5], float(f))
+        man._save_log(Result(np.array([0.2, 0.3]), 65.54, {}, {}), "GloMPO Convergence", False)
+
+        output = ["trajectories_log.png", "trajectories_log_best.png"] if is_log else \
+            ["trajectories.png", "trajectories_best.png"]
+        print(sorted(output))
+        print(sorted(gathered))
+        assert sorted(output) == sorted(gathered)
+
     @pytest.mark.mini
     def test_mwe(self, backend):
         class SteepestGradient(BaseOptimizer):
@@ -627,7 +670,7 @@ class TestManager:
                                 convergence_checker=KillsAfterConvergence(2, 1) | MaxFuncCalls(10000) | MaxSeconds(60),
                                 x0_generator=IntervalGenerator(),
                                 killing_conditions=MinIterations(1000),
-                                summary_files=3,
+                                summary_files=5,
                                 visualisation=False,
                                 visualisation_args=None)
         result = manager.start_manager()
