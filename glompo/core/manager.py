@@ -6,6 +6,7 @@ import glob
 import logging
 import multiprocessing as mp
 import os
+import queue
 import shutil
 import socket
 import sys
@@ -701,10 +702,13 @@ class GloMPOManager:
             self.logger.debug("Resuming optimizers.")
             self._toggle_optimizers(1)
 
-        i_count = 0
-        while not self.optimizer_queue.empty() and i_count < 10:
-            res = self.optimizer_queue.get_nowait()
-            i_count += 1
+        for i in range(10):
+            try:
+                res = self.optimizer_queue.get(block=True, timeout=1)
+            except queue.Empty:
+                self.logger.debug("Timeout on result queue.")
+                break
+
             self.last_feedback[res.opt_id] = time()
             self.f_counter += res.i_fcalls
 
@@ -722,8 +726,6 @@ class GloMPOManager:
                     self.scope.update_optimizer(res.opt_id, (self.f_counter, res.fx))
                     if res.final:
                         self.scope.update_norm_terminate(res.opt_id)
-            else:
-                self.logger.debug("No results found.")
 
     def _start_hunt(self, hunter_id: int):
         """ Creates a new hunt with the provided hunter_id as the 'best' optimizer looking to terminate
