@@ -51,45 +51,8 @@ class TestScope:
                                 x_range=(0, 1000),
                                 y_range=(0, 1000),
                                 **kwargs)
+            scope.setup_moviemaker()
             scope._writer.cleanup()
-
-    @pytest.mark.parametrize("i, palette", [(10, 1), (35, 2), (53, 3), (67, 4), (73, 5), (88, 6), (200, 7)])
-    def test_colors(self, i, palette, scope):
-
-        if i < 20:
-            colors = plt.get_cmap("tab20")
-            threshold = 0
-            group = 1
-        elif i < 40:
-            colors = plt.get_cmap("tab20b")
-            threshold = 20
-            group = 2
-        elif i < 60:
-            colors = plt.get_cmap("tab20c")
-            threshold = 40
-            group = 3
-        elif i < 69:
-            colors = plt.get_cmap("Set1")
-            threshold = 60
-            group = 4
-        elif i < 77:
-            colors = plt.get_cmap("Set2")
-            threshold = 69
-            group = 5
-        elif i < 89:
-            colors = plt.get_cmap("Set3")
-            threshold = 77
-            group = 6
-        else:
-            colors = plt.get_cmap("Dark2")
-            threshold = 89
-            group = 7
-        color = colors(i - threshold)
-
-        scope.n_streams = i - 1
-        scope.add_stream(0)
-        assert color == scope.streams[0]['all_opt'].get_color()
-        assert group == palette
 
     @pytest.mark.parametrize("max_val", [510, 910, 210, 80, 300, 310])
     def test_point_truncation(self, max_val, scope):
@@ -146,6 +109,7 @@ class TestScope:
     def test_generate_movie(self):
         scope = GloMPOScope(log_scale=True,
                             record_movie=True)
+        scope.setup_moviemaker()
         scope.add_stream(1)
         scope.add_stream(2)
         for i in range(0, 510, 10):

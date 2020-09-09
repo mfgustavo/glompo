@@ -9,6 +9,7 @@ import matplotlib.lines as lines
 import matplotlib.pyplot as plt
 import numpy as np
 
+from ..common.helpers import glompo_colors
 from ..common.wrappers import catch_user_interrupt, decorate_all_methods
 
 __all__ = ("GloMPOScope",)
@@ -82,6 +83,7 @@ class GloMPOScope:
         self.events_per_flush = events_per_flush
         self.elitism = bool(elitism)
         self._event_counter = 0
+        self.color_map = glompo_colors()
 
         plt.ion() if interactive_mode else plt.ioff()
 
@@ -149,6 +151,7 @@ class GloMPOScope:
                 warnings.warn("Unidentified key in writer_kwargs. Using default values.", UserWarning)
                 self.logger.warning("Unidentified key in writer_kwargs. Using default values.")
                 self._writer = MyFFMpegWriter()
+
             if not movie_kwargs:
                 movie_kwargs = {}
             if 'outfile' not in movie_kwargs:
@@ -157,12 +160,8 @@ class GloMPOScope:
                 self.logger.info("Saving scope recording as glomporecording.mp4")
             else:
                 self.movie_name = movie_kwargs['outfile']
-            try:
-                self._writer.setup(fig=self.fig, **movie_kwargs)
-            except TypeError:
-                warnings.warn("Unidentified key in writer_kwargs. Using default values.", UserWarning)
-                self.logger.warning("Unidentified key in writer_kwargs. Using default values.")
-                self._writer.setup(fig=self.fig, outfile='glomporecording.mp4')
+            self._movie_kwargs = movie_kwargs
+
         self.logger.debug("Scope initialised successfully")
 
     def _redraw_graph(self, force=False):
@@ -241,32 +240,8 @@ class GloMPOScope:
                                 'opt_norm': self.ax.plot([], [], ls='', marker='*', zorder=500)[0],  # Converged opt
                                 }
 
-        # Match colors for a single optimisation
-        if self.n_streams < 20:
-            colors = plt.get_cmap("tab20")
-            threshold = 0
-        elif self.n_streams < 40:
-            colors = plt.get_cmap("tab20b")
-            threshold = 20
-        elif self.n_streams < 60:
-            colors = plt.get_cmap("tab20c")
-            threshold = 40
-        elif self.n_streams < 69:
-            colors = plt.get_cmap("Set1")
-            threshold = 60
-        elif self.n_streams < 77:
-            colors = plt.get_cmap("Set2")
-            threshold = 69
-        elif self.n_streams < 89:
-            colors = plt.get_cmap("Set3")
-            threshold = 77
-        else:
-            colors = plt.get_cmap("Dark2")
-            self.logger.warning("Using final color palette, colors will loop for here on.")
-            threshold = 89
-
         for line in self.streams[opt_id]:
-            color = colors(self.n_streams - threshold)
+            color = self.color_map(self.n_streams)
             if any([line == _ for _ in ['opt_kill', 'opt_norm']]):
                 color = 'black'
             self.streams[opt_id][line].set_color(color)
@@ -276,7 +251,7 @@ class GloMPOScope:
         else:
             label = f"Optimizer {opt_id}"
 
-        self.leg_elements.append(lines.Line2D([], [], ls='-', c=colors(self.n_streams - threshold),
+        self.leg_elements.append(lines.Line2D([], [], ls='-', c=self.color_map(self.n_streams),
                                               label=label))
         self.ax.legend(loc='upper right', handles=self.leg_elements, bbox_to_anchor=(1.35, 1))
         self.logger.debug(f"Added new plot set for optimizer {opt_id}")
@@ -303,6 +278,18 @@ class GloMPOScope:
         """ The opt_id normal optimizer plot is updated at its final point. """
         self._update_point(opt_id, 'opt_norm')
         self._redraw_graph()
+
+    def setup_moviemaker(self):
+        """ Setups up the movie recording framework. Must be called before the scope begins to be filled in order to
+            begin generating movies correctly. Declared outside the init so that it can be called in the
+            appropriate directory by the manager.
+        """
+        try:
+            self._writer.setup(fig=self.fig, **self._movie_kwargs)
+        except TypeError:
+            warnings.warn("Unidentified key in writer_kwargs. Using default values.", UserWarning)
+            self.logger.warning("Unidentified key in writer_kwargs. Using default values.")
+            self._writer.setup(fig=self.fig, outfile='glomporecording.mp4')
 
     def generate_movie(self):
         """ Final call to write the saved frames into a single movie. """

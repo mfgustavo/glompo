@@ -1,6 +1,6 @@
 """ Useful static functions used throughout GloMPO. """
 import os
-from typing import Sequence, Tuple
+from typing import Optional, Sequence, Tuple, Union
 
 import numpy as np
 import yaml
@@ -10,7 +10,8 @@ __all__ = ("LiteralWrapper",
            "nested_string_formatting",
            "is_bounds_valid",
            "literal_presenter",
-           "distance")
+           "distance",
+           "glompo_colors")
 
 
 def nested_string_formatting(nested_str: str) -> str:
@@ -75,6 +76,25 @@ def literal_presenter(dumper: yaml.Dumper, data: str):
 def distance(pt1: Sequence[float], pt2: Sequence[float]):
     """ Calculate the straight line distance between two points in Euclidean space. """
     return np.sqrt(np.sum((np.array(pt1) - np.array(pt2)) ** 2))
+
+
+def glompo_colors(opt_id: Optional[int] = None) -> Union['matplotlib.colors.ListedColormap', Tuple]:
+    """ Returns a matplotlib Colormap instance containing the custom GloMPO color cycle.
+        If opt_id is provided than the specific color at that index is returned instead.
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import ListedColormap
+
+    colors = []
+    for cmap in ("tab20", "tab20b", "tab20c", "Set1", "Set2", "Set3", "Dark2"):
+        for col in plt.get_cmap(cmap).colors:
+            colors.append(col)
+
+    cmap = ListedColormap(colors, "glompo_colormap")
+    if opt_id:
+        return cmap(opt_id)
+
+    return cmap
 
 
 class LiteralWrapper(str):

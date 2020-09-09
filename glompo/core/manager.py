@@ -391,6 +391,9 @@ class GloMPOManager:
                     "Previous results found. Remove, move or rename them. Alternatively, select "
                     "another working_dir or set overwrite_existing=True.")
 
+        if self.visualisation:
+            self.scope.setup_moviemaker()  # Declared here to ensure no overwriting and creation in correct dir
+
         if self.split_printstreams:
             os.makedirs("glompo_optimizer_printstreams", exist_ok=True)
 
@@ -422,6 +425,9 @@ class GloMPOManager:
 
                 if best_id > 0 and self.killing_conditions:
                     self._start_hunt(best_id)
+
+                self.logger.debug("Checking for user interventions.")
+                self._is_manual_shutdowns()
 
                 self.logger.debug("Checking for hanging processes")
                 self._inspect_children()
@@ -755,6 +761,21 @@ class GloMPOManager:
 
             self.logger.debug("Hunting complete")
 
+    def _is_manual_shutdowns(self):
+        files = os.listdir()
+        files = [file for file in files if "STOP_" in file]
+        for file in files:
+            try:
+                _, opt_id = file.split('_')
+                opt_id = int(opt_id)
+                if opt_id not in self.graveyard:
+                    self._shutdown_job(opt_id, None, "User STOP file intervention.")
+                    self.logger.info(f"STOP file found for Optimizer {opt_id}")
+                    os.remove(file)
+            except ValueError as e:
+                self.logger.debug("Error encountered trying to process STOP files.", exc_info=e)
+                continue
+
     def _shutdown_job(self, opt_id: int, hunter_id: int, reason: str):
         """ Sends a stop signal to optimizer opt_id and updates variables around its termination. """
         self.hunt_victims[opt_id] = time()
@@ -798,11 +819,12 @@ class GloMPOManager:
         return Result(best_x, best_fx, best_stats, best_origin)
 
     def _stop_all_children(self):
+        if self.opts_paused:
+            self._toggle_optimizers(1)
+
         for opt_id in self.optimizer_packs:
             if self.optimizer_packs[opt_id].process.is_alive():
                 self.optimizer_packs[opt_id].signal_pipe.send(1)
-                if self.opts_paused:
-                    self._toggle_optimizers(1)
                 self.graveyard.add(opt_id)
                 self.opt_log.put_metadata(opt_id, "Stop Time", datetime.now())
                 self.opt_log.put_metadata(opt_id, "End Condition", "GloMPO Convergence")
@@ -882,9 +904,13 @@ class GloMPOManager:
 
     def _cleanup_crash(self, opt_reason: str):
         for opt_id in self.optimizer_packs:
-            self.graveyard.add(opt_id)
-            self.opt_log.put_metadata(opt_id, "Stop Time", datetime.now())
-            self.opt_log.put_metadata(opt_id, "End Condition", opt_reason)
+            try:
+                self.opt_log.get_metadata(opt_id, "End Condition")
+                self.opt_log.get_metadata(opt_id, "Stop Time")
+            except KeyError:
+                self.graveyard.add(opt_id)
+                self.opt_log.put_metadata(opt_id, "Stop Time", datetime.now())
+                self.opt_log.put_metadata(opt_id, "End Condition", opt_reason)
             self.optimizer_packs[opt_id].process.join(10)
             if self.optimizer_packs[opt_id].process.is_alive():
                 if self._proc_backend:

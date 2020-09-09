@@ -20,7 +20,7 @@ try:
 except (ModuleNotFoundError, ImportError):
     HAS_MATPLOTLIB = False
 
-from glompo.common.helpers import FileNameHandler, LiteralWrapper, literal_presenter
+from glompo.common.helpers import FileNameHandler, LiteralWrapper, literal_presenter, glompo_colors
 
 __all__ = ("OptimizerLogger",)
 
@@ -176,6 +176,7 @@ class OptimizerLogger:
                         lines.Line2D([], [], ls='', marker='x', c='black', label='Optimizer Killed'),
                         lines.Line2D([], [], ls='', marker='*', c='black', label='Optimizer Converged')]
 
+        colors = glompo_colors()
         track = 'fx_best' if best_fx else 'fx'
         y_lab = "Best Function Evaluation" if best_fx else "Function Evaluation"
         for opt_id in self._storage.keys():
@@ -187,9 +188,8 @@ class OptimizerLogger:
                 stub = "fx_best" if best_fx else "fx"
                 y_lab = f"sign({stub}) * log10(|{stub}|)"
 
-            ax.plot(f_calls, traj)
-            color = ax.get_lines()[-1].get_color()
-            leg_elements.append(lines.Line2D([], [], ls='-', c=color,
+            ax.plot(f_calls, traj, c=colors(opt_id))
+            leg_elements.append(lines.Line2D([], [], ls='-', c=colors(opt_id),
                                              label=f"{opt_id}: {self.get_metadata(opt_id, 'Optimizer Type')}"))
 
             try:
