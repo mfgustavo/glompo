@@ -448,15 +448,23 @@ class GloMPOManager:
                     self.last_status = time()
                     processes = [pack.slots for pack in self.optimizer_packs.values() if pack.process.is_alive()]
                     f_best = f'{self.result.fx:.3E}' if self.result.fx is not None else None
+                    evals = f"{self.f_counter:,}".replace(',', ' ')
                     status_mess = f"Status: \n" \
-                                  f"\t{'Time Elapsed:':21} {datetime.now() - self.dt_start}\n" \
-                                  f"\t{'Optimizers Alive:':21} {len(processes)}\n" \
-                                  f"\t{'Slots Filled:':21} {sum(processes)}/{self.max_jobs}\n" \
-                                  f"\t{'Function Evaluations:':21} {self.f_counter}\n" \
-                                  f"\t{'f_best:':21} {f_best}\n"
+                                  f"    {'Time Elapsed:':.<26} {datetime.now() - self.dt_start}\n" \
+                                  f"    {'Optimizers Alive:':.<26} {len(processes)}\n" \
+                                  f"    {'Slots Filled:':.<26} {sum(processes)}/{self.max_jobs}\n" \
+                                  f"    {'Function Evaluations:':.<26} {evals}\n" \
+                                  f"    Current Optimizer f_vals:\n"
+                    for opt_id in self.optimizer_packs:
+                        if self.optimizer_packs[opt_id].process.is_alive():
+                            hist = self.opt_log.get_history(opt_id, 'fx')
+                            if len(hist) > 0:
+                                width = 21 if hist[-1] < 0 else 22
+                                status_mess += f"        {f'Optimizer {opt_id}':.<{width}} {hist[-1]:.3E}\n"
+                    status_mess += f"    {'Overall f_best:':.<25} {f_best}\n"
                     if HAS_PSUTIL:
-                        status_mess += f"\t{'CPU Usage:':21} {psutil.cpu_percent()}%\n"
-                        status_mess += f"\t{'Virtual Memory:':21} {psutil.virtual_memory().percent}%\n"
+                        status_mess += f"    {'CPU Usage:':.<26} {psutil.cpu_percent()}%\n"
+                        status_mess += f"    {'Virtual Memory:':.<26} {psutil.virtual_memory().percent}%\n"
                     self.logger.info(status_mess)
 
             self.logger.info("Exiting manager loop")
