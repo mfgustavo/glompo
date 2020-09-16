@@ -201,7 +201,7 @@ class OptimizerLogger:
                 else:
                     marker = ''
                 ax.plot(f_calls[-1], traj[-1], marker=marker, color='black')
-            except KeyError:
+            except (KeyError, IndexError):
                 pass
 
         ax.set_xlabel('Function Calls')
