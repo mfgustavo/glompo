@@ -465,6 +465,10 @@ class GloMPOManager:
                     if HAS_PSUTIL:
                         status_mess += f"    {'CPU Usage:':.<26} {psutil.cpu_percent()}%\n"
                         status_mess += f"    {'Virtual Memory:':.<26} {psutil.virtual_memory().percent}%\n"
+                        try:
+                            status_mess += f"    {'System Load:':.<26} {psutil.getloadavg()}\n"
+                        except AttributeError:
+                            pass
                     self.logger.info(status_mess)
 
             self.logger.info("Exiting manager loop")
