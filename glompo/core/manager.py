@@ -391,7 +391,7 @@ class GloMPOManager:
                     "Previous results found. Remove, move or rename them. Alternatively, select "
                     "another working_dir or set overwrite_existing=True.")
 
-        if self.visualisation:
+        if self.visualisation and self.scope.record_movie:
             self.scope.setup_moviemaker()  # Declared here to ensure no overwriting and creation in correct dir
 
         if self.split_printstreams:
