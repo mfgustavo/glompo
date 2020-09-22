@@ -209,3 +209,15 @@ the chosen optimizer.
 Files must be called `STOP_x` where `x` is the optimizer ID number. This file name
 is case-sensitive. Examples include `STOP_1` or `STOP_003`. Note that these files
 should be empty as they are deleted by the manager once processed.
+
+Execution Information
+=====================
+
+GloMPO logs include information about CPU usage, memory usage and system load. This
+is useful traceback to ensure the function is being parallelized correctly. It is
+important to note that CPU usage and memory usage is provided at a *process level*
+system load is provided at a *system level*. This means that the system load
+information will only be of use if GloMPO is the only application running over the
+entire system. In distributed computing systems where GloMPO is only given access to
+a portion of a node, this information will be useless as it will be conflated with
+the usage of other users.

@@ -1,4 +1,5 @@
 """ Useful static functions used throughout GloMPO. """
+import inspect
 import os
 from typing import Optional, Sequence, Tuple, Union
 
@@ -10,7 +11,11 @@ __all__ = ("LiteralWrapper",
            "nested_string_formatting",
            "is_bounds_valid",
            "literal_presenter",
+           "optimizer_selector_presenter",
+           "generator_presenter",
+           "unknown_object_presenter",
            "distance",
+           "mem_pprint",
            "glompo_colors")
 
 
@@ -68,9 +73,54 @@ def is_bounds_valid(bounds: Sequence[Tuple[float, float]], raise_invalid=True) -
     return True
 
 
+# YAML Representers
 def literal_presenter(dumper: yaml.Dumper, data: str):
-    """ Wrapper around string for correct presentation in YAML file. """
+    """ Wrapper around string for better readability in YAML file. """
     return dumper.represent_scalar('tag:yaml.org,2002:str', data.replace(' \n', '\n'), style='|')
+
+
+def optimizer_selector_presenter(dumper, opt_selector: 'BaseSelector'):
+    """ Unique constructor for the optimizer selector. """
+    opts = {}
+    for i, opt in enumerate(opt_selector.avail_opts):
+        opts[i] = dict(zip(('type', 'init_kwargs', 'call_kwargs'), opt))
+
+    return dumper.represent_mapping('tag:yaml.org,2002:map',
+                                    {'Selector': type(opt_selector).__name__,
+                                     'Allow Spawn': opt_selector.allow_spawn,
+                                     'Available Optimizers': opts,
+                                     }, flow_style=False)
+
+
+def generator_presenter(dumper, generator: 'BaseGenerator'):
+    """ Unique constructor for the generator. """
+    info = {}
+    for attr in dir(generator):
+        if not attr.startswith('_') and not callable(getattr(generator, attr)) and attr != 'logger' \
+                and attr != 'bounds':
+            info[attr] = getattr(generator, attr)
+
+    print("USED")
+    print({'Generator': type(generator).__name__,
+           **info})
+    return dumper.represent_mapping('tag:yaml.org,2002:map',
+                                    {'Generator': type(generator).__name__,
+                                     **info}, flow_style=False)
+
+
+def unknown_object_presenter(dumper, unknown_class: object):
+    """ To ensure the YAML file is human readable and can be loaded only with native python types. This constructor
+        parses all unknown objects into a dictionary containing their name and instance variables or, if uninitialised,
+        just the class name.
+    """
+    if inspect.isclass(unknown_class):
+        return dumper.represent_scalar('tag:yaml.org,2002:str', unknown_class.__name__)
+
+    inst_vars = {}
+    for k in dir(unknown_class):
+        if not k.startswith('_') and not callable(getattr(unknown_class, k)):
+            inst_vars[k] = getattr(unknown_class, k)
+    return dumper.represent_mapping('tag:yaml.org,2002:map', {type(unknown_class).__name__: inst_vars})
 
 
 def distance(pt1: Sequence[float], pt2: Sequence[float]):
@@ -95,6 +145,19 @@ def glompo_colors(opt_id: Optional[int] = None) -> Union['matplotlib.colors.List
         return cmap(opt_id)
 
     return cmap
+
+
+def mem_pprint(bytes: int, digits: int = 2) -> str:
+    """ Accepts an integer number of bytes and returns a string formatted to the most appropriate units. """
+    units = 0
+    while bytes > 1024:
+        bytes /= 1024
+        units += 1
+
+    if units == 0:
+        digits = 0
+
+    return f"{bytes:.{digits}f}{['', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'][units]}B"
 
 
 class LiteralWrapper(str):
