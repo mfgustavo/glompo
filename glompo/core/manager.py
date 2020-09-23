@@ -846,8 +846,8 @@ class GloMPOManager:
                         self.logger.info(f"Termination signal sent to optimizer {opt_id}")
                         self.optimizer_packs[opt_id].process.terminate()
                     else:
-                        self.logger.warning(f"Optimizer {opt_id} still alive after join attempt. GloMPO will end while "
-                                            f"it is alive. Terminations cannot be sent to threads.")
+                        self.logger.warning(f"Could not join optimizer {opt_id}. May crash out with it still running "
+                                            f"and thus generate errors. Terminations cannot be sent to threads.")
 
     def _save_log(self, result: Result, reason: str, caught_exception: bool):
         if self.summary_files > 0:
@@ -923,14 +923,14 @@ class GloMPOManager:
                 self.graveyard.add(opt_id)
                 self.opt_log.put_metadata(opt_id, "Stop Time", datetime.now())
                 self.opt_log.put_metadata(opt_id, "End Condition", opt_reason)
-            self.optimizer_packs[opt_id].process.join(10)
+            self.optimizer_packs[opt_id].process.join(self.end_timeout)
             if self.optimizer_packs[opt_id].process.is_alive():
                 if self._proc_backend:
                     self.optimizer_packs[opt_id].process.terminate()
                     self.logger.debug(f"Termination signal sent to optimizer {opt_id}")
                 else:
                     self.logger.warning(f"Could not join optimizer {opt_id}. May crash out with it still running and "
-                                        f"thus generate errors.")
+                                        f"thus generate errors. Terminations cannot be sent to threads.")
 
     def _toggle_optimizers(self, on_off: int):
         """ Sends pause or resume signals to all optimizers based on the on_off parameter:
