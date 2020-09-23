@@ -25,8 +25,7 @@ except ImportError:
     from yaml import Dumper as Dumper
 try:
     import psutil
-
-    HAS_PSUTIL = True
+    HAS_PSUTIL = psutil.version_info[0] >= 5
 except ModuleNotFoundError:
     HAS_PSUTIL = False
 
@@ -288,8 +287,11 @@ class GloMPOManager:
         self.load_history = []
 
         # Initialise system monitors
-        self._process = psutil.Process()
-        self._process.cpu_percent()  # First return is zero and must be ignored
+        if HAS_PSUTIL:
+            self._process = psutil.Process()
+            self._process.cpu_percent()  # First return is zero and must be ignored
+        else:
+            self._process = None
 
         # Save behavioural args
         self.allow_forced_terminations = force_terminations_after > 0
@@ -477,14 +479,11 @@ class GloMPOManager:
                         with self._process.oneshot():
                             self.cpu_history.append(self._process.cpu_percent())
                             self.mem_history.append(self._process.memory_full_info().uss)
-                        self.load_history.append(psutil.getloadavg())
 
                         status_mess += f"    {'CPU Usage:':.<26} {self.cpu_history[-1]}%\n"
                         status_mess += f"    {'Virtual Memory:':.<26} {mem_pprint(self.mem_history[-1])}\n"
-                        try:
-                            status_mess += f"    {'System Load:':.<26} {self.load_history[-1]}\n"
-                        except AttributeError:
-                            pass
+                        self.load_history.append(psutil.getloadavg())
+                        status_mess += f"    {'System Load:':.<26} {self.load_history[-1]}\n"
                     self.logger.info(status_mess)
 
             self.logger.info("Exiting manager loop")
