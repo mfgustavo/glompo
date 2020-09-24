@@ -8,12 +8,16 @@ import yaml
 
 __all__ = ("LiteralWrapper",
            "FileNameHandler",
+           "BoundGroup",
+           "FlowList",
            "nested_string_formatting",
            "is_bounds_valid",
            "literal_presenter",
            "optimizer_selector_presenter",
            "generator_presenter",
+           "bound_group_presenter",
            "unknown_object_presenter",
+           "flow_presenter",
            "distance",
            "mem_pprint",
            "glompo_colors")
@@ -74,6 +78,19 @@ def is_bounds_valid(bounds: Sequence[Tuple[float, float]], raise_invalid=True) -
 
 
 # YAML Representers
+
+class LiteralWrapper(str):
+    """ Used by yaml to save some block strings as literals """
+
+
+class FlowList(list):
+    """ Used to wrap lists which should appear in flow style rather than default block style. """
+
+
+class BoundGroup(list):
+    """ Used to better represent the parameter bounds in a human readable but reusable way. """
+
+
 def literal_presenter(dumper: yaml.Dumper, data: str):
     """ Wrapper around string for better readability in YAML file. """
     return dumper.represent_scalar('tag:yaml.org,2002:str', data.replace(' \n', '\n'), style='|')
@@ -85,9 +102,14 @@ def optimizer_selector_presenter(dumper, opt_selector: 'BaseSelector'):
     for i, opt in enumerate(opt_selector.avail_opts):
         opts[i] = dict(zip(('type', 'init_kwargs', 'call_kwargs'), opt))
 
+    if type(opt_selector.allow_spawn) is object:
+        allow_spawn = opt_selector.allow_spawn
+    else:
+        allow_spawn = opt_selector.allow_spawn.__name__
+
     return dumper.represent_mapping('tag:yaml.org,2002:map',
                                     {'Selector': type(opt_selector).__name__,
-                                     'Allow Spawn': opt_selector.allow_spawn,
+                                     'Allow Spawn': allow_spawn,
                                      'Available Optimizers': opts,
                                      }, flow_style=False)
 
@@ -100,12 +122,21 @@ def generator_presenter(dumper, generator: 'BaseGenerator'):
                 and attr != 'bounds':
             info[attr] = getattr(generator, attr)
 
-    print("USED")
-    print({'Generator': type(generator).__name__,
-           **info})
     return dumper.represent_mapping('tag:yaml.org,2002:map',
                                     {'Generator': type(generator).__name__,
                                      **info}, flow_style=False)
+
+
+def flow_presenter(dumper, lst):
+    return dumper.represent_sequence('tag:yaml.org,2002:seq', lst, flow_style=True)
+
+
+def bound_group_presenter(dumper, bound_group):
+    grouped = {bound: FlowList([]) for bound in set(bound_group)}
+    for i, bound in enumerate(bound_group):
+        grouped[bound].append(i)
+
+    return dumper.represent_mapping('tag:yaml.org,2002:map', grouped)
 
 
 def unknown_object_presenter(dumper, unknown_class: object):
@@ -158,10 +189,6 @@ def mem_pprint(bytes: int, digits: int = 2) -> str:
         digits = 0
 
     return f"{bytes:.{digits}f}{['', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'][units]}B"
-
-
-class LiteralWrapper(str):
-    """ Used by yaml to save some block strings as literals """
 
 
 class FileNameHandler:
