@@ -76,19 +76,6 @@ class BaseSelector(ABC):
         else:
             self.allow_spawn = lambda x: True
 
-    def glompo_log_repr(self):
-        """ Returns a representation of this class in dictionary format which is human-readable and can be saved as
-            part of the GloMPO manager opt_log yaml file.
-        """
-
-        dict_form = {}
-        for i, item in enumerate(self.avail_opts):
-            dict_form[i] = {'type': item[0].__name__,
-                            'init_kwargs': item[1],
-                            'call_kwargs': item[2]}
-        return {'Selector': type(self).__name__,
-                'Available Optimizers': dict_form}
-
     @abstractmethod
     def select_optimizer(self,
                          manager: 'GloMPOManager',

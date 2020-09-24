@@ -360,7 +360,7 @@ class TestManager:
         with open(pjoin("test_manager", "glompo_optimizer_logs", "1_SilentOptimizer.yml"), 'r') as stream:
             data = yaml.safe_load(stream)
             assert "Approximate Stop Time" in data['DETAILS']
-            assert data['DETAILS']['End Condition'] == "Normal termination (Reason unknown)"
+            assert data['DETAILS']['end_cond'] == "Normal termination (Reason unknown)"
 
     def test_messaging(self, backend):
         manager = GloMPOManager(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,

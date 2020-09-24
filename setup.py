@@ -30,6 +30,6 @@ setup(
         'GFLSOptimizer': ['optsam'],
         'Nevergrad': ['nevergrad'],
         'ParAMSWrapper': ['scm'],
-        'ResourceUsageStatusPrinting': ['psutil'],
+        'ResourceUsageStatusPrinting': ['psutil>=5.0'],
     }
 )

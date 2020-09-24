@@ -26,14 +26,15 @@ except ImportError:
 try:
     import psutil
 
-    HAS_PSUTIL = True
+    HAS_PSUTIL = psutil.version_info[0] >= 5
 except ModuleNotFoundError:
     HAS_PSUTIL = False
 
 from ._backends import CustomThread, ThreadPrintRedirect
 from .optimizerlogger import OptimizerLogger
-from ..common.customwarnings import NotImplementedWarning
-from ..common.helpers import LiteralWrapper, literal_presenter, nested_string_formatting
+from ..common.helpers import LiteralWrapper, literal_presenter, nested_string_formatting, unknown_object_presenter, \
+    generator_presenter, optimizer_selector_presenter, mem_pprint, FlowList, flow_presenter, BoundGroup, \
+    bound_group_presenter
 from ..common.namedtuples import Bound, OptimizerPackage, ProcessPackage, Result
 from ..common.wrappers import process_print_redirect
 from ..convergence import BaseChecker, KillsAfterConvergence
@@ -62,8 +63,7 @@ class GloMPOManager:
                  x0_generator: Optional[BaseGenerator] = None,
                  killing_conditions: Optional[BaseHunter] = None,
                  hunt_frequency: int = 100,
-                 region_stability_check: bool = False,
-                 report_statistics: bool = False,
+                 status_messaging: int = 600,
                  summary_files: int = 0,
                  visualisation: bool = False,
                  visualisation_args: Optional[Dict[str, Any]] = None,
@@ -152,11 +152,10 @@ class GloMPOManager:
             The number of function calls between successive attempts to evaluate optimizer performance and determine
             if they should be terminated.
 
-        region_stability_check: bool = False
-            NotYetImplemented
-
-        report_statistics: bool = False
-            NotYetImplemented
+        status_messaging: int = 600
+            Frequency (in seconds) with which status messages are logged. Note that status messages are delivered
+            through a logging INFO level message. Logging must be enabled and setup to see these messages. Consult the
+            README for more information.
 
         summary_files: int = 0
             Indicates the level of saving the user would like in terms of datafiles and plots:
@@ -201,7 +200,6 @@ class GloMPOManager:
         # Filter Warnings
         warnings.simplefilter("always", UserWarning)
         warnings.simplefilter("always", RuntimeWarning)
-        warnings.simplefilter("always", NotImplementedWarning)
 
         # Setup logging
         self.logger = logging.getLogger('glompo.manager')
@@ -282,23 +280,38 @@ class GloMPOManager:
         self.conv_counter = 0  # Number of converged optimizers
         self.hunt_counter = 0  # Number of hunting jobs started
         self.hunt_victims: Dict[int, float] = {}  # opt_ids of killed jobs and timestamps when the signal was sent
+        self.cpu_history = []
+        self.mem_history = []
+        self.load_history = []
+
+        # Initialise system monitors
+        if HAS_PSUTIL:
+            self._process = psutil.Process()
+            self._process.cpu_percent()  # First return is zero and must be ignored
+            psutil.getloadavg()
+        else:
+            self._process = None
 
         # Save behavioural args
         self.allow_forced_terminations = force_terminations_after > 0
         self._too_long = force_terminations_after
-        self.region_stability_check = bool(region_stability_check)
-        self.report_statistics = bool(report_statistics)
         self.summary_files = np.clip(int(summary_files), 0, 5)
         if self.summary_files != summary_files:
             self.logger.warning(f"summary_files argument given as {summary_files} clipped to {self.summary_files}")
         if summary_files:
             yaml.add_representer(LiteralWrapper, literal_presenter, Dumper=Dumper)
+            yaml.add_representer(FlowList, flow_presenter, Dumper=Dumper)
+            yaml.add_representer(BoundGroup, bound_group_presenter, Dumper=Dumper)
+            yaml.add_multi_representer(BaseSelector, optimizer_selector_presenter, Dumper=Dumper)
+            yaml.add_multi_representer(BaseGenerator, generator_presenter, Dumper=Dumper)
+            yaml.add_multi_representer(object, unknown_object_presenter, Dumper=Dumper)
         self.split_printstreams = bool(split_printstreams)
         self.overwrite_existing = bool(overwrite_existing)
         self.visualisation = visualisation
         self.hunt_frequency = hunt_frequency
         self.spawning_opts = True
         self.opts_paused = False
+        self.status_frequency = int(status_messaging)
         self.last_status = 0
 
         # Initialise support classes
@@ -306,12 +319,6 @@ class GloMPOManager:
         if visualisation:
             from .scope import GloMPOScope  # Only imported if needed to avoid matplotlib compatibility issues
             self.scope = GloMPOScope(**visualisation_args) if visualisation_args else GloMPOScope()
-        if region_stability_check:
-            warnings.warn("region_stability_check not implemented. Ignoring.", NotImplementedWarning)
-            self.logger.warning("region_stability_check not yet implemented")
-        if report_statistics:
-            warnings.warn("report_statistics not implemented. Ignoring.", NotImplementedWarning)
-            self.logger.warning("report_statistics not yet implemented")
 
         # Save killing conditions
         if killing_conditions:
@@ -397,6 +404,16 @@ class GloMPOManager:
         if self.split_printstreams:
             os.makedirs("glompo_optimizer_printstreams", exist_ok=True)
 
+        # Detect system information
+        cores = self._process.cpu_affinity()
+        self.logger.info(f"System Info:\n"
+                         f"    {'Cores Available:':.<26}{len(cores)}\n"
+                         f"    {'Core IDs:':.<26}{cores}\n"
+                         f"    {'Memory Available:':.<26}{mem_pprint(psutil.virtual_memory().total)}\n"
+                         f"    {'Hostname:':.<26}{socket.gethostname()}\n"
+                         f"    {'Working Dir:':.<26}{os.getcwd()}\n"
+                         f"    {'Username:':.<26}{getpass.getuser()}")
+
         try:
             self.logger.info("Starting GloMPO Optimization Routine")
 
@@ -444,7 +461,7 @@ class GloMPOManager:
                 if self.converged:
                     self.logger.info("Convergence Reached")
 
-                if time() - self.last_status > 600:
+                if time() - self.last_status > self.status_frequency:
                     self.last_status = time()
                     processes = [pack.slots for pack in self.optimizer_packs.values() if pack.process.is_alive()]
                     f_best = f'{self.result.fx:.3E}' if self.result.fx is not None else None
@@ -463,12 +480,21 @@ class GloMPOManager:
                                 status_mess += f"        {f'Optimizer {opt_id}':.<{width}} {hist[-1]:.3E}\n"
                     status_mess += f"    {'Overall f_best:':.<25} {f_best}\n"
                     if HAS_PSUTIL:
-                        status_mess += f"    {'CPU Usage:':.<26} {psutil.cpu_percent()}%\n"
-                        status_mess += f"    {'Virtual Memory:':.<26} {psutil.virtual_memory().percent}%\n"
-                        try:
-                            status_mess += f"    {'System Load:':.<26} {psutil.getloadavg()}\n"
-                        except AttributeError:
-                            pass
+                        with self._process.oneshot():
+                            self.cpu_history.append(self._process.cpu_percent())
+
+                            mem = self._process.memory_full_info().uss
+                            for child in self._process.children(recursive=True):
+                                try:
+                                    mem += child.memory_full_info().uss
+                                except psutil.NoSuchProcess:
+                                    continue
+                            self.mem_history.append(mem)
+
+                        status_mess += f"    {'CPU Usage:':.<26} {self.cpu_history[-1]}%\n"
+                        status_mess += f"    {'Virtual Memory:':.<26} {mem_pprint(self.mem_history[-1])}\n"
+                        self.load_history.append(psutil.getloadavg())
+                        status_mess += f"    {'System Load:':.<26} {self.load_history[-1]}\n"
                     self.logger.info(status_mess)
 
             self.logger.info("Exiting manager loop")
@@ -505,7 +531,8 @@ class GloMPOManager:
 
             self.result = Result(self.result.x,
                                  self.result.fx,
-                                 {**self.result.stats, 'end_cond': reason},
+                                 {**self.result.stats, 'end_cond': reason} if self.result.stats else {
+                                     'end_cond': reason},
                                  self.result.origin)
 
             if not self._proc_backend and self.split_printstreams:
@@ -855,30 +882,95 @@ class GloMPOManager:
                 reason = f"Process Crash: {caught_exception}"
             with open("glompo_manager_log.yml", "w") as file:
 
-                data = {"Assignment": {"Task": type(self.task).__name__,
-                                       "Working Dir": os.getcwd(),
-                                       "Username": getpass.getuser(),
-                                       "Hostname": socket.gethostname(),
-                                       "Start Time": self.dt_start,
-                                       "Stop Time": datetime.now()},
-                        "Settings": {"x0 Generator": type(self.x0_generator).__name__,
-                                     "Convergence Checker": LiteralWrapper(nested_string_formatting(str(
-                                         self.convergence_checker))),
-                                     "Hunt Conditions": LiteralWrapper(nested_string_formatting(str(
-                                         self.killing_conditions))) if self.killing_conditions else
-                                     self.killing_conditions,
-                                     "Optimizer Selector": self.selector.glompo_log_repr(),
-                                     "Max Jobs": self.max_jobs},
-                        "Counters": {"Function Evaluations": self.f_counter,
-                                     "Hunts Started": self.hunt_counter,
-                                     "Optimizers": {"Started": self.o_counter,
-                                                    "Killed": len(self.hunt_victims),
-                                                    "Converged": self.conv_counter}},
-                        "Solution": {"fx": result.fx,
-                                     "origin": result.origin,
-                                     "exit cond.": LiteralWrapper(nested_string_formatting(reason)),
-                                     "x": result.x},
-                        }
+                if HAS_PSUTIL:
+                    cores = self._process.cpu_affinity()
+                    # Verbose forcing of float and list below needed to stop recursion errors during python dump
+                    if len(self.load_history) > 0:
+                        load_ave = \
+                            np.round(
+                                np.average(
+                                    np.reshape(
+                                        np.array(self.load_history, dtype=float),
+                                        (-1, 3)),
+                                    axis=0),
+                                3)
+                        load_std = \
+                            np.round(
+                                np.std(
+                                    np.reshape(
+                                        np.array(self.load_history, dtype=float),
+                                        (-1, 3)),
+                                    axis=0),
+                                3)
+
+                        load_ave = [float(i) for i in load_ave]
+                        load_std = [float(i) for i in load_std]
+                    else:
+                        load_ave = [0]
+                        load_std = [0]
+
+                    if len(self.mem_history) > 0:
+                        mem_max = mem_pprint(np.max(self.mem_history))
+                        mem_ave = mem_pprint(np.average(self.mem_history))
+                    else:
+                        mem_max = '--'
+                        mem_ave = '--'
+
+                    if len(self.cpu_history) > 0:
+                        cpu_ave = float(np.round(np.average(self.cpu_history), 2))
+                        cpu_std = float(np.round(np.std(self.cpu_history), 2))
+                    else:
+                        cpu_ave = 0
+                        cpu_std = 0
+
+                    run_info = {
+                        "Memory": {
+                            "Used": {
+                                "Max": mem_max,
+                                "Ave": mem_ave},
+                            "Available": mem_pprint(psutil.virtual_memory().total)},
+                        "CPU": {
+                            "Cores": {
+                                "Total": len(cores),
+                                "IDs": FlowList(cores)},
+                            "Frequency":
+                                f"{psutil.cpu_freq().max / 1000}GHz",
+                            "Load": {
+                                "Average": FlowList(load_ave),
+                                "Std. Dev.": FlowList(load_std)},
+                            "CPU Usage(%)": {
+                                "Average": cpu_ave,
+                                "Std. Dev.": cpu_std}}}
+                else:
+                    run_info = "<COULD NOT MEASURE. REQUIRES psutil>=5>"
+
+                data = {"Assignment": {
+                    "Task": type(self.task).__name__ if type(self.task) is object else self.task.__name__,
+                    "Working Dir": os.getcwd(),
+                    "Username": getpass.getuser(),
+                    "Hostname": socket.gethostname(),
+                    "Start Time": self.dt_start,
+                    "Stop Time": datetime.now(),
+                    "Bounds": BoundGroup(self.bounds)},
+                    "Settings": {"x0 Generator": self.x0_generator,
+                                 "Convergence Checker": LiteralWrapper(nested_string_formatting(str(
+                                     self.convergence_checker))),
+                                 "Hunt Conditions": LiteralWrapper(nested_string_formatting(str(
+                                     self.killing_conditions))) if self.killing_conditions else
+                                 self.killing_conditions,
+                                 "Optimizer Selector": self.selector,
+                                 "Max Jobs": self.max_jobs},
+                    "Counters": {"Function Evaluations": self.f_counter,
+                                 "Hunts Started": self.hunt_counter,
+                                 "Optimizers": {"Started": self.o_counter,
+                                                "Killed": len(self.hunt_victims),
+                                                "Converged": self.conv_counter}},
+                    "Run Information": run_info,
+                    "Solution": {"fx": result.fx,
+                                 "origin": result.origin,
+                                 "exit cond.": LiteralWrapper(nested_string_formatting(reason)),
+                                 "x": FlowList(result.x) if result.x else result.x},
+                }
                 self.logger.debug("Saving manager summary file.")
                 yaml.dump(data, file, Dumper=Dumper, default_flow_style=False, sort_keys=False)
 

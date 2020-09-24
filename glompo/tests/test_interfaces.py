@@ -9,7 +9,7 @@ try:
 except (ModuleNotFoundError, ImportError):
     HAS_PARAMS = False
 
-from glompo.interfaces.paramswrapper import _FunctionWrapper
+from glompo.interfaces.params import _FunctionWrapper
 
 
 class FakeLossEvaluator(_LossEvaluator):
@@ -18,7 +18,7 @@ class FakeLossEvaluator(_LossEvaluator):
 
     def __call__(self, x):
         return EvaluatorReturn(100, x, self.name, self.ncalled, self.interface,
-                               None, [5, 2, -1, -9], [0.10, 0.25, 0.30, 0.35])
+                               None, [5, 2, -1, -9], [0.10, 0.25, 0.30, 0.35], 0)
 
 
 @pytest.mark.skipif(not HAS_PARAMS, reason="SCM ParAMS needed to test and use the ParAMS interface.")
