@@ -51,11 +51,7 @@ if __name__ == '__main__':
 
     # The manager is setup using all GloMPO defaults in this case. Only the task, its box bounds and local
     # optimizers need be provided.
-    manager = GloMPOManager(task=task,
-                            optimizer_selector=selector,
-                            bounds=task.bounds,
-                            # OPTIONAL:
-                            max_jobs=32)
+    manager = GloMPOManager(task=task, bounds=task.bounds, optimizer_selector=selector, max_jobs=32)
 
     # To execute the minimization we simply run start_manager(). Note: by default GloMPO will not save any files but
     # this is available

@@ -6,11 +6,10 @@
 import os
 import pickle
 import shutil
-import warnings
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
-from typing import Callable, Sequence, Tuple
+from typing import Callable, Optional, Sequence, Tuple
 
 import cma
 import numpy as np
@@ -29,10 +28,9 @@ class CMAOptimizer(BaseOptimizer):
         * Module: https://github.com/CMA-ES/pycma
     """
 
-    def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
-                 pause_flag: Event = None, workers: int = 1, backend: str = 'processes',
-                 sigma: float = 0.5, sampler: str = 'full', verbose: bool = True, keep_files: bool = False,
-                 **cmasettings):
+    def __init__(self, sigma: float, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
+                 pause_flag: Event = None, workers: int = 1, backend: str = 'processes', is_restart: bool = False,
+                 sampler: str = 'full', verbose: bool = True, keep_files: bool = False, **cmasettings):
         """ Parameters
             ----------
             sigma: float
@@ -48,36 +46,57 @@ class CMAOptimizer(BaseOptimizer):
                 If True the files produced by CMA are retained otherwise they are deleted. Deletion is the default
                 behaviour since, when using GloMPO, GloMPO log files are created. Note, however, that GloMPO log files
                 are different from CMA ones.
-            cmasettings : Optional[Dict[str, Any]]
+            cmasettings: Optional[Dict[str, Any]]
                 cma module-specific settings as ``k,v`` pairs. See ``cma.s.pprint(cma.CMAOptions())`` for a list of
                 available options. Most useful keys are: `timeout`, `tolstagnation`, `popsize`. Additionally,
                 the key `minsigma` is supported: Termination if ``sigma < minsigma``.
+            is_restart: bool = False
+                If True CMA will load itself from a previously saved restart file containing a binary pickle of its
+                state variables.
         """
         super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
+
+        self.is_restart = is_restart
+        if is_restart:
+            self.restart()
+            return
+
         self.sigma = sigma
         self.verbose = verbose
-        self.sampler = sampler
-        self.opts = {}
-        self.dir = ''
         self.es = None
         self.result = None
         self.keep_files = keep_files
+        self.is_restart = is_restart
+        self.folder_name = 'cmadata' if not self._opt_id else f'cmadata_{self._opt_id}'
+        self.cmasettings = cmasettings
 
         # Sort all non-native CMA options into the custom cmaoptions key 'vv':
-        customkeys = [i for i in cmasettings if i not in cma.CMAOptions().keys()]
-        customopts = {i: cmasettings[i] for i in customkeys}
-        cmasettings = {k: v for k, v in cmasettings.items() if not any(k == i for i in customkeys)}
-        cmasettings['vv'] = customopts
-        cmasettings['verbose'] = -3  # Silence CMA Logger
-        if 'tolstagnation' not in cmasettings:
-            cmasettings['tolstagnation'] = int(1e22)
-        if 'maxiter' not in cmasettings:
-            cmasettings['maxiter'] = float('inf')
-        if 'tolfunhist' not in cmasettings:
-            cmasettings['tolfunhist'] = 1e-15
-        if 'tolfun' not in cmasettings:
-            cmasettings['tolfun'] = 1e-20
-        self.cmasettings = cmasettings
+        customopts = {}
+        for key, val in [*self.cmasettings.items()]:
+            if key not in cma.CMAOptions().keys():
+                customopts[key] = val
+                del self.cmasettings[key]
+
+        self.cmasettings['vv'] = customopts
+        self.cmasettings['verbose'] = -3  # Silence CMA Logger
+        if 'tolstagnation' not in self.cmasettings:
+            self.cmasettings['tolstagnation'] = int(1e22)
+        if 'maxiter' not in self.cmasettings:
+            self.cmasettings['maxiter'] = float('inf')
+        if 'tolfunhist' not in self.cmasettings:
+            self.cmasettings['tolfunhist'] = 1e-15
+        if 'tolfun' not in self.cmasettings:
+            self.cmasettings['tolfun'] = 1e-20
+
+        if self.workers > 1 and 'popsize' not in self.cmasettings:
+            self.cmasettings['popsize'] = self.workers
+
+        if sampler == 'vd':
+            self.cmasettings = GaussVDSampler.extend_cma_options(self.cmasettings)
+        elif sampler == 'vkd':
+            self.cmasettings = GaussVkDSampler.extend_cma_options(self.cmasettings)
+
+        self.cmasettings.update({'verb_filenameprefix': self.folder_name + 'cma_'})
 
     def minimize(self,
                  function: Callable[[Sequence[float]], float],
@@ -85,34 +104,23 @@ class CMAOptimizer(BaseOptimizer):
                  bounds: Sequence[Tuple[float, float]],
                  callbacks: Callable = None, **kwargs) -> MinimizeResult:
 
-        self.opts = self.cmasettings.copy()
-        if self.workers > 1 and 'popsize' not in self.opts:
-            self.opts['popsize'] = self.workers
-        if self.sampler == 'vd':
-            self.opts = GaussVDSampler.extend_cma_options(self.opts)
-        elif self.sampler == 'vkd':
-            self.opts = GaussVkDSampler.extend_cma_options(self.opts)
+        if not self.is_restart:
+            self.logger.info("Setting up fresh CMA")
 
-        folder_name = 'cmadata' if not self._opt_id else f'cmadata_{self._opt_id}'
-        self.dir = os.path.abspath('.') + os.sep + folder_name + os.sep
-        if not os.path.isdir(self.dir):
-            os.makedirs(self.dir)
+            os.makedirs(self.folder_name, exist_ok=True)
 
-        self.opts.update({'verb_filenameprefix': self.dir + 'cma_'})
-        self.opts.update({'bounds': np.transpose(bounds).tolist()})
-        self.logger.debug("Updated options")
-
-        self.result = MinimizeResult()
-        self.es = es = cma.CMAEvolutionStrategy(x0, self.sigma, self.opts)
+            self.result = MinimizeResult()
+            self.cmasettings.update({'bounds': np.transpose(bounds).tolist()})
+            self.es = cma.CMAEvolutionStrategy(x0, self.sigma, self.cmasettings)
 
         self.logger.debug("Entering optimization loop")
 
+        i = self.es.countiter
         x = None
-        i = 0
-        while not es.stop():
+        while not self.es.stop():
             i += 1
             self.logger.debug("Asking for parameter vectors")
-            x = es.ask()
+            x = self.es.ask()
             self.logger.debug("Parameter vectors generated")
 
             if self.workers > 1:
@@ -128,22 +136,20 @@ class CMAOptimizer(BaseOptimizer):
                 self.logger.debug("Executing serially")
                 fx = [function(i) for i in x]
 
-            es.tell(x, fx)
+            self.es.tell(x, fx)
             self.logger.debug("Told solutions")
-            es.logger.add()
-            self.logger.debug("Add solutions to log")
-            self.result.x, self.result.fx = es.result[:2]
+            self.result.x, self.result.fx = self.es.result[:2]
             if self.result.fx == float('inf'):
                 self.logger.warning("CMA iteration found no valid results."
                                     "fx = 'inf' and x = (first vector generated by es.ask())")
                 self.result.x = x[0]
             self.logger.debug("Extracted x and fx from result")
             if self.verbose and i % 10 == 0 or i == 1:
-                print(f"@ iter = {i} fx={self.result.fx:.2E}")
+                print(f"@ iter = {i} fx={self.result.fx:.2E} sigma={self.es.sigma:.3E}")
 
             if self._results_queue:
                 i_best = np.argmin(fx)
-                self.push_iter_result(es.countiter, len(x), x[i_best], fx[i_best], False)
+                self.push_iter_result(self.es.countiter, len(x), x[i_best], fx[i_best], False)
                 self.logger.debug("Pushed result to queue")
                 self.check_messages()
                 self.logger.debug("Checked messages")
@@ -155,54 +161,53 @@ class CMAOptimizer(BaseOptimizer):
             self.logger.debug("callbacks called")
 
         self.logger.debug("Exited optimization loop")
-        self.result.x, self.result.fx = es.result[:2]
+
+        self.result.x, self.result.fx = self.es.result[:2]
         self.result.success = np.isfinite(self.result.fx)
         if self.result.fx == float('inf'):
             self.logger.warning("CMA iteration found no valid results."
                                 "fx = 'inf' and x = (first vector generated by es.ask())")
             self.result.x = x[0]
-        if self.verbose and i % 10 == 0 or i == 1:
+
+        if self.verbose:
             print(f"Optimization terminated: success = {self.result.success}")
             print(f"Final fx={self.result.fx:.2E}")
 
         if self._results_queue:
             self.logger.debug("Pushing final result")
-            self.push_iter_result(es.countiter, len(x), self.result.x, self.result.fx, True)
+            self.push_iter_result(self.es.countiter, len(x), self.result.x, self.result.fx, True)
             self.logger.debug("Messaging termination to manager.")
-            self.message_manager(0, f"Optimizer convergence {es.stop()}")
-            self.logger.debug("Final message check")
-            self.check_messages()
+            self.message_manager(0, f"Optimizer convergence {self.es.stop()}")
 
-        if self.keep_files:
-            with open(self.dir + 'cma_results.pkl', 'wb') as f:
-                self.logger.debug("Pickling results")
-                pickle.dump(es.result, f, -1)
-
-        if not self.keep_files:
-            shutil.rmtree(folder_name, ignore_errors=True)
+        if self.es.stop() != "Checkpoint Shutdown":
+            if self.keep_files:
+                with open(os.path.join(self.folder_name, 'cma_results.pkl'), 'wb') as file:
+                    self.logger.debug("Pickling results")
+                    pickle.dump(self.es.result, file)
+            else:
+                shutil.rmtree(self.folder_name, ignore_errors=True)
 
         return self.result
 
     def _customtermination(self):
-        es = self.es
-        if 'tolstagnation' in self.opts:
+        if 'tolstagnation' in self.cmasettings:
             # The default 'tolstagnation' criterium is way too complex (as most 'tol*' criteria are).
             # Here we hack it to actually do what it is supposed to do: Stop when no change after last x iterations.
             if not hasattr(self, '_stagnationcounter'):
                 self._stagnationcounter = 0
-                self._prev_best = es.best.f
+                self._prev_best = self.es.best.f
 
-            if self._prev_best == es.best.f:
+            if self._prev_best == self.es.best.f:
                 self._stagnationcounter += 1
             else:
-                self._prev_best = es.best.f
+                self._prev_best = self.es.best.f
                 self._stagnationcounter = 0
 
-            if self._stagnationcounter > self.opts['tolstagnation']:
+            if self._stagnationcounter > self.cmasettings['tolstagnation']:
                 self.callstop("Early CMA stop: 'tolstagnation'.")
 
-        opts = self.opts['vv']
-        if 'minsigma' in opts and es.sigma < opts['minsigma']:
+        opts = self.cmasettings['vv']
+        if 'minsigma' in opts and self.es.sigma < opts['minsigma']:
             # Stop if sigma falls below minsigma
             self.callstop("Early CMA stop: 'minsigma'.")
 
@@ -222,5 +227,33 @@ class CMAOptimizer(BaseOptimizer):
         self.logger.debug(f"Calling stop. Reason = {reason}")
         self.es.callbackstop = 1
 
-    def save_state(self, *args):
-        warnings.warn("CMA save_state not yet implemented.", NotImplementedError)
+    def save_state(self, path: Optional[str] = None):
+        self.logger.debug("Creating restart file.")
+
+        if not path:
+            path = f'cma.{self._opt_id:04}.restart' if self._opt_id else f'cma.restart'
+
+        dump_collection = {}
+        for var in dir(self):
+            if not callable(getattr(self, var)) and not var.startswith('_'):
+                dump_collection[var] = getattr(self, var)
+
+        del dump_collection['is_restart']
+        with open(path, 'wb') as file:
+            pickle.dump(dump_collection, file)
+
+        self.logger.info("Restart file created successfully.")
+
+    def restart(self, path: Optional[str] = None):
+        self.logger.info("Initialising from restart file.")
+
+        if not path:
+            path = f'cma.{self._opt_id:04}.restart' if self._opt_id else f'cma.restart'
+
+        with open(path, 'rb') as file:
+            state = pickle.load(file)
+
+        for var, val in state.items():
+            self.__setattr__(var, val)
+
+        self.logger.info("Successfully loaded.")

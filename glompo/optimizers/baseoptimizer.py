@@ -177,5 +177,12 @@ class BaseOptimizer(ABC):
         raise NotImplementedError
 
     def save_state(self, *args):
-        """ Save current state, suitable for restarting. """
+        """ Save current state, suitable for restarting.
+        """
+        raise NotImplementedError
+
+    def restart(self, *args):
+        """ Recreates a previous instance of the optimizer suitable to continue a optimization from its previous
+            state.
+        """
         raise NotImplementedError

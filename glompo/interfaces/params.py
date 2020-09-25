@@ -141,9 +141,7 @@ class GlompoParamsWrapper(BaseOptimizer):
         # Silence function printing
         function.v = False
 
-        manager = GloMPOManager(task=_FunctionWrapper(function),
-                                optimizer_selector=self.selector,
-                                bounds=bounds,
+        manager = GloMPOManager(task=_FunctionWrapper(function), bounds=bounds, optimizer_selector=self.selector,
                                 **self.manager_kwargs)
 
         result = manager.start_manager()

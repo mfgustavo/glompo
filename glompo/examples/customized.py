@@ -143,21 +143,11 @@ if __name__ == '__main__':
     force_terminations = -1
 
     # All arguments are now fed to the manager initialisation
-    manager = GloMPOManager(task=task,
-                            optimizer_selector=selector,
-                            bounds=task.bounds,
-                            # OPTIONAL:
-                            working_dir="customized_example_outputs",  # Directory to save result files
-                            overwrite_existing=True,  # Deletes any previous results in working_dir
-                            max_jobs=max_jobs,  # Maximum number of threads optimizers can use
-                            backend=backend,
-                            convergence_checker=checker,
-                            x0_generator=generator,
-                            killing_conditions=all_killers,
-                            hunt_frequency=500,  # Task eval. frequency manager applies kill conditions.
-                            summary_files=3,  # Maximum file saving, all logs and printstreams are retained
-                            visualisation=visualisation,
-                            visualisation_args=visualisation_args,
+    manager = GloMPOManager(task=task, bounds=task.bounds, optimizer_selector=selector,
+                            working_dir="customized_example_outputs", overwrite_existing=True, max_jobs=max_jobs,
+                            backend=backend, convergence_checker=checker, x0_generator=generator,
+                            killing_conditions=all_killers, hunt_frequency=500, summary_files=3,
+                            visualisation=visualisation, visualisation_args=visualisation_args,
                             force_terminations_after=-1,
                             split_printstreams=True)  # Automatically send print statements from opts to different files
 

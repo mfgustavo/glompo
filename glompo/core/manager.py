@@ -42,6 +42,7 @@ from ..generators import BaseGenerator, RandomGenerator
 from ..hunters import BaseHunter
 from ..opt_selectors.baseselector import BaseSelector
 from ..optimizers.baseoptimizer import BaseOptimizer
+from .checkpointing import CheckpointingControl
 
 __all__ = ("GloMPOManager",)
 
@@ -63,7 +64,8 @@ class GloMPOManager:
                  x0_generator: Optional[BaseGenerator] = None,
                  killing_conditions: Optional[BaseHunter] = None,
                  hunt_frequency: int = 100,
-                 status_messaging: int = 600,
+                 status_frequency: int = 600,
+                 checkpoint_control: Optional[CheckpointingControl] = None,
                  summary_files: int = 0,
                  visualisation: bool = False,
                  visualisation_args: Optional[Dict[str, Any]] = None,
@@ -152,10 +154,15 @@ class GloMPOManager:
             The number of function calls between successive attempts to evaluate optimizer performance and determine
             if they should be terminated.
 
-        status_messaging: int = 600
+        status_frequency: int = 600
             Frequency (in seconds) with which status messages are logged. Note that status messages are delivered
             through a logging INFO level message. Logging must be enabled and setup to see these messages. Consult the
             README for more information.
+
+        checkpoint_control: Optional[CheckpointingControl] = None
+            If provided, the manager will use checkpointing during the optimization. This saves its state to disk,
+            these files can be used by a new GloMPOManager instance to resume. Checkpointing options are provided
+            through a CheckpointingControl instance.
 
         summary_files: int = 0
             Indicates the level of saving the user would like in terms of datafiles and plots:
@@ -311,7 +318,7 @@ class GloMPOManager:
         self.hunt_frequency = hunt_frequency
         self.spawning_opts = True
         self.opts_paused = False
-        self.status_frequency = int(status_messaging)
+        self.status_frequency = int(status_frequency)
         self.last_status = 0
 
         # Initialise support classes
