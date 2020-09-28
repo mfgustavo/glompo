@@ -111,8 +111,8 @@ class TestLogger:
                         reason="Matplotlib package needed to use these features.")
     def test_plot_traj(self, filled_log):
         os.makedirs("optlogger_plots", exist_ok=True)
-        filled_log.plot_trajectory("optlogger_plots/traj.png")
-        assert os.path.exists("optlogger_plots/traj.png")
+        filled_log.plot_trajectory(os.path.join('optlogger_plots', 'traj.png'))
+        assert os.path.exists(os.path.join('optlogger_plots', 'traj.png'))
 
     @pytest.mark.skipif(not glompo.core.optimizerlogger.HAS_MATPLOTLIB,
                         reason="Matplotlib package needed to use these features.")

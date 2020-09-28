@@ -1,8 +1,17 @@
+import os
+import re
+from copy import copy
+from datetime import datetime
+
+__all__ = ("CheckpointingControl",)
+
+
 class CheckpointingControl:
     """ Class to setup and control the checkpointing behaviour of GloMPOManagers. """
 
     def __init__(self,
                  checkpoint_frequency: int,
+                 checkpoint_at_init: bool,
                  checkpoint_at_conv: bool,
                  keep_past: int = -1,
                  naming_format: str = 'glompo_checkpoint_%(date)_%(time)',
@@ -13,6 +22,10 @@ class CheckpointingControl:
         checkpoint_frequency: int
             Frequency (in seconds) with which GloMPO will save its state to disk during an optimization. Any such
             directory can be used to initialize a new GloMPOManager and resume an optimization.
+
+        checkpoint_at_init: bool
+            If True a checkpoint is built at the very start of the optimization. This can make starting duplicate jobs
+            easier.
 
         checkpoint_at_conv: bool
             If True a checkpoint is built when the manager reaches convergence and before it exits.
@@ -32,27 +45,62 @@ class CheckpointingControl:
                 %(yr): Year formatted to YY
                 %(month): Numerical month formatted to MM
                 %(day): Calendar day of the month formatted to DD
-                %(time): Current calendar time formatted to HHMMSS
-                %(hour): Hour formatted to HH
+                %(time): Current calendar time formatted to HHMMSS (24-hour style)
+                %(hour): Hour formatted to HH  (24-hour style)
                 %(min): Minutes formatted to MM
                 %(sec): Seconds formatted to SS
                 %(count): Index count of the number of checkpoints constructed. Count starts from the largest existing
-                    folder in the checkpoint_dir or zero otherwise.
+                    folder in the checkpoint_dir or zero otherwise. Formatted to 3 digits.
 
         checkpointing_dir: str = 'checkpoints'
             Directory in which checkpoints are saved.
         """
 
         self.checkpoint_frequency = checkpoint_frequency
+        self.checkpoint_at_init = checkpoint_at_init
         self.checkpoint_at_conv = checkpoint_at_conv
         self.checkpointing_dir = checkpointing_dir
         self.keep_past = keep_past
         self.naming_format = naming_format
 
         if '%(count)' in self.naming_format:
-            self.count = None
-        else:
-            self.count = None
+            codes = {'%[(]date[)]': 8, '%[(]year[)]': 4, '%[(]yr[)]': 2, '%[(]month[)]': 2, '%[(]day[)]': 2,
+                     '%[(]time[)]': 6, '%[(]hour[)]': 2,
+                     '%[(]min[)]': 2, '%[(]sec[)]': 2}
+            format_re = list(copy(self.naming_format))
+            for i, char in enumerate(format_re):
+                if any([char == c for c in ('{', '(', '+', '*', '|', '.', '$', ')', '}')]):
+                    format_re[i] = f'[{char}]'
+                if any([char == c for c in ('^', '[', ']')]):
+                    format_re[i] = rf'\{char}'
+            format_re = "".join(format_re)
+            for key, digits in codes.items():
+                format_re = format_re.replace(key, f'[0-9]{{{digits}}}')
+            format_re = format_re.replace('%[(]count[)]', '(?P<index>[0-9]{3})')
+            matches = [re.search(format_re, folder) for folder in os.listdir(checkpointing_dir)]
+            max_index = -1
+            for match in matches:
+                if match:
+                    i = int(match.group('index'))
+                    max_index = i if i > max_index else max_index
+            self.count = max_index + 1
 
     def get_name(self):
-        pass
+        time = datetime.now()
+        name = copy(self.naming_format)
+        codes = {'%(date)': '%Y%m%d',
+                 '%(year)': '%Y',
+                 '%(yr)': '%y',
+                 '%(month)': '%m',
+                 '%(day)': '%d',
+                 '%(time)': '%H%M%S',
+                 '%(hour)': '%H',
+                 '%(min)': '%M',
+                 '%(sec)': '%S'}
+        for key, val in codes.items():
+            name = name.replace(key, time.strftime(val))
+
+        name = name.replace('%(count)', f'{self.count:03}')
+        self.count += 1
+
+        return name

@@ -6,6 +6,7 @@ import glob
 import logging
 import multiprocessing as mp
 import os
+import pickle
 import queue
 import shutil
 import socket
@@ -320,6 +321,7 @@ class GloMPOManager:
         self.opts_paused = False
         self.status_frequency = int(status_frequency)
         self.last_status = 0
+        self.last_checkpoint = 0
 
         # Initialise support classes
         self.opt_log = OptimizerLogger()
@@ -370,6 +372,11 @@ class GloMPOManager:
                 self.end_timeout = 10
             else:
                 self.end_timeout = None
+
+        # Setup Checkpointing
+        self.checkpoint_options = checkpoint_control
+        if self.checkpoint_options.checkpoint_at_init:
+            self.checkpoint()
 
         self.logger.info("Initialization Done")
 
@@ -426,6 +433,7 @@ class GloMPOManager:
 
             self.t_start = time()
             self.last_status = self.t_start
+            self.last_checkpoint = self.t_start
             self.dt_start = datetime.now()
 
             while not self.converged:
@@ -504,6 +512,10 @@ class GloMPOManager:
                         status_mess += f"    {'System Load:':.<26} {self.load_history[-1]}\n"
                     self.logger.info(status_mess)
 
+                if time() - self.last_checkpoint > self.checkpoint_options.checkpoint_frequency:
+                    self.last_checkpoint = time()
+                    self.checkpoint()
+
             self.logger.info("Exiting manager loop")
             self.logger.info(f"Exit conditions met: \n"
                              f"{nested_string_formatting(reason)}")
@@ -551,6 +563,62 @@ class GloMPOManager:
             self.logger.info("GloMPO Optimization Routine Done")
 
             return self.result
+
+    def checkpoint(self):
+        """ Saves the state of the manager and any existing optimizers to disk. GloMPO can be loaded from these files
+            and resume optimization from this state.
+        """
+
+        self.logger.info("Constructing Checkpoint")
+
+        # Remove loggers to allowing pickling of components
+        for nest in (self.killing_conditions, self.convergence_checker):
+            for base in nest:
+                base.logger = None
+
+        for comp in (self.x0_generator, self.selector, self.killing_conditions, self.convergence_checker, self.scope):
+            comp.logger = None
+
+        # Select variables for pickling
+        pickle_vars = set()
+        for var in dir(self):
+            if not callable(getattr(self, var)) and \
+                    '__' not in var and \
+                    not any([var == no_pickle for no_pickle in ('logger', '_process', '_mp_manager',
+                                                                'optimizer_packs', 'scope', 'task')]):
+                pickle_vars.add(var)
+
+        for var in pickle_vars:
+            try:
+                pickle.dumps(getattr(self, var))
+            except (pickle.PickleError, TypeError) as e:
+                print(f"Pickle Failed: {var}")
+                print(e)
+
+        # Save non-picklable variables
+
+        # # Task
+
+        # # Scope
+
+        # # Optimizers
+
+        # Replace loggers
+        for logger, nest in {'hunter': self.killing_conditions, 'checker': self.convergence_checker}.items():
+            for base in nest:
+                base.logger = logging.getLogger(f'glompo.{logger}')
+
+        for logger, comp in {'generator': self.x0_generator,
+                             'selector': self.selector,
+                             'hunter': self.killing_conditions,
+                             'checker': self.convergence_checker,
+                             'scope': self.scope}.items():
+            comp.logger = logging.getLogger(f'glompo.{logger}')
+
+        self.logger.info("Checkpoint successfully built")
+
+    def load_checkpoint(self):
+        """ Initialise GloMPO from the provided checkpoint file. """
 
     def _fill_optimizer_slots(self):
         """ Starts new optimizers if there are slots available. """

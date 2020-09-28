@@ -5,6 +5,8 @@ from abc import ABC, abstractmethod
 
 __all__ = ("_CoreBase", "_CombiCore", "_OrCore", "_AndCore")
 
+from typing import Generator
+
 
 class _CoreBase(ABC):
     """ Base on which BaseHunter and BaseChecker are built """
@@ -54,6 +56,11 @@ class _CombiCore(_CoreBase):
         self._base1 = base1
         self._base2 = base2
 
+        # self._bases = [self._base1._bases if isinstance(self._base1, _CombiCore) else [self._base1],
+        #               self._base2._bases if isinstance(self._base2, _CombiCore) else [self._base2]]
+        # self._bases = functools.reduce(operator.iconcat, self._bases, [])
+        self._index = -1
+
     def __call__(self, *args, **kwargs):
         self.reset()
 
@@ -74,6 +81,20 @@ class _CombiCore(_CoreBase):
 
         self._base2._last_result = None
         self._base2.reset()
+
+    def __iter__(self) -> Generator[_CoreBase, None, None]:
+        return self._bases()
+
+    def _bases(self):
+        """ Returns a generator which yields each of the bases which make up the _CombiCore. This is fully recursive
+            but the returns are 'flat' (i.e. nesting is not preserved).
+        """
+        for base in (self._base1, self._base2):
+            if isinstance(base, _CombiCore):
+                for item in list(base._bases()):
+                    yield item
+            else:
+                yield base
 
 
 class _OrCore(_CombiCore):

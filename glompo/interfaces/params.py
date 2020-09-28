@@ -5,7 +5,7 @@
     2) GloMPI is primary, setup a GloMPOManager instance as normal.
        The ReaxFFError class below will create the error function to be used as the manager 'task' parameter.
 """
-
+import os
 import warnings
 from typing import Callable, Sequence, Tuple, Union
 
@@ -214,17 +214,17 @@ def setup_reax(path: str) -> Tuple[DataSet, JobCollection, ReaxParams]:
     ----------
     path: str
         Path to folder containing:
-        - ts_trainset.in: Contains the description of the items in the training set
+        - trainset.in: Contains the description of the items in the training set
         - control:        Contains ReaxFF settings
-        - ts_ffield_init: A force field file which contains values for all the parameters
-        - ts_ffield_bool: A force field file with all parameters set to 0 or 1.
-                          1 indicates it will be adjusted during optimisation.
-                          0 indicates it will not be changed during optimisation.
-        - ts_ffield_max:  A force field file where the active parameters are set to their maximum value (value of other
-                          parameters is ignored).
-        - ts_ffield_min:  A force field file where the active parameters are set to their maximum value (value of other
-                          parameters is ignored).
-        - ts_geo:         Contains the geometries of the items used in the training set.
+        - ffield_init: A force field file which contains values for all the parameters
+        - ffield_bool: A force field file with all parameters set to 0 or 1.
+                       1 indicates it will be adjusted during optimisation.
+                       0 indicates it will not be changed during optimisation.
+        - ffield_max:  A force field file where the active parameters are set to their maximum value (value of other
+                       parameters is ignored).
+        - ffield_min:  A force field file where the active parameters are set to their maximum value (value of other
+                       parameters is ignored).
+        - geo:         Contains the geometries of the items used in the training set.
 
     Returns
     -------
@@ -235,16 +235,16 @@ def setup_reax(path: str) -> Tuple[DataSet, JobCollection, ReaxParams]:
         ReaxParams is the interface to the actual engine used to calculate the force field results.
     """
 
-    dat_set = trainset_to_params(f"{path}/ts_trainset.in")
-    rxf_eng = ReaxParams(f"{path}/ts_ffield_bool")
-    vars_max = ReaxParams(f"{path}/ts_ffield_max")
-    vars_min = ReaxParams(f"{path}/ts_ffield_min")
+    dat_set = trainset_to_params(os.path.join(path, 'trainset.in'))
+    rxf_eng = ReaxParams(os.path.join(path, 'ffield_bool'))
+    vars_max = ReaxParams(os.path.join(path, 'ffield_max'))
+    vars_min = ReaxParams(os.path.join(path, 'ffield_min'))
 
     # Update the job collection depending on the types of data in the training set
-    settings = reaxff_control_to_settings(f"{path}/control")
+    settings = reaxff_control_to_settings(os.path.join(path, 'control'))
     if dat_set.forces():
         settings.input.ams.properties.gradients = True
-    job_col = geo_to_params(f"{path}/ts_geo", settings)
+    job_col = geo_to_params(os.path.join(path, 'geo'), settings)
 
     # Remove training set entries not in job collection
     remove_ids = dat_set.check_consistency(job_col)
@@ -265,7 +265,7 @@ def setup_reax(path: str) -> Tuple[DataSet, JobCollection, ReaxParams]:
                 parm.is_active = False
                 print(f"WARNING: {parm.name} deactivated due to bounds.")
 
-    vars_values = ReaxParams(f"{path}/ts_ffield_init")
+    vars_values = ReaxParams(os.path.join(path, 'ffield_init'))
     rxf_eng.x = vars_values.x
     for parm in rxf_eng.active:
         if not parm.range[0] < parm.value < parm.range[1]:
