@@ -20,7 +20,8 @@ try:
 except (ModuleNotFoundError, ImportError):
     HAS_MATPLOTLIB = False
 
-from glompo.common.helpers import FileNameHandler, LiteralWrapper, literal_presenter, glompo_colors
+from glompo.common.helpers import FileNameHandler, LiteralWrapper, FlowList, literal_presenter, glompo_colors, \
+    flow_presenter
 
 __all__ = ("OptimizerLogger",)
 
@@ -30,6 +31,7 @@ class OptimizerLogger:
 
     def __init__(self):
         self._storage: Dict[int, _OptimizerLogger] = {}
+        yaml.add_representer(FlowList, flow_presenter, Dumper=Dumper)
 
     def __len__(self):
         return len(self._storage)
@@ -126,7 +128,7 @@ class OptimizerLogger:
                 sum_data[optimizer] = {'end_cond': self._storage[optimizer].metadata["End Condition"],
                                        'f_calls': f_calls,
                                        'f_best': f_best,
-                                       'x_best': x_best}
+                                       'x_best': FlowList(x_best)}
 
             with open(filename, "w+") as file:
                 yaml.dump(sum_data, file, Dumper=Dumper, default_flow_style=False, sort_keys=False)
@@ -264,7 +266,7 @@ class _OptimizerLogger:
                                'fx': float(fx),
                                'i_best': int(self.i_best),
                                'fx_best': float(self.fx_best),
-                               'x': ls}
+                               'x': FlowList(ls)}
 
     def append_message(self, message):
         """ Adds message to the optimizer history. """
