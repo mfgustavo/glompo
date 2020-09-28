@@ -102,7 +102,7 @@ def optimizer_selector_presenter(dumper, opt_selector: 'BaseSelector'):
     for i, opt in enumerate(opt_selector.avail_opts):
         opts[i] = dict(zip(('type', 'init_kwargs', 'call_kwargs'), opt))
 
-    if type(opt_selector.allow_spawn) is object:
+    if isinstance(opt_selector.allow_spawn, object):
         allow_spawn = opt_selector.allow_spawn
     else:
         allow_spawn = opt_selector.allow_spawn.__name__
@@ -178,17 +178,17 @@ def glompo_colors(opt_id: Optional[int] = None) -> Union['matplotlib.colors.List
     return cmap
 
 
-def mem_pprint(bytes: int, digits: int = 2) -> str:
+def mem_pprint(bytes_: int, digits: int = 2) -> str:
     """ Accepts an integer number of bytes and returns a string formatted to the most appropriate units. """
     units = 0
-    while bytes > 1024:
-        bytes /= 1024
+    while bytes_ > 1024:
+        bytes_ /= 1024
         units += 1
 
     if units == 0:
         digits = 0
 
-    return f"{bytes:.{digits}f}{['', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'][units]}B"
+    return f"{bytes_:.{digits}f}{['', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'][units]}B"
 
 
 class FileNameHandler:
