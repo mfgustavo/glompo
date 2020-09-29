@@ -221,3 +221,18 @@ information will only be of use if GloMPO is the only application running over t
 entire system. In distributed computing systems where GloMPO is only given access to
 a portion of a node, this information will be useless as it will be conflated with
 the usage of other users.
+
+Checkpointing
+=============
+
+Checkpointing tries to create an entire image of the GloMPO state, it is the user's
+responsibility to ensure that the used optimizers are restartable. Within
+`tests/test_optimizers.py` there is the `TestSubclassesGlompoCompatible` class which
+can be used to ensure an optimizer is compatible with all of GloMPO's functionality.
+
+The optimization task can sometimes not be reduced to a pickled state depending on
+it complexity and interfaces to other codes. GloMPO will first attempt to `pickle`
+the object, failing that GloMPO will attempt to call the `save_state()` function if
+the task has such a method. If this also fails the checkpoint is created without the
+optimization task. GloMPO can be restarted from an incomplete checkpoint if the
+missing components are provided.

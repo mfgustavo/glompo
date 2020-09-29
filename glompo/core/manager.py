@@ -163,7 +163,7 @@ class GloMPOManager:
         checkpoint_control: Optional[CheckpointingControl] = None
             If provided, the manager will use checkpointing during the optimization. This saves its state to disk,
             these files can be used by a new GloMPOManager instance to resume. Checkpointing options are provided
-            through a CheckpointingControl instance.
+            through a CheckpointingControl instance. (see README for more details on checkpointing).
 
         summary_files: int = 0
             Indicates the level of saving the user would like in terms of datafiles and plots:
@@ -571,6 +571,31 @@ class GloMPOManager:
 
         self.logger.info("Constructing Checkpoint")
 
+        # Pause and synchronize optimizers
+        self._toggle_optimizers(1)  # Ensure they are all running to ensure no deadlock
+        self._sync_optimizers()
+
+        # Process outstanding results
+        while not self.optimizer_queue.empty():
+            res = self.optimizer_queue.get_nowait()
+            self.last_feedback[res.opt_id] = time()
+            self.f_counter += res.i_fcalls
+
+            history = self.opt_log.get_history(res.opt_id, "f_call_opt")
+            if len(history) > 0:
+                opt_fcalls = history[-1] + res.i_fcalls
+            else:
+                opt_fcalls = res.i_fcalls
+
+            if res.opt_id not in self.hunt_victims:
+                self.opt_log.put_iteration(res.opt_id, res.n_iter, self.f_counter, opt_fcalls, list(res.x), res.fx)
+                self.logger.debug(f"Result from {res.opt_id} @ iter {res.n_iter} fx = {res.fx}")
+
+                if self.visualisation:
+                    self.scope.update_optimizer(res.opt_id, (self.f_counter, res.fx))
+                    if res.final:
+                        self.scope.update_norm_terminate(res.opt_id)
+
         # Remove loggers to allowing pickling of components
         for nest in (self.killing_conditions, self.convergence_checker):
             for base in nest:
@@ -599,7 +624,24 @@ class GloMPOManager:
 
         # # Task
 
+        try:
+            pickle.dumps(self.task)
+            self.logger.debug("Pickle task failed. Attempting task.save_state()")
+        except pickle.PickleError:
+            try:
+                self.task.save_state()
+            except AttributeError:
+                self.logger.debug(f"task.save_state not found.")
+                self.logger.warning("Checkpointing without task.")
+            except Exception as e:
+                self.logger.debug(f"task.save_state failed. Exception: {e}")
+                self.logger.warning("Checkpointing without task.")
+
         # # Scope
+
+        for var in dir(self.scope):
+            if '__' not in var and not callable(getattr(self.scope, var)) and var != '_writer':
+                pickle.dumps(getattr(self.scope, var))
 
         # # Optimizers
 
@@ -616,6 +658,9 @@ class GloMPOManager:
             comp.logger = logging.getLogger(f'glompo.{logger}')
 
         self.logger.info("Checkpoint successfully built")
+
+        # Restart Optimizers
+        self._toggle_optimizers(1)
 
     def load_checkpoint(self):
         """ Initialise GloMPO from the provided checkpoint file. """
@@ -1111,3 +1156,24 @@ class GloMPOManager:
                     pack.allow_run_event.set()
                 else:
                     pack.allow_run_event.clear()
+
+    def _sync_optimizers(self):
+        """ Sends pause signals to the optimizers and blocks until they confirm the pause. """
+        wait_reply = set()
+        for opt_id, pack in self.optimizer_packs.items():
+            if pack.process.is_alive():
+                pack.signal_pipe.send(2)
+                wait_reply.add(opt_id)
+
+        alive = len(wait_reply)
+        while wait_reply:
+            self.logger.debug(f"Blocking, {alive - len(wait_reply)}/{alive} optimizers synced")
+            for opt_id, pack in self.optimizer_packs.items():
+                if pack.signal_pipe.poll(0.1):
+                    message = pack.signal_pipe.recv()
+                    if message == 1:
+                        wait_reply.remove(opt_id)
+                    else:
+                        raise RuntimeError("Unhandled message")
+
+        self.logger.info("Optimizers paused and synced.")

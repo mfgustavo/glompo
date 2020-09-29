@@ -123,12 +123,12 @@ class OptimizerLogger:
 
                     best = opt_history[i_best]
 
-                    x_best = best['x']
+                    x_best = FlowList(best['x'])
                     f_best = best['fx_best']
                 sum_data[optimizer] = {'end_cond': self._storage[optimizer].metadata["End Condition"],
                                        'f_calls': f_calls,
                                        'f_best': f_best,
-                                       'x_best': FlowList(x_best)}
+                                       'x_best': x_best}
 
             with open(filename, "w+") as file:
                 yaml.dump(sum_data, file, Dumper=Dumper, default_flow_style=False, sort_keys=False)

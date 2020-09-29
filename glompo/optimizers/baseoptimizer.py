@@ -57,19 +57,20 @@ class BaseOptimizer(ABC):
 
     """
 
-    def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
-                 pause_flag: Event = None, workers: int = 1, backend: str = 'threads', **kwargs):
+    def __init__(self, opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
+                 results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
+                 backend: str = 'threads', **kwargs):
         """
         Parameters
         ----------
-        opt_id: int = None
+        opt_id: Optional[int] = None
             Unique identifier automatically assigned within the GloMPO manager framework.
-        signal_pipe: multiprocessing.connection.Connection = None
+        signal_pipe: Optional[multiprocessing.connection.Connection] = None
             Bidirectional pipe used to message management behaviour between the manager and optimizer.
-        results_queue: queue.Queue = None
+        results_queue: Optional[queue.Queue] = None
             Threading queue into which optimizer iteration results are centralised across all optimizers and sent to
             the manager.
-        pause_flag: threading.Event = None
+        pause_flag: Optional[threading.Event] = None
             Event flag which can be used to pause the optimizer between iterations.
         workers: int = 1
             The number of concurrent calculations used by the optimizer. Defaults to one. The manager will only start
@@ -90,8 +91,10 @@ class BaseOptimizer(ABC):
         self._backend = backend
 
         self._FROM_MANAGER_SIGNAL_DICT = {0: self.save_state,
-                                          1: self.callstop}
+                                          1: self.callstop,
+                                          2: self.certified_pause}
         self._TO_MANAGER_SIGNAL_DICT = {0: "Normal Termination",
+                                        1: "Confirm Pause",
                                         9: "Other Message (Saved to Log)"}
         self.workers = workers
 
@@ -156,11 +159,15 @@ class BaseOptimizer(ABC):
     def check_messages(self, *args):
         while self._signal_pipe.poll():
             message = self._signal_pipe.recv()
-            if isinstance(message, int):
+            self.logger.debug(f"Received signal: {message}")
+            if isinstance(message, int) and message in self._FROM_MANAGER_SIGNAL_DICT:
+                self.logger.debug(f"Executing: {self._FROM_MANAGER_SIGNAL_DICT[message].__name__}")
                 self._FROM_MANAGER_SIGNAL_DICT[message]()
-            elif isinstance(message, tuple):
+            elif isinstance(message, tuple) and message[0] in self._FROM_MANAGER_SIGNAL_DICT:
+                self.logger.debug(f"Executing: {self._FROM_MANAGER_SIGNAL_DICT[message[0]].__name__}")
                 self._FROM_MANAGER_SIGNAL_DICT[message[0]](*message[1:])
             else:
+                self.logger.warning("Cannot parse message, ignoring")
                 warnings.warn("Cannot parse message, ignoring", RuntimeWarning)
 
     def push_iter_result(self, *args):
@@ -186,3 +193,9 @@ class BaseOptimizer(ABC):
             state.
         """
         raise NotImplementedError
+
+    def certified_pause(self):
+        """ Pauses the optimizers and sends a message to the manager to confirm the fact. """
+        self._pause_signal.clear()
+        self._signal_pipe.send(1)
+        self._pause_signal.wait()

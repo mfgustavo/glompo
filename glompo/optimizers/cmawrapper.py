@@ -28,9 +28,11 @@ class CMAOptimizer(BaseOptimizer):
         * Module: https://github.com/CMA-ES/pycma
     """
 
-    def __init__(self, sigma: float, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
-                 pause_flag: Event = None, workers: int = 1, backend: str = 'processes', is_restart: bool = False,
-                 sampler: str = 'full', verbose: bool = True, keep_files: bool = False, **cmasettings):
+    def __init__(self, sigma: float, sampler: str = 'full', verbose: bool = True, keep_files: bool = False,
+                 opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
+                 results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
+                 backend: str = 'processes', is_restart: bool = False,
+                 **cmasettings):
         """ Parameters
             ----------
             sigma: float
@@ -46,13 +48,13 @@ class CMAOptimizer(BaseOptimizer):
                 If True the files produced by CMA are retained otherwise they are deleted. Deletion is the default
                 behaviour since, when using GloMPO, GloMPO log files are created. Note, however, that GloMPO log files
                 are different from CMA ones.
+            is_restart: bool = False
+                If True CMA will load itself from a previously saved restart file containing a binary pickle of its
+                state variables.
             cmasettings: Optional[Dict[str, Any]]
                 cma module-specific settings as ``k,v`` pairs. See ``cma.s.pprint(cma.CMAOptions())`` for a list of
                 available options. Most useful keys are: `timeout`, `tolstagnation`, `popsize`. Additionally,
                 the key `minsigma` is supported: Termination if ``sigma < minsigma``.
-            is_restart: bool = False
-                If True CMA will load itself from a previously saved restart file containing a binary pickle of its
-                state variables.
         """
         super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
 
