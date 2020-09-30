@@ -229,15 +229,12 @@ class CMAOptimizer(BaseOptimizer):
         self.logger.debug(f"Calling stop. Reason = {reason}")
         self.es.callbackstop = 1
 
-    def save_state(self, path: Optional[str] = None):
+    def save_state(self, path: str):
         self.logger.debug("Creating restart file.")
-
-        if not path:
-            path = f'cma.{self._opt_id:04}.restart' if self._opt_id else f'cma.restart'
 
         dump_collection = {}
         for var in dir(self):
-            if not callable(getattr(self, var)) and not var.startswith('_'):
+            if not callable(getattr(self, var)) and not var.startswith('_') and var != 'logger':
                 dump_collection[var] = getattr(self, var)
 
         del dump_collection['is_restart']
@@ -246,11 +243,8 @@ class CMAOptimizer(BaseOptimizer):
 
         self.logger.info("Restart file created successfully.")
 
-    def restart(self, path: Optional[str] = None):
+    def restart(self, path: str):
         self.logger.info("Initialising from restart file.")
-
-        if not path:
-            path = f'cma.{self._opt_id:04}.restart' if self._opt_id else f'cma.restart'
 
         with open(path, 'rb') as file:
             state = pickle.load(file)

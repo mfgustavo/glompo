@@ -11,6 +11,7 @@ import queue
 import shutil
 import socket
 import sys
+import tarfile
 import traceback
 import warnings
 from datetime import datetime
@@ -33,9 +34,9 @@ except ModuleNotFoundError:
 
 from ._backends import CustomThread, ThreadPrintRedirect
 from .optimizerlogger import OptimizerLogger
-from ..common.helpers import LiteralWrapper, literal_presenter, nested_string_formatting, unknown_object_presenter, \
-    generator_presenter, optimizer_selector_presenter, mem_pprint, FlowList, flow_presenter, BoundGroup, \
-    bound_group_presenter
+from ..common.helpers import FileNameHandler, LiteralWrapper, literal_presenter, nested_string_formatting, \
+    unknown_object_presenter, generator_presenter, optimizer_selector_presenter, mem_pprint, FlowList, flow_presenter, \
+    BoundGroup, bound_group_presenter, CheckpointingError
 from ..common.namedtuples import Bound, OptimizerPackage, ProcessPackage, Result
 from ..common.wrappers import process_print_redirect
 from ..convergence import BaseChecker, KillsAfterConvergence
@@ -44,6 +45,7 @@ from ..hunters import BaseHunter
 from ..opt_selectors.baseselector import BaseSelector
 from ..optimizers.baseoptimizer import BaseOptimizer
 from .checkpointing import CheckpointingControl
+
 
 __all__ = ("GloMPOManager",)
 
@@ -520,6 +522,9 @@ class GloMPOManager:
             self.logger.info(f"Exit conditions met: \n"
                              f"{nested_string_formatting(reason)}")
 
+            if self.checkpoint_options.checkpoint_at_conv:
+                self.checkpoint()
+
             self.logger.debug("Cleaning up multiprocessing")
             self._stop_all_children()
 
@@ -571,79 +576,147 @@ class GloMPOManager:
 
         self.logger.info("Constructing Checkpoint")
 
-        # Pause and synchronize optimizers
-        self._toggle_optimizers(1)  # Ensure they are all running to ensure no deadlock
-        self._sync_optimizers()
-
-        # Process outstanding results
-        while not self.optimizer_queue.empty():
-            res = self.optimizer_queue.get_nowait()
-            self.last_feedback[res.opt_id] = time()
-            self.f_counter += res.i_fcalls
-
-            history = self.opt_log.get_history(res.opt_id, "f_call_opt")
-            if len(history) > 0:
-                opt_fcalls = history[-1] + res.i_fcalls
-            else:
-                opt_fcalls = res.i_fcalls
-
-            if res.opt_id not in self.hunt_victims:
-                self.opt_log.put_iteration(res.opt_id, res.n_iter, self.f_counter, opt_fcalls, list(res.x), res.fx)
-                self.logger.debug(f"Result from {res.opt_id} @ iter {res.n_iter} fx = {res.fx}")
-
-                if self.visualisation:
-                    self.scope.update_optimizer(res.opt_id, (self.f_counter, res.fx))
-                    if res.final:
-                        self.scope.update_norm_terminate(res.opt_id)
-
-        # Remove loggers to allowing pickling of components
-        for nest in (self.killing_conditions, self.convergence_checker):
-            for base in nest:
-                base.logger = None
-
-        for comp in (self.x0_generator, self.selector, self.killing_conditions, self.convergence_checker, self.scope):
-            comp.logger = None
-
-        # Select variables for pickling
-        pickle_vars = set()
-        for var in dir(self):
-            if not callable(getattr(self, var)) and \
-                    '__' not in var and \
-                    not any([var == no_pickle for no_pickle in ('logger', '_process', '_mp_manager',
-                                                                'optimizer_packs', 'scope', 'task')]):
-                pickle_vars.add(var)
-
-        for var in pickle_vars:
-            try:
-                pickle.dumps(getattr(self, var))
-            except (pickle.PickleError, TypeError) as e:
-                print(f"Pickle Failed: {var}")
-                print(e)
-
-        # Save non-picklable variables
-
-        # # Task
+        # Construct Checkpoint Name
+        chkpt_name = self.checkpoint_options.get_name()
+        path = os.path.join(self.checkpoint_options.checkpointing_dir, chkpt_name) + os.sep
 
         try:
-            pickle.dumps(self.task)
-            self.logger.debug("Pickle task failed. Attempting task.save_state()")
-        except pickle.PickleError:
-            try:
-                self.task.save_state()
-            except AttributeError:
-                self.logger.debug(f"task.save_state not found.")
-                self.logger.warning("Checkpointing without task.")
-            except Exception as e:
-                self.logger.debug(f"task.save_state failed. Exception: {e}")
-                self.logger.warning("Checkpointing without task.")
+            with FileNameHandler(path):
 
-        # # Scope
+                # Pause, save and synchronize optimizers
+                os.mkdir('optimizers')
+                self._toggle_optimizers(1)  # Ensure they are all running to ensure no deadlock
+                wait_reply = set()
+                for opt_id, pack in self.optimizer_packs.items():
+                    if pack.process.is_alive():
+                        pack.signal_pipe.send((0, os.path.join(path, 'optimizers', f'{opt_id:04}')))
+                        pack.signal_pipe.send(2)
+                        wait_reply.add(opt_id)
 
-        for var in dir(self.scope):
-            if '__' not in var and not callable(getattr(self.scope, var)) and var != '_writer':
-                pickle.dumps(getattr(self.scope, var))
+                n_alive = len(wait_reply)
+                living = wait_reply.copy()
+                while wait_reply:
+                    self.logger.debug(f"Blocking, {n_alive - len(wait_reply)}/{n_alive} optimizers synced")
+                    for opt_id, pack in self.optimizer_packs.items():
+                        if pack.signal_pipe.poll(0.1):
+                            message = pack.signal_pipe.recv()
+                            if message == 1:
+                                wait_reply.remove(opt_id)
+                            else:
+                                # TODO Handle case of optimizer finishing or changing state before sync_pause is reached
+                                raise RuntimeError(f"Unhandled message: {message}")
 
-        # # Optimizers
+                self.logger.debug("Optimizers paused and synced.")
+                saved_states = os.listdir('optimizers')
+                living_names = {f'{opt_id:04}' for opt_id in living}
+                for lv in living_names:
+                    if lv not in saved_states:
+                        raise CheckpointingError(f"Unable to identify restart file/folder for optimizer {lv}")
+                self.logger.debug("All optimizer restart files detected.")
+
+                # Process outstanding results
+                while not self.optimizer_queue.empty():
+                    res = self.optimizer_queue.get_nowait()
+                    self.last_feedback[res.opt_id] = time()
+                    self.f_counter += res.i_fcalls
+
+                    history = self.opt_log.get_history(res.opt_id, "f_call_opt")
+                    if len(history) > 0:
+                        opt_fcalls = history[-1] + res.i_fcalls
+                    else:
+                        opt_fcalls = res.i_fcalls
+
+                    if res.opt_id not in self.hunt_victims:
+                        self.opt_log.put_iteration(res.opt_id, res.n_iter, self.f_counter, opt_fcalls,
+                                                   list(res.x), res.fx)
+                        self.logger.debug(f"Result from {res.opt_id} @ iter {res.n_iter} fx = {res.fx}")
+
+                        if self.visualisation:
+                            self.scope.update_optimizer(res.opt_id, (self.f_counter, res.fx))
+                            if res.final:
+                                self.scope.update_norm_terminate(res.opt_id)
+                self.logger.debug("Outstanding results processed.")
+
+                # Remove loggers to allowing pickling of components
+                for nest in (self.killing_conditions, self.convergence_checker):
+                    for base in nest:
+                        base.logger = None
+
+                for comp in (self.x0_generator, self.selector, self.killing_conditions,
+                             self.convergence_checker, self.scope):
+                    comp.logger = None
+                self.logger.debug("Loggers removed from components")
+
+                # Select variables for pickling
+                pickle_vars = set()
+                for var in dir(self):
+                    if not callable(getattr(self, var)) and \
+                            '__' not in var and \
+                            not any([var == no_pickle for no_pickle in ('logger', '_process', '_mp_manager',
+                                                                        'optimizer_packs', 'scope', 'task')]):
+                        pickle_vars.add(var)
+
+                with open('manager', 'wb') as file:
+                    for var in pickle_vars:
+                        try:
+                            pickle.dump(getattr(self, var), file)
+                        except pickle.PickleError:
+                            raise CheckpointingError(f"Could not pickle manager.{var}")
+                self.logger.debug("Manager successfully pickled")
+
+                # Save non-picklable variables
+
+                try:
+                    with open('task', 'wb') as file:
+                        pickle.dump(self.task, file)
+                except pickle.PickleError as pckl_err:
+                    self.logger.debug(f"Pickle task failed: {pckl_err}. Attempting task.save_state()")
+                    os.remove('task')
+                    try:
+                        # noinspection PyUnresolvedReferences
+                        self.task.save_state('task')
+                    except AttributeError:
+                        self.logger.debug(f"task.save_state not found.")
+                        self.logger.warning("Checkpointing without task.")
+                    except Exception as e:
+                        self.logger.debug(f"task.save_state failed. Exception: {e}")
+                        self.logger.warning("Checkpointing without task.")
+
+                try:
+                    with open('scope', 'wb') as file:
+                        for var in dir(self.scope):
+                            if '__' not in var and not callable(getattr(self.scope, var)) and var != '_writer':
+                                pickle.dump(getattr(self.scope, var), file)
+                except pickle.PickleError as e:
+                    raise CheckpointingError(f"Scope pickling failed: {e}")
+                self.logger.debug("Scope successfully pickled")
+
+            # Compress checkpoint
+            self.logger.debug("Building TarFile")
+            with tarfile.open(path[:-1] + '.tar.gz', 'x:gz') as tfile:
+                tfile.add(path, recursive=True, arcname='')
+            self.logger.debug("TarFile built, directory removed.")
+
+            # Delete old checkpoints
+            if self.checkpoint_options.keep_past > -1:
+                self.logger.debug("Finding old checkpoints to delete")
+                to_delete = sorted(filter(self.checkpoint_options.matches_naming_format,
+                                          os.listdir(self.checkpoint_options.checkpointing_dir)), reverse=True)
+                self.logger.debug(f"Identified to delete: {to_delete[self.checkpoint_options.keep_past + 1:]}")
+                print(to_delete)
+                for old in to_delete[self.checkpoint_options.keep_past + 1:]:
+                    os.remove(os.path.join(self.checkpoint_options.checkpointing_dir, old))
+
+        except CheckpointingError as e:
+
+            if self.checkpoint_options.raise_checkpoint_fail:
+                self.logger.error(f"Checkpointing failed: {e}")
+                raise e
+
+            self.logger.warning(f"Checkpointing failed: {e}.\nAborting checkpoint construction.")
+            warnings.warn(f"Checkpointing failed: {e}.\nAborting checkpoint construction.")
+        finally:
+            shutil.rmtree(path, ignore_errors=True)
 
         # Replace loggers
         for logger, nest in {'hunter': self.killing_conditions, 'checker': self.convergence_checker}.items():
@@ -1065,7 +1138,7 @@ class GloMPOManager:
                     run_info = "<COULD NOT MEASURE. REQUIRES psutil>=5>"
 
                 data = {"Assignment": {
-                    "Task": type(self.task).__name__ if type(self.task) is object else self.task.__name__,
+                    "Task": type(self.task).__name__ if isinstance(type(self.task), object) else self.task.__name__,
                     "Working Dir": os.getcwd(),
                     "Username": getpass.getuser(),
                     "Hostname": socket.gethostname(),
@@ -1156,24 +1229,3 @@ class GloMPOManager:
                     pack.allow_run_event.set()
                 else:
                     pack.allow_run_event.clear()
-
-    def _sync_optimizers(self):
-        """ Sends pause signals to the optimizers and blocks until they confirm the pause. """
-        wait_reply = set()
-        for opt_id, pack in self.optimizer_packs.items():
-            if pack.process.is_alive():
-                pack.signal_pipe.send(2)
-                wait_reply.add(opt_id)
-
-        alive = len(wait_reply)
-        while wait_reply:
-            self.logger.debug(f"Blocking, {alive - len(wait_reply)}/{alive} optimizers synced")
-            for opt_id, pack in self.optimizer_packs.items():
-                if pack.signal_pipe.poll(0.1):
-                    message = pack.signal_pipe.recv()
-                    if message == 1:
-                        wait_reply.remove(opt_id)
-                    else:
-                        raise RuntimeError("Unhandled message")
-
-        self.logger.info("Optimizers paused and synced.")

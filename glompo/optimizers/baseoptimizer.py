@@ -183,8 +183,8 @@ class BaseOptimizer(ABC):
         """
         raise NotImplementedError
 
-    def save_state(self, *args):
-        """ Save current state, suitable for restarting.
+    def save_state(self, path: str):
+        """ Save current state, suitable for restarting. Path is the location for the file or folder to be constructed.
         """
         raise NotImplementedError
 

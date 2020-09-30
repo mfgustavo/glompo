@@ -6,21 +6,24 @@ from typing import Optional, Sequence, Tuple, Union
 import numpy as np
 import yaml
 
-__all__ = ("LiteralWrapper",
-           "FileNameHandler",
-           "BoundGroup",
-           "FlowList",
-           "nested_string_formatting",
+__all__ = ("nested_string_formatting",
            "is_bounds_valid",
+           "distance",
+           "glompo_colors",
+           "mem_pprint",
+           "LiteralWrapper",
+           "FlowList",
+           "BoundGroup",
            "literal_presenter",
            "optimizer_selector_presenter",
            "generator_presenter",
+           "flow_presenter",
            "bound_group_presenter",
            "unknown_object_presenter",
-           "flow_presenter",
-           "distance",
-           "mem_pprint",
-           "glompo_colors")
+           "FileNameHandler",
+           "CheckpointingError")
+
+""" Sundry Code Stubs """
 
 
 def nested_string_formatting(nested_str: str) -> str:
@@ -77,7 +80,45 @@ def is_bounds_valid(bounds: Sequence[Tuple[float, float]], raise_invalid=True) -
     return True
 
 
-# YAML Representers
+def distance(pt1: Sequence[float], pt2: Sequence[float]):
+    """ Calculate the straight line distance between two points in Euclidean space. """
+    return np.sqrt(np.sum((np.array(pt1) - np.array(pt2)) ** 2))
+
+
+def glompo_colors(opt_id: Optional[int] = None) -> Union['matplotlib.colors.ListedColormap', Tuple]:
+    """ Returns a matplotlib Colormap instance containing the custom GloMPO color cycle.
+        If opt_id is provided than the specific color at that index is returned instead.
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import ListedColormap
+
+    colors = []
+    for cmap in ("tab20", "tab20b", "tab20c", "Set1", "Set2", "Set3", "Dark2"):
+        for col in plt.get_cmap(cmap).colors:
+            colors.append(col)
+
+    cmap = ListedColormap(colors, "glompo_colormap")
+    if opt_id:
+        return cmap(opt_id)
+
+    return cmap
+
+
+def mem_pprint(bytes_: int, digits: int = 2) -> str:
+    """ Accepts an integer number of bytes and returns a string formatted to the most appropriate units. """
+    units = 0
+    while bytes_ > 1024:
+        bytes_ /= 1024
+        units += 1
+
+    if units == 0:
+        digits = 0
+
+    return f"{bytes_:.{digits}f}{['', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'][units]}B"
+
+
+""" YAML Representers """
+
 
 class LiteralWrapper(str):
     """ Used by yaml to save some block strings as literals """
@@ -154,41 +195,7 @@ def unknown_object_presenter(dumper, unknown_class: object):
     return dumper.represent_mapping('tag:yaml.org,2002:map', {type(unknown_class).__name__: inst_vars})
 
 
-def distance(pt1: Sequence[float], pt2: Sequence[float]):
-    """ Calculate the straight line distance between two points in Euclidean space. """
-    return np.sqrt(np.sum((np.array(pt1) - np.array(pt2)) ** 2))
-
-
-def glompo_colors(opt_id: Optional[int] = None) -> Union['matplotlib.colors.ListedColormap', Tuple]:
-    """ Returns a matplotlib Colormap instance containing the custom GloMPO color cycle.
-        If opt_id is provided than the specific color at that index is returned instead.
-    """
-    import matplotlib.pyplot as plt
-    from matplotlib.colors import ListedColormap
-
-    colors = []
-    for cmap in ("tab20", "tab20b", "tab20c", "Set1", "Set2", "Set3", "Dark2"):
-        for col in plt.get_cmap(cmap).colors:
-            colors.append(col)
-
-    cmap = ListedColormap(colors, "glompo_colormap")
-    if opt_id:
-        return cmap(opt_id)
-
-    return cmap
-
-
-def mem_pprint(bytes_: int, digits: int = 2) -> str:
-    """ Accepts an integer number of bytes and returns a string formatted to the most appropriate units. """
-    units = 0
-    while bytes_ > 1024:
-        bytes_ /= 1024
-        units += 1
-
-    if units == 0:
-        digits = 0
-
-    return f"{bytes_:.{digits}f}{['', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'][units]}B"
+""" Context Managers """
 
 
 class FileNameHandler:
@@ -211,3 +218,10 @@ class FileNameHandler:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         os.chdir(self.orig_dir)
+
+
+""" Custom Errors """
+
+
+class CheckpointingError(RuntimeError):
+    """ Error raised during creation of a checkpoint which would result in an incomplete checkpoint """

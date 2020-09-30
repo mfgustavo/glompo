@@ -13,6 +13,7 @@ class CheckpointingControl:
                  checkpoint_frequency: int,
                  checkpoint_at_init: bool,
                  checkpoint_at_conv: bool,
+                 raise_checkpoint_fail: bool = False,
                  keep_past: int = -1,
                  naming_format: str = 'glompo_checkpoint_%(date)_%(time)',
                  checkpointing_dir: str = 'checkpoints'):
@@ -30,12 +31,18 @@ class CheckpointingControl:
         checkpoint_at_conv: bool
             If True a checkpoint is built when the manager reaches convergence and before it exits.
 
+        raise_checkpoint_fail: bool = False
+            If True a failed checkpoint will cause the manager to end the optimization in error. Note, that GloMPO will
+            always write out some data when it terminates. This can be a way of preserving data if the checkpoint fails.
+            If False an error in constructing a checkpoint will simply raise a warning and pass.
+
         keep_past: int
             The keep_past newest checkpoints are retained when a new checkpoint is made. Any older ones are deleted.
             Default is -1 which performs no deletion. keep_past = 0 retains no previous results, only the newly
             constructed checkpoint will exist.
-            Note, that GloMPO will only count the directories in checkpointing_dir and matching the supplied
-            naming_format
+            Notes:
+                1) GloMPO will only count the directories in checkpointing_dir and matching the supplied naming_format
+                2) Existing checkpoints will only be deleted if the new checkpoint is successfully constructed.
 
         naming_format: str = 'glompo_checkpoint_%(date)_%(time)'
             Convention used to name the checkpoints.
@@ -60,30 +67,35 @@ class CheckpointingControl:
         self.checkpoint_at_init = checkpoint_at_init
         self.checkpoint_at_conv = checkpoint_at_conv
         self.checkpointing_dir = checkpointing_dir
+        self.raise_checkpoint_fail = raise_checkpoint_fail
         self.keep_past = keep_past
         self.naming_format = naming_format
 
-        if '%(count)' in self.naming_format:
-            codes = {'%[(]date[)]': 8, '%[(]year[)]': 4, '%[(]yr[)]': 2, '%[(]month[)]': 2, '%[(]day[)]': 2,
-                     '%[(]time[)]': 6, '%[(]hour[)]': 2,
-                     '%[(]min[)]': 2, '%[(]sec[)]': 2}
-            format_re = list(copy(self.naming_format))
-            for i, char in enumerate(format_re):
-                if any([char == c for c in ('{', '(', '+', '*', '|', '.', '$', ')', '}')]):
-                    format_re[i] = f'[{char}]'
-                if any([char == c for c in ('^', '[', ']')]):
-                    format_re[i] = rf'\{char}'
-            format_re = "".join(format_re)
-            for key, digits in codes.items():
-                format_re = format_re.replace(key, f'[0-9]{{{digits}}}')
-            format_re = format_re.replace('%[(]count[)]', '(?P<index>[0-9]{3})')
-            matches = [re.search(format_re, folder) for folder in os.listdir(checkpointing_dir)]
-            max_index = -1
+        codes = {'%[(]date[)]': 8, '%[(]year[)]': 4, '%[(]yr[)]': 2, '%[(]month[)]': 2, '%[(]day[)]': 2,
+                 '%[(]time[)]': 6, '%[(]hour[)]': 2,
+                 '%[(]min[)]': 2, '%[(]sec[)]': 2}
+        format_re = list(copy(self.naming_format))
+        for i, char in enumerate(format_re):
+            if any([char == c for c in ('{', '(', '+', '*', '|', '.', '$', ')', '}')]):
+                format_re[i] = f'[{char}]'
+            if any([char == c for c in ('^', '[', ']')]):
+                format_re[i] = rf'\{char}'
+        format_re = "".join(format_re)
+        for key, digits in codes.items():
+            format_re = format_re.replace(key, f'[0-9]{{{digits}}}')
+        format_re = format_re.replace('%[(]count[)]', '(?P<index>[0-9]{3})')
+        max_index = -1
+        try:
+            matches = [re.match(format_re, folder) for folder in os.listdir(checkpointing_dir)]
             for match in matches:
                 if match:
                     i = int(match.group('index'))
                     max_index = i if i > max_index else max_index
+        except FileNotFoundError:
+            pass
+        finally:
             self.count = max_index + 1
+        self.naming_format_re = format_re
 
     def get_name(self):
         time = datetime.now()
@@ -104,3 +116,7 @@ class CheckpointingControl:
         self.count += 1
 
         return name
+
+    def matches_naming_format(self, name: str) -> bool:
+        """ Returns True if the provided name matches the pattern in the naming_format """
+        return bool(re.match(self.naming_format_re, name))
