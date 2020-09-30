@@ -16,7 +16,7 @@ import traceback
 import warnings
 from datetime import datetime
 from time import time
-from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Callable, Dict, Optional, Sequence, Set, Tuple
 
 import numpy as np
 import yaml
@@ -36,7 +36,7 @@ from ._backends import CustomThread, ThreadPrintRedirect
 from .optimizerlogger import OptimizerLogger
 from ..common.helpers import FileNameHandler, LiteralWrapper, literal_presenter, nested_string_formatting, \
     unknown_object_presenter, generator_presenter, optimizer_selector_presenter, mem_pprint, FlowList, flow_presenter, \
-    BoundGroup, bound_group_presenter, CheckpointingError
+    BoundGroup, bound_group_presenter, CheckpointingError, is_bounds_valid
 from ..common.namedtuples import Bound, OptimizerPackage, ProcessPackage, Result
 from ..common.wrappers import process_print_redirect
 from ..convergence import BaseChecker, KillsAfterConvergence
@@ -46,7 +46,6 @@ from ..opt_selectors.baseselector import BaseSelector
 from ..optimizers.baseoptimizer import BaseOptimizer
 from .checkpointing import CheckpointingControl
 
-
 __all__ = ("GloMPOManager",)
 
 
@@ -55,28 +54,99 @@ class GloMPOManager:
         decision criteria, will stop and intelligently restart others.
     """
 
-    def __init__(self,
-                 task: Callable[[Sequence[float]], float],
-                 bounds: Sequence[Tuple[float, float]],
-                 optimizer_selector: BaseSelector,
-                 working_dir: str = ".",
-                 overwrite_existing: bool = False,
-                 max_jobs: Optional[int] = None,
-                 backend: str = 'processes',
-                 convergence_checker: Optional[BaseChecker] = None,
-                 x0_generator: Optional[BaseGenerator] = None,
-                 killing_conditions: Optional[BaseHunter] = None,
-                 hunt_frequency: int = 100,
-                 status_frequency: int = 600,
-                 checkpoint_control: Optional[CheckpointingControl] = None,
-                 summary_files: int = 0,
-                 visualisation: bool = False,
-                 visualisation_args: Optional[Dict[str, Any]] = None,
-                 force_terminations_after: int = -1,
-                 end_timeout: Optional[int] = None,
-                 split_printstreams: bool = True):
+    def __init__(self):
+        """ The manager is not initialised directly. Either use GloMPOManager().setup() to build a new optimization
+            or GloMPOManager.load_checkpoint() to resume an optimization from a previously saved checkpoint file.
         """
-        Generates the environment for a globally managed parallel optimization job.
+        self._initialised = False
+
+        self.logger = logging.getLogger('glompo.manager')
+        self._init_workdir = os.getcwd()
+
+        self._mp_manager = mp.Manager()
+        self.optimizer_queue = self._mp_manager.Queue()
+
+        yaml.add_representer(LiteralWrapper, literal_presenter, Dumper=Dumper)
+        yaml.add_representer(FlowList, flow_presenter, Dumper=Dumper)
+        yaml.add_representer(BoundGroup, bound_group_presenter, Dumper=Dumper)
+        yaml.add_multi_representer(BaseSelector, optimizer_selector_presenter, Dumper=Dumper)
+        yaml.add_multi_representer(BaseGenerator, generator_presenter, Dumper=Dumper)
+        yaml.add_multi_representer(object, unknown_object_presenter, Dumper=Dumper)
+
+        self._workdir = None
+
+        self.task = None
+        self.selector = None
+        self.bounds = None
+        self.n_parms = None
+        self.max_jobs = None
+        self.convergence_checker = None
+        self.x0_generator = None
+        self.killing_conditions = None
+
+        self.result = Result(None, None, None, None)
+        self.t_start = None
+        self.dt_start = None
+        self.converged = None
+        self.end_timeout = None
+        self.o_counter = 0
+        self.f_counter = 0
+        self.last_hunt = 0
+        self.conv_counter = 0
+        self.hunt_counter = 0
+
+        self._process = None
+        self.cpu_history = []
+        self.mem_history = []
+        self.load_history = []
+
+        self.hunt_victims: Dict[int, float] = {}  # opt_ids of killed jobs and timestamps when the signal was sent
+        self.optimizer_packs: Dict[int, ProcessPackage] = {}
+        self.graveyard: Set[int] = set()
+        self.last_feedback: Dict[int, float] = {}
+
+        self.allow_forced_terminations = None
+        self._too_long = None
+        self.summary_files = None
+        self.split_printstreams = None
+        self.overwrite_existing = None
+        self.visualisation = None
+        self.hunt_frequency = None
+        self.spawning_opts = None
+        self.opts_paused = None
+        self.status_frequency = None
+        self.last_status = None
+        self.last_checkpoint = None
+        self.checkpoint_options = None
+
+        self.opt_log = None
+        self.scope = None
+
+        self._proc_backend = None
+        self.opts_daemonic = None
+
+    def setup(self,
+              task: Callable[[Sequence[float]], float],
+              bounds: Sequence[Tuple[float, float]],
+              optimizer_selector: BaseSelector,
+              working_dir: str = ".",
+              overwrite_existing: bool = False,
+              max_jobs: Optional[int] = None,
+              backend: str = 'processes',
+              convergence_checker: Optional[BaseChecker] = None,
+              x0_generator: Optional[BaseGenerator] = None,
+              killing_conditions: Optional[BaseHunter] = None,
+              hunt_frequency: int = 100,
+              status_frequency: int = 600,
+              checkpoint_control: Optional[CheckpointingControl] = None,
+              summary_files: int = 0,
+              visualisation: bool = False,
+              visualisation_args: Optional[Dict[str, Any]] = None,
+              force_terminations_after: int = -1,
+              end_timeout: Optional[int] = None,
+              split_printstreams: bool = True):
+        """
+        Generates the environment for a new globally managed parallel optimization job.
 
         Parameters
         ----------
@@ -212,7 +282,6 @@ class GloMPOManager:
         warnings.simplefilter("always", RuntimeWarning)
 
         # Setup logging
-        self.logger = logging.getLogger('glompo.manager')
         self.logger.info("Initializing Manager ... ")
 
         # Setup working directory
@@ -236,14 +305,8 @@ class GloMPOManager:
             raise TypeError("optimizer_selector not an instance of a subclass of BaseSelector.")
 
         # Save bounds
-        self.bounds: List[Bound] = []
-        for bnd in bounds:
-            if bnd[0] == bnd[1]:
-                raise ValueError("Bounds min and max cannot be equal. Rather fix its value and remove it from the "
-                                 "list of parameters. Fixed values can be supplied through task_args or task_kwargs.")
-            if bnd[1] < bnd[0]:
-                raise ValueError("Bound min cannot be larger than max.")
-            self.bounds.append(Bound(bnd[0], bnd[1]))
+        if is_bounds_valid(bounds, raise_invalid=True):
+            self.bounds = [Bound(*bnd) for bnd in bounds]
         self.n_parms = len(self.bounds)
 
         # Save max_jobs
@@ -295,12 +358,7 @@ class GloMPOManager:
         self.load_history = []
 
         # Initialise system monitors
-        if HAS_PSUTIL:
-            self._process = psutil.Process()
-            self._process.cpu_percent()  # First return is zero and must be ignored
-            psutil.getloadavg()
-        else:
-            self._process = None
+        self._process = None
 
         # Save behavioural args
         self.allow_forced_terminations = force_terminations_after > 0
@@ -308,13 +366,6 @@ class GloMPOManager:
         self.summary_files = np.clip(int(summary_files), 0, 5)
         if self.summary_files != summary_files:
             self.logger.warning(f"summary_files argument given as {summary_files} clipped to {self.summary_files}")
-        if summary_files:
-            yaml.add_representer(LiteralWrapper, literal_presenter, Dumper=Dumper)
-            yaml.add_representer(FlowList, flow_presenter, Dumper=Dumper)
-            yaml.add_representer(BoundGroup, bound_group_presenter, Dumper=Dumper)
-            yaml.add_multi_representer(BaseSelector, optimizer_selector_presenter, Dumper=Dumper)
-            yaml.add_multi_representer(BaseGenerator, generator_presenter, Dumper=Dumper)
-            yaml.add_multi_representer(object, unknown_object_presenter, Dumper=Dumper)
         self.split_printstreams = bool(split_printstreams)
         self.overwrite_existing = bool(overwrite_existing)
         self.visualisation = visualisation
@@ -382,6 +433,28 @@ class GloMPOManager:
 
         self.logger.info("Initialization Done")
 
+    def load_checkpoint(self, path: str, task: Optional[Callable[[Sequence[float]], float]] = None, **glompo_kwargs):
+        """ Initialise GloMPO from the provided checkpoint file and allows an optimization to resume from that point.
+
+            Parameters
+            ----------
+            path: str
+                Path to GloMPO checkpoint file.
+            task: Optional[Callable[[Sequence[float]], float]] = None
+                It is possible for checkpoint files to not contain the optimization task within them. This is because
+                some functions may be too complex to reduce to a persistent state and need to be reconstructed. In that
+                case the task can be provided here.
+            glompo_kwargs
+                Most arguments supplied to GloMPOManager.setup can also be provided here. This will overwrite the values
+                saved in the checkpoint.
+                Arguments which cannot/should not be changed:
+                    bounds: Many optimizers save the bounds during checkpointing. If changed here old optimizers will
+                        retain the old bounds but new optimizers will start in new bounds.
+                    working_dir: This may also be changed but do so with care, starting in a new folder will mean the
+                        creation of totally new printstreams etc. Objects relying on finding certain files will fail to
+                        do so.
+        """
+
     def start_manager(self) -> Result:
         """ Begins the optimization routine and returns the selected minimum in an instance of MinimizeResult. """
 
@@ -419,6 +492,12 @@ class GloMPOManager:
 
         if self.split_printstreams:
             os.makedirs("glompo_optimizer_printstreams", exist_ok=True)
+
+        # Setup system monitoring
+        if HAS_PSUTIL:
+            self._process = psutil.Process()
+            self._process.cpu_percent()  # First return is zero and must be ignored
+            psutil.getloadavg()
 
         # Detect system information
         cores = self._process.cpu_affinity()
@@ -734,9 +813,6 @@ class GloMPOManager:
 
         # Restart Optimizers
         self._toggle_optimizers(1)
-
-    def load_checkpoint(self):
-        """ Initialise GloMPO from the provided checkpoint file. """
 
     def _fill_optimizer_slots(self):
         """ Starts new optimizers if there are slots available. """
