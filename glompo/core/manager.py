@@ -6,7 +6,6 @@ import glob
 import logging
 import multiprocessing as mp
 import os
-import pickle
 import queue
 import shutil
 import socket
@@ -15,6 +14,7 @@ import tarfile
 import traceback
 import warnings
 from datetime import datetime
+from pickle import PickleError
 from time import time
 from typing import Any, Callable, Dict, Optional, Sequence, Set, Tuple
 
@@ -22,9 +22,17 @@ import numpy as np
 import yaml
 
 try:
+    import dill
+
+    HAS_DILL = True
+except ModuleNotFoundError:
+    HAS_DILL = False
+
+try:
     from yaml import CDumper as Dumper
 except ImportError:
     from yaml import Dumper as Dumper
+
 try:
     import psutil
 
@@ -124,6 +132,10 @@ class GloMPOManager:
 
         self._proc_backend = None
         self.opts_daemonic = None
+
+    @property
+    def is_initialised(self):
+        return self._initialised
 
     def setup(self,
               task: Callable[[Sequence[float]], float],
@@ -236,6 +248,9 @@ class GloMPOManager:
             If provided, the manager will use checkpointing during the optimization. This saves its state to disk,
             these files can be used by a new GloMPOManager instance to resume. Checkpointing options are provided
             through a CheckpointingControl instance. (see README for more details on checkpointing).
+            Note: Checkpointing requires the use of the dill package for serialisation. If you attempt to checkpoint or
+                supply checkpoint controls without this package present, a warning will be raised and no checkpointing
+                will occur.
 
         summary_files: int = 0
             Indicates the level of saving the user would like in terms of datafiles and plots:
@@ -427,10 +442,19 @@ class GloMPOManager:
                 self.end_timeout = None
 
         # Setup Checkpointing
-        self.checkpoint_options = checkpoint_control
-        if self.checkpoint_options.checkpoint_at_init:
-            self.checkpoint()
+        if isinstance(checkpoint_control, CheckpointingControl):
+            if HAS_DILL:
+                self.checkpoint_options = checkpoint_control
+                if self.checkpoint_options.checkpoint_at_init:
+                    self.checkpoint()
+            else:
+                self.logger.warning("Checkpointing controls ignored. Cannot setup infrastructure without dill package.")
+                warnings.warn("Checkpointing controls ignored. Cannot setup infrastructure without dill package.")
+                self.checkpoint_options = None
+        else:
+            self.checkpoint_options = None
 
+        self._initialised = True
         self.logger.info("Initialization Done")
 
     def load_checkpoint(self, path: str, task: Optional[Callable[[Sequence[float]], float]] = None, **glompo_kwargs):
@@ -454,9 +478,78 @@ class GloMPOManager:
                         creation of totally new printstreams etc. Objects relying on finding certain files will fail to
                         do so.
         """
+        with tarfile.open(path, 'r:gz') as tfile:
+            tfile.extractall('/tmp/glompo_chkpt')
+
+        # Load manager variables
+        with open('/tmp/glompo_chkpt/manager', 'rb') as file:
+            data = dill.load(file)
+            for var, val in data.items():
+                try:
+                    self.__setattr__(var, val)
+                except AttributeError:
+                    print(f"Failed: {var} = {val}")
+
+        # Setup Task
+        try:
+            if 'task' in os.listdir('/tmp/glompo_chkpt'):
+                self.logger.info("Unpickling task")
+                with open('/tmp/glompo_chkpt/task') as file:
+                    self.task = dill.load(file)
+            elif 'task_ss' in os.listdir('/tmp/glompo_chkpt'):
+                self.logger.info("Building task from save state")
+                # noinspection PyUnresolvedReferences
+                self.task = task.load_state('/tmp/glompo_chkpt/task_ss')
+            elif task:
+                self.logger.info("Setting task to provided value.")
+                self.task = task
+
+            if not callable(self.task):
+                raise TypeError("Failed to build task correctly. Task not callable.")
+
+        except Exception as e:
+            raise CheckpointingError(f"Failed to build task due to error: {e}")
+
+        # Allow manual overrides
+        for key, val in glompo_kwargs:
+            self.__setattr__(key, val)
+
+        # Extract scope and rebuild writer if still visualizing
+        if self.visualisation:
+            pass
+
+        # Modify/create missing variables
+        self.converged = self.convergence_checker(self)
+        if self.converged:
+            self.logger.warning("The convergence criteria already evaluates to True. The manager will be unable to "
+                                "resume the optimisation. Consider changing the convergence criteria.")
+            warnings.warn("The convergence criteria already evaluates to True. The manager will be unable to resume the"
+                          " optimisation. Consider changing the convergence criteria.", RuntimeWarning)
+
+        # Append nan to histories to show break in optimizations
+        self.cpu_history.append(float('nan'))
+        self.mem_history.append(float('nan'))
+        self.load_history.append((float('nan'),) * 3)
+
+        self.optimizer_packs: Dict[int, ProcessPackage] = {}
+        self.last_feedback: Dict[int, float] = {}  # Must be reset to prevent accidental time-out kills
+
+        self.overwrite_existing = None
+        self.opts_paused = False
+
+        # Load optimizer states
+        for opt in os.listdir('/tmp/glompo_chkpt/optimizers'):
+            pass
+
+        self._initialised = True
 
     def start_manager(self) -> Result:
         """ Begins the optimization routine and returns the selected minimum in an instance of MinimizeResult. """
+
+        if not self._initialised:
+            self.logger.error("Cannot start manager, initialise manager first with setup or load_checkpoint")
+            warnings.warn("Cannot start manager, initialise manager first with setup or load_checkpoint", UserWarning)
+            return
 
         reason = "None"
         caught_exception = None
@@ -593,7 +686,8 @@ class GloMPOManager:
                         status_mess += f"    {'System Load:':.<26} {self.load_history[-1]}\n"
                     self.logger.info(status_mess)
 
-                if time() - self.last_checkpoint > self.checkpoint_options.checkpoint_frequency:
+                if self.checkpoint_options and \
+                        time() - self.last_checkpoint > self.checkpoint_options.checkpoint_frequency:
                     self.last_checkpoint = time()
                     self.checkpoint()
 
@@ -601,7 +695,7 @@ class GloMPOManager:
             self.logger.info(f"Exit conditions met: \n"
                              f"{nested_string_formatting(reason)}")
 
-            if self.checkpoint_options.checkpoint_at_conv:
+            if self.checkpoint_options and self.checkpoint_options.checkpoint_at_conv:
                 self.checkpoint()
 
             self.logger.debug("Cleaning up multiprocessing")
@@ -677,7 +771,7 @@ class GloMPOManager:
                 while wait_reply:
                     self.logger.debug(f"Blocking, {n_alive - len(wait_reply)}/{n_alive} optimizers synced")
                     for opt_id, pack in self.optimizer_packs.items():
-                        if pack.signal_pipe.poll(0.1):
+                        if pack.process.is_alive() and pack.signal_pipe.poll(0.1):
                             message = pack.signal_pipe.recv()
                             if message == 1:
                                 wait_reply.remove(opt_id)
@@ -714,7 +808,11 @@ class GloMPOManager:
                             self.scope.update_optimizer(res.opt_id, (self.f_counter, res.fx))
                             if res.final:
                                 self.scope.update_norm_terminate(res.opt_id)
+                # TODO: Handle the case of hunting during the processing of these results?
                 self.logger.debug("Outstanding results processed.")
+
+                # TODO Run something like _inspect_children here to ensure all processes are properly tidied up but make
+                #   sure there is no deadlock.
 
                 # Remove loggers to allowing pickling of components
                 for nest in (self.killing_conditions, self.convergence_checker):
@@ -727,28 +825,32 @@ class GloMPOManager:
                 self.logger.debug("Loggers removed from components")
 
                 # Select variables for pickling
-                pickle_vars = set()
+                pickle_vars = {}
                 for var in dir(self):
+                    val = getattr(self, var)
                     if not callable(getattr(self, var)) and \
                             '__' not in var and \
                             not any([var == no_pickle for no_pickle in ('logger', '_process', '_mp_manager',
-                                                                        'optimizer_packs', 'scope', 'task')]):
-                        pickle_vars.add(var)
+                                                                        'optimizer_packs', 'scope', 'task',
+                                                                        'optimizer_queue', 'is_initialised')]):
+                        if dill.pickles(val):
+                            pickle_vars[var] = val
+                        else:
+                            raise CheckpointingError(f"Cannot pickle {var}.")
 
                 with open('manager', 'wb') as file:
-                    for var in pickle_vars:
-                        try:
-                            pickle.dump(getattr(self, var), file)
-                        except pickle.PickleError:
-                            raise CheckpointingError(f"Could not pickle manager.{var}")
+                    try:
+                        dill.dump(pickle_vars, file)
+                    except PickleError:
+                        raise CheckpointingError(f"Could not pickle manager.")
                 self.logger.debug("Manager successfully pickled")
 
                 # Save non-picklable variables
 
                 try:
                     with open('task', 'wb') as file:
-                        pickle.dump(self.task, file)
-                except pickle.PickleError as pckl_err:
+                        dill.dump(self.task, file)
+                except PickleError as pckl_err:
                     self.logger.debug(f"Pickle task failed: {pckl_err}. Attempting task.save_state()")
                     os.remove('task')
                     try:
@@ -765,8 +867,8 @@ class GloMPOManager:
                     with open('scope', 'wb') as file:
                         for var in dir(self.scope):
                             if '__' not in var and not callable(getattr(self.scope, var)) and var != '_writer':
-                                pickle.dump(getattr(self.scope, var), file)
-                except pickle.PickleError as e:
+                                dill.dump(getattr(self.scope, var), file)
+                except PickleError as e:
                     raise CheckpointingError(f"Scope pickling failed: {e}")
                 self.logger.debug("Scope successfully pickled")
 
@@ -782,7 +884,6 @@ class GloMPOManager:
                 to_delete = sorted(filter(self.checkpoint_options.matches_naming_format,
                                           os.listdir(self.checkpoint_options.checkpointing_dir)), reverse=True)
                 self.logger.debug(f"Identified to delete: {to_delete[self.checkpoint_options.keep_past + 1:]}")
-                print(to_delete)
                 for old in to_delete[self.checkpoint_options.keep_past + 1:]:
                     os.remove(os.path.join(self.checkpoint_options.checkpointing_dir, old))
 
@@ -1157,7 +1258,7 @@ class GloMPOManager:
                     if len(self.load_history) > 0:
                         load_ave = \
                             np.round(
-                                np.average(
+                                np.nanmean(
                                     np.reshape(
                                         np.array(self.load_history, dtype=float),
                                         (-1, 3)),
@@ -1165,7 +1266,7 @@ class GloMPOManager:
                                 3)
                         load_std = \
                             np.round(
-                                np.std(
+                                np.nanstd(
                                     np.reshape(
                                         np.array(self.load_history, dtype=float),
                                         (-1, 3)),
@@ -1179,15 +1280,15 @@ class GloMPOManager:
                         load_std = [0]
 
                     if len(self.mem_history) > 0:
-                        mem_max = mem_pprint(np.max(self.mem_history))
-                        mem_ave = mem_pprint(np.average(self.mem_history))
+                        mem_max = mem_pprint(np.nanmax(self.mem_history))
+                        mem_ave = mem_pprint(np.nanmean(self.mem_history))
                     else:
                         mem_max = '--'
                         mem_ave = '--'
 
                     if len(self.cpu_history) > 0:
-                        cpu_ave = float(np.round(np.average(self.cpu_history), 2))
-                        cpu_std = float(np.round(np.std(self.cpu_history), 2))
+                        cpu_ave = float(np.round(np.nanmean(self.cpu_history), 2))
+                        cpu_std = float(np.round(np.nanstd(self.cpu_history), 2))
                     else:
                         cpu_ave = 0
                         cpu_std = 0

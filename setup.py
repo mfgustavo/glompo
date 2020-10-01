@@ -30,6 +30,7 @@ setup(
         'GFLSOptimizer': ['optsam'],
         'Nevergrad': ['nevergrad'],
         'ParAMSWrapper': ['scm'],
+        'Checkpointing': ['dill~=0.2.7'],
         'ResourceUsageStatusPrinting': ['psutil>=5.0'],
     }
 )

@@ -60,7 +60,9 @@ class CheckpointingControl:
                     folder in the checkpoint_dir or zero otherwise. Formatted to 3 digits.
 
         checkpointing_dir: str = 'checkpoints'
-            Directory in which checkpoints are saved.
+            Directory in which checkpoints are saved. NB: If a relative path is provided it will be interrpretted as
+            relative to the working directory provided to the manager! It is NOT relative to the working directory where
+            the script is executed.
         """
 
         self.checkpoint_frequency = checkpoint_frequency
@@ -84,18 +86,8 @@ class CheckpointingControl:
         for key, digits in codes.items():
             format_re = format_re.replace(key, f'[0-9]{{{digits}}}')
         format_re = format_re.replace('%[(]count[)]', '(?P<index>[0-9]{3})')
-        max_index = -1
-        try:
-            matches = [re.match(format_re, folder) for folder in os.listdir(checkpointing_dir)]
-            for match in matches:
-                if match:
-                    i = int(match.group('index'))
-                    max_index = i if i > max_index else max_index
-        except FileNotFoundError:
-            pass
-        finally:
-            self.count = max_index + 1
         self.naming_format_re = format_re
+        self.count = None
 
     def get_name(self):
         time = datetime.now()
@@ -111,6 +103,15 @@ class CheckpointingControl:
                  '%(sec)': '%S'}
         for key, val in codes.items():
             name = name.replace(key, time.strftime(val))
+
+        if not self.count:
+            max_index = -1
+            matches = [re.match(self.naming_format_re, folder) for folder in os.listdir(self.checkpointing_dir)]
+            for match in matches:
+                if match:
+                    i = int(match.group('index'))
+                    max_index = i if i > max_index else max_index
+            self.count = max_index + 1
 
         name = name.replace('%(count)', f'{self.count:03}')
         self.count += 1

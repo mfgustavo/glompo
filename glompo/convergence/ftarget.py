@@ -16,5 +16,9 @@ class TargetCost(BaseChecker):
         self.atol = atol
 
     def __call__(self, manager: 'GloMPOManager') -> bool:
-        self._last_result = np.abs(manager.result.fx - self.target) < self.atol
+        if manager.result.fx:
+            self._last_result = np.abs(manager.result.fx - self.target) < self.atol
+        else:
+            self._last_result = False
+
         return self._last_result
