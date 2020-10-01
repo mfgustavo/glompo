@@ -109,7 +109,7 @@ class GloMPOManager:
         self.load_history = []
 
         self.hunt_victims: Dict[int, float] = {}  # opt_ids of killed jobs and timestamps when the signal was sent
-        self.optimizer_packs: Dict[int, ProcessPackage] = {}
+        self.optimizer_packs: Dict[int, ProcessPackage] = {}  # Dictionary of living or recently living optimizers.
         self.graveyard: Set[int] = set()
         self.last_feedback: Dict[int, float] = {}
 
@@ -638,6 +638,11 @@ class GloMPOManager:
                 self.logger.debug("Checking for hanging processes")
                 self._inspect_children()
 
+                # Purge old processes
+                for opt_id, pack in self.optimizer_packs.items():
+                    if not pack.process.is_alive() and opt_id in self.graveyard:
+                        del self.optimizer_packs[opt_id]
+
                 all_dead = len([p for p in self.optimizer_packs.values() if p.process.is_alive()]) == 0
                 checker_condition = self.convergence_checker(self)
 
@@ -652,8 +657,18 @@ class GloMPOManager:
 
                 if time() - self.last_status > self.status_frequency:
                     self.last_status = time()
-                    processes = [pack.slots for pack in self.optimizer_packs.values() if pack.process.is_alive()]
+                    processes = []
                     f_best = f'{self.result.fx:.3E}' if self.result.fx is not None else None
+                    live_opts_status = ""
+
+                    for opt_id, pack in self.optimizer_packs.items():
+                        if pack.process.is_alive():
+                            processes.append(pack.slots)
+                            hist = self.opt_log.get_history(opt_id, 'fx')
+                            if len(hist) > 0:
+                                width = 21 if hist[-1] < 0 else 22
+                                live_opts_status += f"        {f'Optimizer {opt_id}':.<{width}} {hist[-1]:.3E}\n"
+
                     evals = f"{self.f_counter:,}".replace(',', ' ')
                     status_mess = f"Status: \n" \
                                   f"    {'Time Elapsed:':.<26} {datetime.now() - self.dt_start}\n" \
@@ -661,12 +676,7 @@ class GloMPOManager:
                                   f"    {'Slots Filled:':.<26} {sum(processes)}/{self.max_jobs}\n" \
                                   f"    {'Function Evaluations:':.<26} {evals}\n" \
                                   f"    Current Optimizer f_vals:\n"
-                    for opt_id in self.optimizer_packs:
-                        if self.optimizer_packs[opt_id].process.is_alive():
-                            hist = self.opt_log.get_history(opt_id, 'fx')
-                            if len(hist) > 0:
-                                width = 21 if hist[-1] < 0 else 22
-                                status_mess += f"        {f'Optimizer {opt_id}':.<{width}} {hist[-1]:.3E}\n"
+                    status_mess += live_opts_status
                     status_mess += f"    {'Overall f_best:':.<25} {f_best}\n"
                     if HAS_PSUTIL:
                         with self._process.oneshot():
@@ -1051,11 +1061,11 @@ class GloMPOManager:
             strange behaviour such as crashes or non-responsive behaviour.
         """
 
-        for opt_id in self.optimizer_packs:
+        for opt_id, pack in self.optimizer_packs.items():
 
             # Find dead optimizer processes that did not properly signal their termination.
-            if opt_id not in self.graveyard and not self.optimizer_packs[opt_id].process.is_alive():
-                exitcode = self.optimizer_packs[opt_id].process.exitcode
+            if opt_id not in self.graveyard and not pack.process.is_alive():
+                exitcode = pack.process.exitcode
                 if exitcode == 0:
                     if not self._check_signals(opt_id):
                         self.conv_counter += 1
@@ -1078,7 +1088,7 @@ class GloMPOManager:
                     self.opt_log.put_metadata(opt_id, "End Condition", f"Error termination (exitcode {-exitcode}).")
 
             # Find hanging processes
-            if self.optimizer_packs[opt_id].process.is_alive() and \
+            if pack.process.is_alive() and \
                     time() - self.last_feedback[opt_id] > self._too_long and \
                     self.allow_forced_terminations and \
                     opt_id not in self.hunt_victims and \
@@ -1089,16 +1099,16 @@ class GloMPOManager:
                 self.opt_log.put_message(opt_id, "Force terminated due to no feedback timeout.")
                 self.opt_log.put_metadata(opt_id, "Approximate Stop Time", datetime.now())
                 self.opt_log.put_metadata(opt_id, "End Condition", "Forced GloMPO Termination")
-                self.optimizer_packs[opt_id].process.terminate()
+                pack.process.terminate()
 
             # Force kill zombies
             if opt_id in self.hunt_victims and \
                     self.allow_forced_terminations and \
-                    self.optimizer_packs[opt_id].process.is_alive() and \
+                    pack.process.is_alive() and \
                     time() - self.hunt_victims[opt_id] > self._too_long and \
                     self._proc_backend:
-                self.optimizer_packs[opt_id].process.terminate()
-                self.optimizer_packs[opt_id].process.join(3)
+                pack.process.terminate()
+                pack.process.join(3)
                 self.opt_log.put_message(opt_id, "Force terminated due to no feedback after kill signal "
                                                  "timeout.")
                 self.opt_log.put_metadata(opt_id, "Approximate Stop Time", datetime.now())
@@ -1207,7 +1217,7 @@ class GloMPOManager:
         best_x = []
         best_origin = None
 
-        for opt_id in self.optimizer_packs:
+        for opt_id in range(1, self.o_counter + 1):
             history = self.opt_log.get_history(opt_id, "fx_best")
             if len(history) > 0:
                 opt_best = history[-1]
@@ -1231,17 +1241,17 @@ class GloMPOManager:
         if self.opts_paused:
             self._toggle_optimizers(1)
 
-        for opt_id in self.optimizer_packs:
-            if self.optimizer_packs[opt_id].process.is_alive():
-                self.optimizer_packs[opt_id].signal_pipe.send(1)
+        for opt_id, pack in self.optimizer_packs.items():
+            if pack.process.is_alive():
+                pack.signal_pipe.send(1)
                 self.graveyard.add(opt_id)
                 self.opt_log.put_metadata(opt_id, "Stop Time", datetime.now())
                 self.opt_log.put_metadata(opt_id, "End Condition", "GloMPO Convergence")
-                self.optimizer_packs[opt_id].process.join(self.end_timeout)
-                if self.optimizer_packs[opt_id].process.is_alive():
+                pack.process.join(self.end_timeout)
+                if pack.process.is_alive():
                     if self._proc_backend:
                         self.logger.info(f"Termination signal sent to optimizer {opt_id}")
-                        self.optimizer_packs[opt_id].process.terminate()
+                        pack.process.terminate()
                     else:
                         self.logger.warning(f"Could not join optimizer {opt_id}. May crash out with it still running "
                                             f"and thus generate errors. Terminations cannot be sent to threads.")
@@ -1355,7 +1365,7 @@ class GloMPOManager:
                 signs = set()
                 large = 0
                 small = float('inf')
-                for opt_id in self.optimizer_packs:
+                for opt_id in range(1, self.o_counter + 1):
                     fx = self.opt_log.get_history(opt_id, 'fx')
                     [signs.add(i) for i in set(np.sign(fx))]
                     if len(fx) > 0:
@@ -1377,7 +1387,7 @@ class GloMPOManager:
                 self.opt_log.plot_optimizer_trials()
 
     def _cleanup_crash(self, opt_reason: str):
-        for opt_id in self.optimizer_packs:
+        for opt_id, pack in self.optimizer_packs.items():
             try:
                 self.opt_log.get_metadata(opt_id, "End Condition")
                 self.opt_log.get_metadata(opt_id, "Stop Time")
@@ -1385,10 +1395,10 @@ class GloMPOManager:
                 self.graveyard.add(opt_id)
                 self.opt_log.put_metadata(opt_id, "Stop Time", datetime.now())
                 self.opt_log.put_metadata(opt_id, "End Condition", opt_reason)
-            self.optimizer_packs[opt_id].process.join(self.end_timeout)
-            if self.optimizer_packs[opt_id].process.is_alive():
+            pack.process.join(self.end_timeout)
+            if pack.process.is_alive():
                 if self._proc_backend:
-                    self.optimizer_packs[opt_id].process.terminate()
+                    pack.process.terminate()
                     self.logger.debug(f"Termination signal sent to optimizer {opt_id}")
                 else:
                     self.logger.warning(f"Could not join optimizer {opt_id}. May crash out with it still running and "
