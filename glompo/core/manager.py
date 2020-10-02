@@ -561,7 +561,7 @@ class GloMPOManager:
             new_slots = int(self.max_jobs / len(restarts))
             if new_slots < 1:
                 raise CheckpointingError("Insufficient max_jobs allowed to restart all optimizers in checkpoint.")
-            restart_slots = [new_slots] * len(restarts)
+            restarts = {opt_id: new_slots for opt_id in restarts}
 
         backend = 'threads' if self.opts_daemonic else 'processes'
         for opt_id, slots in restarts.items():
