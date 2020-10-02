@@ -59,7 +59,7 @@ class BaseOptimizer(ABC):
 
     def __init__(self, opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
                  results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
-                 backend: str = 'threads', **kwargs):
+                 backend: str = 'threads', restart_file: Optional[str] = None, **kwargs):
         """
         Parameters
         ----------
@@ -80,6 +80,13 @@ class BaseOptimizer(ABC):
             The type of concurrency used by the optimizers (processes or threads). This is not necessarily applicable to
             all optimizers. This will default to threads unless forced to used processes (see GloMPOManger backend
             argument for details).
+        restart_file: Optional[str] = None
+            Path to file produced by BaseOptimizer.save_state. This will setup the optimizer to resume an
+            optimization from the point in the restart_file. Note that if a restart_file is provided all the other
+            parameters given to the initialisation of this class are ignored. In order to ensure GloMPO compatibility
+            optimizers MUST be initialisable with no arguments! Parameters for which default arguments cannot be
+            provided should be set to None and the constructor may raise an error if insufficient arguments have been
+            provided.
         kwargs
             Optimizer specific initialization arguments.
         """
@@ -89,6 +96,7 @@ class BaseOptimizer(ABC):
         self._results_queue = results_queue
         self._pause_signal = pause_flag  # If set allow run, if cleared wait.
         self._backend = backend
+        self._restart_file = restart_file
 
         self._FROM_MANAGER_SIGNAL_DICT = {0: self.save_state,
                                           1: self.callstop,

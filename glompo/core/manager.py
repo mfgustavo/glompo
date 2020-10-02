@@ -45,7 +45,7 @@ from .optimizerlogger import OptimizerLogger
 from ..common.helpers import FileNameHandler, LiteralWrapper, literal_presenter, nested_string_formatting, \
     unknown_object_presenter, generator_presenter, optimizer_selector_presenter, mem_pprint, FlowList, flow_presenter, \
     BoundGroup, bound_group_presenter, CheckpointingError, is_bounds_valid
-from ..common.namedtuples import Bound, OptimizerPackage, ProcessPackage, Result
+from ..common.namedtuples import Bound, OptimizerPackage, ProcessPackage, Result, OptimizerCheckpoint
 from ..common.wrappers import process_print_redirect
 from ..convergence import BaseChecker, KillsAfterConvergence
 from ..generators import BaseGenerator, RandomGenerator
@@ -66,7 +66,7 @@ class GloMPOManager:
         """ The manager is not initialised directly. Either use GloMPOManager().setup() to build a new optimization
             or GloMPOManager.load_checkpoint() to resume an optimization from a previously saved checkpoint file.
         """
-        self._initialised = False
+        self._is_restart = None
 
         self.logger = logging.getLogger('glompo.manager')
         self._init_workdir = os.getcwd()
@@ -112,6 +112,7 @@ class GloMPOManager:
         self.optimizer_packs: Dict[int, ProcessPackage] = {}  # Dictionary of living or recently living optimizers.
         self.graveyard: Set[int] = set()
         self.last_feedback: Dict[int, float] = {}
+        self.opt_checkpoints: Dict[int, OptimizerCheckpoint] = {}  # Type & slots of every opt for checkpt loading
 
         self.allow_forced_terminations = None
         self._too_long = None
@@ -135,7 +136,7 @@ class GloMPOManager:
 
     @property
     def is_initialised(self):
-        return self._initialised
+        return self._is_restart is not None
 
     def setup(self,
               task: Callable[[Sequence[float]], float],
@@ -421,6 +422,7 @@ class GloMPOManager:
         self.optimizer_packs: Dict[int, ProcessPackage] = {}
         self.graveyard: Set[int] = set()
         self.last_feedback: Dict[int, float] = {}
+        self.opt_checkpoints: Dict[int, OptimizerCheckpoint] = {}
 
         self._mp_manager = mp.Manager()
         self.optimizer_queue = self._mp_manager.Queue()
@@ -454,7 +456,7 @@ class GloMPOManager:
         else:
             self.checkpoint_options = None
 
-        self._initialised = True
+        self._is_restart = False
         self.logger.info("Initialization Done")
 
     def load_checkpoint(self, path: str, task: Optional[Callable[[Sequence[float]], float]] = None, **glompo_kwargs):
@@ -477,7 +479,13 @@ class GloMPOManager:
                     working_dir: This may also be changed but do so with care, starting in a new folder will mean the
                         creation of totally new printstreams etc. Objects relying on finding certain files will fail to
                         do so.
+                    max_jobs: If this is decreased and falls below the number required by the optimizers in the
+                        checkpoint, the manager will attempt to adjust the workers for each optimizer to fit the new
+                        limit. Slots are apportioned equally (regardless of the distribution in the checkpoint) and
+                        there is no guarantee that the optimizers will actually respond to this change.
         """
+        self.logger.info("Initializing from Checkpoint ...")
+
         with tarfile.open(path, 'r:gz') as tfile:
             tfile.extractall('/tmp/glompo_chkpt')
 
@@ -486,15 +494,15 @@ class GloMPOManager:
             data = dill.load(file)
             for var, val in data.items():
                 try:
-                    self.__setattr__(var, val)
-                except AttributeError:
-                    print(f"Failed: {var} = {val}")
+                    setattr(self, var, val)
+                except Exception as e:
+                    raise CheckpointingError(f"Cound not set {var} attribute correctly: {e}")
 
         # Setup Task
         try:
             if 'task' in os.listdir('/tmp/glompo_chkpt'):
                 self.logger.info("Unpickling task")
-                with open('/tmp/glompo_chkpt/task') as file:
+                with open('/tmp/glompo_chkpt/task', 'rb') as file:
                     self.task = dill.load(file)
             elif 'task_ss' in os.listdir('/tmp/glompo_chkpt'):
                 self.logger.info("Building task from save state")
@@ -511,7 +519,7 @@ class GloMPOManager:
             raise CheckpointingError(f"Failed to build task due to error: {e}")
 
         # Allow manual overrides
-        for key, val in glompo_kwargs:
+        for key, val in glompo_kwargs.items():
             self.__setattr__(key, val)
 
         # Extract scope and rebuild writer if still visualizing
@@ -521,8 +529,9 @@ class GloMPOManager:
         # Modify/create missing variables
         self.converged = self.convergence_checker(self)
         if self.converged:
-            self.logger.warning("The convergence criteria already evaluates to True. The manager will be unable to "
-                                "resume the optimisation. Consider changing the convergence criteria.")
+            self.logger.warning(f"The convergence criteria already evaluates to True. The manager will be unable to "
+                                f"resume the optimisation. Consider changing the convergence criteria.\n"
+                                f"{nested_string_formatting(self.convergence_checker.str_with_result())}")
             warnings.warn("The convergence criteria already evaluates to True. The manager will be unable to resume the"
                           " optimisation. Consider changing the convergence criteria.", RuntimeWarning)
 
@@ -538,15 +547,60 @@ class GloMPOManager:
         self.opts_paused = False
 
         # Load optimizer states
-        for opt in os.listdir('/tmp/glompo_chkpt/optimizers'):
-            pass
+        restarts = {int(opt): self.opt_checkpoints[int(opt)].slots for opt in
+                    os.listdir('/tmp/glompo_chkpt/optimizers')}
+        if self.max_jobs < sum(restarts.values()):
+            self.logger.warning("The maximum number of jobs allowed is less than that demanded by the optimizers in "
+                                "the checkpoint. Attempting to adjust the number of workers in each optimizer to fit. "
+                                "Jobs are divided equally and there is no guarantee the optimizers will respond as "
+                                "expected.")
+            warnings.warn("The maximum number of jobs allowed is less than that demanded by the optimizers in "
+                          "the checkpoint. Attempting to adjust the number of workers in each optimizer to fit. "
+                          "Jobs are divided equally and there is no guarantee the optimizers will respond as "
+                          "expected.", UserWarning)
+            new_slots = int(self.max_jobs / len(restarts))
+            if new_slots < 1:
+                raise CheckpointingError("Insufficient max_jobs allowed to restart all optimizers in checkpoint.")
+            restart_slots = [new_slots] * len(restarts)
 
-        self._initialised = True
+        backend = 'threads' if self.opts_daemonic else 'processes'
+        for opt_id, slots in restarts.items():
+            parent_pipe, child_pipe = mp.Pipe()
+            event = self._mp_manager.Event()
+            event.set()
+            try:
+                optimizer = self.opt_checkpoints[opt_id].opt_type(opt_id=opt_id,
+                                                                  signal_pipe=child_pipe,
+                                                                  results_queue=self.optimizer_queue,
+                                                                  pause_flag=event,
+                                                                  workers=slots,
+                                                                  backend=backend,
+                                                                  restart_file=f'/tmp/glompo_chkpt/optimizers/{opt_id:04}')
+
+                optimizer.workers = slots
+                optimizer._backend = backend  # Overwrite in case load_state set old values
+                process = mp.Process(target=optimizer.minimize, kwargs={'function': self.task,
+                                                                        'x0': [0] * self.n_parms,
+                                                                        # Ignored during a restart
+                                                                        'bounds': self.bounds  # Ignored by restart
+                                                                        })
+                self.optimizer_packs[opt_id] = ProcessPackage(process, parent_pipe, event, slots)
+
+            except Exception as e:
+                self.logger.error(f"Failed to initialise optimizer {opt_id}: {e}")
+                warnings.warn(f"Failed to initialise optimizer {opt_id}: {e}")
+
+        if len(self.optimizer_packs) == 0 and len(restarts) > 0:
+            raise CheckpointingError("Unable to successfully built any optimizers from the checkpoint.")
+
+        self._is_restart = True
+
+        self.logger.info("Initialization Done")
 
     def start_manager(self) -> Result:
         """ Begins the optimization routine and returns the selected minimum in an instance of MinimizeResult. """
 
-        if not self._initialised:
+        if not self.is_initialised:
             self.logger.error("Cannot start manager, initialise manager first with setup or load_checkpoint")
             warnings.warn("Cannot start manager, initialise manager first with setup or load_checkpoint", UserWarning)
             return
@@ -838,7 +892,7 @@ class GloMPOManager:
                 pickle_vars = {}
                 for var in dir(self):
                     val = getattr(self, var)
-                    if not callable(getattr(self, var)) and \
+                    if not (callable(getattr(self, var)) and hasattr(val, '__self__')) and \
                             '__' not in var and \
                             not any([var == no_pickle for no_pickle in ('logger', '_process', '_mp_manager',
                                                                         'optimizer_packs', 'scope', 'task',
@@ -1025,6 +1079,7 @@ class GloMPOManager:
                              **init_kwargs)
 
         self.opt_log.add_optimizer(self.o_counter, type(optimizer).__name__, datetime.now())
+        self.opt_checkpoints[self.o_counter] = OptimizerCheckpoint(selected, init_kwargs['workers'])
 
         if call_kwargs:
             return OptimizerPackage(self.o_counter, optimizer, call_kwargs, parent_pipe, event, init_kwargs['workers'])

@@ -28,7 +28,7 @@ class CMAOptimizer(BaseOptimizer):
         * Module: https://github.com/CMA-ES/pycma
     """
 
-    def __init__(self, sigma: float, sampler: str = 'full', verbose: bool = True, keep_files: bool = False,
+    def __init__(self, sigma: float = None, sampler: str = 'full', verbose: bool = True, keep_files: bool = False,
                  opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
                  results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
                  backend: str = 'processes', restart_file: Optional[str] = None,
@@ -38,6 +38,7 @@ class CMAOptimizer(BaseOptimizer):
             sigma: float
                 Standard deviation for all parameters (all parameters must be scaled accordingly).
                 Defines the search space as the std dev from an initial x0. Larger values will sample a wider Gaussian.
+                If a restart_file is not provided this argument must be given.
             sampler: Literal['full', 'vkd', 'vd'] = 'full'
                 Allows the use of `GaussVDSampler` and `GaussVkDSampler` settings.
             verbose: bool = True
@@ -48,18 +49,14 @@ class CMAOptimizer(BaseOptimizer):
                 If True the files produced by CMA are retained otherwise they are deleted. Deletion is the default
                 behaviour since, when using GloMPO, GloMPO log files are created. Note, however, that GloMPO log files
                 are different from CMA ones.
-            restart_file: Optional[str] = None
-                Path to file produced by CMAOptimizer.save_state. This will setup the optimizer to resume an
-                optimization from the point in the restart_file. Note that if a restart_file is provided all the other
-                parameters given to the initialisation of this class are ignored.
             cmasettings: Optional[Dict[str, Any]]
                 cma module-specific settings as ``k,v`` pairs. See ``cma.s.pprint(cma.CMAOptions())`` for a list of
                 available options. Most useful keys are: `timeout`, `tolstagnation`, `popsize`. Additionally,
                 the key `minsigma` is supported: Termination if ``sigma < minsigma``.
         """
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
+        assert bool(sigma) ^ bool(restart_file), "Must supply a sigma value OR a restart_file"
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend, restart_file)
 
-        self.is_restart = restart_file
         if restart_file:
             self.load_state(restart_file)
             return
@@ -69,7 +66,6 @@ class CMAOptimizer(BaseOptimizer):
         self.es = None
         self.result = None
         self.keep_files = keep_files
-        self.is_restart = restart_file
         self.folder_name = 'cmadata' if not self._opt_id else f'cmadata_{self._opt_id}'
         self.cmasettings = cmasettings
 
@@ -107,7 +103,7 @@ class CMAOptimizer(BaseOptimizer):
                  bounds: Sequence[Tuple[float, float]],
                  callbacks: Callable = None, **kwargs) -> MinimizeResult:
 
-        if not self.is_restart:
+        if not self._restart_file:
             self.logger.info("Setting up fresh CMA")
 
             os.makedirs(self.folder_name, exist_ok=True)
@@ -238,7 +234,6 @@ class CMAOptimizer(BaseOptimizer):
             if not callable(getattr(self, var)) and not var.startswith('_') and var != 'logger':
                 dump_collection[var] = getattr(self, var)
 
-        del dump_collection['is_restart']
         with open(path, 'wb') as file:
             pickle.dump(dump_collection, file)
 
