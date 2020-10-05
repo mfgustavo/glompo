@@ -10,7 +10,7 @@ __all__ = ("nested_string_formatting",
            "is_bounds_valid",
            "distance",
            "glompo_colors",
-           "mem_pprint",
+           "present_memory",
            "LiteralWrapper",
            "FlowList",
            "BoundGroup",
@@ -104,7 +104,7 @@ def glompo_colors(opt_id: Optional[int] = None) -> Union['matplotlib.colors.List
     return cmap
 
 
-def mem_pprint(bytes_: int, digits: int = 2) -> str:
+def present_memory(bytes_: int, digits: int = 2) -> str:
     """ Accepts an integer number of bytes and returns a string formatted to the most appropriate units. """
     units = 0
     while bytes_ > 1024:

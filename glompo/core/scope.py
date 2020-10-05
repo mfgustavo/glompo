@@ -1,9 +1,11 @@
 """ Contains the GloMPOScope class which is a useful extension allowing a user to visualize GloMPO's behaviour. """
-
 import logging
+import os
+import subprocess
 import warnings
 from typing import Any, Dict, Optional, Set, Tuple, Union
 
+import dill
 import matplotlib.animation as ani
 import matplotlib.lines as lines
 import matplotlib.pyplot as plt
@@ -77,13 +79,14 @@ class GloMPOScope:
         self.streams: Dict[int, Dict[str, plt.Axes.plot]] = {}
         self._dead_streams: Set[int] = set()
         self.n_streams = 0
-        self.t_last = 0
         self.x_max = 0
         self.log_scale = log_scale
         self.events_per_flush = events_per_flush
         self.elitism = bool(elitism)
         self._event_counter = 0
         self.color_map = glompo_colors()
+        self.interactive_mode = interactive_mode
+        self.partial_exists = False
 
         plt.ion() if interactive_mode else plt.ioff()
 
@@ -145,12 +148,8 @@ class GloMPOScope:
         self.record_movie = record_movie
         self.movie_name = None
         if record_movie:
-            try:
-                self._writer = MyFFMpegWriter(**writer_kwargs) if writer_kwargs else MyFFMpegWriter()
-            except TypeError:
-                warnings.warn("Unidentified key in writer_kwargs. Using default values.", UserWarning)
-                self.logger.warning("Unidentified key in writer_kwargs. Using default values.")
-                self._writer = MyFFMpegWriter()
+            self._writer_kwargs = writer_kwargs
+            self._new_writer()
 
             if not movie_kwargs:
                 movie_kwargs = {}
@@ -163,6 +162,15 @@ class GloMPOScope:
             self._movie_kwargs = movie_kwargs
 
         self.logger.debug("Scope initialised successfully")
+
+    def _new_writer(self):
+        """ Constructs a new FFMpegWriter to record a movie """
+        try:
+            self._writer = MyFFMpegWriter(**self._writer_kwargs) if self._writer_kwargs else MyFFMpegWriter()
+        except TypeError:
+            warnings.warn("Unidentified key in writer_kwargs. Using default values.", UserWarning)
+            self.logger.warning("Unidentified key in writer_kwargs. Using default values.")
+            self._writer = MyFFMpegWriter()
 
     def _redraw_graph(self, force=False):
         """ Redraws the figure after new data has been added. Grabs a frame if a movie is being recorded.
@@ -297,8 +305,30 @@ class GloMPOScope:
         if self.record_movie:
             try:
                 self._writer.finish()
+
+                if self.partial_exists:
+                    with open('join.txt', 'w') as file:
+                        file.write("file '_partial_movie.mp4'\n")
+                        file.write(f"file '{self._writer.outfile}'")
+
+                    # Writing done in separate process must wait for it to complete before attempting join
+                    # noinspection PyProtectedMember
+                    self._writer._proc.wait()
+
+                    if '_concat.mp4' in os.listdir():
+                        os.remove('_concat.mp4')
+                    joiner = subprocess.Popen('ffmpeg -f concat -i join.txt -c copy _concat.mp4'.split(' '),
+                                              stdin=subprocess.PIPE,
+                                              stdout=subprocess.PIPE,
+                                              stderr=subprocess.PIPE)
+                    joiner.wait()
+                    os.remove('_partial_movie.mp4')
+                    os.remove(self._writer.outfile)
+                    os.rename('_concat.mp4', self._writer.outfile)
+                    os.remove('join.txt')
+
             except Exception as e:
-                self.logger.exception("generate_movie failed")
+                self.logger.exception("generate_movie failed", exc_info=e)
                 warnings.warn(f"Exception caught while trying to save movie: {e}", RuntimeWarning)
         else:
             self.logger.error("generate_movie called without initialisation parameter record_movie = False")
@@ -321,3 +351,43 @@ class GloMPOScope:
             close the matplotlib figure at the end of the optimization routine to stop figures building up in this way.
         """
         plt.close(self.fig)
+
+    def save_state(self, path: Optional[str] = ''):
+        """ Saves the state of the scope, suitable for resumption, during a checkpoint. Path is a directory in which to
+            dump the generated files.
+        """
+        self._redraw_graph(True)
+
+        dump_variables = {}
+        for var in dir(self):
+            if '__' not in var and not callable(getattr(self, var)) and var != '_writer':
+                dump_variables[var] = getattr(self, var)
+
+        with open(os.path.join(path, 'scope'), 'wb') as file:
+            dill.dump(dump_variables, file)
+
+        if self.record_movie:
+            self.generate_movie()
+            os.rename(self._writer.outfile, os.path.join(path, '_partial_movie.mp4'))
+            self._new_writer()
+            self.setup_moviemaker()
+            self.partial_exists = True
+
+    def load_state(self, path: str):
+        """ Loads a saved scope state. Path is a directory containing the checkpoint files. """
+
+        with open(os.path.join(path, 'scope'), 'rb') as file:
+            data = dill.load(file)
+
+        for var, val in data.items():
+            setattr(self, var, val)
+
+        if self.record_movie:
+            self._new_writer()
+            self.setup_moviemaker()
+
+        partial_movie = [*filter(lambda x: x == '_partial_movie.mp4', os.listdir())]
+        self.partial_exists = bool(partial_movie)
+
+        if self.interactive_mode:
+            self.fig.show()

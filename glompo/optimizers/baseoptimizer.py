@@ -100,7 +100,7 @@ class BaseOptimizer(ABC):
 
         self._FROM_MANAGER_SIGNAL_DICT = {0: self.save_state,
                                           1: self.callstop,
-                                          2: self.certified_pause}
+                                          2: self._prepare_checkpoint}
         self._TO_MANAGER_SIGNAL_DICT = {0: "Normal Termination",
                                         1: "Confirm Pause",
                                         9: "Other Message (Saved to Log)"}
@@ -202,8 +202,9 @@ class BaseOptimizer(ABC):
         """
         raise NotImplementedError
 
-    def certified_pause(self):
-        """ Pauses the optimizers and sends a message to the manager to confirm the fact. """
-        self._pause_signal.clear()
-        self._signal_pipe.send(1)
-        self._pause_signal.wait()
+    def _prepare_checkpoint(self):
+        """ Process to pause, synchronize and save optimizers. Should not be overwritten. """
+        self.message_manager(1)  # Certify waiting for next instruction
+        self._signal_pipe.poll(timeout=None)  # Wait on instruction to save or end
+        self.check_messages()
+        self._pause_signal.clear()  # Wait on pause event, to be released by manager
