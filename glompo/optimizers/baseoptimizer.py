@@ -7,7 +7,7 @@ import traceback
 import warnings
 from abc import ABC, abstractmethod
 from multiprocessing.connection import Connection
-from queue import Queue
+from queue import Full, Queue
 from threading import Event
 from typing import Callable, Optional, Sequence, Tuple
 
@@ -97,6 +97,7 @@ class BaseOptimizer(ABC):
         self._pause_signal = pause_flag  # If set allow run, if cleared wait.
         self._backend = backend
         self._restart_file = restart_file
+        self._result_cache = None
 
         self._FROM_MANAGER_SIGNAL_DICT = {0: self.save_state,
                                           1: self.callstop,
@@ -178,9 +179,18 @@ class BaseOptimizer(ABC):
                 self.logger.warning("Cannot parse message, ignoring")
                 warnings.warn("Cannot parse message, ignoring", RuntimeWarning)
 
-    def push_iter_result(self, *args):
-        """ Put an iteration result into _results_queue. """
-        raise NotImplementedError
+    def push_iter_result(self, result: 'IterationResult'):
+        """ Put an iteration result into _results_queue.
+            Will block until the result is passed to the queue but does timeout every 1s to process any messages from
+            the manager. Should not be overwritten.
+        """
+        self._result_cache = result
+        while self._result_cache:
+            try:
+                self._results_queue.put(result, block=True, timeout=1)
+                self._result_cache = None
+            except Full:
+                self.check_messages()
 
     def message_manager(self, key: int, message: Optional[str] = None):
         self._signal_pipe.send((key, message))
@@ -204,6 +214,8 @@ class BaseOptimizer(ABC):
 
     def _prepare_checkpoint(self):
         """ Process to pause, synchronize and save optimizers. Should not be overwritten. """
+        if self._result_cache:
+            self._results_queue.put(self._result_cache, block=True)
         self.message_manager(1)  # Certify waiting for next instruction
         self._signal_pipe.poll(timeout=None)  # Wait on instruction to save or end
         self.check_messages()

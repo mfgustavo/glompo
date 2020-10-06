@@ -1,7 +1,6 @@
 """ Contains the GloMPOScope class which is a useful extension allowing a user to visualize GloMPO's behaviour. """
 import logging
 import os
-import subprocess
 import warnings
 from typing import Any, Dict, Optional, Set, Tuple, Union
 
@@ -76,7 +75,6 @@ class GloMPOScope:
             Optional dictionary of arguments to be sent to matplotlib.animation.FFMpegWriter.setup().
         """
         self.logger = logging.getLogger('glompo.scope')
-        self.streams: Dict[int, Dict[str, plt.Axes.plot]] = {}
         self._dead_streams: Set[int] = set()
         self.n_streams = 0
         self.x_max = 0
@@ -86,7 +84,6 @@ class GloMPOScope:
         self._event_counter = 0
         self.color_map = glompo_colors()
         self.interactive_mode = interactive_mode
-        self.partial_exists = False
 
         plt.ion() if interactive_mode else plt.ioff()
 
@@ -103,9 +100,18 @@ class GloMPOScope:
         # Create custom legend
         self.leg_elements = [lines.Line2D([], [], ls='-', c='black', label='Optimizer Evaluations'),
                              lines.Line2D([], [], ls='', marker='x', c='black', label='Optimizer Killed'),
-                             lines.Line2D([], [], ls='', marker='*', c='black', label='Optimizer Converged')]
+                             lines.Line2D([], [], ls='', marker='*', c='black', label='Optimizer Converged'),
+                             lines.Line2D([], [], ls='', marker='4', c='black', label='Optimizer Paused'),
+                             lines.Line2D([], [], ls='', marker='|', c='black', label='Checkpoint')]
 
         self.ax.legend(loc='upper right', handles=self.leg_elements, bbox_to_anchor=(1.35, 1))
+
+        self.opt_streams: Dict[int, plt.Axes.plot] = {}
+        self.gen_streams: Dict[str, plt.Axes.plot] = {
+            'opt_kill': self.ax.plot([], [], ls='', marker='x', color='black', zorder=500)[0],
+            'opt_norm': self.ax.plot([], [], ls='', marker='*', color='black', zorder=500)[0],
+            'pause': self.ax.plot([], [], ls='', marker='4', color='black', zorder=500)[0],
+            'chkpt': self.ax.plot([], [], ls='', marker='|', color='black', zorder=500)[0]}
 
         # Setup and shrink axis position to fit legend
         box = self.ax.get_position()
@@ -181,23 +187,22 @@ class GloMPOScope:
 
             # Purge old results
             if self.truncated:
-                for opt_id in self.streams:
+                for opt_id, line in self.opt_streams:
                     if opt_id not in self._dead_streams:
                         done = []
-                        for line in self.streams[opt_id].values():
-                            x_vals = np.array(line.get_xdata())
-                            y_vals = np.array(line.get_ydata())
+                        x_vals = np.array(line.get_xdata())
+                        y_vals = np.array(line.get_ydata())
 
-                            if len(x_vals) > 0:
-                                min_val = np.clip(self.x_max - self.truncated, 0, None)
+                        if len(x_vals) > 0:
+                            min_val = np.clip(self.x_max - self.truncated, 0, None)
 
-                                bool_arr = x_vals >= min_val
-                                x_vals = x_vals[bool_arr]
-                                y_vals = y_vals[bool_arr]
+                            bool_arr = x_vals >= min_val
+                            x_vals = x_vals[bool_arr]
+                            y_vals = y_vals[bool_arr]
 
-                                line.set_xdata(x_vals)
-                                line.set_ydata(y_vals)
-                            done.append(len(x_vals) == 0)
+                            line.set_xdata(x_vals)
+                            line.set_ydata(y_vals)
+                        done.append(len(x_vals) == 0)
                         if all(done):
                             self._dead_streams.add(opt_id)
                             self.logger.debug(f"Opt{opt_id} identified as out of scope.")
@@ -233,7 +238,10 @@ class GloMPOScope:
 
             self.x_max = x if x > self.x_max else self.x_max
 
-            line = self.streams[opt_id][track]
+            if track == 'all_opt':
+                line = self.opt_streams[opt_id]
+            else:
+                line = self.gen_streams[track]
             x_vals = np.append(line.get_xdata(), x)
             y_vals = np.append(line.get_ydata(), y)
 
@@ -243,24 +251,19 @@ class GloMPOScope:
     def add_stream(self, opt_id: int, opt_type: Optional[str] = None):
         """ Registers and sets up a new optimizer in the scope. """
         self.n_streams += 1
-        self.streams[opt_id] = {'all_opt': self.ax.plot([], [])[0],  # Follows every optimizer iteration
-                                'opt_kill': self.ax.plot([], [], ls='', marker='x', zorder=500)[0],  # Killed opt
-                                'opt_norm': self.ax.plot([], [], ls='', marker='*', zorder=500)[0],  # Converged opt
-                                }
 
-        for line in self.streams[opt_id]:
-            color = self.color_map(self.n_streams)
-            if any([line == _ for _ in ['opt_kill', 'opt_norm']]):
-                color = 'black'
-            self.streams[opt_id][line].set_color(color)
+        line_style = '-'
+        marker = '.'
+        color = self.color_map(self.n_streams)
+
+        self.opt_streams[opt_id] = self.ax.plot([], [], ls=line_style, marker=marker, color=color)[0]
 
         if opt_type:
             label = f"{opt_id}: {opt_type}"
         else:
             label = f"Optimizer {opt_id}"
 
-        self.leg_elements.append(lines.Line2D([], [], ls='-', c=self.color_map(self.n_streams),
-                                              label=label))
+        self.leg_elements.append(lines.Line2D([], [], ls=line_style, marker=marker, c=color, label=label))
         self.ax.legend(loc='upper right', handles=self.leg_elements, bbox_to_anchor=(1.35, 1))
         self.logger.debug(f"Added new plot set for optimizer {opt_id}")
 
@@ -268,7 +271,7 @@ class GloMPOScope:
         """ Given pt tuple is used to update the opt_id optimizer plot."""
         x, y = pt
         if self.elitism:
-            y_vals = self.streams[opt_id]['all_opt'].get_ydata()
+            y_vals = self.opt_streams[opt_id].get_ydata()
             if len(y_vals) > 0:
                 last = 10 ** y_vals[-1] if self.log_scale else y_vals[-1]
                 if last < y:
@@ -285,6 +288,16 @@ class GloMPOScope:
     def update_norm_terminate(self, opt_id: int):
         """ The opt_id normal optimizer plot is updated at its final point. """
         self._update_point(opt_id, 'opt_norm')
+        self._redraw_graph()
+
+    def update_pause(self, opt_id: int):
+        """ The opt_id normal optimizer plot is updated at its final point. """
+        self._update_point(opt_id, 'pause')
+        self._redraw_graph()
+
+    def update_checkpoint(self, opt_id: int):
+        """ The opt_id normal optimizer plot is updated at its final point. """
+        self._update_point(opt_id, 'chkpt')
         self._redraw_graph()
 
     def setup_moviemaker(self):
@@ -306,26 +319,24 @@ class GloMPOScope:
             try:
                 self._writer.finish()
 
-                if self.partial_exists:
-                    with open('join.txt', 'w') as file:
-                        file.write("file '_partial_movie.mp4'\n")
-                        file.write(f"file '{self._writer.outfile}'")
-
-                    # Writing done in separate process must wait for it to complete before attempting join
-                    # noinspection PyProtectedMember
-                    self._writer._proc.wait()
-
-                    if '_concat.mp4' in os.listdir():
-                        os.remove('_concat.mp4')
-                    joiner = subprocess.Popen('ffmpeg -f concat -i join.txt -c copy _concat.mp4'.split(' '),
-                                              stdin=subprocess.PIPE,
-                                              stdout=subprocess.PIPE,
-                                              stderr=subprocess.PIPE)
-                    joiner.wait()
-                    os.remove('_partial_movie.mp4')
-                    os.remove(self._writer.outfile)
-                    os.rename('_concat.mp4', self._writer.outfile)
-                    os.remove('join.txt')
+                # Attempt to make movie saving resumable
+                # --------------------------------------
+                # if self.partial_exists:
+                #     with open('join.txt', 'w') as file:
+                #         file.write("file '_partial_movie.mp4'\n")
+                #         file.write(f"file '{self._writer.outfile}'")
+                #
+                #     if '_concat.mp4' in os.listdir():
+                #         os.remove('_concat.mp4')
+                #     joiner = subprocess.Popen('ffmpeg -f concat -i join.txt -c copy _concat.mp4'.split(' '),
+                #                               stdin=subprocess.PIPE,
+                #                               stdout=subprocess.PIPE,
+                #                               stderr=subprocess.PIPE)
+                #     joiner.wait()
+                #     os.remove('_partial_movie.mp4')
+                #     os.remove(self._writer.outfile)
+                #     os.rename('_concat.mp4', self._writer.outfile)
+                #     os.remove('join.txt')
 
             except Exception as e:
                 self.logger.exception("generate_movie failed", exc_info=e)
@@ -338,8 +349,8 @@ class GloMPOScope:
     def get_farthest_pt(self, opt_id: int) -> Tuple[float, float]:
         """ Returns the furthest evaluated point of the opt_id optimizer. """
         try:
-            x = float(self.streams[opt_id]['all_opt'].get_xdata()[-1])
-            y = float(self.streams[opt_id]['all_opt'].get_ydata()[-1])
+            x = float(self.opt_streams[opt_id].get_xdata()[-1])
+            y = float(self.opt_streams[opt_id].get_ydata()[-1])
         except IndexError:
             return None
 
@@ -367,11 +378,20 @@ class GloMPOScope:
             dill.dump(dump_variables, file)
 
         if self.record_movie:
-            self.generate_movie()
-            os.rename(self._writer.outfile, os.path.join(path, '_partial_movie.mp4'))
-            self._new_writer()
-            self.setup_moviemaker()
-            self.partial_exists = True
+            warnings.warn("Movie saving is not supported with checkpointing")
+            self.logger.warning("Movie saving is not supported with checkpointing")
+
+        # Attempt to make movie saving resumable
+        # --------------------------------------
+        # if self.record_movie:
+        #     self.generate_movie()
+        #     os.rename(self._writer.outfile, '_partial_movie.mp4')
+        #     sleep(0.5)
+        #     shutil.copy('_partial_movie.mp4', os.path.join(path, '_partial_movie.mp4'))
+        #     sleep(0.5)
+        #     self._new_writer()
+        #     self.setup_moviemaker()
+        #     self.partial_exists = True
 
     def load_state(self, path: str):
         """ Loads a saved scope state. Path is a directory containing the checkpoint files. """
@@ -386,8 +406,10 @@ class GloMPOScope:
             self._new_writer()
             self.setup_moviemaker()
 
-        partial_movie = [*filter(lambda x: x == '_partial_movie.mp4', os.listdir())]
-        self.partial_exists = bool(partial_movie)
+        # Attempt to make movie saving resumable
+        # --------------------------------------
+        # partial_movie = [*filter(lambda x: x == '_partial_movie.mp4', os.listdir())]
+        # self.partial_exists = bool(partial_movie)
 
         if self.interactive_mode:
             self.fig.show()

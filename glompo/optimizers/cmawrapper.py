@@ -89,6 +89,7 @@ class CMAOptimizer(BaseOptimizer):
 
         if self.workers > 1 and 'popsize' not in self.cmasettings:
             self.cmasettings['popsize'] = self.workers
+        self.popsize = self.cmasettings['popsize']
 
         if sampler == 'vd':
             self.cmasettings = GaussVDSampler.extend_cma_options(self.cmasettings)
@@ -148,7 +149,8 @@ class CMAOptimizer(BaseOptimizer):
 
             if self._results_queue:
                 i_best = np.argmin(fx)
-                self.push_iter_result(self.es.countiter, len(x), x[i_best], fx[i_best], False)
+                result = IterationResult(self._opt_id, self.es.countiter, self.popsize, x[i_best], fx[i_best], False)
+                self.push_iter_result(result)
                 self.logger.debug("Pushed result to queue")
                 self.check_messages()
                 self.logger.debug("Checked messages")
@@ -174,7 +176,8 @@ class CMAOptimizer(BaseOptimizer):
 
         if self._results_queue:
             self.logger.debug("Pushing final result")
-            self.push_iter_result(self.es.countiter, len(x), self.result.x, self.result.fx, True)
+            result = IterationResult(self._opt_id, self.es.countiter, self.popsize, self.result.x, self.result.fx, True)
+            self.push_iter_result(result)
             self.logger.debug("Messaging termination to manager.")
             self.message_manager(0, f"Optimizer convergence {self.es.stop()}")
 
@@ -209,16 +212,6 @@ class CMAOptimizer(BaseOptimizer):
         if 'minsigma' in opts and self.es.sigma < opts['minsigma']:
             # Stop if sigma falls below minsigma
             self.callstop("Early CMA stop: 'minsigma'.")
-
-    def push_iter_result(self, i, f_calls, x, fx, final_push):
-        self.logger.debug(f"Pushing result:\n"
-                          f"\topt_id = {self._opt_id}\n"
-                          f"\ti = {i}\n"
-                          f"\tf_calls = {f_calls}\n"
-                          f"\tx = {x}\n"
-                          f"\tfx = {fx}\n"
-                          f"\tfinal = {final_push}")
-        self._results_queue.put(IterationResult(self._opt_id, i, f_calls, x, fx, final_push))
 
     def callstop(self, reason="Manager termination signal"):
         if reason and self.verbose:
