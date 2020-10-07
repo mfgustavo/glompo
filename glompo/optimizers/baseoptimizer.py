@@ -43,19 +43,7 @@ class MinimizeResult:
 
 
 class BaseOptimizer(ABC):
-    """Base class of parameter optimizers in ParAMS.
-
-    Classes representing specific optimizers (e.g. |OptCMA|) can derive from this abstract base class.
-
-    Attributes:
-
-    needscaler : `bool`
-        Whether the optimizer requires parameter scaling or not.
-
-        .. warning:: This variable **must** be defined with every optimizer.
-
-
-    """
+    """ Base class of parameter optimizers in GloMPO """
 
     def __init__(self, opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
                  results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,

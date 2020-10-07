@@ -230,10 +230,10 @@ class GloMPOManager:
                 E.g.: killing_conditions = (BestUnmoving(100, 0.01) & TimeAnnealing(2) & ValueAnnealing()) |
                                            ParameterDistance(0.1)
                 In this case GloMPO will only allow a hunt to terminate an optimizer if
-                    1) an optimizer's best value has not improved by more than 1% in 100 function calls,
+                    1) an optimiser's best value has not improved by more than 1% in 100 function calls,
                     2) and it fails an annealing type test based on how many iterations it has run,
                     3) and if fails an annealing type test based on how far the victim's value is from the best
-                    optimizer's best value,
+                    optimiser's best value,
                     4) or the two optimizers are iterating very close to one another in parameter space
                 Default (None): Killing is not used, i.e. the optimizer will not terminate optimizers.
             Note, for performance and to allow conditionality between hunters conditions are evaluated 'lazily' i.e.
@@ -727,7 +727,7 @@ class GloMPOManager:
             self.last_checkpoint = self.t_start
             self.dt_start = datetime.now()
 
-            # Restart specfic tasks
+            # Restart specific tasks
             if self._is_restart:
                 for opt_id, pack in self.optimizer_packs.items():
                     pack.process.start()

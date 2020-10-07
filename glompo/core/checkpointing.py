@@ -60,7 +60,7 @@ class CheckpointingControl:
                     folder in the checkpoint_dir or zero otherwise. Formatted to 3 digits.
 
         checkpointing_dir: str = 'checkpoints'
-            Directory in which checkpoints are saved. NB: If a relative path is provided it will be interrpretted as
+            Directory in which checkpoints are saved. NB: If a relative path is provided it will be interpreted as
             relative to the working directory provided to the manager! It is NOT relative to the working directory where
             the script is executed.
         """

@@ -30,8 +30,6 @@ class RandomOptimizer(BaseOptimizer):
                  bounds: Sequence[Tuple[float, float]],
                  callbacks: Callable = None, **kwargs) -> MinimizeResult:
 
-        vector = []
-        fx = np.inf
         best_f = np.inf
         i = 0
         while i < self.iters:
@@ -51,7 +49,8 @@ class RandomOptimizer(BaseOptimizer):
 
             if self._results_queue:
                 self.logger.debug("Pushing result")
-                self.push_iter_result(i, 1, vector, fx, False)
+                result = IterationResult(self._opt_id, i, 1, vector, fx, i >= self.iters)
+                self.push_iter_result(result)
                 self.logger.debug("Checking messages")
                 self.check_messages()
                 self._pause_signal.wait()
@@ -68,16 +67,12 @@ class RandomOptimizer(BaseOptimizer):
         self.result.success = True
         self.logger.debug("Termination successful")
         if self._results_queue:
-            self.push_iter_result(i, 1, vector, fx, True)
             self.logger.debug("Messaging manager")
             self.message_manager(0, "Optimizer convergence")
             self.check_messages()
 
         self.logger.debug("Returning result")
         return self.result
-
-    def push_iter_result(self, i, f_calls, x, fx, last):
-        self._results_queue.put(IterationResult(self._opt_id, i, f_calls, x, fx, last))
 
     def callstop(self, reason=None):
         self.stop_called = True
