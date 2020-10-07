@@ -58,7 +58,7 @@ class CMAOptimizer(BaseOptimizer):
         super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend, restart_file)
 
         if restart_file:
-            self.load_state(restart_file)
+            self.checkpoint_load(restart_file)
             return
 
         self.sigma = sigma
@@ -230,7 +230,7 @@ class CMAOptimizer(BaseOptimizer):
 
         self.logger.info("Restart file created successfully.")
 
-    def load_state(self, path: str):
+    def checkpoint_load(self, path: str):
         self.logger.info("Initialising from restart file.")
 
         with open(path, 'rb') as file:

@@ -194,7 +194,7 @@ class BaseOptimizer(ABC):
         """
         raise NotImplementedError
 
-    def load_state(self, path: str):
+    def checkpoint_load(self, path: str):
         """ Recreates a previous instance of the optimizer suitable to continue a optimization from its previous
             state.
         """

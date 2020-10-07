@@ -107,6 +107,9 @@ class GloMPOManager:
         self.last_hunt = 0
         self.conv_counter = 0
         self.hunt_counter = 0
+        self.last_status = 0
+        self.last_time_checkpoint = 0
+        self.last_iter_checkpoint = 0
 
         self._process = None
         self.cpu_history = []
@@ -128,8 +131,6 @@ class GloMPOManager:
         self.hunt_frequency = None
         self.spawning_opts = None
         self.status_frequency = None
-        self.last_status = None
-        self.last_checkpoint = None
         self.checkpoint_options = None
 
         self.opt_log = None
@@ -383,8 +384,6 @@ class GloMPOManager:
         self.hunt_frequency = hunt_frequency
         self.spawning_opts = True
         self.status_frequency = int(status_frequency)
-        self.last_status = 0
-        self.last_checkpoint = 0
 
         # Setup Checkpointing
         if isinstance(checkpoint_control, CheckpointingControl):
@@ -724,7 +723,7 @@ class GloMPOManager:
 
             self.t_start = time()
             self.last_status = self.t_start
-            self.last_checkpoint = self.t_start
+            self.last_time_checkpoint = self.t_start
             self.dt_start = datetime.now()
 
             # Restart specific tasks
@@ -810,10 +809,13 @@ class GloMPOManager:
                         status_mess += f"    {'System Load:':.<26} {self.load_history[-1]}\n"
                     self.logger.info(status_mess)
 
-                if self.checkpoint_options and \
-                        time() - self.last_checkpoint > self.checkpoint_options.checkpoint_frequency:
-                    self.last_checkpoint = time()
-                    self.checkpoint()
+                if self.checkpoint_options:
+                    if time() - self.last_time_checkpoint > self.checkpoint_options.checkpoint_time_frequency:
+                        self.last_time_checkpoint = time()
+                        self.checkpoint()
+                    elif self.f_counter - self.last_iter_checkpoint > self.checkpoint_options.checkpoint_iter_frequency:
+                        self.last_iter_checkpoint = self.f_counter
+                        self.checkpoint()
 
             self.logger.info("Exiting manager loop")
             self.logger.info(f"Exit conditions met: \n"
@@ -921,7 +923,8 @@ class GloMPOManager:
                                 self.graveyard.add(opt_id)
                                 self.conv_counter += 1
                             elif key == 1:
-                                self.scope.update_pause(opt_id)
+                                if self.visualisation:
+                                    self.scope.update_pause(opt_id)
                                 wait_reply.remove(opt_id)
                             else:
                                 raise RuntimeError(f"Unhandled message: {message}")
@@ -930,10 +933,11 @@ class GloMPOManager:
                 # Send checkpoint_save signals
                 os.mkdir('optimizers')
                 for opt_id in living:
-                    self.scope.update_checkpoint(opt_id)
+                    if self.visualisation:
+                        self.scope.update_checkpoint(opt_id)
                     pack = self.optimizer_packs[opt_id]
                     if pack.process.is_alive():
-                        pack.signal_pipe.send((0, os.path.join(path, 'optimizers', f'{opt_id:04}')))  # Message to save
+                        pack.signal_pipe.send((0, os.path.abspath(os.path.join('optimizers', f'{opt_id:04}'))))
 
                 # Wait for all checkpoint_save to complete
                 wait_reply = living.copy()
@@ -1023,18 +1027,6 @@ class GloMPOManager:
             warnings.warn(f"Checkpointing failed: {caught_exception}.\nAborting checkpoint construction.")
         finally:
             shutil.rmtree(path, ignore_errors=True)
-
-        # Replace loggers
-        for logger, nest in {'hunter': self.killing_conditions, 'checker': self.convergence_checker}.items():
-            for base in nest:
-                base.logger = logging.getLogger(f'glompo.{logger}')
-
-        for logger, comp in {'generator': self.x0_generator,
-                             'selector': self.selector,
-                             'hunter': self.killing_conditions,
-                             'checker': self.convergence_checker,
-                             'scope': self.scope}.items():
-            comp.logger = logging.getLogger(f'glompo.{logger}')
 
         self.logger.info("Checkpoint successfully built")
         self._toggle_optimizers(1)

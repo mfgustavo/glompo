@@ -10,9 +10,10 @@ class CheckpointingControl:
     """ Class to setup and control the checkpointing behaviour of GloMPOManagers. """
 
     def __init__(self,
-                 checkpoint_frequency: int,
-                 checkpoint_at_init: bool,
-                 checkpoint_at_conv: bool,
+                 checkpoint_time_frequency: float = float('inf'),
+                 checkpoint_iter_frequency: float = float('inf'),
+                 checkpoint_at_init: bool = False,
+                 checkpoint_at_conv: bool = False,
                  raise_checkpoint_fail: bool = False,
                  keep_past: int = -1,
                  naming_format: str = 'glompo_checkpoint_%(date)_%(time)',
@@ -20,9 +21,13 @@ class CheckpointingControl:
         """
         Parameters
         ----------
-        checkpoint_frequency: int
-            Frequency (in seconds) with which GloMPO will save its state to disk during an optimization. Any such
-            directory can be used to initialize a new GloMPOManager and resume an optimization.
+        checkpoint_time_frequency: float = float('inf')
+            Frequency (in seconds) with which GloMPO will save its state to disk during an optimization. Time based
+            checkpointing not performed if this parameter is not provided.
+
+        checkpoint_iter_frequency: float = float('inf')
+            Frequency (in number of function evaluations) with which GloMPO will save its state to disk during an
+            optimization. Function call based checkpointing not performed if this parameter is not provided.
 
         checkpoint_at_init: bool
             If True a checkpoint is built at the very start of the optimization. This can make starting duplicate jobs
@@ -65,7 +70,8 @@ class CheckpointingControl:
             the script is executed.
         """
 
-        self.checkpoint_frequency = checkpoint_frequency
+        self.checkpoint_time_frequency = checkpoint_time_frequency
+        self.checkpoint_iter_frequency = checkpoint_iter_frequency
         self.checkpoint_at_init = checkpoint_at_init
         self.checkpoint_at_conv = checkpoint_at_conv
         self.checkpointing_dir = checkpointing_dir
