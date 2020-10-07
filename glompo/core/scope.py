@@ -363,7 +363,7 @@ class GloMPOScope:
         """
         plt.close(self.fig)
 
-    def save_state(self, path: Optional[str] = ''):
+    def checkpoint_save(self, path: Optional[str] = ''):
         """ Saves the state of the scope, suitable for resumption, during a checkpoint. Path is a directory in which to
             dump the generated files.
         """

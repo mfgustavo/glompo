@@ -78,8 +78,8 @@ class Nevergrad(BaseOptimizer):
     def callstop(self, *args):
         self.stop = True
 
-    def save_state(self, *args):
-        warnings.warn("Nevergrad save_state not yet implemented.", NotImplementedError)
+    def checkpoint_save(self, *args):
+        warnings.warn("Nevergrad checkpoint_save not yet implemented.", NotImplementedError)
 
 
 class _NevergradCallbacksWrapper:

@@ -204,7 +204,7 @@ class GFLSOptimizer(BaseOptimizer):
             mess = mess[:-5]
             return mess
 
-    def save_state(self, logger: Logger, algorithm, stopcond, file_name: str):
+    def checkpoint_save(self, logger: Logger, algorithm, stopcond, file_name: str):
         if os.sep in file_name:
             path, name = tuple(file_name.rsplit(os.sep, 1))
             os.makedirs(path)

@@ -6,7 +6,6 @@ from typing import Any, Callable, Dict, Sequence, Tuple, Type, Union
 import numpy as np
 import pytest
 import yaml
-
 from glompo.common.namedtuples import IterationResult, ProcessPackage, Result
 from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxFuncCalls, MaxOptsStarted, MaxSeconds
 from glompo.core.manager import GloMPOManager
@@ -40,7 +39,7 @@ class OptimizerTest1(BaseOptimizer):
     def callstop(self, *args):
         pass
 
-    def save_state(self, *args):
+    def checkpoint_save(self, *args):
         pass
 
 
@@ -62,7 +61,7 @@ class MessagingOptimizer(BaseOptimizer):
     def callstop(self, *args):
         pass
 
-    def save_state(self, *args):
+    def checkpoint_save(self, *args):
         pass
 
 
@@ -78,7 +77,7 @@ class SilentOptimizer(BaseOptimizer):
     def callstop(self, *args):
         pass
 
-    def save_state(self, *args):
+    def checkpoint_save(self, *args):
         pass
 
 
@@ -95,7 +94,7 @@ class HangingOptimizer(BaseOptimizer):
     def callstop(self, *args):
         pass
 
-    def save_state(self, *args):
+    def checkpoint_save(self, *args):
         pass
 
 
@@ -124,7 +123,7 @@ class HangOnEndOptimizer(BaseOptimizer):
         while True:
             pass
 
-    def save_state(self, *args):
+    def checkpoint_save(self, *args):
         pass
 
 
@@ -140,7 +139,7 @@ class ErrorOptimizer(BaseOptimizer):
     def callstop(self, *args):
         pass
 
-    def save_state(self, *args):
+    def checkpoint_save(self, *args):
         pass
 
 
@@ -545,7 +544,7 @@ class TestManager:
                 self.terminate = True
                 self.reason = "manager termination"
 
-            def save_state(self, *args):
+            def checkpoint_save(self, *args):
                 with open("steepgrad_savestate.yml" "w+") as file:
                     data = {"Settings": {"max_iters": self.max_iters,
                                          "gamma": self.gamma,

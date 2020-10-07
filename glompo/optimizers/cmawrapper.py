@@ -217,7 +217,7 @@ class CMAOptimizer(BaseOptimizer):
         self.logger.debug(f"Calling stop. Reason = {reason}")
         self.es.callbackstop = 1
 
-    def save_state(self, path: str):
+    def checkpoint_save(self, path: str):
         self.logger.debug("Creating restart file.")
 
         dump_collection = {}

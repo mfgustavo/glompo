@@ -2,7 +2,6 @@ from typing import Callable, Sequence, Tuple
 
 import numpy as np
 import pytest
-
 from glompo.common.corebase import _CombiCore
 from glompo.core.optimizerlogger import OptimizerLogger
 from glompo.hunters.basehunter import BaseHunter, _AndHunter, _OrHunter
@@ -81,7 +80,7 @@ class FakeOpt(BaseOptimizer):
     def callstop(self, *args):
         pass
 
-    def save_state(self, *args):
+    def checkpoint_save(self, *args):
         pass
 
 

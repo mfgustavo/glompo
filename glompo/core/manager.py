@@ -428,17 +428,34 @@ class GloMPOManager:
         self._is_restart = False
         self.logger.info("Initialization Done")
 
-    def load_checkpoint(self, path: str, task: Optional[Callable[[Sequence[float]], float]] = None, **glompo_kwargs):
+    def load_checkpoint(self, path: str,
+                        task_loader: Optional[Callable[[str], Callable[[Sequence[float]], float]]] = None,
+                        task: Optional[Callable[[Sequence[float]], float]] = None, **glompo_kwargs):
         """ Initialise GloMPO from the provided checkpoint file and allows an optimization to resume from that point.
 
             Parameters
             ----------
             path: str
                 Path to GloMPO checkpoint file.
-            task: Optional[Callable[[Sequence[float]], float]] = None
+
+            task_loader: Optional[Callable[[str], Callable[[Sequence[float]], float]]] = None
                 It is possible for checkpoint files to not contain the optimization task within them. This is because
-                some functions may be too complex to reduce to a persistent state and need to be reconstructed. In that
-                case the task can be provided here.
+                some functions may be too complex to reduce to a persistent state and need to be reconstructed. A task
+                loader method can be executed to construct a task from the files dumped in the checkpoint by
+                task.checkpoint_save when the checkpoint was constructed. (see documentation for GloMPOManger.checkpoint
+                method for more on this).
+
+                task_loader accepts a path to the files task.checkpoint_save constructed and returns a callable which is the
+                task itself.
+
+                If both task_loader and task are provided, the manager will first attempt to use the task_loader and
+                then only use task if that fails otherwise task is ignored.
+
+            task: Optional[Callable[[Sequence[float]], float]] = None
+                In the case that the checkpoint does not contain a record of the task, it can be provided directly here.
+                If both task_loader and task are provided, the manager will first attempt to use the task_loader and
+                then only use task if that fails otherwise task is ignored.
+
             glompo_kwargs
                 Most arguments supplied to GloMPOManager.setup can also be provided here. This will overwrite the values
                 saved in the checkpoint.
@@ -454,6 +471,19 @@ class GloMPOManager:
                         there is no guarantee that the optimizers will actually respond to this change.
                     visualisation_args: Due to the semantics of constructions these arguments will not be accepted by
                         the loaded scope object.
+
+            Notes
+            -----
+            GloMPO produces the requested log files when it closes (ie a convergence or crash). The working directory
+            is, however, purged of old results at the start of the optimization (if overwriting is allowed). This
+            behavior is the same regardless of whether the optimization is a resume or a fresh start. This means it is
+            the users responsibility to save and move important files from the working_dir before a resume. This is
+            particularly important for optimizer printstreams (which are overwritten) as well as movie files which can
+            later be stitched together to make a single video of the entire optimization.
+
+            GloMPO does not support making a single continuous recording of the optimization if it is stopped and
+            resumed at some point. However, at the end of each section a movie file is made and these can be stitched
+            together to make a continuous recording.
         """
         if self.is_initialised:
             warnings.warn("Manager already initialised, cannot reinitialise. Aborting", UserWarning)
@@ -477,20 +507,33 @@ class GloMPOManager:
 
         # Setup Task
         try:
+            self.task = None
             if 'task' in os.listdir('/tmp/glompo_chkpt'):
                 self.logger.info("Unpickling task")
                 with open('/tmp/glompo_chkpt/task', 'rb') as file:
-                    self.task = dill.load(file)
-            elif 'task_ss' in os.listdir('/tmp/glompo_chkpt'):
-                self.logger.info("Building task from save state")
-                # noinspection PyUnresolvedReferences
-                self.task = task.load_state('/tmp/glompo_chkpt/task_ss')
-            elif task:
-                self.logger.info("Setting task to provided value.")
-                self.task = task
+                    try:
+                        self.task = dill.load(file)
+                    except PickleError as e:
+                        self.logger.error("Unpickling task failed.")
+                        raise e
 
-            if not callable(self.task):
-                raise TypeError("Failed to build task correctly. Task not callable.")
+            if not self.task and task_loader:
+                try:
+                    self.task = task_loader('/tmp/glompo_chkpt')
+                    assert callable(self.task)
+                except Exception as e:
+                    self.logger.error("Use of task_loader failed.")
+                    raise e
+
+            if not self.task and task:
+                try:
+                    self.task = task
+                    assert callable(self.task)
+                except AssertionError:
+                    self.logger.error("Could not set task, not callable")
+                    raise e
+
+            assert self.task is not None
 
         except Exception as e:
             raise CheckpointingError(f"Failed to build task due to error", e)
@@ -825,6 +868,19 @@ class GloMPOManager:
     def checkpoint(self):
         """ Saves the state of the manager and any existing optimizers to disk. GloMPO can be loaded from these files
             and resume optimization from this state.
+
+            Notes
+            -----
+            When checkpointing GloMPO will attempt to handle the task in three ways:
+                1) Pickle the with the other manager variables, this is the easiest and most straightforward method.
+
+                2) If the above fails, the manager will attempt to call task.checkpoint_save(path) if it is present. This is
+                   expected to create file/s in path which is suitable for reconstruction during load_checkpoint().
+                   When resuming a run the manager will attempt to reconstruct the task by calling the method passed
+                   to the task_loader method of load_checkpoint.
+
+                3) If the manager cannot perform either of the above methods the checkpoint will be constructed without
+                   a task. In that case a fully initialised task must be given to load_checkpoint.
         """
 
         self.logger.info("Constructing Checkpoint")
@@ -871,7 +927,7 @@ class GloMPOManager:
                                 raise RuntimeError(f"Unhandled message: {message}")
                 self.logger.debug("Optimizers paused and synced.")
 
-                # Send save_state signals
+                # Send checkpoint_save signals
                 os.mkdir('optimizers')
                 for opt_id in living:
                     self.scope.update_checkpoint(opt_id)
@@ -879,7 +935,7 @@ class GloMPOManager:
                     if pack.process.is_alive():
                         pack.signal_pipe.send((0, os.path.join(path, 'optimizers', f'{opt_id:04}')))  # Message to save
 
-                # Wait for all save_states to complete
+                # Wait for all checkpoint_save to complete
                 wait_reply = living.copy()
                 while wait_reply:
                     for opt_id in wait_reply.copy():
@@ -922,21 +978,21 @@ class GloMPOManager:
                     with open('task', 'wb') as file:
                         dill.dump(self.task, file)
                 except PickleError as pckl_err:
-                    self.logger.debug(f"Pickle task failed: {pckl_err}. Attempting task.save_state()")
+                    self.logger.debug(f"Pickle task failed: {pckl_err}. Attempting task.checkpoint_save()")
                     os.remove('task')
                     try:
                         # noinspection PyUnresolvedReferences
-                        self.task.save_state('task')
+                        self.task.checkpoint_save('task')
                     except AttributeError:
-                        self.logger.debug(f"task.save_state not found.")
+                        self.logger.debug(f"task.checkpoint_save not found.")
                         self.logger.warning("Checkpointing without task.")
                     except Exception as e:
-                        self.logger.debug(f"task.save_state failed", exc_info=e)
+                        self.logger.debug(f"task.checkpoint_save failed", exc_info=e)
                         self.logger.warning("Checkpointing without task.")
 
             # Save scope
             if self.visualisation:
-                self.scope.save_state(path)
+                self.scope.checkpoint_save(path)
             self.logger.debug("Scope successfully pickled")
 
             # Compress checkpoint

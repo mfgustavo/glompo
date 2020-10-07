@@ -232,7 +232,7 @@ can be used to ensure an optimizer is compatible with all of GloMPO's functional
 
 The optimization task can sometimes not be reduced to a pickled state depending on
 it complexity and interfaces to other codes. GloMPO will first attempt to `pickle`
-the object, failing that GloMPO will attempt to call the `save_state()` function if
+the object, failing that GloMPO will attempt to call the `checkpoint_save()` function if
 the task has such a method. If this also fails the checkpoint is created without the
 optimization task. GloMPO can be restarted from an incomplete checkpoint if the
 missing components are provided.

@@ -60,7 +60,7 @@ class PlainOptimizer(BaseOptimizer):
         self.terminate = True
         self.message_manager(code, MinimizeResult())
 
-    def save_state(self, *args):
+    def checkpoint_save(self, *args):
         with open("savestate.txt", "w+") as file:
             file.write("Start\n")
             for i in dir(self):
@@ -128,7 +128,7 @@ class TestBase:
         assert mp_package.queue.get() == "item"
 
     def test_savestate(self, mp_package):
-        process = mp.Process(target=mp_package.opti.save_state, args=(None, None))
+        process = mp.Process(target=mp_package.opti.checkpoint_save, args=(None, None))
         process.start()
         process.join()
 

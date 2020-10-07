@@ -1,7 +1,6 @@
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Type, Union
 
 import pytest
-
 from glompo.core.optimizerlogger import OptimizerLogger
 from glompo.opt_selectors.baseselector import BaseSelector
 from glompo.opt_selectors.chain import ChainSelector
@@ -28,7 +27,7 @@ class BasicOptimizer(BaseOptimizer):
     def callstop(self, *args):
         pass
 
-    def save_state(self, *args):
+    def checkpoint_save(self, *args):
         pass
 
 

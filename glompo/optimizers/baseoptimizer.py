@@ -81,7 +81,7 @@ class BaseOptimizer(ABC):
             all optimizers. This will default to threads unless forced to used processes (see GloMPOManger backend
             argument for details).
         restart_file: Optional[str] = None
-            Path to file produced by BaseOptimizer.save_state. This will setup the optimizer to resume an
+            Path to file produced by BaseOptimizer.checkpoint_save. This will setup the optimizer to resume an
             optimization from the point in the restart_file. Note that if a restart_file is provided all the other
             parameters given to the initialisation of this class are ignored. In order to ensure GloMPO compatibility
             optimizers MUST be initialisable with no arguments! Parameters for which default arguments cannot be
@@ -99,7 +99,7 @@ class BaseOptimizer(ABC):
         self._restart_file = restart_file
         self._result_cache = None
 
-        self._FROM_MANAGER_SIGNAL_DICT = {0: self.save_state,
+        self._FROM_MANAGER_SIGNAL_DICT = {0: self.checkpoint_save,
                                           1: self.callstop,
                                           2: self._prepare_checkpoint}
         self._TO_MANAGER_SIGNAL_DICT = {0: "Normal Termination",
@@ -201,7 +201,7 @@ class BaseOptimizer(ABC):
         """
         raise NotImplementedError
 
-    def save_state(self, path: str):
+    def checkpoint_save(self, path: str):
         """ Save current state, suitable for restarting. Path is the location for the file or folder to be constructed.
         """
         raise NotImplementedError
