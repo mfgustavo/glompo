@@ -262,7 +262,8 @@ class _OptimizerLogger:
             ls = [float(num) for num in [x]]
         finally:
             if i > 1:
-                assert i == max(self.history) + 1, f"{i} == {max(self.history) + 1}"
+                assert i == max(
+                    self.history) + 1, f"Opt {self.metadata['Optimizer ID']}: {i} != {max(self.history) + 1}"
             self.history[i] = {'f_call_overall': int(f_call_overall),
                                'f_call_opt': int(f_call_opt),
                                'fx': float(fx),

@@ -149,7 +149,8 @@ class CMAOptimizer(BaseOptimizer):
 
             if self._results_queue:
                 i_best = np.argmin(fx)
-                result = IterationResult(self._opt_id, self.es.countiter, self.popsize, x[i_best], fx[i_best], False)
+                result = IterationResult(self._opt_id, self.es.countiter, self.popsize, x[i_best], fx[i_best],
+                                         self.es.stop())
                 self.push_iter_result(result)
                 self.logger.debug("Pushed result to queue")
                 self.check_messages()
@@ -175,9 +176,6 @@ class CMAOptimizer(BaseOptimizer):
             print(f"Final fx={self.result.fx:.2E}")
 
         if self._results_queue:
-            self.logger.debug("Pushing final result")
-            result = IterationResult(self._opt_id, self.es.countiter, self.popsize, self.result.x, self.result.fx, True)
-            self.push_iter_result(result)
             self.logger.debug("Messaging termination to manager.")
             self.message_manager(0, f"Optimizer convergence {self.es.stop()}")
 

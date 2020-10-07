@@ -24,6 +24,9 @@ class _CoreBase(ABC):
     def __and__(self, other: '_CoreBase') -> '_AndCore':
         return _AndCore(self, other)
 
+    def __iter__(self):
+        return iter([self])
+
     def __str__(self) -> str:
         lst = ""
         signature = inspect.signature(self.__init__)
