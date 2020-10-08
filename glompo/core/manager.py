@@ -1051,11 +1051,13 @@ class GloMPOManager:
             else:
                 is_possible = False
 
+        processes = [pack.slots for pack in self.optimizer_packs.values() if pack.process.is_alive()]
         if started_new:
-            processes = [pack.slots for pack in self.optimizer_packs.values() if pack.process.is_alive()]
             f_best = f'{self.result.fx:.3E}' if self.result.fx is not None else None
             self.logger.info(f"Status: {len(processes)} optimizers alive, {sum(processes)}/{self.max_jobs} slots filled"
                              f", {self.f_counter} function evaluations, f_best = {f_best}.")
+        elif len(processes) == 0:
+            raise RuntimeError("Not enough worker slots to start any optimizers with the current settings.")
 
     def _start_new_job(self, opt_id: int, optimizer: BaseOptimizer, call_kwargs: Dict[str, Any],
                        pipe: mp.connection.Connection, event: mp.Event, workers: int):

@@ -96,7 +96,7 @@ class OptimizerLogger:
                 os.makedirs(filename, exist_ok=True)
                 os.chdir(filename)
 
-                digits = len(str(max(self._storage)))
+                digits = len(str(max(self._storage))) if self._storage else 1
                 for optimizer in self._storage:
                     opt_id = int(self._storage[optimizer].metadata["Optimizer ID"])
                     opt_type = self._storage[optimizer].metadata["Optimizer Type"]
