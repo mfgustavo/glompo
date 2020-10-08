@@ -700,14 +700,15 @@ class GloMPOManager:
             psutil.getloadavg()
 
         # Detect system information
-        cores = self._process.cpu_affinity()
-        self.logger.info(f"System Info:\n"
-                         f"    {'Cores Available:':.<26}{len(cores)}\n"
-                         f"    {'Core IDs:':.<26}{cores}\n"
-                         f"    {'Memory Available:':.<26}{present_memory(psutil.virtual_memory().total)}\n"
-                         f"    {'Hostname:':.<26}{socket.gethostname()}\n"
-                         f"    {'Working Dir:':.<26}{os.getcwd()}\n"
-                         f"    {'Username:':.<26}{getpass.getuser()}")
+        if HAS_PSUTIL:
+            cores = self._process.cpu_affinity()
+            self.logger.info(f"System Info:\n"
+                             f"    {'Cores Available:':.<26}{len(cores)}\n"
+                             f"    {'Core IDs:':.<26}{cores}\n"
+                             f"    {'Memory Available:':.<26}{present_memory(psutil.virtual_memory().total)}\n"
+                             f"    {'Hostname:':.<26}{socket.gethostname()}\n"
+                             f"    {'Working Dir:':.<26}{os.getcwd()}\n"
+                             f"    {'Username:':.<26}{getpass.getuser()}")
 
         # Setup split printing for threads
         if self.split_printstreams and not self._proc_backend:
@@ -904,9 +905,6 @@ class GloMPOManager:
 
                 # Process outstanding results and hunts
                 self._process_results()
-                for opt_id, pack in self.optimizer_packs.items():
-                    if not pack.process.is_alive():
-                        wait_reply.remove(opt_id)
 
                 assert self.optimizer_queue.empty()
 
@@ -929,6 +927,9 @@ class GloMPOManager:
                                 wait_reply.remove(opt_id)
                             else:
                                 raise RuntimeError(f"Unhandled message: {message}")
+                        else:
+                            wait_reply.remove(opt_id)
+                            living.remove(opt_id)
                 self.logger.debug("Optimizers paused and synced.")
 
                 # Send checkpoint_save signals
