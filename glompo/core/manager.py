@@ -914,19 +914,20 @@ class GloMPOManager:
                 while wait_reply:
                     self.logger.debug(f"Blocking, {n_alive - len(wait_reply)}/{n_alive} optimizers synced")
                     for opt_id, pack in self.optimizer_packs.items():
-                        if pack.process.is_alive() and pack.signal_pipe.poll(0.1):
-                            key, message = pack.signal_pipe.recv()
-                            if key == 0:
-                                self.opt_log.put_metadata(opt_id, "Stop Time", datetime.now())
-                                self.opt_log.put_metadata(opt_id, "End Condition", message)
-                                self.graveyard.add(opt_id)
-                                self.conv_counter += 1
-                            elif key == 1:
-                                if self.visualisation:
-                                    self.scope.update_pause(opt_id)
-                                wait_reply.remove(opt_id)
-                            else:
-                                raise RuntimeError(f"Unhandled message: {message}")
+                        if pack.process.is_alive():
+                            if pack.signal_pipe.poll(0.1):
+                                key, message = pack.signal_pipe.recv()
+                                if key == 0:
+                                    self.opt_log.put_metadata(opt_id, "Stop Time", datetime.now())
+                                    self.opt_log.put_metadata(opt_id, "End Condition", message)
+                                    self.graveyard.add(opt_id)
+                                    self.conv_counter += 1
+                                elif key == 1:
+                                    if self.visualisation:
+                                        self.scope.update_pause(opt_id)
+                                    wait_reply.remove(opt_id)
+                                else:
+                                    raise RuntimeError(f"Unhandled message: {message}")
                         else:
                             wait_reply.remove(opt_id)
                             living.remove(opt_id)
