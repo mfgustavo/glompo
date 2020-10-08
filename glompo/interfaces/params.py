@@ -7,6 +7,7 @@
 """
 import os
 import warnings
+from threading import RLock
 from typing import Callable, Dict, Optional, Sequence, Tuple, Union
 
 import dill
@@ -182,12 +183,19 @@ class ReaxFFError:
         """
         assert not (path_to_classic and path_to_params), "Only one path allowed."
 
+        self.dat_set: DataSet = None
+        self.job_col: JobCollection = None
+        self.rxf_eng: ReaxParams = None
+        self.loss: Union[str, Loss] = None
+        self.scaler: LinearParameterScaler = None
+        self.par_levels: ParallelLevels = None
+
         if path_to_classic:
             self.dat_set, self.job_col, self.rxf_eng = setup_reax_from_classic(path_to_classic)
         elif path_to_params:
             self.dat_set, self.job_col, self.rxf_eng = setup_reax_from_params(path_to_params)
         else:
-            self.dat_set, self.job_col, self.rxf_eng = (None,) * 3
+            return
 
         if loss:
             self.loss = loss
@@ -278,14 +286,6 @@ def setup_reax_from_classic(path: str) -> Tuple[DataSet, JobCollection, ReaxPara
         - ffield_min:  A force field file where the active parameters are set to their maximum value (value of other
                        parameters is ignored).
         - geo:         Contains the geometries of the items used in the training set.
-
-    Returns
-    -------
-    DataSet, JobCollection, ReaxParams
-        DataSet contains the training data
-        JobCollection contains details of the PLAMS jobs which must be run to extract the force field results with which
-            to compare to the the DataSet.
-        ReaxParams is the interface to the actual engine used to calculate the force field results.
     """
 
     dat_set = trainset_to_params(os.path.join(path, 'trainset.in'))
@@ -340,14 +340,6 @@ def setup_reax_from_params(path: str) -> Tuple[DataSet, JobCollection, ReaxParam
         - job_collection.yml: Contains descriptions of the AMS jobs to evaluate.
         - reax_params.pkl:    Pickle of the ReaxParams object which contains the force field, active variables and their
                               ranges.
-
-    Returns
-    -------
-    DataSet, JobCollection, ReaxParams
-        DataSet contains the training data
-        JobCollection contains details of the PLAMS jobs which must be run to extract the force field results with which
-            to compare to the the DataSet.
-        ReaxParams is the interface to the actual engine used to calculate the force field results.
     """
 
     dat_set = DataSet().load(os.path.join(path, 'data_set.yml'))
@@ -364,13 +356,24 @@ def reaxfferror_task_loader(path: str) -> ReaxFFError:
     """
     task = ReaxFFError()
 
-    dat_set = DataSet().pickle_load(os.path.join(path, 'data_set'))
-    job_col = JobCollection().pickle_load(os.path.join(path, 'job_collection'))
+    dat_set = DataSet()
+    dat_set.pickle_load(os.path.join(path, 'data_set'))
+
+    job_col = JobCollection()
+    job_col.pickle_load(os.path.join(path, 'job_collection'))
+
     with open(os.path.join(path, 'reax_engine'), 'rb') as file:
         rxf_eng = dill.load(file)
+        rxf_eng._Lock = RLock()
 
     task.dat_set = dat_set
     task.job_col = job_col
     task.rxf_eng = rxf_eng
+
+    with open(os.path.join(path, 'extra_task'), 'rb') as file:
+        data = dill.load(file)
+
+    for var, val in data.items():
+        setattr(task, var, val)
 
     return task

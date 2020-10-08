@@ -134,6 +134,7 @@ class GloMPOManager:
         self.checkpoint_options: CheckpointingControl = None
 
         self.opt_log: OptimizerLogger = None
+        # noinspection PyUnresolvedReferences
         self.scope: Optional['GloMPOScope'] = None
 
         self._proc_backend: str = None
@@ -907,15 +908,17 @@ class GloMPOManager:
 
                 # Process outstanding results and hunts
                 self._process_results()
+                self.logger.info(f"Outstanding results processed")
 
                 assert self.optimizer_queue.empty()
 
                 # Synchronise and wait for replies (end or paused)
-                n_alive = len(wait_reply)
                 living = wait_reply.copy()
                 while wait_reply:
+                    n_alive = len(living)
                     self.logger.debug(f"Blocking, {n_alive - len(wait_reply)}/{n_alive} optimizers synced")
-                    for opt_id, pack in self.optimizer_packs.items():
+                    for opt_id in wait_reply.copy():
+                        pack = self.optimizer_packs[opt_id]
                         if pack.process.is_alive():
                             if pack.signal_pipe.poll(0.1):
                                 key, message = pack.signal_pipe.recv()
@@ -933,7 +936,7 @@ class GloMPOManager:
                         else:
                             wait_reply.remove(opt_id)
                             living.remove(opt_id)
-                self.logger.debug("Optimizers paused and synced.")
+                self.logger.info("Optimizers paused and synced.")
 
                 # Send checkpoint_save signals
                 os.mkdir('optimizers')
@@ -957,7 +960,7 @@ class GloMPOManager:
                 for lv in living_names:
                     if lv not in saved_states:
                         raise CheckpointingError(f"Unable to identify restart file/folder for optimizer {lv}")
-                self.logger.debug("All optimizer restart files detected.")
+                self.logger.info("All optimizer restart files detected.")
 
                 # Select variables for pickling
                 pickle_vars = {}
@@ -998,7 +1001,7 @@ class GloMPOManager:
                 if not task_persisted:
                     try:
                         # noinspection PyUnresolvedReferences
-                        self.task.checkpoint_save('task')
+                        self.task.checkpoint_save('')
                         self.logger.info("Task successfully saved")
                     except AttributeError:
                         self.logger.info(f"task.checkpoint_save not found.")
@@ -1397,7 +1400,7 @@ class GloMPOManager:
                 if HAS_PSUTIL:
                     cores = self._process.cpu_affinity()
                     # Verbose forcing of float and list below needed to stop recursion errors during python dump
-                    if len(self.load_history) > 0:
+                    if len(self.load_history) > 0 and not np.all(np.isnan(self.load_history)):
                         load_ave = \
                             np.round(
                                 np.nanmean(
@@ -1421,14 +1424,14 @@ class GloMPOManager:
                         load_ave = [0]
                         load_std = [0]
 
-                    if len(self.mem_history) > 0:
+                    if len(self.mem_history) > 0 and not np.all(np.isnan(self.mem_history)):
                         mem_max = present_memory(np.nanmax(self.mem_history))
                         mem_ave = present_memory(np.nanmean(self.mem_history))
                     else:
                         mem_max = '--'
                         mem_ave = '--'
 
-                    if len(self.cpu_history) > 0:
+                    if len(self.cpu_history) > 0 and not np.all(np.isnan(self.cpu_history)):
                         cpu_ave = float(np.round(np.nanmean(self.cpu_history), 2))
                         cpu_std = float(np.round(np.nanstd(self.cpu_history), 2))
                     else:
