@@ -754,6 +754,7 @@ class GloMPOManager:
 
                 self.logger.debug("Checking for user interventions.")
                 self._is_manual_shutdowns()
+                self._is_manual_checkpoints()
 
                 self.logger.debug("Checking for hanging processes")
                 self._inspect_children()
@@ -1332,6 +1333,22 @@ class GloMPOManager:
             except ValueError as e:
                 self.logger.debug("Error encountered trying to process STOP files.", exc_info=e)
                 continue
+
+    def _is_manual_checkpoints(self):
+        if "CHKPT" in os.listdir():
+            os.remove("CHKPT")
+
+            temp_controls = None
+            if not self.checkpoint_options:
+                self.logger.warning("Manual checkpoint requested but checkpointing control not setup during "
+                                    "initialisation, constructing with defaults.")
+                self.checkpoint_options = CheckpointingControl()
+
+            self.logger.info("Manual checkpoint requested")
+            self.checkpoint()
+
+            if temp_controls:
+                self.checkpoint_options = None
 
     def _shutdown_job(self, opt_id: int, hunter_id: int, reason: str):
         """ Sends a stop signal to optimizer opt_id and updates variables around its termination. """
