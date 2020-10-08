@@ -36,7 +36,7 @@ except ImportError:
 try:
     import psutil
 
-    HAS_PSUTIL = psutil.version_info[0] >= 5
+    HAS_PSUTIL = psutil.version_info >= (5, 6, 2)
 except ModuleNotFoundError:
     HAS_PSUTIL = False
 
@@ -508,10 +508,10 @@ class GloMPOManager:
         try:
             self.task = None
             if 'task' in os.listdir('/tmp/glompo_chkpt'):
-                self.logger.info("Unpickling task")
                 with open('/tmp/glompo_chkpt/task', 'rb') as file:
                     try:
                         self.task = dill.load(file)
+                        self.logger.info("Task successfully unpickled")
                     except PickleError as e:
                         self.logger.error("Unpickling task failed.")
                         raise e
@@ -520,6 +520,7 @@ class GloMPOManager:
                 try:
                     self.task = task_loader('/tmp/glompo_chkpt')
                     assert callable(self.task)
+                    self.logger.info("Task successfully loaded.")
                 except Exception as e:
                     self.logger.error("Use of task_loader failed.")
                     raise e
@@ -981,12 +982,14 @@ class GloMPOManager:
                 try:
                     with open('task', 'wb') as file:
                         dill.dump(self.task, file)
+                        self.logger.info("Task successfully pickled")
                 except PickleError as pckl_err:
-                    self.logger.debug(f"Pickle task failed: {pckl_err}. Attempting task.checkpoint_save()")
+                    self.logger.info(f"Pickle task failed: {pckl_err}. Attempting task.checkpoint_save()")
                     os.remove('task')
                     try:
                         # noinspection PyUnresolvedReferences
                         self.task.checkpoint_save('task')
+                        self.logger.info("Task successfully saved")
                     except AttributeError:
                         self.logger.debug(f"task.checkpoint_save not found.")
                         self.logger.warning("Checkpointing without task.")
