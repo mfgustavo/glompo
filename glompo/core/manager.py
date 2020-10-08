@@ -16,10 +16,11 @@ import warnings
 from datetime import datetime
 from pickle import PickleError
 from time import time
-from typing import Any, Callable, Dict, Optional, Sequence, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 import numpy as np
 import yaml
+from core.scope import GloMPOScope
 
 try:
     import dill
@@ -72,11 +73,11 @@ class GloMPOManager:
         warnings.simplefilter("always", UserWarning)
         warnings.simplefilter("always", RuntimeWarning)
 
-        self._is_restart = None
+        self._is_restart: bool = None
 
         self.logger = logging.getLogger('glompo.manager')
         self._init_workdir = os.getcwd()
-        self._workdir = None
+        self._workdir: str = None
 
         self._mp_manager = mp.Manager()
         self.optimizer_queue = self._mp_manager.Queue(10)
@@ -88,20 +89,20 @@ class GloMPOManager:
         yaml.add_multi_representer(BaseGenerator, generator_presenter, Dumper=Dumper)
         yaml.add_multi_representer(object, unknown_object_presenter, Dumper=Dumper)
 
-        self.task = None
-        self.selector = None
-        self.bounds = None
-        self.n_parms = None
-        self.max_jobs = None
-        self.convergence_checker = None
-        self.x0_generator = None
-        self.killing_conditions = None
+        self.task: Callable[[Sequence[float]], float] = None
+        self.selector: BaseSelector = None
+        self.bounds: Sequence[Bound] = None
+        self.n_parms: int = None
+        self.max_jobs: int = None
+        self.convergence_checker: BaseChecker = None
+        self.x0_generator: BaseGenerator = None
+        self.killing_conditions: BaseHunter = None
 
         self.result = Result(None, None, None, None)
-        self.t_start = None
-        self.dt_start = None
-        self.converged = None
-        self.end_timeout = None
+        self.t_start: float = None
+        self.dt_start: datetime = None
+        self.converged: bool = None
+        self.end_timeout: float = None
         self.o_counter = 0
         self.f_counter = 0
         self.last_hunt = 0
@@ -111,10 +112,10 @@ class GloMPOManager:
         self.last_time_checkpoint = 0
         self.last_iter_checkpoint = 0
 
-        self._process = None
-        self.cpu_history = []
-        self.mem_history = []
-        self.load_history = []
+        self._process: Optional['psutil.Process'] = None
+        self.cpu_history: List[float] = []
+        self.mem_history: List[float] = []
+        self.load_history: List[Tuple[float, float, float]] = []
 
         self.hunt_victims: Dict[int, float] = {}  # opt_ids of killed jobs and timestamps when the signal was sent
         self.optimizer_packs: Dict[int, ProcessPackage] = {}  # Dictionary of living or recently living optimizers.
@@ -122,22 +123,22 @@ class GloMPOManager:
         self.last_feedback: Dict[int, float] = {}
         self.opt_checkpoints: Dict[int, OptimizerCheckpoint] = {}  # Type & slots of every opt for checkpt loading
 
-        self.allow_forced_terminations = None
-        self._too_long = None
-        self.summary_files = None
-        self.split_printstreams = None
-        self.overwrite_existing = None
-        self.visualisation = None
-        self.hunt_frequency = None
-        self.spawning_opts = None
-        self.status_frequency = None
-        self.checkpoint_options = None
+        self.allow_forced_terminations: bool = None
+        self._too_long: float = None
+        self.summary_files: int = None
+        self.split_printstreams: bool = None
+        self.overwrite_existing: bool = None
+        self.visualisation: bool = None
+        self.hunt_frequency: int = None
+        self.spawning_opts: bool = None
+        self.status_frequency: float = None
+        self.checkpoint_options: CheckpointingControl = None
 
-        self.opt_log = None
-        self.scope = None
+        self.opt_log: OptimizerLogger = None
+        self.scope: Optional['GloMPOScope'] = None
 
-        self._proc_backend = None
-        self.opts_daemonic = None
+        self._proc_backend: str = None
+        self.opts_daemonic: bool = None
 
     @property
     def is_initialised(self):
@@ -507,7 +508,7 @@ class GloMPOManager:
         # Setup Task
         try:
             self.task = None
-            if 'task' in os.listdir('/tmp/glompo_chkpt'):
+            if 'task' in os.listdir('/tmp/glompo_chkpt') and not self.checkpoint_options.force_task_save:
                 with open('/tmp/glompo_chkpt/task', 'rb') as file:
                     try:
                         self.task = dill.load(file)
@@ -515,6 +516,8 @@ class GloMPOManager:
                     except PickleError as e:
                         self.logger.error("Unpickling task failed.")
                         raise e
+            else:
+                self.logger.warning('No task detected in checkpoint, task or task_loader required.')
 
             if not self.task and task_loader:
                 try:

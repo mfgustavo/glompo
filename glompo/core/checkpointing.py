@@ -15,6 +15,7 @@ class CheckpointingControl:
                  checkpoint_at_init: bool = False,
                  checkpoint_at_conv: bool = False,
                  raise_checkpoint_fail: bool = False,
+                 force_task_save: bool = False,
                  keep_past: int = -1,
                  naming_format: str = 'glompo_checkpoint_%(date)_%(time)',
                  checkpointing_dir: str = 'checkpoints'):
@@ -40,6 +41,11 @@ class CheckpointingControl:
             If True a failed checkpoint will cause the manager to end the optimization in error. Note, that GloMPO will
             always write out some data when it terminates. This can be a way of preserving data if the checkpoint fails.
             If False an error in constructing a checkpoint will simply raise a warning and pass.
+
+        force_task_save: bool = False
+            Some tasks may pickle successfully but fail to load properly, if this is an issue then setting this
+            parameter to True will cause the manager to bypass the pickle task step and immediately attempt the
+            checkpoint_save method.
 
         keep_past: int
             The keep_past newest checkpoints are retained when a new checkpoint is made. Any older ones are deleted.
@@ -75,13 +81,16 @@ class CheckpointingControl:
         self.checkpoint_at_init = checkpoint_at_init
         self.checkpoint_at_conv = checkpoint_at_conv
         self.checkpointing_dir = checkpointing_dir
-        self.raise_checkpoint_fail = raise_checkpoint_fail
+        self.raise_checkpoint_fail = bool(raise_checkpoint_fail)
+        self.force_task_save = bool(force_task_save)
         self.keep_past = keep_past
         self.naming_format = naming_format
+        self.count = None
 
         codes = {'%[(]date[)]': 8, '%[(]year[)]': 4, '%[(]yr[)]': 2, '%[(]month[)]': 2, '%[(]day[)]': 2,
                  '%[(]time[)]': 6, '%[(]hour[)]': 2,
                  '%[(]min[)]': 2, '%[(]sec[)]': 2}
+
         format_re = list(copy(self.naming_format))
         for i, char in enumerate(format_re):
             if any([char == c for c in ('{', '(', '+', '*', '|', '.', '$', ')', '}')]):
@@ -92,8 +101,8 @@ class CheckpointingControl:
         for key, digits in codes.items():
             format_re = format_re.replace(key, f'[0-9]{{{digits}}}')
         format_re = format_re.replace('%[(]count[)]', '(?P<index>[0-9]{3})')
+
         self.naming_format_re = format_re
-        self.count = None
 
     def get_name(self):
         time = datetime.now()
