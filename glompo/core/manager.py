@@ -13,7 +13,7 @@ import sys
 import tarfile
 import traceback
 import warnings
-from datetime import datetime
+from datetime import datetime, timedelta
 from pickle import PickleError
 from time import time
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
@@ -98,8 +98,10 @@ class GloMPOManager:
         self.killing_conditions: BaseHunter = None
 
         self.result = Result(None, None, None, None)
-        self.t_start: float = None
-        self.dt_start: datetime = None
+        self.t_start: float = None  # Session start time
+        self.t_used: float = 0  # Time used during previous sessions if loading from checkpoint
+        self.dt_starts: List[datetime] = []
+        self.dt_ends: List[datetime] = []
         self.converged: bool = None
         self.end_timeout: float = None
         self.o_counter = 0
@@ -110,6 +112,7 @@ class GloMPOManager:
         self.last_status = 0
         self.last_time_checkpoint = 0
         self.last_iter_checkpoint = 0
+        self.chkpt_history: List[str] = []
 
         self._process: Optional['psutil.Process'] = None
         self.cpu_history: List[float] = []
@@ -490,7 +493,7 @@ class GloMPOManager:
             self.logger.warning("Manager already initialised, cannot reinitialise. Aborting")
             return
 
-        self.logger.info("Initializing from Checkpoint ...")
+        self.logger.info(f"Initializing from Checkpoint: {os.path.abspath(path)}")
 
         shutil.rmtree('/tmp/glompo_chkpt', ignore_errors=True)  # Old extracted checkpoints can interfere with loading
         with tarfile.open(path, 'r:gz') as tfile:
@@ -556,7 +559,15 @@ class GloMPOManager:
                 self.scope.load_state('/tmp/glompo_chkpt')
 
         # Modify/create missing variables
-        self.converged = self.convergence_checker(self)
+        assert len(self.dt_starts) == len(self.dt_ends), "Timestamps missing from checkpoint."
+        self.optimizer_packs: Dict[int, ProcessPackage] = {}
+        self.t_used = sum([(end - start).seconds for start, end in zip(self.dt_starts, self.dt_ends)])
+        self.t_start = None
+        # noinspection PyBroadException
+        try:
+            self.converged = self.convergence_checker(self)
+        except Exception:
+            self.converged = False
         if self.converged:
             self.logger.warning(f"The convergence criteria already evaluates to True. The manager will be unable to "
                                 f"resume the optimisation. Consider changing the convergence criteria.\n"
@@ -568,9 +579,6 @@ class GloMPOManager:
         self.cpu_history.append(float('nan'))
         self.mem_history.append(float('nan'))
         self.load_history.append((float('nan'),) * 3)
-
-        self.optimizer_packs: Dict[int, ProcessPackage] = {}
-        self.last_feedback: Dict[int, float] = {}  # Must be reset to prevent accidental time-out kills
 
         # Load optimizer state
         restarts = {int(opt): self.opt_checkpoints[int(opt)].slots for opt in
@@ -729,7 +737,7 @@ class GloMPOManager:
             self.t_start = time()
             self.last_status = self.t_start
             self.last_time_checkpoint = self.t_start
-            self.dt_start = datetime.now()
+            self.dt_starts.append(datetime.now())
 
             # Restart specific tasks
             if self._is_restart:
@@ -790,7 +798,7 @@ class GloMPOManager:
 
                     evals = f"{self.f_counter:,}".replace(',', ' ')
                     status_mess = f"Status: \n" \
-                                  f"    {'Time Elapsed:':.<26} {datetime.now() - self.dt_start}\n" \
+                                  f"    {'Time Elapsed:':.<26} {timedelta(seconds=time() - self.t_start)}\n" \
                                   f"    {'Optimizers Alive:':.<26} {len(processes)}\n" \
                                   f"    {'Slots Filled:':.<26} {sum(processes)}/{self.max_jobs}\n" \
                                   f"    {'Function Evaluations:':.<26} {evals}\n" \
@@ -847,6 +855,8 @@ class GloMPOManager:
         finally:
 
             self.logger.info("Cleaning up and closing GloMPO")
+
+            self.dt_ends.append(datetime.now())
 
             if self.visualisation:
                 if self.scope.record_movie and not caught_exception:
@@ -962,6 +972,13 @@ class GloMPOManager:
                     if lv not in saved_states:
                         raise CheckpointingError(f"Unable to identify restart file/folder for optimizer {lv}")
                 self.logger.info("All optimizer restart files detected.")
+
+                # Save timestamp and checkpoint name
+                if len(self.dt_starts) == len(self.dt_ends):
+                    self.dt_ends[-1] = datetime.now()
+                else:
+                    self.dt_ends.append(datetime.now())
+                self.chkpt_history.append(chkpt_name)
 
                 # Select variables for pickling
                 pickle_vars = {}
@@ -1474,16 +1491,20 @@ class GloMPOManager:
                                 "Average": cpu_ave,
                                 "Std. Dev.": cpu_std}}}
                 else:
-                    run_info = "<COULD NOT MEASURE. REQUIRES psutil>=5>"
+                    run_info = None
 
-                data = {"Assignment": {
-                    "Task": type(self.task).__name__ if isinstance(type(self.task), object) else self.task.__name__,
-                    "Working Dir": os.getcwd(),
-                    "Username": getpass.getuser(),
-                    "Hostname": socket.gethostname(),
-                    "Start Time": self.dt_start,
-                    "Stop Time": datetime.now(),
-                    "Bounds": BoundGroup(self.bounds)},
+                t_total = str(timedelta(seconds=sum([(t - t0).seconds for t0, t in zip(self.dt_starts, self.dt_ends)])))
+                t_session = str(timedelta(seconds=time() - self.t_start))
+                t_periods = [{"Start": str(t0), "End": str(t)} for t0, t in zip(self.dt_starts, self.dt_ends)]
+                data = {
+                    "Assignment": {
+                        "Task": type(self.task).__name__ if isinstance(type(self.task), object) else self.task.__name__,
+                        "Working Dir": os.getcwd(),
+                        "Username": getpass.getuser(),
+                        "Hostname": socket.gethostname(),
+                        "Time": {"Optimisation Periods": t_periods,
+                                 "Total": t_total,
+                                 "Session": t_session}},
                     "Settings": {"x0 Generator": self.x0_generator,
                                  "Convergence Checker": LiteralWrapper(nested_string_formatting(str(
                                      self.convergence_checker))),
@@ -1491,18 +1512,26 @@ class GloMPOManager:
                                      self.killing_conditions))) if self.killing_conditions else
                                  self.killing_conditions,
                                  "Optimizer Selector": self.selector,
-                                 "Max Jobs": self.max_jobs},
+                                 "Max Jobs": self.max_jobs,
+                                 "Bounds": BoundGroup(self.bounds)},
                     "Counters": {"Function Evaluations": self.f_counter,
                                  "Hunts Started": self.hunt_counter,
                                  "Optimizers": {"Started": self.o_counter,
                                                 "Killed": len(self.hunt_victims),
-                                                "Converged": self.conv_counter}},
-                    "Run Information": run_info,
-                    "Solution": {"fx": result.fx,
-                                 "origin": result.origin,
-                                 "exit cond.": LiteralWrapper(nested_string_formatting(reason)),
-                                 "x": FlowList(result.x) if result.x else result.x},
-                }
+                                                "Converged": self.conv_counter}}}
+
+                if run_info:
+                    data["Run Information"] = run_info
+
+                if self.checkpoint_options:
+                    data["Checkpointing"] = {"Directory": os.path.abspath(self.checkpoint_options.checkpointing_dir),
+                                             "Checkpoints": [os.path.abspath(chkpt) for chkpt in self.chkpt_history]}
+
+                data["Solution"] = {"fx": result.fx,
+                                    "origin": result.origin,
+                                    "exit cond.": LiteralWrapper(nested_string_formatting(reason)),
+                                    "x": FlowList(result.x) if result.x else result.x}
+
                 self.logger.debug("Saving manager summary file.")
                 yaml.dump(data, file, Dumper=Dumper, default_flow_style=False, sort_keys=False)
 
