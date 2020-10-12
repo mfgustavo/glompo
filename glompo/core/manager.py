@@ -1525,7 +1525,8 @@ class GloMPOManager:
 
                 if self.checkpoint_options:
                     data["Checkpointing"] = {"Directory": os.path.abspath(self.checkpoint_options.checkpointing_dir),
-                                             "Checkpoints": [os.path.abspath(chkpt) for chkpt in self.chkpt_history]}
+                                             "Checkpoints":
+                                                 [os.path.abspath(chkpt) + '.tar.gz' for chkpt in self.chkpt_history]}
 
                 data["Solution"] = {"fx": result.fx,
                                     "origin": result.origin,
