@@ -202,9 +202,18 @@ class BaseOptimizer(ABC):
 
     def _prepare_checkpoint(self):
         """ Process to pause, synchronize and save optimizers. Should not be overwritten. """
+        self.logger.debug("Preparing for Checkpoint")
         if self._result_cache:
+            self.logger.debug("Outstanding result found. Pushing to queue...")
             self._results_queue.put(self._result_cache, block=True)
+            self.logger.debug(f"Oustanding result (iter={self._result_cache.n_iter}) pushed")
+            self._result_cache = None
         self.message_manager(1)  # Certify waiting for next instruction
+        self.logger.debug("Wait signal messaged to manager, waiting for reply...")
         self._signal_pipe.poll(timeout=None)  # Wait on instruction to save or end
+        self.logger.debug("Instruction received. Executing...")
         self.check_messages()
+        self.logger.debug("Instructions processed. Pausing until release...")
         self._pause_signal.clear()  # Wait on pause event, to be released by manager
+        self._pause_signal.wait()
+        self.logger.debug("Pause released by manager. Checkpointing completed.")

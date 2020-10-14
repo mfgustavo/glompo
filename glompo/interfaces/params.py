@@ -144,7 +144,7 @@ class GlompoParamsWrapper(BaseOptimizer):
         function.v = False
 
         manager = GloMPOManager()
-        manager.setup(task=_FunctionWrapper(function), bounds=bounds, optimizer_selector=self.selector,
+        manager.setup(task=_FunctionWrapper(function), bounds=bounds, opt_selector=self.selector,
                       **self.manager_kwargs)
 
         result = manager.start_manager()

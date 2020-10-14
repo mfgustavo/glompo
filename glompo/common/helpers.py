@@ -1,7 +1,7 @@
 """ Useful static functions used throughout GloMPO. """
 import inspect
 import os
-from typing import Optional, Sequence, Tuple, Union
+from typing import Optional, Sequence, Tuple, Union, overload
 
 import numpy as np
 import yaml
@@ -85,7 +85,16 @@ def distance(pt1: Sequence[float], pt2: Sequence[float]):
     return np.sqrt(np.sum((np.array(pt1) - np.array(pt2)) ** 2))
 
 
-def glompo_colors(opt_id: Optional[int] = None) -> Union['matplotlib.colors.ListedColormap', Tuple]:
+@overload
+def glompo_colors() -> 'matplotlib.colors.ListedColormap': ...
+
+
+@overload
+def glompo_colors(opt_id: int) -> Tuple[float, float, float, float]: ...
+
+
+def glompo_colors(opt_id: Optional[int] = None) -> \
+        Union['matplotlib.colors.ListedColormap', Tuple[float, float, float, float]]:
     """ Returns a matplotlib Colormap instance containing the custom GloMPO color cycle.
         If opt_id is provided than the specific color at that index is returned instead.
     """

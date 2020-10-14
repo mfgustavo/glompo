@@ -3,7 +3,7 @@
 import os
 import warnings
 from math import inf
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence, Union, overload
 
 import numpy as np
 import yaml
@@ -53,6 +53,14 @@ class OptimizerLogger:
             the log.
         """
         self._storage[opt_id].append_message(message)
+
+    @overload
+    def get_history(self, opt_id: int) -> Dict[int, Dict[str, float]]:
+        ...
+
+    @overload
+    def get_history(self, opt_id: int, track: str) -> List:
+        ...
 
     def get_history(self, opt_id: int, track: Optional[str] = None) -> Union[List, Dict[int, Dict[str, float]]]:
         """ Returns a list of values for a given optimizer and track or returns the entire dictionary of all tracks

@@ -165,8 +165,8 @@ class ErrorChecker(BaseChecker):
 class TestManager:
 
     @pytest.mark.parametrize("kwargs", [{'task': None},
-                                        {'optimizer_selector': {'default': OptimizerTest2}},
-                                        {'optimizer_selector': OptimizerTest1()},
+                                        {'opt_selector': {'default': OptimizerTest2}},
+                                        {'opt_selector': OptimizerTest1()},
                                         {'max_jobs': '2'},
                                         {'bounds': (0, 1)},
                                         {'x0_generator': OptimizerTest2()},
@@ -184,7 +184,7 @@ class TestManager:
     def test_init_typeerr(self, kwargs, backend):
         with pytest.raises(TypeError):
             keys = {**{'task': lambda x, y: x + y,
-                       'optimizer_selector': DummySelector([OptimizerTest1]),
+                       'opt_selector': DummySelector([OptimizerTest1]),
                        'bounds': ((0, 1), (0, 1)),
                        'overwrite_existing': True},
                     **kwargs}
@@ -196,7 +196,7 @@ class TestManager:
     def test_init_valerr(self, kwargs, backend):
         with pytest.raises(ValueError):
             keys = {**{'task': lambda x, y: x + y,
-                       'optimizer_selector': DummySelector([OptimizerTest1]),
+                       'opt_selector': DummySelector([OptimizerTest1]),
                        'bounds': ((0, 1), (0, 1)),
                        'overwrite_existing': True},
                     **kwargs}
@@ -205,7 +205,7 @@ class TestManager:
     def test_invalid_backend(self, backend):
         with pytest.warns(UserWarning, match="Unable to parse backend"):
             keys = {'task': lambda x, y: x + y,
-                    'optimizer_selector': DummySelector([OptimizerTest1]),
+                    'opt_selector': DummySelector([OptimizerTest1]),
                     'bounds': ((0, 1), (0, 1)),
                     'overwrite_existing': True}
             GloMPOManager(backend='magic', **keys)
@@ -217,7 +217,7 @@ class TestManager:
                                         {'killing_conditions': MinIterations(10)}])
     def test_init(self, kwargs, backend):
         kwargs = {**{'task': lambda x, y: x + y,
-                     'optimizer_selector': DummySelector([OptimizerTest1]),
+                     'opt_selector': DummySelector([OptimizerTest1]),
                      'bounds': ((0, 1), (0, 1)),
                      'overwrite_existing': True},
                   **kwargs}
