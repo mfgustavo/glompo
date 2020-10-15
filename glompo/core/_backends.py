@@ -63,7 +63,7 @@ class ThreadPrintRedirect:
     def register(self, opt_id: int, ext: str):
         """ Adds a thread to the set of files. """
         thread_id = threading.currentThread().ident
-        self.threads[thread_id] = open(pjoin("glompo_optimizer_printstreams", f"{opt_id}_printstream.{ext}"), "w+")
+        self.threads[thread_id] = open(pjoin("glompo_optimizer_printstreams", f"printstream_{opt_id:04}.{ext}"), "w+")
 
     def write(self, message):
         """ Sends message to the appropriate handler. """

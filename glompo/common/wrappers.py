@@ -11,8 +11,8 @@ def process_print_redirect(opt_id, func):
 
     @wraps(func)
     def wrapper(*args, **kwargs):
-        sys.stdout = open(pjoin("glompo_optimizer_printstreams", f"{opt_id}_printstream.out"), "w")
-        sys.stderr = open(pjoin("glompo_optimizer_printstreams", f"{opt_id}_printstream.err"), "w")
+        sys.stdout = open(pjoin("glompo_optimizer_printstreams", f"printstream_{opt_id:04}.out"), "w")
+        sys.stderr = open(pjoin("glompo_optimizer_printstreams", f"printstream_{opt_id:04}.err"), "w")
         func(*args, **kwargs)
 
     return wrapper
