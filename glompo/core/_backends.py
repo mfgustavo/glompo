@@ -21,7 +21,7 @@ class CustomThread(threading.Thread):
         try:
             if self.redirect:
                 try:
-                    opt_id = self.name.replace("Opt", "")
+                    opt_id = int(self.name.replace("Opt", ""))
                     sys.stdout.register(opt_id, 'out')
                     sys.stderr.register(opt_id, 'err')
                 except AttributeError:

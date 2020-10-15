@@ -103,6 +103,7 @@ class GloMPOManager:
         self.dt_starts: List[datetime] = []
         self.dt_ends: List[datetime] = []
         self.converged: bool = None
+        self.opt_crashed: bool = None
         self.end_timeout: float = None
         self.o_counter = 0
         self.f_counter = 0
@@ -110,6 +111,7 @@ class GloMPOManager:
         self.conv_counter = 0
         self.hunt_counter = 0
         self.last_status = 0
+        self.last_opt_spawn = (0, 0)
         self.last_time_checkpoint = 0
         self.last_iter_checkpoint = 0
         self.chkpt_history: List[str] = []
@@ -574,6 +576,8 @@ class GloMPOManager:
         self.optimizer_packs: Dict[int, ProcessPackage] = {}
         self.t_used = sum([(end - start).seconds for start, end in zip(self.dt_starts, self.dt_ends)])
         self.t_start = None
+        self.opt_crashed = False
+        self.last_opt_spawn = (0, 0)
         # noinspection PyBroadException
         try:
             self.converged = self.convergence_checker(self)
@@ -1085,6 +1089,11 @@ class GloMPOManager:
         processes = [pack.slots for pack in self.optimizer_packs.values() if pack.process.is_alive()]
         count = sum(processes)
 
+        if self.last_opt_spawn[0] == self.f_counter and \
+                self.o_counter > self.last_opt_spawn[1] + 5 and \
+                self.opt_crashed:
+            raise RuntimeError("Optimizers spawning and crashing immediately.")
+
         is_possible = True  # Flag if no optimizer can fit in the slots available due to its configuration
         started_new = False
         while count < self.max_jobs and is_possible and self.spawning_opts:
@@ -1098,6 +1107,8 @@ class GloMPOManager:
 
         processes = [pack.slots for pack in self.optimizer_packs.values() if pack.process.is_alive()]
         if started_new:
+            self.last_opt_spawn = (self.f_counter, self.o_counter) \
+                if self.last_opt_spawn[0] != self.f_counter else self.last_opt_spawn
             f_best = f'{self.result.fx:.3E}' if self.result.fx is not None else None
             self.logger.info(f"Status: {len(processes)} optimizers alive, {sum(processes)}/{self.max_jobs} slots filled"
                              f", {self.f_counter} function evaluations, f_best = {f_best}.")
@@ -1205,7 +1216,8 @@ class GloMPOManager:
                     self.conv_counter += 1
                 elif key == 9:
                     self.opt_log.put_message(opt_id, message)
-                    self.logger.info(f"Message received: {message}")
+                    self.logger.warning(f"Optimizer {opt_id} Exception: {message}")
+                    self.opt_crashed = "Traceback" in message or self.opt_crashed
                 found_signal = True
             except EOFError:
                 self.logger.error(f"Opt{opt_id} pipe closed. Opt{opt_id} should be in graveyard")
