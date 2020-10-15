@@ -124,7 +124,7 @@ class CheckpointingControl:
                 max_index = -1
                 matches = [re.match(self.naming_format_re, folder) for folder in os.listdir(self.checkpointing_dir)]
                 for match in matches:
-                    if match:
+                    if match and match.lastgroup == 'index':
                         i = int(match.group('index'))
                         max_index = i if i > max_index else max_index
                 self.count = max_index + 1

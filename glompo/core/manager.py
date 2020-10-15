@@ -921,6 +921,7 @@ class GloMPOManager:
         # Construct Checkpoint Name
         chkpt_name = self.checkpoint_control.get_name()
         path = os.path.join(self.checkpoint_control.checkpointing_dir, chkpt_name) + os.sep
+        overwriting_chkpt = False
 
         try:
             with FileNameHandler(path):
@@ -1052,9 +1053,25 @@ class GloMPOManager:
 
             # Compress checkpoint
             self.logger.debug("Building TarFile")
-            with tarfile.open(path[:-1] + '.tar.gz', 'x:gz') as tfile:
-                tfile.add(path, recursive=True, arcname='')
-            self.logger.debug("TarFile built, directory removed.")
+            tar_name = path[:-1] + '.tar.gz'
+            if os.path.exists(tar_name):
+                self.logger.warning("Overwriting existing checkpoint. To avoid this change the checkpointing naming "
+                                    "format")
+                warnings.warn("Overwriting existing checkpoint. To avoid this change the checkpointing naming "
+                              "format")
+                os.rename(tar_name, '_overwriting_chkpt.tar.gz')
+                overwriting_chkpt = True
+
+            try:
+                with tarfile.open(tar_name, 'x:gz') as tfile:
+                    tfile.add(path, recursive=True, arcname='')
+                self.logger.debug("TarFile built, directory removed.")
+            except tarfile.TarError as e:
+                self.logger.error("Error encountered during compression.")
+                if overwriting_chkpt:
+                    self.logger.info("Overwritten checkpoint restored")
+                    os.rename('_overwriting_chkpt.tar.gz', tar_name)
+                raise CheckpointingError("Could not compress checkpoint", e)
 
             # Delete old checkpoints
             if self.checkpoint_control.keep_past > -1:
@@ -1078,6 +1095,8 @@ class GloMPOManager:
             warnings.warn(f"Checkpointing failed: {caught_exception}.\nAborting checkpoint construction.")
         finally:
             shutil.rmtree(path, ignore_errors=True)
+            if overwriting_chkpt:
+                os.remove('_overwriting_chkpt.tar.gz')
 
         if self.converged:
             [pack.signal_pipe.send(1) for _, pack in self.optimizer_packs.items() if pack.process.is_alive()]
