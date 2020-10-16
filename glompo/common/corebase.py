@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 
 __all__ = ("_CoreBase", "_CombiCore", "_OrCore", "_AndCore")
 
-from typing import Generator
+from typing import Generator, Iterable
 
 
 class _CoreBase(ABC):
@@ -24,7 +24,7 @@ class _CoreBase(ABC):
     def __and__(self, other: '_CoreBase') -> '_AndCore':
         return _AndCore(self, other)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterable['_CoreBase']:
         return iter([self])
 
     def __str__(self) -> str:

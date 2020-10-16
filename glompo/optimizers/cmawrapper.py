@@ -135,17 +135,18 @@ class CMAOptimizer(BaseOptimizer):
                 with pool_executor(max_workers=self.workers) as executor:
                     submitted = {slot: executor.submit(function, parms) for slot, parms in enumerate(x)}
                     # For very slow evaluations this will allow evaluations to be interrupted.
-                    loop = 0
-                    for _ in as_completed(submitted.values()):
-                        loop += 1
-                        self.logger.debug(f"Result {loop}/{self.popsize} returned.")
-                        self._pause_signal.wait()
-                        self.check_messages()
-                        if self.es.callbackstop == 1:
-                            self.logger.debug("Stop command received during function evaluations.")
-                            cancelled = [future.cancel() for future in submitted.values()]
-                            self.logger.debug(f"Aborted {sum(cancelled)} calls.")
-                            break
+                    if self._results_queue:
+                        loop = 0
+                        for _ in as_completed(submitted.values()):
+                            loop += 1
+                            self.logger.debug(f"Result {loop}/{self.popsize} returned.")
+                            self._pause_signal.wait()
+                            self.check_messages()
+                            if self.es.callbackstop == 1:
+                                self.logger.debug("Stop command received during function evaluations.")
+                                cancelled = [future.cancel() for future in submitted.values()]
+                                self.logger.debug(f"Aborted {sum(cancelled)} calls.")
+                                break
                     fx = [future.result() for future in submitted.values() if not future.cancelled()]
             else:
                 self.logger.debug("Executing serially")
