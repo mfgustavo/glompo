@@ -18,12 +18,6 @@ class _CoreBase(ABC):
     def __call__(self, *args, **kwargs):
         """ Main evaluation method to determine the result of the hunt / convergence. """
 
-    def __or__(self, other: '_CoreBase') -> '_OrCore':
-        return _OrCore(self, other)
-
-    def __and__(self, other: '_CoreBase') -> '_AndCore':
-        return _AndCore(self, other)
-
     def __iter__(self) -> Iterable['_CoreBase']:
         return iter([self])
 
@@ -32,7 +26,7 @@ class _CoreBase(ABC):
         signature = inspect.signature(self.__init__)
         for parm in signature.parameters:
             if parm in dir(self):
-                lst += f"{parm}={self.__getattribute__(parm)}, "
+                lst += f"{parm}={getattr(self, parm)}, "
             else:
                 lst += f"{parm}, "
         lst = lst[:-2]
@@ -58,10 +52,6 @@ class _CombiCore(_CoreBase):
                 raise TypeError("_CombiCore can only be initialised with instances of _CoreBase subclasses.")
         self._base1 = base1
         self._base2 = base2
-
-        # self._bases = [self._base1._bases if isinstance(self._base1, _CombiCore) else [self._base1],
-        #               self._base2._bases if isinstance(self._base2, _CombiCore) else [self._base2]]
-        # self._bases = functools.reduce(operator.iconcat, self._bases, [])
         self._index = -1
 
     def __call__(self, *args, **kwargs):

@@ -1,7 +1,14 @@
 import os
-from os.path import join as pjoin
 
 import pytest
+import yaml
+
+try:
+    from yaml import CDumper as Dumper
+    from yaml import CLoader as Loader
+except (ModuleNotFoundError, ImportError):
+    from yaml import Dumper
+    from yaml import Loader
 
 try:
     import matplotlib.pyplot as plt
@@ -11,7 +18,20 @@ try:
 except (ModuleNotFoundError, ImportError):
     HAS_MATPLOTLIB = False
 
-from glompo.common.helpers import FileNameHandler, distance, is_bounds_valid, nested_string_formatting, glompo_colors
+from glompo.common.helpers import FileNameHandler, LiteralWrapper, literal_presenter, nested_string_formatting, \
+    unknown_object_presenter, generator_presenter, optimizer_selector_presenter, present_memory, FlowList, \
+    flow_presenter, BoundGroup, bound_group_presenter, is_bounds_valid, distance, glompo_colors
+from glompo.opt_selectors import BaseSelector, CycleSelector, IterSpawnStop
+from glompo.generators import RandomGenerator, BaseGenerator
+from glompo.common.namedtuples import Bound
+from glompo.optimizers.cmawrapper import CMAOptimizer
+
+yaml.add_representer(LiteralWrapper, literal_presenter, Dumper=Dumper)
+yaml.add_representer(FlowList, flow_presenter, Dumper=Dumper)
+yaml.add_representer(BoundGroup, bound_group_presenter, Dumper=Dumper)
+yaml.add_multi_representer(BaseSelector, optimizer_selector_presenter, Dumper=Dumper)
+yaml.add_multi_representer(BaseGenerator, generator_presenter, Dumper=Dumper)
+yaml.add_multi_representer(object, unknown_object_presenter, Dumper=Dumper)
 
 
 def test_string():
@@ -71,19 +91,21 @@ def test_bounds(bnds, output):
     assert is_bounds_valid(bnds, raise_invalid=False) == output
     if not output:
         with pytest.raises(ValueError):
-            is_bounds_valid(bnds, raise_invalid=True)
+            is_bounds_valid(bnds)
 
 
 def test_distance():
     assert distance([1] * 9, [-1] * 9) == 6
 
 
-def test_file_name_handler():
+def test_file_name_handler(tmp_path):
     start_direc = os.getcwd()
-    with FileNameHandler(pjoin("test_helpers", "fnh")) as name:
-        assert os.getcwd() == pjoin(start_direc, 'test_helpers')
-        assert name == 'fnh'
-    assert os.getcwd() == start_direc
+    os.chdir(tmp_path)
+    with FileNameHandler(os.path.join(tmp_path, 'a', 'b', 'c')) as name:
+        assert os.getcwd() == os.path.join(tmp_path, 'a', 'b')
+        assert name == 'c'
+    assert os.getcwd() == str(tmp_path)
+    os.chdir(start_direc)
 
 
 @pytest.mark.skipif(not HAS_MATPLOTLIB, reason="Requires matplotlib to use this function.")
@@ -115,3 +137,44 @@ def test_colors(opt_id):
         assert color == glompo_colors(opt_id)
     else:
         assert isinstance(glompo_colors(), cols.ListedColormap)
+
+
+@pytest.mark.parametrize("mem_int, mem_str", [(123, '123B'),
+                                              (1234, '1.2kB'),
+                                              (1234567, '1.2MB'),
+                                              (1234567890, '1.1GB'),
+                                              (12345678901112, '11.2TB')])
+def test_memory_presenter(mem_int, mem_str):
+    assert present_memory(mem_int, 1) == mem_str
+
+
+class MaxCallsCallback:
+    def __init__(self, max_iter, calls_per_iter):
+        self.max_iter = max_iter
+        self.calls_per_iter = calls_per_iter
+        self.iters_used = 0
+
+
+@pytest.mark.parametrize("dump, load",
+                         [(LiteralWrapper("This\n\tis\n\t\ta\n\t\t\tTest"),
+                           '"This\\n\\tis\\n\\t\\ta\\n\\t\\t\\tTest"\n'),
+
+                          (FlowList([2] * 3), "[2, 2, 2]\n"),
+
+                          ([2] * 3, "- 2\n- 2\n- 2\n"),
+
+                          (BoundGroup([Bound(0, 1)] * 5 + [Bound(3, 6)] * 4),
+                           "? Bound:\n    max: 1\n    min: 0\n: [0, 1, 2, 3, 4]\n"
+                           "? Bound:\n    max: 6\n    min: 3\n: [5, 6, 7, 8]\n"),
+
+                          (CycleSelector([(CMAOptimizer, {'sigma': 0.5, 'workers': 1, 'popsize': 10},
+                                           {'callbacks': MaxCallsCallback(100, 1)})], allow_spawn=IterSpawnStop(300)),
+                           'Selector: CycleSelector\nAllow Spawn:\n  IterSpawnStop:\n    max_calls: 300\n'
+                           'Available Optimizers:\n  0:\n    type: CMAOptimizer\n    init_kwargs:\n      sigma: 0.5\n'
+                           '      workers: 1\n      popsize: 10\n    call_kwargs:\n      callbacks:\n        '
+                           'MaxCallsCallback:\n          calls_per_iter: 1\n          iters_used: 0\n          '
+                           'max_iter: 100\n'),
+
+                          (RandomGenerator([(6, 7)] * 30), 'Generator: RandomGenerator\nn_params: 30\n')])
+def test_yaml_presenters(dump, load):
+    assert yaml.dump(dump, Dumper=Dumper, default_flow_style=False, sort_keys=False) == load

@@ -44,8 +44,7 @@ from ._backends import CustomThread, ThreadPrintRedirect
 from .optimizerlogger import OptimizerLogger
 from ..common.helpers import FileNameHandler, LiteralWrapper, literal_presenter, nested_string_formatting, \
     unknown_object_presenter, generator_presenter, optimizer_selector_presenter, present_memory, FlowList, \
-    flow_presenter, \
-    BoundGroup, bound_group_presenter, CheckpointingError, is_bounds_valid
+    flow_presenter, BoundGroup, bound_group_presenter, CheckpointingError, is_bounds_valid
 from ..common.namedtuples import Bound, OptimizerPackage, ProcessPackage, Result, OptimizerCheckpoint
 from ..common.wrappers import process_print_redirect
 from ..convergence import BaseChecker, KillsAfterConvergence

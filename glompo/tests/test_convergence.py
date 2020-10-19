@@ -94,6 +94,12 @@ class TestBase:
     def test_str(self, checker, output):
         assert str(checker) == output
 
+    @pytest.mark.parametrize("checker", [PlainChecker(),
+                                         PlainChecker() & PlainChecker(),
+                                         (PlainChecker() | PlainChecker()) & PlainChecker()])
+    def test_iter(self, checker):
+        assert all([isinstance(base, PlainChecker) for base in iter(checker)])
+
     @pytest.mark.parametrize("checker, output", [(PlainChecker(), "PlainChecker() = None"),
                                                  (TrueChecker(), "TrueChecker() = True"),
                                                  (any_checker(), "[PlainChecker() = None | \nPlainChecker() = "
@@ -134,17 +140,20 @@ class TestOthers:
             self.o_counter = 10
             self.t_start = 1584521316.09197
             self.hunt_victims = {1, 2, 3, 5, 6, 7}
+            self.t_used = 100
             self.result = Result([0, 0], 0, None, None)
 
-    @pytest.mark.parametrize("checker, output", [(MaxSeconds(60), True),
+    @pytest.mark.parametrize("checker, output", [(MaxSeconds(session_max=60), True),
+                                                 (MaxSeconds(session_max=1e318), False),
+                                                 (MaxSeconds(overall_max=1e318), False),
+                                                 (MaxSeconds(overall_max=100), True),
                                                  (MaxFuncCalls(200), True),
-                                                 (NOptConverged(2), True),
-                                                 (MaxKills(6), True),
-                                                 (MaxOptsStarted(10), True),
-                                                 (MaxSeconds(1e318), False),
                                                  (MaxFuncCalls(900), False),
+                                                 (NOptConverged(2), True),
                                                  (NOptConverged(9), False),
+                                                 (MaxKills(6), True),
                                                  (MaxKills(10), False),
+                                                 (MaxOptsStarted(10), True),
                                                  (MaxOptsStarted(20), False),
                                                  (TargetCost(0), True),
                                                  (TargetCost(0.9e-6), True),
