@@ -7,16 +7,14 @@
 """
 import os
 import warnings
-from threading import RLock
-from typing import Callable, Dict, Optional, Sequence, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import dill
 import numpy as np
 from scm.params.common.parallellevels import ParallelLevels
 from scm.params.common.reaxff_converter import geo_to_params, trainset_to_params
-from scm.params.core.dataset import DataSet, Loss
+from scm.params.core.dataset import DataSet, Loss, SSE
 from scm.params.core.jobcollection import JobCollection
-from scm.params.core.lossfunctions import SSE
 from scm.params.core.opt_components import LinearParameterScaler, _Step
 from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
 from scm.params.parameterinterfaces.reaxff import ReaxParams
@@ -99,7 +97,7 @@ class GlompoParamsWrapper(BaseOptimizer):
             self._loss = SSE()
 
     def minimize(self,
-                 function: Callable,
+                 function: _Step,
                  x0: Sequence[float],
                  bounds: Sequence[Tuple[float, float]],
                  workers: int = 1) -> MinimizeResult:
@@ -163,57 +161,75 @@ class ReaxFFError:
         a provided trainign set of data.
     """
 
-    def __init__(self, *,
-                 path_to_classic: Optional[str] = None,
-                 path_to_params: Optional[str] = None,
-                 loss: Union[Loss, str, None] = None):
-        """ Initialisation of the error function from configuration files.
+    @classmethod
+    def from_classic_files(cls, path: str, **kwargs) -> 'ReaxFFError':
+        """ Initializes the error function from classic ReaxFF files.
 
             Parameters
             ----------
-            path_to_classic: Optional[str] = None
+            path: str
                 Path to classic ReaxFF files, passed to setup_reax_from_classic (see its docs for what files are
                 expected).
-            path_to_params: Optional[str] = None
+            kwargs
+                Passed to the class initialisation method.
+        """
+        dat_set, job_col, rxf_eng = setup_reax_from_classic(path)
+        return cls(dat_set, job_col, rxf_eng, **kwargs)
+
+    @classmethod
+    def from_params_files(cls, path: str, **kwargs) -> 'ReaxFFError':
+        """ Initializes the error function from ParAMS data files.
+
+            Parameters
+            ----------
+            path: str
                 Path to directory containing ParAMS data set, job collection and ReaxFF engine files.
                 (see setup_reax_from_params for what files are expected).
+            kwargs
+                Passed to the class initialisation method.
+        """
+        dat_set, job_col, rxf_eng = setup_reax_from_params(path)
+        return cls(dat_set, job_col, rxf_eng, **kwargs)
+
+    def __init__(self, data_set: DataSet, job_collection: JobCollection, reax_params: ReaxParams,
+                 loss: Union[Loss, str, None] = None):
+        """ Initialisation of the ReaxFF error function. To initialise the object from files use the class factory
+            methods: ReaxFFError.from_classic_files or ReaxFFError.from_params_files
+
+            Parameters
+            ----------
+            data_set: DataSet
+                Reference data used to compare against force field results.
+            job_collection: JobCollection
+                AMS jobs from which the data can be extracted for comparison to the DataSet
+            reax_params: ReaxParams
+                ReaxParams object which holds the force field values, ranges, engine and which parameters are active or
+                not.
             loss: Union[Loss, str]
                 A subclass of scm.params.core.dataset.Loss, holding the mathematical definition of the
                 loss function to be applied to every entry, or a registered string shortcut.
         """
-        assert not (path_to_classic and path_to_params), "Only one path allowed."
-
-        self.dat_set: DataSet = None
-        self.job_col: JobCollection = None
-        self.rxf_eng: ReaxParams = None
-        self.loss: Union[str, Loss] = None
-        self.scaler: LinearParameterScaler = None
-        self.par_levels: ParallelLevels = None
-
-        if path_to_classic:
-            self.dat_set, self.job_col, self.rxf_eng = setup_reax_from_classic(path_to_classic)
-        elif path_to_params:
-            self.dat_set, self.job_col, self.rxf_eng = setup_reax_from_params(path_to_params)
-        else:
-            return
+        self.dat_set = data_set
+        self.job_col = job_collection
+        self.rxf_eng = reax_params
 
         if loss:
             self.loss = loss
         else:
-            self.loss = 'sse'
+            self.loss = SSE()
         self.scaler = LinearParameterScaler(self.rxf_eng.active.range)
         self.par_levels = ParallelLevels(jobs=1)
 
     @property
-    def n_parms(self):
+    def n_parms(self) -> int:
         """ Returns the number of active parameters. """
         return len(self.rxf_eng.active.x)
 
-    def __call__(self, x: Sequence[float]):
+    def __call__(self, x: Sequence[float]) -> float:
         """ Returns the error value between the the force field with the given parameters and the training values. """
         return self._calculate(x)[0]
 
-    def resids(self, x: Sequence[float]):
+    def resids(self, x: Sequence[float]) -> Sequence[float]:
         """ Method for compatibility with GFLS optimizer. Returns the signed differences between the force field and
             training set.
         """
@@ -225,8 +241,8 @@ class ReaxFFError:
         """
         self.dat_set.pickle_dump(os.path.join(path, 'data_set'))
         self.job_col.pickle_dump(os.path.join(path, 'job_collection'))
-        with open(os.path.join(path, 'reax_engine'), 'wb') as file:
-            dill.dump(self.rxf_eng, file)
+        self.rxf_eng.pickle_dump(os.path.join(path, 'reax_engine.pkl'))
+
         with open(os.path.join(path, 'extra_task'), 'wb') as file:
             dill.dump({'loss': self.loss,
                        'scaler': self.scaler,
@@ -255,7 +271,7 @@ class ReaxFFError:
         self.job_col.store(os.path.join(path, names['jc']))
         self.rxf_eng.write(os.path.join(path, names['ff']), parameters)
 
-    def _calculate(self, x: Sequence[float]):
+    def _calculate(self, x: Sequence[float]) -> Tuple[float, List[float], List[float]]:
         """ Core calculation function, returns both the error function value and the residuals. """
         try:
             self.rxf_eng.active.x = self.scaler.scaled2real(x)
@@ -264,7 +280,7 @@ class ReaxFFError:
             err_result = self.dat_set.evaluate(ff_results, self.loss, True)
             return err_result
         except ResultsError:
-            return np.inf, np.array([np.inf])
+            return float('inf'), [float('inf')], [float('inf')]
 
 
 def setup_reax_from_classic(path: str) -> Tuple[DataSet, JobCollection, ReaxParams]:
@@ -354,21 +370,15 @@ def reaxfferror_task_loader(path: str) -> ReaxFFError:
     """ Builds a ReaxFFError instance from the files (located in path) made by its checkpoint_save method.
         This method was designed to be used as the task_loader when loading a GloMPO checkpoint.
     """
-    task = ReaxFFError()
-
     dat_set = DataSet()
     dat_set.pickle_load(os.path.join(path, 'data_set'))
 
     job_col = JobCollection()
     job_col.pickle_load(os.path.join(path, 'job_collection'))
 
-    with open(os.path.join(path, 'reax_engine'), 'rb') as file:
-        rxf_eng = dill.load(file)
-        rxf_eng._Lock = RLock()
+    rxf_eng = ReaxParams.pickle_load(os.path.join(path, 'reax_engine.pkl'))
 
-    task.dat_set = dat_set
-    task.job_col = job_col
-    task.rxf_eng = rxf_eng
+    task = ReaxFFError(dat_set, job_col, rxf_eng)
 
     with open(os.path.join(path, 'extra_task'), 'rb') as file:
         data = dill.load(file)
