@@ -114,7 +114,7 @@ def glompo_colors(opt_id: Optional[int] = None) -> \
     return cmap
 
 
-def present_memory(bytes_: int, digits: int = 2) -> str:
+def present_memory(bytes_: float, digits: int = 2) -> str:
     """ Accepts an integer number of bytes and returns a string formatted to the most appropriate units. """
     units = 0
     while bytes_ > 1024:

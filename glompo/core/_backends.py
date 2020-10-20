@@ -1,10 +1,10 @@
 """ Contains code to support using both multiprocessing and threading within the GloMPO manager. """
 
-import _io
 import sys
 import threading
 import warnings
 from os.path import join as pjoin
+from typing import TextIO
 
 
 class CustomThread(threading.Thread):
@@ -56,7 +56,7 @@ class ThreadPrintRedirect:
         if CustomThread is used.
     """
 
-    def __init__(self, intercept: _io.TextIOWrapper):
+    def __init__(self, intercept: TextIO):
         self.stdout = intercept
         self.threads = {}  # Dict[thread_id: int, file: _io.TextIOWrapper]
 

@@ -6,6 +6,7 @@
       <w>bnds</w>
       <w>callbackstop</w>
       <w>callstop</w>
+      <w>chkpt</w>
       <w>cmadata</w>
       <w>cmaoptions</w>
       <w>cmasettings</w>
@@ -18,6 +19,7 @@
       <w>customtermination</w>
       <w>dataset</w>
       <w>easom</w>
+      <w>evals</w>
       <w>fbest</w>
       <w>fcall</w>
       <w>fcalls</w>
