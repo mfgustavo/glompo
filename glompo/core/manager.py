@@ -74,7 +74,7 @@ class GloMPOManager:
         self._is_restart: bool = None
 
         self.logger = logging.getLogger('glompo.manager')
-        self._init_workdir = os.getcwd()
+        self._init_workdir = None
         self.working_dir: str = None
 
         self._mp_manager = mp.Manager()
@@ -689,6 +689,7 @@ class GloMPOManager:
 
         # Move into or make working dir
         os.makedirs(self.working_dir, exist_ok=True)
+        self._init_workdir = os.getcwd()
         os.chdir(self.working_dir)
 
         # Purge Old Results
