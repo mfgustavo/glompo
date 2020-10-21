@@ -1,15 +1,31 @@
 import inspect
+import os
+import pickle
+from typing import Dict
 
 import pytest
 
 try:
     from scm.params.core.opt_components import _Step, _LossEvaluator, EvaluatorReturn
+    from scm.params.common.parallellevels import ParallelLevels
+    from scm.params.common.reaxff_converter import geo_to_params, trainset_to_params
+    from scm.params.core.dataset import DataSet, Loss, SSE
+    from scm.params.core.jobcollection import JobCollection
+    from scm.params.core.opt_components import LinearParameterScaler, _Step
+    from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
+    from scm.params.parameterinterfaces.reaxff import ReaxParams
+    from scm.plams.core.errors import ResultsError
+    from scm.plams.interfaces.adfsuite.reaxff import reaxff_control_to_settings
 
     HAS_PARAMS = True
 except (ModuleNotFoundError, ImportError):
     HAS_PARAMS = False
 
-from glompo.interfaces.params import _FunctionWrapper
+import glompo.tests
+from glompo.interfaces.params import _FunctionWrapper, ReaxFFError
+
+GLOMPO_PATH = inspect.getabsfile(glompo.tests).rstrip('__init__.py')
+INPUT_FILE_PATH = os.path.join(GLOMPO_PATH, '_test_inputs')
 
 
 class FakeLossEvaluator(_LossEvaluator):
@@ -68,3 +84,48 @@ class TestParamsStep:
         params_func.cbs = lambda x: x
         with pytest.warns(UserWarning, match="Callbacks provided through the Optimization class are ignored"):
             _FunctionWrapper(params_func)
+
+
+class TestReaxFFError:
+    built_tasks: Dict[str, ReaxFFError] = {}
+
+    @pytest.fixture(scope='class')
+    def check_result(self):
+        with open(os.path.join(INPUT_FILE_PATH, 'check_result.pkl'), 'rb') as file:
+            result = pickle.load(file)
+        return result
+
+    @pytest.mark.parametrize("name, factory", [('classic', ReaxFFError.from_classic_files),
+                                               ('params', ReaxFFError.from_params_files)])
+    def test_load(self, name, factory):
+        task = factory(INPUT_FILE_PATH)
+
+        assert isinstance(task.dat_set, DataSet)
+        assert isinstance(task.job_col, JobCollection)
+        assert isinstance(task.rxf_eng, ReaxParams)
+        assert isinstance(task.loss, Loss)
+        assert isinstance(task.par_levels, ParallelLevels)
+        assert isinstance(task.scaler, LinearParameterScaler)
+
+        self.built_tasks[name] = task
+
+    def test_chkpt(self):
+        pass
+
+    def test_save(self):
+        pass
+
+    @pytest.mark.parametrize("name", ['classic', 'params'])
+    def test_calculate(self, name, check_result):
+        if name not in self.built_tasks:
+            pytest.xfail("Task not constructed successfully")
+
+        task = self.built_tasks[name]
+        fx, resids, cont = check_result
+        result = task._calculate([0.5] * task.n_parms)
+
+        assert isinstance(result, tuple)
+        assert len(result) == 3
+        assert result[0] == fx
+        assert result[1] == resids
+        assert all([r == c for r, c in zip(result[2], cont)])

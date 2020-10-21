@@ -205,7 +205,7 @@ class ReaxFFError:
             reax_params: ReaxParams
                 ReaxParams object which holds the force field values, ranges, engine and which parameters are active or
                 not.
-            loss: Union[Loss, str]
+            loss: Union[Loss, str, None]
                 A subclass of scm.params.core.dataset.Loss, holding the mathematical definition of the
                 loss function to be applied to every entry, or a registered string shortcut.
         """
@@ -263,6 +263,9 @@ class ReaxFFError:
                 Optional parameters to be written into the force field file. If not given the parameters currently,
                 therein will be used.
         """
+        if not filenames:
+            filenames = {}
+
         names = {'ds': filenames['ds'] if 'ds' in filenames else 'data_set.yml',
                  'jc': filenames['jc'] if 'jc' in filenames else 'job_collection.yml',
                  'ff': filenames['ff'] if 'ff' in filenames else 'ffield'}
