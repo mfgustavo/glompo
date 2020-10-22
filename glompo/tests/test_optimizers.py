@@ -11,25 +11,25 @@ from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from glompo.optimizers.random import RandomOptimizer
 
 # Append new optimizer class names to this list to run tests for GloMPO compatibility
-available_classes = [RandomOptimizer]
+available_classes = [(RandomOptimizer, {})]
 try:
     from glompo.optimizers.cmawrapper import CMAOptimizer
 
-    available_classes.append(CMAOptimizer)
+    available_classes.append((CMAOptimizer, {'sigma': 0.5}))
 except ModuleNotFoundError:
     pass
 
 try:
     from glompo.optimizers.gflswrapper import GFLSOptimizer
 
-    available_classes.append(GFLSOptimizer)
+    available_classes.append((GFLSOptimizer, {}))
 except ModuleNotFoundError:
     pass
 
 try:
     from glompo.optimizers.nevergrad import Nevergrad
 
-    available_classes.append(Nevergrad)
+    available_classes.append((Nevergrad, {}))
 except ModuleNotFoundError:
     pass
 
@@ -127,7 +127,7 @@ class TestBase:
         process.join()
         assert mp_package.queue.get() == "item"
 
-    def test_savestate(self, mp_package):
+    def test_checkpointsave(self, mp_package):
         process = mp.Process(target=mp_package.opti.checkpoint_save, args=(None, None))
         process.start()
         process.join()
@@ -139,8 +139,11 @@ class TestBase:
 
         os.remove("savestate.txt")
 
+    def test_checkpointload(self):
+        pass
 
-@pytest.mark.parametrize("opti", available_classes)
+
+@pytest.mark.parametrize("opti, kwargs", zip(available_classes))
 class TestSubclassesGlompoCompatible:
     package = namedtuple("package", "queue p_pipe c_pipe event")
 

@@ -29,11 +29,28 @@ class CMAOptimizer(BaseOptimizer):
         * Module: https://github.com/CMA-ES/pycma
     """
 
-    def __init__(self, sigma: float = None, sampler: str = 'full', verbose: bool = True, keep_files: bool = False,
+    @classmethod
+    def checkpoint_load(cls, path: str, opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
+                        results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
+                        backend: str = 'threads') -> 'CMAOptimizer':
+
+        opt = cls.__new__(cls)
+        super(CMAOptimizer, opt).__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
+
+        with open(path, 'rb') as file:
+            state = pickle.load(file)
+
+        for var, val in state.items():
+            opt.__setattr__(var, val)
+        opt.restart = True
+
+        opt.logger.info("Successfully loaded from restart file.")
+        return opt
+
+    def __init__(self, sigma, sampler: str = 'full', verbose: bool = True, keep_files: bool = False,
                  opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
                  results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
-                 backend: str = 'processes', restart_file: Optional[str] = None,
-                 **cmasettings):
+                 backend: str = 'threads', **cmasettings):
         """ Parameters
             ----------
             sigma: float
@@ -55,12 +72,7 @@ class CMAOptimizer(BaseOptimizer):
                 available options. Most useful keys are: `timeout`, `tolstagnation`, `popsize`. Additionally,
                 the key `minsigma` is supported: Termination if ``sigma < minsigma``.
         """
-        assert bool(sigma) ^ bool(restart_file), "Must supply a sigma value OR a restart_file"
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend, restart_file)
-
-        if restart_file:
-            self.checkpoint_load(restart_file)
-            return
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
 
         self.sigma = sigma
         self.verbose = verbose
@@ -69,6 +81,7 @@ class CMAOptimizer(BaseOptimizer):
         self.keep_files = keep_files
         self.folder_name = 'cmadata' if not self._opt_id else f'cmadata_{self._opt_id}'
         self.cmasettings = cmasettings
+        self.restart = False
 
         # Sort all non-native CMA options into the custom cmaoptions key 'vv':
         customopts = {}
@@ -110,7 +123,7 @@ class CMAOptimizer(BaseOptimizer):
                  bounds: Sequence[Tuple[float, float]],
                  callbacks: Callable = None, **kwargs) -> MinimizeResult:
 
-        if not self._restart_file:
+        if not self.restart:
             self.logger.info("Setting up fresh CMA")
 
             os.makedirs(self.folder_name, exist_ok=True)
@@ -250,14 +263,3 @@ class CMAOptimizer(BaseOptimizer):
             pickle.dump(dump_collection, file)
 
         self.logger.info("Restart file created successfully.")
-
-    def checkpoint_load(self, path: str):
-        self.logger.info("Initialising from restart file.")
-
-        with open(path, 'rb') as file:
-            state = pickle.load(file)
-
-        for var, val in state.items():
-            self.__setattr__(var, val)
-
-        self.logger.info("Successfully loaded.")

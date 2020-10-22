@@ -45,9 +45,27 @@ class MinimizeResult:
 class BaseOptimizer(ABC):
     """ Base class of parameter optimizers in GloMPO """
 
+    @classmethod
+    def checkpoint_load(cls, path: str, opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
+                        results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
+                        backend: str = 'threads') -> 'BaseOptimizer':
+        """ Recreates a previous instance of the optimizer suitable to continue a optimization from its previous
+            state.
+
+            Parameters
+            ----------
+            path: str
+                Path to checkpoint file from which to build from. It must be a file produced by the corresponding
+                BaseOptimizer().checkpoint_save method.
+            opt_id, signal_pipe, results_queue, pause_flag, workers, backend
+                These parameters are the same as the corresponding ones in BaseOptimizer.__init__. These will be
+                regenerated and supplied by the manager during reconstruction.
+        """
+        raise NotImplementedError
+
     def __init__(self, opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
                  results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
-                 backend: str = 'threads', restart_file: Optional[str] = None, **kwargs):
+                 backend: str = 'threads', **kwargs):
         """
         Parameters
         ----------
@@ -68,13 +86,6 @@ class BaseOptimizer(ABC):
             The type of concurrency used by the optimizers (processes or threads). This is not necessarily applicable to
             all optimizers. This will default to threads unless forced to used processes (see GloMPOManger backend
             argument for details).
-        restart_file: Optional[str] = None
-            Path to file produced by BaseOptimizer.checkpoint_save. This will setup the optimizer to resume an
-            optimization from the point in the restart_file. Note that if a restart_file is provided all the other
-            parameters given to the initialisation of this class are ignored. In order to ensure GloMPO compatibility
-            optimizers MUST be initialisable with no arguments! Parameters for which default arguments cannot be
-            provided should be set to None and the constructor may raise an error if insufficient arguments have been
-            provided.
         kwargs
             Optimizer specific initialization arguments.
         """
@@ -84,7 +95,6 @@ class BaseOptimizer(ABC):
         self._results_queue = results_queue
         self._pause_signal = pause_flag  # If set allow run, if cleared wait.
         self._backend = backend
-        self._restart_file = restart_file
         self._result_cache = None
 
         self._FROM_MANAGER_SIGNAL_DICT = {0: self.checkpoint_save,
@@ -191,12 +201,8 @@ class BaseOptimizer(ABC):
 
     def checkpoint_save(self, path: str):
         """ Save current state, suitable for restarting. Path is the location for the file or folder to be constructed.
-        """
-        raise NotImplementedError
-
-    def checkpoint_load(self, path: str):
-        """ Recreates a previous instance of the optimizer suitable to continue a optimization from its previous
-            state.
+            Note that only the absolutely critical aspects of the state of the optimizer need to be saved. The manager
+            will resupply multiprocessing parameters when the optimizer is reconstructed.
         """
         raise NotImplementedError
 

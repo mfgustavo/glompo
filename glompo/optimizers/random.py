@@ -76,6 +76,3 @@ class RandomOptimizer(BaseOptimizer):
 
     def callstop(self, reason=None):
         self.stop_called = True
-
-    def checkpoint_save(self, *args):
-        pass

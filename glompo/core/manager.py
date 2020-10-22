@@ -620,14 +620,15 @@ class GloMPOManager:
             event = self._mp_manager.Event()
             event.set()
             try:
-                optimizer = self.opt_checkpoints[opt_id].opt_type(opt_id=opt_id,
-                                                                  signal_pipe=child_pipe,
-                                                                  results_queue=self.optimizer_queue,
-                                                                  pause_flag=event,
-                                                                  workers=slots,
-                                                                  backend=backend,
-                                                                  restart_file=os.path.join(tmp_dir, 'optimizers',
-                                                                                            f'{opt_id:04}'))
+                optimizer = self.opt_checkpoints[opt_id].opt_type.checkpoint_load(opt_id=opt_id,
+                                                                                  signal_pipe=child_pipe,
+                                                                                  results_queue=self.optimizer_queue,
+                                                                                  pause_flag=event,
+                                                                                  workers=slots,
+                                                                                  backend=backend,
+                                                                                  path=os.path.join(tmp_dir,
+                                                                                                    'optimizers',
+                                                                                                    f'{opt_id:04}'))
 
                 optimizer.workers = slots
                 optimizer._backend = backend  # Overwrite in case load_state set old values

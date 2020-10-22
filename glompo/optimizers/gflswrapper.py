@@ -204,15 +204,6 @@ class GFLSOptimizer(BaseOptimizer):
             mess = mess[:-5]
             return mess
 
-    def checkpoint_save(self, logger: Logger, algorithm, stopcond, file_name: str):
-        if os.sep in file_name:
-            path, name = tuple(file_name.rsplit(os.sep, 1))
-            os.makedirs(path)
-        else:
-            name = file_name
-        logger.save(name)
-        return stopcond
-
     def callstop(self, logger: Logger, *args):
         return "Manager Termination"
 

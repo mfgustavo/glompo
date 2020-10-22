@@ -78,9 +78,6 @@ class Nevergrad(BaseOptimizer):
     def callstop(self, *args):
         self.stop = True
 
-    def checkpoint_save(self, *args):
-        warnings.warn("Nevergrad checkpoint_save not yet implemented.", NotImplementedError)
-
 
 class _NevergradCallbacksWrapper:
     """ Wraps all the components needed by GloMPO to be called after each iteration into a single object which can be
