@@ -71,16 +71,16 @@ class CheckpointingControl:
                     folder in the checkpoint_dir or zero otherwise. Formatted to 3 digits.
 
         checkpointing_dir: str = 'checkpoints'
-            Directory in which checkpoints are saved. NB: If a relative path is provided it will be interpreted as
-            relative to the working directory provided to the manager! It is NOT relative to the working directory where
-            the script is executed.
+            Directory in which checkpoints are saved.
+            NB: This path is always converted to an absolute path, if a relative path is provided it will be relative
+                to the working directory when this object is created.
         """
 
         self.checkpoint_time_frequency = checkpoint_time_frequency
         self.checkpoint_iter_frequency = checkpoint_iter_frequency
         self.checkpoint_at_init = checkpoint_at_init
         self.checkpoint_at_conv = checkpoint_at_conv
-        self.checkpointing_dir = checkpointing_dir
+        self.checkpointing_dir = os.path.abspath(checkpointing_dir)
         self.raise_checkpoint_fail = bool(raise_checkpoint_fail)
         self.force_task_save = bool(force_task_save)
         self.keep_past = keep_past

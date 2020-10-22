@@ -139,7 +139,7 @@ class GloMPOManager:
         self.status_frequency: float = None
         self.checkpoint_control: CheckpointingControl = None
 
-        self.opt_log: OptimizerLogger = None
+        self.opt_log: OptimizerLogger = OptimizerLogger()
         # noinspection PyUnresolvedReferences
         self.scope: Optional['GloMPOScope'] = None
 
@@ -406,7 +406,6 @@ class GloMPOManager:
             self.checkpoint_control = None
 
         # Initialise support classes
-        self.opt_log = OptimizerLogger()
         if visualisation:
             from .scope import GloMPOScope  # Only imported if needed to avoid matplotlib compatibility issues
             self.scope = GloMPOScope(**visualisation_args) if visualisation_args else GloMPOScope()
@@ -495,106 +494,108 @@ class GloMPOManager:
 
         self.logger.info(f"Initializing from Checkpoint: {os.path.abspath(path)}")
 
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            with tarfile.open(path, 'r:gz') as tfile:
-                tfile.extractall(tmp_dir)
+        tmp_dir_obj = tempfile.TemporaryDirectory()
+        tmp_dir = tmp_dir_obj.name
 
-            # Load manager variables
-            with open(os.path.join(tmp_dir, 'manager'), 'rb') as file:
-                data = dill.load(file)
-                for var, val in data.items():
+        with tarfile.open(path, 'r:gz') as tfile:
+            tfile.extractall(tmp_dir)
+
+        # Load manager variables
+        with open(os.path.join(tmp_dir, 'manager'), 'rb') as file:
+            data = dill.load(file)
+            for var, val in data.items():
+                try:
+                    setattr(self, var, val)
+                except Exception as e:
+                    raise CheckpointingError(f"Could not set {var} attribute correctly", e)
+
+        # Setup Task
+        try:
+            self.task = None
+            if 'task' in os.listdir(tmp_dir):
+                with open(os.path.join(tmp_dir, 'task'), 'rb') as file:
                     try:
-                        setattr(self, var, val)
-                    except Exception as e:
-                        raise CheckpointingError(f"Could not set {var} attribute correctly", e)
-
-            # Setup Task
-            try:
-                self.task = None
-                if 'task' in os.listdir(tmp_dir):
-                    with open(os.path.join(tmp_dir, 'task'), 'rb') as file:
-                        try:
-                            self.task = dill.load(file)
-                            self.logger.info("Task successfully unpickled")
-                        except PickleError as e:
-                            self.logger.error("Unpickling task failed.")
-                            raise e
-                else:
-                    self.logger.warning('No task detected in checkpoint, task or task_loader required.')
-
-                if not self.task and task_loader:
-                    try:
-                        self.task = task_loader(tmp_dir)
-                        assert callable(self.task)
-                        self.logger.info("Task successfully loaded.")
-                    except Exception as e:
-                        self.logger.error("Use of task_loader failed.")
+                        self.task = dill.load(file)
+                        self.logger.info("Task successfully unpickled")
+                    except PickleError as e:
+                        self.logger.error("Unpickling task failed.")
                         raise e
+            else:
+                self.logger.warning('No task detected in checkpoint, task or task_loader required.')
 
-                if not self.task and task:
-                    try:
-                        self.task = task
-                        assert callable(self.task)
-                    except AssertionError:
-                        self.logger.error("Could not set task, not callable")
-                        raise e
+            if not self.task and task_loader:
+                try:
+                    self.task = task_loader(tmp_dir)
+                    assert callable(self.task)
+                    self.logger.info("Task successfully loaded.")
+                except Exception as e:
+                    self.logger.error("Use of task_loader failed.")
+                    raise e
 
-                assert self.task is not None
+            if not self.task and task:
+                try:
+                    self.task = task
+                    assert callable(self.task)
+                except AssertionError:
+                    self.logger.error("Could not set task, not callable")
+                    raise e
 
-            except Exception as e:
-                raise CheckpointingError(f"Failed to build task due to error", e)
+            assert self.task is not None
 
-            # Allow manual overrides
-            permit_keys = dir(self)
-            for key, val in glompo_kwargs.items():
-                if key in permit_keys:
-                    setattr(self, key, val)
-                elif key == 'backend':
-                    backend = glompo_kwargs['backend']
-                    self._proc_backend = 'processes' in backend
-                    self.opts_daemonic = backend != 'processes_forced'
-                elif key == 'force_terminations_after':
-                    force_terminations_after = glompo_kwargs['force_terminations_after']
-                    self.allow_forced_terminations = force_terminations_after > 0
-                    self._too_long = force_terminations_after
-                elif key == 'visualisation_args':
-                    pass
-                else:
-                    self.logger.warning(f"Cannot parse keyword argument '{key}'. Ignoring.")
+        except Exception as e:
+            raise CheckpointingError(f"Failed to build task due to error", e)
 
-            # Extract scope and rebuild writer if still visualizing
-            if self.visualisation:
-                from .scope import GloMPOScope
-                self.scope = GloMPOScope(**glompo_kwargs['visualisation_args']) \
-                    if 'visualisation_args' in glompo_kwargs else GloMPOScope()
+        # Allow manual overrides
+        permit_keys = dir(self)
+        for key, val in glompo_kwargs.items():
+            if key in permit_keys:
+                setattr(self, key, val)
+            elif key == 'backend':
+                backend = glompo_kwargs['backend']
+                self._proc_backend = 'processes' in backend
+                self.opts_daemonic = backend != 'processes_forced'
+            elif key == 'force_terminations_after':
+                force_terminations_after = glompo_kwargs['force_terminations_after']
+                self.allow_forced_terminations = force_terminations_after > 0
+                self._too_long = force_terminations_after
+            elif key == 'visualisation_args':
+                pass
+            else:
+                self.logger.warning(f"Cannot parse keyword argument '{key}'. Ignoring.")
 
-                if 'scope' in os.listdir(tmp_dir):
-                    self.logger.info('Scope checkpoint found, extracting')
-                    self.scope.load_state(tmp_dir)
+        # Extract scope and rebuild writer if still visualizing
+        if self.visualisation:
+            from .scope import GloMPOScope
+            self.scope = GloMPOScope(**glompo_kwargs['visualisation_args']) \
+                if 'visualisation_args' in glompo_kwargs else GloMPOScope()
 
-            # Modify/create missing variables
-            assert len(self.dt_starts) == len(self.dt_ends), "Timestamps missing from checkpoint."
-            self.optimizer_packs: Dict[int, ProcessPackage] = {}
-            self.t_used = sum([(end - start).seconds for start, end in zip(self.dt_starts, self.dt_ends)])
-            self.t_start = None
-            self.opt_crashed = False
-            self.last_opt_spawn = (0, 0)
-            # noinspection PyBroadException
-            try:
-                self.converged = self.convergence_checker(self)
-            except Exception:
-                self.converged = False
-            if self.converged:
-                self.logger.warning(f"The convergence criteria already evaluates to True. The manager will be unable to"
-                                    f" resume the optimisation. Consider changing the convergence criteria.\n"
-                                    f"{nested_string_formatting(self.convergence_checker.str_with_result())}")
-                warnings.warn("The convergence criteria already evaluates to True. The manager will be unable to resume"
-                              " the optimisation. Consider changing the convergence criteria.", RuntimeWarning)
+            if 'scope' in os.listdir(tmp_dir):
+                self.logger.info('Scope checkpoint found, extracting')
+                self.scope.load_state(tmp_dir)
 
-            # Append nan to histories to show break in optimizations
-            self.cpu_history.append(float('nan'))
-            self.mem_history.append(float('nan'))
-            self.load_history.append((float('nan'),) * 3)
+        # Modify/create missing variables
+        assert len(self.dt_starts) == len(self.dt_ends), "Timestamps missing from checkpoint."
+        self.optimizer_packs: Dict[int, ProcessPackage] = {}
+        self.t_used = sum([(end - start).seconds for start, end in zip(self.dt_starts, self.dt_ends)])
+        self.t_start = None
+        self.opt_crashed = False
+        self.last_opt_spawn = (0, 0)
+        # noinspection PyBroadException
+        try:
+            self.converged = self.convergence_checker(self)
+        except Exception:
+            self.converged = False
+        if self.converged:
+            self.logger.warning(f"The convergence criteria already evaluates to True. The manager will be unable to"
+                                f" resume the optimisation. Consider changing the convergence criteria.\n"
+                                f"{nested_string_formatting(self.convergence_checker.str_with_result())}")
+            warnings.warn("The convergence criteria already evaluates to True. The manager will be unable to resume"
+                          " the optimisation. Consider changing the convergence criteria.", RuntimeWarning)
+
+        # Append nan to histories to show break in optimizations
+        self.cpu_history.append(float('nan'))
+        self.mem_history.append(float('nan'))
+        self.load_history.append((float('nan'),) * 3)
 
         # Load optimizer state
         restarts = {int(opt): self.opt_checkpoints[int(opt)].slots for opt in
@@ -664,6 +665,7 @@ class GloMPOManager:
             raise CheckpointingError("Unable to successfully built any optimizers from the checkpoint.")
 
         self._is_restart = True
+        tmp_dir_obj.cleanup()
 
         self.logger.info("Initialization Done")
 
@@ -996,10 +998,11 @@ class GloMPOManager:
                 self.logger.info("All optimizer restart files detected.")
 
                 # Save timestamp and checkpoint name
-                if len(self.dt_starts) == len(self.dt_ends):
-                    self.dt_ends[-1] = datetime.now()
-                else:
-                    self.dt_ends.append(datetime.now())
+                if len(self.dt_starts) > 0:
+                    if len(self.dt_starts) == len(self.dt_ends):
+                        self.dt_ends[-1] = datetime.now()
+                    else:
+                        self.dt_ends.append(datetime.now())
                 self.chkpt_history.append(chkpt_name)
 
                 # Select variables for pickling
