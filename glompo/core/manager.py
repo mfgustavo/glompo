@@ -15,6 +15,7 @@ import tempfile
 import traceback
 import warnings
 from datetime import datetime, timedelta
+from pathlib import Path
 from pickle import PickleError
 from time import time
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
@@ -869,6 +870,7 @@ class GloMPOManager:
             self._stop_all_children("User Interrupt")
 
         except Exception as e:
+            caught_exception = str(e)
             self.logger.critical("Critical error encountered. Attempting to close GloMPO gracefully", exc_info=e)
             warnings.warn(f"Optimization failed. Caught exception: {e}", RuntimeWarning)
             self._stop_all_children("GloMPO Crash")
@@ -1109,6 +1111,26 @@ class GloMPOManager:
             [pack.signal_pipe.send(1) for _, pack in self.optimizer_packs.items() if pack.process.is_alive()]
         self._toggle_optimizers(1)
         self.logger.info(f"Checkpoint '{chkpt_name}' successfully built")
+
+    def dump_state(self, summary_files: Optional[int] = None, dump_dir: Optional[Path] = None):
+        """ Produces the same output files produced by start_manager without actually running any optimization. Useful
+            to extract output files from checkpoints.
+
+            Parameters
+            ----------
+            summary_files: Optional[int] = None
+                If provided, this will overwrite the manager summary_files setting allowing this method to produce more
+                or less output as desired.
+            dump_dir: Optional[Path] = None
+                If provided, this will overwrite the manager working_dir allowing the output to be redirected to a
+                different folder so as to not interfere with files in the working directory.
+        """
+        self.logger.info("Dumping manager state")
+        if dump_dir:
+            path = Path(dump_dir)
+            if not path.exists():
+                path.mkdir()
+        self._save_log(self.result, "Manual Save State", None, summary_files, dump_dir)
 
     def _fill_optimizer_slots(self):
         """ Starts new optimizers if there are slots available. """
@@ -1500,124 +1522,128 @@ class GloMPOManager:
                         self.logger.warning(f"Could not join optimizer {opt_id}. May crash out with it still running "
                                             f"and thus generate errors. Terminations cannot be sent to threads.")
 
-    def _save_log(self, result: Result, reason: str, caught_exception: str):
-        if self.summary_files > 0:
+    def _save_log(self, result: Result, reason: str, caught_exception: Optional[str],
+                  summary_files: Optional[int] = None, dump_dir: Optional[Path] = None):
+        summary_files = summary_files if summary_files is not None else self.summary_files
+        dump_dir = dump_dir if dump_dir is not None else ''
+
+        if summary_files > 0:
             if caught_exception:
                 reason = f"Process Crash: {caught_exception}"
-            with open("glompo_manager_log.yml", "w") as file:
 
-                if HAS_PSUTIL:
-                    cores = self._process.cpu_affinity()
-                    # Verbose forcing of float and list below needed to stop recursion errors during python dump
-                    if len(self.load_history) > 0 and not np.all(np.isnan(self.load_history)):
-                        load_ave = \
-                            np.round(
-                                np.nanmean(
-                                    np.reshape(
-                                        np.array(self.load_history, dtype=float),
-                                        (-1, 3)),
-                                    axis=0),
-                                3)
-                        load_std = \
-                            np.round(
-                                np.nanstd(
-                                    np.reshape(
-                                        np.array(self.load_history, dtype=float),
-                                        (-1, 3)),
-                                    axis=0),
-                                3)
+            if HAS_PSUTIL and self._process:
+                cores = self._process.cpu_affinity()
+                # Verbose forcing of float and list below needed to stop recursion errors during python dump
+                if len(self.load_history) > 0 and not np.all(np.isnan(self.load_history)):
+                    load_ave = \
+                        np.round(
+                            np.nanmean(
+                                np.reshape(
+                                    np.array(self.load_history, dtype=float),
+                                    (-1, 3)),
+                                axis=0),
+                            3)
+                    load_std = \
+                        np.round(
+                            np.nanstd(
+                                np.reshape(
+                                    np.array(self.load_history, dtype=float),
+                                    (-1, 3)),
+                                axis=0),
+                            3)
 
-                        load_ave = [float(i) for i in load_ave]
-                        load_std = [float(i) for i in load_std]
-                    else:
-                        load_ave = [0]
-                        load_std = [0]
-
-                    if len(self.mem_history) > 0 and not np.all(np.isnan(self.mem_history)):
-                        mem_max = present_memory(float(np.nanmax(self.mem_history)))
-                        mem_ave = present_memory(float(np.nanmean(self.mem_history)))
-                    else:
-                        mem_max = '--'
-                        mem_ave = '--'
-
-                    if len(self.cpu_history) > 0 and not np.all(np.isnan(self.cpu_history)):
-                        cpu_ave = float(np.round(np.nanmean(self.cpu_history), 2))
-                        cpu_std = float(np.round(np.nanstd(self.cpu_history), 2))
-                    else:
-                        cpu_ave = 0
-                        cpu_std = 0
-
-                    run_info = {
-                        "Memory": {
-                            "Used": {
-                                "Max": mem_max,
-                                "Ave": mem_ave},
-                            "Available": present_memory(psutil.virtual_memory().total)},
-                        "CPU": {
-                            "Cores": {
-                                "Total": len(cores),
-                                "IDs": FlowList(cores)},
-                            "Frequency":
-                                f"{psutil.cpu_freq().max / 1000}GHz",
-                            "Load": {
-                                "Average": FlowList(load_ave),
-                                "Std. Dev.": FlowList(load_std)},
-                            "CPU Usage(%)": {
-                                "Average": cpu_ave,
-                                "Std. Dev.": cpu_std}}}
+                    load_ave = [float(i) for i in load_ave]
+                    load_std = [float(i) for i in load_std]
                 else:
-                    run_info = None
+                    load_ave = [0]
+                    load_std = [0]
 
-                t_total = str(timedelta(seconds=sum([(t - t0).seconds for t0, t in zip(self.dt_starts, self.dt_ends)])))
-                t_session = str(timedelta(seconds=time() - self.t_start))
-                t_periods = [{"Start": str(t0), "End": str(t)} for t0, t in zip(self.dt_starts, self.dt_ends)]
-                data = {
-                    "Assignment": {
-                        "Task": type(self.task).__name__ if isinstance(type(self.task), object) else self.task.__name__,
-                        "Working Dir": os.getcwd(),
-                        "Username": getpass.getuser(),
-                        "Hostname": socket.gethostname(),
-                        "Time": {"Optimisation Periods": t_periods,
-                                 "Total": t_total,
-                                 "Session": t_session}},
-                    "Settings": {"x0 Generator": self.x0_generator,
-                                 "Convergence Checker": LiteralWrapper(nested_string_formatting(str(
-                                     self.convergence_checker))),
-                                 "Hunt Conditions": LiteralWrapper(nested_string_formatting(str(
-                                     self.killing_conditions))) if self.killing_conditions else
-                                 self.killing_conditions,
-                                 "Optimizer Selector": self.opt_selector,
-                                 "Max Jobs": self.max_jobs,
-                                 "Bounds": BoundGroup(self.bounds)},
-                    "Counters": {"Function Evaluations": self.f_counter,
-                                 "Hunts Started": self.hunt_counter,
-                                 "Optimizers": {"Started": self.o_counter,
-                                                "Killed": len(self.hunt_victims),
-                                                "Converged": self.conv_counter}}}
+                if len(self.mem_history) > 0 and not np.all(np.isnan(self.mem_history)):
+                    mem_max = present_memory(float(np.nanmax(self.mem_history)))
+                    mem_ave = present_memory(float(np.nanmean(self.mem_history)))
+                else:
+                    mem_max = '--'
+                    mem_ave = '--'
 
-                if run_info:
-                    data["Run Information"] = run_info
+                if len(self.cpu_history) > 0 and not np.all(np.isnan(self.cpu_history)):
+                    cpu_ave = float(np.round(np.nanmean(self.cpu_history), 2))
+                    cpu_std = float(np.round(np.nanstd(self.cpu_history), 2))
+                else:
+                    cpu_ave = 0
+                    cpu_std = 0
 
-                if self.checkpoint_control:
-                    data["Checkpointing"] = {"Directory": os.path.abspath(self.checkpoint_control.checkpointing_dir),
-                                             "Checkpoints":
-                                                 [os.path.abspath(chkpt) + '.tar.gz' for chkpt in self.chkpt_history]}
+                run_info = {
+                    "Memory": {
+                        "Used": {
+                            "Max": mem_max,
+                            "Ave": mem_ave},
+                        "Available": present_memory(psutil.virtual_memory().total)},
+                    "CPU": {
+                        "Cores": {
+                            "Total": len(cores),
+                            "IDs": FlowList(cores)},
+                        "Frequency":
+                            f"{psutil.cpu_freq().max / 1000}GHz",
+                        "Load": {
+                            "Average": FlowList(load_ave),
+                            "Std. Dev.": FlowList(load_std)},
+                        "CPU Usage(%)": {
+                            "Average": cpu_ave,
+                            "Std. Dev.": cpu_std}}}
+            else:
+                run_info = None
 
-                data["Solution"] = {"fx": result.fx,
-                                    "origin": result.origin,
-                                    "exit cond.": LiteralWrapper(nested_string_formatting(reason)),
-                                    "x": FlowList(result.x) if result.x else result.x}
+            t_total = str(timedelta(seconds=sum([(t - t0).seconds for t0, t in zip(self.dt_starts, self.dt_ends)])))
+            t_session = str(timedelta(seconds=time() - self.t_start)) if self.t_start else None
+            t_periods = [{"Start": str(t0), "End": str(t)} for t0, t in zip(self.dt_starts, self.dt_ends)]
+            data = {
+                "Assignment": {
+                    "Task": type(self.task).__name__ if isinstance(type(self.task), object) else self.task.__name__,
+                    "Working Dir": os.getcwd(),
+                    "Username": getpass.getuser(),
+                    "Hostname": socket.gethostname(),
+                    "Time": {"Optimisation Periods": t_periods,
+                             "Total": t_total,
+                             "Session": t_session}},
+                "Settings": {"x0 Generator": self.x0_generator,
+                             "Convergence Checker": LiteralWrapper(nested_string_formatting(str(
+                                 self.convergence_checker))),
+                             "Hunt Conditions": LiteralWrapper(nested_string_formatting(str(
+                                 self.killing_conditions))) if self.killing_conditions else
+                             self.killing_conditions,
+                             "Optimizer Selector": self.opt_selector,
+                             "Max Jobs": self.max_jobs,
+                             "Bounds": BoundGroup(self.bounds)},
+                "Counters": {"Function Evaluations": self.f_counter,
+                             "Hunts Started": self.hunt_counter,
+                             "Optimizers": {"Started": self.o_counter,
+                                            "Killed": len(self.hunt_victims),
+                                            "Converged": self.conv_counter}}}
 
+            if run_info:
+                data["Run Information"] = run_info
+
+            if self.checkpoint_control:
+                data["Checkpointing"] = {"Directory": os.path.abspath(self.checkpoint_control.checkpointing_dir),
+                                         "Checkpoints":
+                                             [os.path.abspath(chkpt) + '.tar.gz' for chkpt in self.chkpt_history]}
+
+            data["Solution"] = {"fx": result.fx,
+                                "origin": result.origin,
+                                "exit cond.": LiteralWrapper(nested_string_formatting(reason)),
+                                "x": FlowList(result.x) if result.x else result.x}
+
+            with Path(dump_dir, "glompo_manager_log.yml").open("w") as file:
                 self.logger.debug("Saving manager summary file.")
                 yaml.dump(data, file, Dumper=Dumper, default_flow_style=False, sort_keys=False)
 
-            if self.summary_files >= 2:
+            if summary_files >= 2:
                 self.logger.debug("Saving optimizers summary file.")
-                self.opt_log.save_summary("opt_best_summary.yml")
-            if self.summary_files >= 3:
+                self.opt_log.save_summary(os.path.join(dump_dir, "opt_best_summary.yml"))
+            if summary_files >= 3:
                 self.logger.debug("Saving optimizer log files.")
-                self.opt_log.save_optimizer("glompo_optimizer_logs")
-            if self.summary_files >= 4:
+                self.opt_log.save_optimizer(os.path.join(dump_dir, "glompo_optimizer_logs"))
+            if summary_files >= 4:
                 self.logger.debug("Saving trajectory plot.")
                 signs = set()
                 large = 0
@@ -1638,10 +1664,10 @@ class GloMPOManager:
                     name += "best_" if best_fx else ""
                     name = name[:-1] if name.endswith("_") else name
                     name += ".png"
-                    self.opt_log.plot_trajectory(name, log_scale, best_fx)
-            if self.summary_files == 5:
+                    self.opt_log.plot_trajectory(Path(dump_dir, name), log_scale, best_fx)
+            if summary_files == 5:
                 self.logger.debug("Saving optimizer parameter trials.")
-                self.opt_log.plot_optimizer_trials()
+                self.opt_log.plot_optimizer_trials(dump_dir)
 
     def _toggle_optimizers(self, on_off: int):
         """ Sends pause or resume signals to all optimizers based on the on_off parameter:

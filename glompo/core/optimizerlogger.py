@@ -3,6 +3,7 @@
 import os
 import warnings
 from math import inf
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Union, overload
 
 import numpy as np
@@ -133,7 +134,9 @@ class OptimizerLogger:
 
                     x_best = FlowList(best['x'])
                     f_best = best['fx_best']
-                sum_data[optimizer] = {'end_cond': self._storage[optimizer].metadata["End Condition"],
+                end_cond = self._storage[optimizer].metadata["End Condition"] \
+                    if "End Condition" in self._storage[optimizer].metadata else None
+                sum_data[optimizer] = {'end_cond': end_cond,
                                        'f_calls': f_calls,
                                        'f_best': f_best,
                                        'x_best': x_best}
@@ -141,7 +144,7 @@ class OptimizerLogger:
             with open(filename, "w+") as file:
                 yaml.dump(sum_data, file, Dumper=Dumper, default_flow_style=False, sort_keys=False)
 
-    def plot_optimizer_trials(self, opt_id: Optional[int] = None):
+    def plot_optimizer_trials(self, path: Optional[Path] = None, opt_id: Optional[int] = None):
         if not HAS_MATPLOTLIB:
             warnings.warn("Matplotlib not present cannot create plots.", ImportWarning)
             return
@@ -163,7 +166,8 @@ class OptimizerLogger:
             ax.set_ylabel('Parameter Value')
             ax.set_title('Parameter values as a function of optimizer iteration number')
 
-            fig.savefig(f'opt{opt}_parms.png')
+            name = f'opt{opt}_parms.png' if path is None else Path(path, f'opt{opt}_parms.png')
+            fig.savefig(name)
             plt.close(fig)
 
         if is_interactive:
