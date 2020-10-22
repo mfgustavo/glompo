@@ -88,7 +88,7 @@ class CMAOptimizer(BaseOptimizer):
         if 'tolfun' not in self.cmasettings:
             self.cmasettings['tolfun'] = 1e-20
 
-        if self.workers > 1 and 'popsize' not in self.cmasettings:
+        if 'popsize' not in self.cmasettings:
             self.cmasettings['popsize'] = self.workers
         self.popsize = self.cmasettings['popsize']
         if self.popsize < self.workers:

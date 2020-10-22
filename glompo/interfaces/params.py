@@ -7,13 +7,12 @@
 """
 import os
 import warnings
-from typing import Dict, List, Optional, Sequence, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Tuple
 
-import dill
 import numpy as np
 from scm.params.common.parallellevels import ParallelLevels
 from scm.params.common.reaxff_converter import geo_to_params, trainset_to_params
-from scm.params.core.dataset import DataSet, Loss, SSE
+from scm.params.core.dataset import DataSet, SSE
 from scm.params.core.jobcollection import JobCollection
 from scm.params.core.opt_components import LinearParameterScaler, _Step
 from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
@@ -51,7 +50,7 @@ class _FunctionWrapper:
     def __call__(self, pars) -> float:
         return self.func(pars)
 
-    def resids(self, pars):
+    def resids(self, pars) -> Sequence[float]:
         """ Method added to conform the function to optsam API and allow the GFLS algorithm to be used. """
 
         result = self.func(pars, full=True)[0]
@@ -162,7 +161,7 @@ class ReaxFFError:
     """
 
     @classmethod
-    def from_classic_files(cls, path: str, **kwargs) -> 'ReaxFFError':
+    def from_classic_files(cls, path: str) -> 'ReaxFFError':
         """ Initializes the error function from classic ReaxFF files.
 
             Parameters
@@ -170,14 +169,12 @@ class ReaxFFError:
             path: str
                 Path to classic ReaxFF files, passed to setup_reax_from_classic (see its docs for what files are
                 expected).
-            kwargs
-                Passed to the class initialisation method.
         """
         dat_set, job_col, rxf_eng = setup_reax_from_classic(path)
-        return cls(dat_set, job_col, rxf_eng, **kwargs)
+        return cls(dat_set, job_col, rxf_eng)
 
     @classmethod
-    def from_params_files(cls, path: str, **kwargs) -> 'ReaxFFError':
+    def from_params_files(cls, path: str) -> 'ReaxFFError':
         """ Initializes the error function from ParAMS data files.
 
             Parameters
@@ -185,14 +182,11 @@ class ReaxFFError:
             path: str
                 Path to directory containing ParAMS data set, job collection and ReaxFF engine files.
                 (see setup_reax_from_params for what files are expected).
-            kwargs
-                Passed to the class initialisation method.
         """
         dat_set, job_col, rxf_eng = setup_reax_from_params(path)
-        return cls(dat_set, job_col, rxf_eng, **kwargs)
+        return cls(dat_set, job_col, rxf_eng)
 
-    def __init__(self, data_set: DataSet, job_collection: JobCollection, reax_params: ReaxParams,
-                 loss: Union[Loss, str, None] = None):
+    def __init__(self, data_set: DataSet, job_collection: JobCollection, reax_params: ReaxParams):
         """ Initialisation of the ReaxFF error function. To initialise the object from files use the class factory
             methods: ReaxFFError.from_classic_files or ReaxFFError.from_params_files
 
@@ -205,18 +199,12 @@ class ReaxFFError:
             reax_params: ReaxParams
                 ReaxParams object which holds the force field values, ranges, engine and which parameters are active or
                 not.
-            loss: Union[Loss, str, None]
-                A subclass of scm.params.core.dataset.Loss, holding the mathematical definition of the
-                loss function to be applied to every entry, or a registered string shortcut.
         """
         self.dat_set = data_set
         self.job_col = job_collection
         self.rxf_eng = reax_params
 
-        if loss:
-            self.loss = loss
-        else:
-            self.loss = SSE()
+        self.loss = SSE()
         self.scaler = LinearParameterScaler(self.rxf_eng.active.range)
         self.par_levels = ParallelLevels(jobs=1)
 
@@ -239,17 +227,12 @@ class ReaxFFError:
         """ Used to store files into a GloMPO checkpoint (at path) suitable to reconstruct the task when the checkpoint
             is loaded.
         """
-        self.dat_set.pickle_dump(os.path.join(path, 'data_set'))
-        self.job_col.pickle_dump(os.path.join(path, 'job_collection'))
-        self.rxf_eng.pickle_dump(os.path.join(path, 'reax_engine.pkl'))
-
-        with open(os.path.join(path, 'extra_task'), 'wb') as file:
-            dill.dump({'loss': self.loss,
-                       'scaler': self.scaler,
-                       'par_levels': self.par_levels}, file)
+        self.dat_set.pickle_dump(os.path.join(path, 'data_set.pkl'))
+        self.job_col.pickle_dump(os.path.join(path, 'job_collection.pkl'))
+        self.rxf_eng.pickle_dump(os.path.join(path, 'reax_params.pkl'))
 
     def save(self, path: str, filenames: Optional[Dict[str, str]] = None, parameters: Optional[Sequence[float]] = None):
-        """ Writes the data set and job collection to YAML files. Writes a ReaxFF force field file.
+        """ Writes the data set and job collection to YAML files. Writes the ReaxFF engine object to a force field file.
 
             Parameters
             ----------
@@ -260,7 +243,7 @@ class ReaxFFError:
                 below. This example contains the default names used if not given:
                     {'ds': 'data_set.yml', 'jc': 'job_collection.yml', 'ff': 'ffield'}
             parameters: Optional[Sequence[float]] = None
-                Optional parameters to be written into the force field file. If not given the parameters currently,
+                Optional parameters to be written into the force field file. If not given, the parameters currently
                 therein will be used.
         """
         if not filenames:
@@ -348,45 +331,44 @@ def setup_reax_from_classic(path: str) -> Tuple[DataSet, JobCollection, ReaxPara
 
 
 def setup_reax_from_params(path: str) -> Tuple[DataSet, JobCollection, ReaxParams]:
-    """
-    Loaded ParAMS produced ReaxFF files into ParAMS objects.
+    """ Loads ParAMS produced ReaxFF files into ParAMS objects.
 
-    Parameters
-    ----------
-    path: str
-        Path to folder containing:
-        - data_set.yml:       Contains the description of the items in the training set.
-        - job_collection.yml: Contains descriptions of the AMS jobs to evaluate.
-        - reax_params.pkl:    Pickle of the ReaxParams object which contains the force field, active variables and their
-                              ranges.
+        Parameters
+        ----------
+        path: str
+            Path to folder containing:
+            - data_set.yml OR data_set.pkl
+                Contains the description of the items in the training set. A YAML file must be of the form produced by
+                scm.params.core.dataset.DataSet.store, a pickle file must be of the form produced by
+                scm.params.core.dataset.DataSet.pickle_dump. If both files are present, the pickle is given priority.
+            - job_collection.yml OR job_collection.pkl
+                Contains descriptions of the AMS jobs to evaluate. A YAML file must be of the form produced by
+                scm.params.core.jobcollection.JobCollection.store, a pickle file must be of the form produced by
+                scm.params.core.jobcollection.JobCollection.pickle_dump.  If both files are present, the pickle is given
+                priority.
+            - reax_params.pkl:
+                Pickle produced by scm.params.parameterinterfaces.reaxff.ReaxParams.pickle_dump, representing the force
+                field, active parameters and their ranges.
     """
+    files = os.listdir(path)
 
-    dat_set = DataSet().load(os.path.join(path, 'data_set.yml'))
-    job_col = JobCollection().load(os.path.join(path, 'job_collection.yml'))
-    with open(os.path.join(path, 'reax_params.pkl'), 'rb') as file:
-        rxf_eng = dill.load(file)
+    dat_set = DataSet()
+    job_col = JobCollection()
+
+    if 'data_set.pkl' in files:
+        dat_set.pickle_load(os.path.join(path, 'data_set.pkl'))
+    elif 'data_set.yml' in files:
+        dat_set.load(os.path.join(path, 'data_set.yml'))
+    else:
+        raise FileNotFoundError("No data set data identified")
+
+    if 'job_collection.pkl' in files:
+        job_col.pickle_load(os.path.join(path, 'job_collection.pkl'))
+    elif 'job_collection.yml' in files:
+        job_col.load(os.path.join(path, 'job_collection.yml'))
+    else:
+        raise FileNotFoundError("No job collection data identified")
+
+    rxf_eng = ReaxParams.pickle_load(os.path.join(path, 'reax_params.pkl'))
 
     return dat_set, job_col, rxf_eng
-
-
-def reaxfferror_task_loader(path: str) -> ReaxFFError:
-    """ Builds a ReaxFFError instance from the files (located in path) made by its checkpoint_save method.
-        This method was designed to be used as the task_loader when loading a GloMPO checkpoint.
-    """
-    dat_set = DataSet()
-    dat_set.pickle_load(os.path.join(path, 'data_set'))
-
-    job_col = JobCollection()
-    job_col.pickle_load(os.path.join(path, 'job_collection'))
-
-    rxf_eng = ReaxParams.pickle_load(os.path.join(path, 'reax_engine.pkl'))
-
-    task = ReaxFFError(dat_set, job_col, rxf_eng)
-
-    with open(os.path.join(path, 'extra_task'), 'rb') as file:
-        data = dill.load(file)
-
-    for var, val in data.items():
-        setattr(task, var, val)
-
-    return task

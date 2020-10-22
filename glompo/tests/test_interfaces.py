@@ -1,6 +1,8 @@
 import inspect
 import os
 import pickle
+import shutil
+import tempfile
 from typing import Dict
 
 import pytest
@@ -96,9 +98,21 @@ class TestReaxFFError:
         return result
 
     @pytest.mark.parametrize("name, factory", [('classic', ReaxFFError.from_classic_files),
-                                               ('params', ReaxFFError.from_params_files)])
+                                               ('params_pkl', ReaxFFError.from_params_files),
+                                               ('params_yml', ReaxFFError.from_params_files)])
     def test_load(self, name, factory):
-        task = factory(INPUT_FILE_PATH)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            if 'params' in name:
+                suffix = name.split('_')[1]
+                for file in ('data_set.' + suffix, 'job_collection.' + suffix, 'reax_params.pkl'):
+                    shutil.copy(os.path.join(INPUT_FILE_PATH, file), os.path.join(tmp_dir, file))
+                    if file != 'reax_params.pkl':
+                        with pytest.raises(FileNotFoundError):
+                            factory(tmp_dir)
+            else:
+                for file in ('control', 'ffield_bool', 'ffield_max', 'ffield_min', 'ffield_init', 'geo', 'trainset.in'):
+                    shutil.copy(os.path.join(INPUT_FILE_PATH, file), os.path.join(tmp_dir, file))
+            task = factory(tmp_dir)
 
         assert isinstance(task.dat_set, DataSet)
         assert isinstance(task.job_col, JobCollection)
@@ -109,16 +123,28 @@ class TestReaxFFError:
 
         self.built_tasks[name] = task
 
-    def test_chkpt(self):
-        pass
+    @pytest.mark.parametrize("method, suffix", [('save', 'yml'), ('checkpoint_save', 'pkl')])
+    def test_save(self, method, suffix):
+        if len(self.built_tasks) == 0:
+            pytest.xfail("No tasks constructed successfully")
 
-    def test_save(self):
-        pass
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            task = self.built_tasks[[*self.built_tasks.keys()][0]]
+            getattr(task, method)(tmp_dir)
 
-    @pytest.mark.parametrize("name", ['classic', 'params'])
+            files = os.listdir(tmp_dir)
+            for file in ('data_set.' + suffix, 'job_collection.' + suffix,
+                         'reax_params.pkl' if suffix == 'pkl' else 'ffield'):
+                assert file in files
+
+    @pytest.mark.parametrize("name", ['classic', 'params_pkl', 'params_yml'])
     def test_calculate(self, name, check_result):
         if name not in self.built_tasks:
             pytest.xfail("Task not constructed successfully")
+
+        # TODO Remove when AMS bug is fixed
+        if name == 'params_yml':
+            pytest.xfail("Know AMS bug causes this to fail.")
 
         task = self.built_tasks[name]
         fx, resids, cont = check_result
