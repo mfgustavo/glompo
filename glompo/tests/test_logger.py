@@ -1,11 +1,10 @@
 import datetime
-import os
+from pathlib import Path
 
+import glompo.core.optimizerlogger
 import numpy as np
 import pytest
 import yaml
-
-import glompo.core.optimizerlogger
 from glompo.core.optimizerlogger import OptimizerLogger
 from glompo.optimizers.baseoptimizer import BaseOptimizer
 from glompo.optimizers.cmawrapper import CMAOptimizer
@@ -45,17 +44,17 @@ class TestLogger:
         return log
 
     def test_save(self, filled_log, tmp_path):
-        filled_log.save_optimizer(os.path.join(tmp_path, "success"), 1)
-        filled_log.save_optimizer(os.path.join(tmp_path, "all"))
+        filled_log.save_optimizer(Path(tmp_path, "success"), 1)
+        filled_log.save_optimizer(Path(tmp_path, "all"))
 
-        open(os.path.join(tmp_path, "all", "0_GFLSOptimizer.yml"), "r")
-        open(os.path.join(tmp_path, "all", "1_CMAOptimizer.yml"), "r")
-        open(os.path.join(tmp_path, "all", "2_ABCMeta.yml"), "r")
-        open(os.path.join(tmp_path, "success.yml"), "r")
+        Path(tmp_path, "all", "0_GFLSOptimizer.yml").exists()
+        Path(tmp_path, "all", "1_CMAOptimizer.yml").exists()
+        Path(tmp_path, "all", "2_ABCMeta.yml").exists()
+        Path(tmp_path, "success.yml").exists()
 
     def test_save_summary(self, filled_log, tmp_path):
-        filled_log.save_summary(os.path.join(tmp_path, "summary.yml"))
-        with open(os.path.join(tmp_path, "summary.yml"), "r") as file:
+        filled_log.save_summary(Path(tmp_path, "summary.yml"))
+        with Path(tmp_path, "summary.yml").open("r") as file:
             data = yaml.safe_load(file)
         assert len(data) == 3
         assert all([kw in data[0] for kw in ('end_cond', 'f_calls', 'f_best', 'x_best')])
@@ -110,12 +109,12 @@ class TestLogger:
     @pytest.mark.skipif(not glompo.core.optimizerlogger.HAS_MATPLOTLIB,
                         reason="Matplotlib package needed to use these features.")
     def test_plot_traj(self, filled_log, tmp_path):
-        filled_log.plot_trajectory(os.path.join(tmp_path, 'traj.png'))
-        assert os.path.exists(os.path.join(tmp_path, 'traj.png'))
+        filled_log.plot_trajectory(Path(tmp_path, 'traj.png'))
+        assert Path(tmp_path, 'traj.png').exists()
 
     @pytest.mark.skipif(not glompo.core.optimizerlogger.HAS_MATPLOTLIB,
                         reason="Matplotlib package needed to use these features.")
     def test_plot_opts(self, work_in_tmp, filled_log):
         filled_log.plot_optimizer_trials()
         for i in range(3):
-            assert os.path.exists(f"opt{i}_parms.png")
+            assert Path(f"opt{i}_parms.png").exists()

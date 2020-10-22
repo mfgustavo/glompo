@@ -1,11 +1,11 @@
 import multiprocessing as mp
-import os
+from pathlib import Path
 
 from glompo.common.wrappers import catch_user_interrupt, decorate_all_methods, process_print_redirect
 
 
 def test_redirect(work_in_tmp):
-    os.makedirs("glompo_optimizer_printstreams", exist_ok=True)
+    Path("glompo_optimizer_printstreams").mkdir(parents=True, exist_ok=True)
 
     def func():
         print("redirect_test")
@@ -16,10 +16,10 @@ def test_redirect(work_in_tmp):
     p.start()
     p.join()
 
-    with open(os.path.join("glompo_optimizer_printstreams", "printstream_0001.out"), "r") as file:
+    with Path("glompo_optimizer_printstreams", "printstream_0001.out").open("r") as file:
         assert file.readline() == "redirect_test\n"
 
-    with open(os.path.join("glompo_optimizer_printstreams", "printstream_0001.err"), "r") as file:
+    with Path("glompo_optimizer_printstreams", "printstream_0001.err").open("r") as file:
         assert any(["redirect_test_error" in line for line in file.readlines()])
 
 

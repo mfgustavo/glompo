@@ -1,6 +1,7 @@
 """ Useful static functions used throughout GloMPO. """
 import inspect
 import os
+from pathlib import Path
 from typing import Optional, Sequence, Tuple, Union, overload
 
 import matplotlib
@@ -21,7 +22,7 @@ __all__ = ("nested_string_formatting",
            "flow_presenter",
            "bound_group_presenter",
            "unknown_object_presenter",
-           "FileNameHandler",
+           "WorkInDirectory",
            "CheckpointingError")
 
 """ Sundry Code Stubs """
@@ -208,23 +209,21 @@ def unknown_object_presenter(dumper, unknown_class: object):
 """ Context Managers """
 
 
-class FileNameHandler:
+class WorkInDirectory:
     """ Context manager to manage the creation of new files in a different directory from the working one. """
 
-    def __init__(self, name: str):
-        """ Decomposes name into a path to a new directory. The final leaf (directory or file) is returned when the
-            context manager is created and the working directory is changed to one level up from this final leaf while
-            within the context manager. The working directory is returned when exiting the manager.
+    def __init__(self, path: Union[Path, str]):
+        """ path is a directory to which the working directory will be changed on entering the context manager.
+            If the directory does not exist, it will be created. The working directory is changed back on exiting the
+            context manager.
         """
-        self.filename = name
-        self.orig_dir = os.getcwd()
-        if os.sep in name:
-            path, self.filename = name.rsplit(os.sep, 1)
-            os.makedirs(path, exist_ok=True)
-            os.chdir(path)
+        path = Path(path).resolve()
+        self.orig_dir = Path.cwd()
+        path.mkdir(parents=True, exist_ok=True)
+        os.chdir(path)
 
     def __enter__(self):
-        return self.filename
+        pass
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         os.chdir(self.orig_dir)

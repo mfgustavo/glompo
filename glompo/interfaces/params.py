@@ -5,9 +5,9 @@
     2) GloMPI is primary, setup a GloMPOManager instance as normal.
        The ReaxFFError class below will create the error function to be used as the manager 'task' parameter.
 """
-import os
 import warnings
-from typing import Dict, List, Optional, Sequence, Tuple
+from pathlib import Path
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from scm.params.common.parallellevels import ParallelLevels
@@ -161,12 +161,12 @@ class ReaxFFError:
     """
 
     @classmethod
-    def from_classic_files(cls, path: str) -> 'ReaxFFError':
+    def from_classic_files(cls, path: Union[Path, str]) -> 'ReaxFFError':
         """ Initializes the error function from classic ReaxFF files.
 
             Parameters
             ----------
-            path: str
+            path: Union[Path, str]
                 Path to classic ReaxFF files, passed to setup_reax_from_classic (see its docs for what files are
                 expected).
         """
@@ -174,12 +174,12 @@ class ReaxFFError:
         return cls(dat_set, job_col, rxf_eng)
 
     @classmethod
-    def from_params_files(cls, path: str) -> 'ReaxFFError':
+    def from_params_files(cls, path: Union[Path, str]) -> 'ReaxFFError':
         """ Initializes the error function from ParAMS data files.
 
             Parameters
             ----------
-            path: str
+            path: Union[Path, str]
                 Path to directory containing ParAMS data set, job collection and ReaxFF engine files.
                 (see setup_reax_from_params for what files are expected).
         """
@@ -223,20 +223,21 @@ class ReaxFFError:
         """
         return self._calculate(x)[1]
 
-    def checkpoint_save(self, path: str):
+    def checkpoint_save(self, path: Union[Path, str]):
         """ Used to store files into a GloMPO checkpoint (at path) suitable to reconstruct the task when the checkpoint
             is loaded.
         """
-        self.dat_set.pickle_dump(os.path.join(path, 'data_set.pkl'))
-        self.job_col.pickle_dump(os.path.join(path, 'job_collection.pkl'))
-        self.rxf_eng.pickle_dump(os.path.join(path, 'reax_params.pkl'))
+        self.dat_set.pickle_dump(Path(path, 'data_set.pkl'))
+        self.job_col.pickle_dump(Path(path, 'job_collection.pkl'))
+        self.rxf_eng.pickle_dump(str(Path(path, 'reax_params.pkl')))  # Method does not support Path
 
-    def save(self, path: str, filenames: Optional[Dict[str, str]] = None, parameters: Optional[Sequence[float]] = None):
+    def save(self, path: Union[Path, str], filenames: Optional[Dict[str, str]] = None,
+             parameters: Optional[Sequence[float]] = None):
         """ Writes the data set and job collection to YAML files. Writes the ReaxFF engine object to a force field file.
 
             Parameters
             ----------
-            path: str
+            path: Union[Path, str]
                 Path to directory in which files will be saved.
             filenames: Optional[Dict[str, str]] = None
                 Custom filenames for the written files. The dictionary may include any/all of the keys in the example
@@ -253,9 +254,9 @@ class ReaxFFError:
                  'jc': filenames['jc'] if 'jc' in filenames else 'job_collection.yml',
                  'ff': filenames['ff'] if 'ff' in filenames else 'ffield'}
 
-        self.dat_set.store(os.path.join(path, names['ds']))
-        self.job_col.store(os.path.join(path, names['jc']))
-        self.rxf_eng.write(os.path.join(path, names['ff']), parameters)
+        self.dat_set.store(Path(path, names['ds']))
+        self.job_col.store(Path(path, names['jc']))
+        self.rxf_eng.write(Path(path, names['ff']), parameters)
 
     def _calculate(self, x: Sequence[float]) -> Tuple[float, List[float], List[float]]:
         """ Core calculation function, returns both the error function value and the residuals. """
@@ -269,13 +270,13 @@ class ReaxFFError:
             return float('inf'), [float('inf')], [float('inf')]
 
 
-def setup_reax_from_classic(path: str) -> Tuple[DataSet, JobCollection, ReaxParams]:
+def setup_reax_from_classic(path: Union[Path, str]) -> Tuple[DataSet, JobCollection, ReaxParams]:
     """
     Parses classic ReaxFF force field and configuration files into instances which can be evaluated by AMS.
 
     Parameters
     ----------
-    path: str
+    path: Union[Path, str]
         Path to folder containing:
         - trainset.in: Contains the description of the items in the training set
         - control:     Contains ReaxFF settings
@@ -290,16 +291,16 @@ def setup_reax_from_classic(path: str) -> Tuple[DataSet, JobCollection, ReaxPara
         - geo:         Contains the geometries of the items used in the training set.
     """
 
-    dat_set = trainset_to_params(os.path.join(path, 'trainset.in'))
-    rxf_eng = ReaxParams(os.path.join(path, 'ffield_bool'))
-    vars_max = ReaxParams(os.path.join(path, 'ffield_max'))
-    vars_min = ReaxParams(os.path.join(path, 'ffield_min'))
+    dat_set = trainset_to_params(Path(path, 'trainset.in'))
+    rxf_eng = ReaxParams(Path(path, 'ffield_bool'))
+    vars_max = ReaxParams(Path(path, 'ffield_max'))
+    vars_min = ReaxParams(Path(path, 'ffield_min'))
 
     # Update the job collection depending on the types of data in the training set
-    settings = reaxff_control_to_settings(os.path.join(path, 'control'))
+    settings = reaxff_control_to_settings(Path(path, 'control'))
     if dat_set.forces():
         settings.input.ams.properties.gradients = True
-    job_col = geo_to_params(os.path.join(path, 'geo'), settings)
+    job_col = geo_to_params(Path(path, 'geo'), settings)
 
     # Remove training set entries not in job collection
     remove_ids = dat_set.check_consistency(job_col)
@@ -320,7 +321,7 @@ def setup_reax_from_classic(path: str) -> Tuple[DataSet, JobCollection, ReaxPara
                 parm.is_active = False
                 print(f"WARNING: {parm.name} deactivated due to bounds.")
 
-    vars_values = ReaxParams(os.path.join(path, 'ffield_init'))
+    vars_values = ReaxParams(Path(path, 'ffield_init'))
     rxf_eng.x = vars_values.x
     for parm in rxf_eng.active:
         if not parm.range[0] < parm.value < parm.range[1]:
@@ -330,12 +331,12 @@ def setup_reax_from_classic(path: str) -> Tuple[DataSet, JobCollection, ReaxPara
     return dat_set, job_col, rxf_eng
 
 
-def setup_reax_from_params(path: str) -> Tuple[DataSet, JobCollection, ReaxParams]:
+def setup_reax_from_params(path: Union[Path, str]) -> Tuple[DataSet, JobCollection, ReaxParams]:
     """ Loads ParAMS produced ReaxFF files into ParAMS objects.
 
         Parameters
         ----------
-        path: str
+        path: Union[Path, str]
             Path to folder containing:
             - data_set.yml OR data_set.pkl
                 Contains the description of the items in the training set. A YAML file must be of the form produced by
@@ -350,25 +351,19 @@ def setup_reax_from_params(path: str) -> Tuple[DataSet, JobCollection, ReaxParam
                 Pickle produced by scm.params.parameterinterfaces.reaxff.ReaxParams.pickle_dump, representing the force
                 field, active parameters and their ranges.
     """
-    files = os.listdir(path)
-
     dat_set = DataSet()
     job_col = JobCollection()
 
-    if 'data_set.pkl' in files:
-        dat_set.pickle_load(os.path.join(path, 'data_set.pkl'))
-    elif 'data_set.yml' in files:
-        dat_set.load(os.path.join(path, 'data_set.yml'))
-    else:
-        raise FileNotFoundError("No data set data identified")
+    for name, params_obj in {'data_set': dat_set, 'job_collection': job_col}.items():
+        built = False
+        for suffix, loader in {'.pkl': 'pickle_load', '.yml': 'load'}.items():
+            file = Path(path, name + suffix)
+            if file.exists():
+                getattr(params_obj, loader)(file)
+                built = True
+        if not built:
+            raise FileNotFoundError(f"No {name.replace('_', ' ')} data found")
 
-    if 'job_collection.pkl' in files:
-        job_col.pickle_load(os.path.join(path, 'job_collection.pkl'))
-    elif 'job_collection.yml' in files:
-        job_col.load(os.path.join(path, 'job_collection.yml'))
-    else:
-        raise FileNotFoundError("No job collection data identified")
-
-    rxf_eng = ReaxParams.pickle_load(os.path.join(path, 'reax_params.pkl'))
+    rxf_eng = ReaxParams.pickle_load(Path(path, 'reax_params.pkl'))
 
     return dat_set, job_col, rxf_eng

@@ -2,7 +2,6 @@
 
 import copy
 import getpass
-import glob
 import logging
 import multiprocessing as mp
 import os
@@ -18,7 +17,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from pickle import PickleError
 from time import time
-from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 import numpy as np
 import yaml
@@ -44,7 +43,7 @@ except ModuleNotFoundError:
 
 from ._backends import CustomThread, ThreadPrintRedirect
 from .optimizerlogger import OptimizerLogger
-from ..common.helpers import FileNameHandler, LiteralWrapper, literal_presenter, nested_string_formatting, \
+from ..common.helpers import LiteralWrapper, literal_presenter, nested_string_formatting, \
     unknown_object_presenter, generator_presenter, optimizer_selector_presenter, present_memory, FlowList, \
     flow_presenter, BoundGroup, bound_group_presenter, CheckpointingError, is_bounds_valid
 from ..common.namedtuples import Bound, OptimizerPackage, ProcessPackage, Result, OptimizerCheckpoint
@@ -77,8 +76,8 @@ class GloMPOManager:
         self._is_restart: bool = None
 
         self.logger = logging.getLogger('glompo.manager')
-        self._init_workdir = None
-        self.working_dir: str = None
+        self._init_workdir: Path = None
+        self.working_dir: Path = None
 
         self._mp_manager = mp.Manager()
         self.optimizer_queue = self._mp_manager.Queue(10)
@@ -155,7 +154,7 @@ class GloMPOManager:
               task: Callable[[Sequence[float]], float],
               bounds: Sequence[Tuple[float, float]],
               opt_selector: BaseSelector,
-              working_dir: str = ".",
+              working_dir: Union[Path, str] = ".",
               overwrite_existing: bool = False,
               max_jobs: Optional[int] = None,
               backend: str = 'processes',
@@ -190,7 +189,7 @@ class GloMPOManager:
             subclasses are initialised by default with a set of BaseOptimizer subclasses the user would like to make
             available to the optimization. See BaseSelector and BaseOptimizer documentation for more details.
 
-        working_dir: str = "."
+        working_dir: Union[Path, str] = "."
             If provided, GloMPO wil redirect its outputs to the given directory.
 
         overwrite_existing: bool = False
@@ -318,7 +317,7 @@ class GloMPOManager:
             warnings.warn(f"Cannot parse working_dir = {working_dir}. str or bytes expected. Using current "
                           f"work directory.", UserWarning)
             working_dir = "."
-        self.working_dir = working_dir
+        self.working_dir = Path(working_dir).absolute()
 
         # Save and wrap task
         if not callable(task):
@@ -434,14 +433,14 @@ class GloMPOManager:
         self._is_restart = False
         self.logger.info("Initialization Done")
 
-    def load_checkpoint(self, path: str,
+    def load_checkpoint(self, path: Union[Path, str],
                         task_loader: Optional[Callable[[str], Callable[[Sequence[float]], float]]] = None,
                         task: Optional[Callable[[Sequence[float]], float]] = None, **glompo_kwargs):
         """ Initialise GloMPO from the provided checkpoint file and allows an optimization to resume from that point.
 
             Parameters
             ----------
-            path: str
+            path: Union[Path, str]
                 Path to GloMPO checkpoint file.
 
             task_loader: Optional[Callable[[str], Callable[[Sequence[float]], float]]] = None
@@ -493,16 +492,17 @@ class GloMPOManager:
             self.logger.warning("Manager already initialised, cannot reinitialise. Aborting")
             return
 
-        self.logger.info(f"Initializing from Checkpoint: {os.path.abspath(path)}")
+        path = Path(path).resolve()
+        self.logger.info(f"Initializing from Checkpoint: {path}")
 
         tmp_dir_obj = tempfile.TemporaryDirectory()
-        tmp_dir = tmp_dir_obj.name
+        tmp_dir = Path(tmp_dir_obj.name)
 
         with tarfile.open(path, 'r:gz') as tfile:
             tfile.extractall(tmp_dir)
 
         # Load manager variables
-        with open(os.path.join(tmp_dir, 'manager'), 'rb') as file:
+        with (tmp_dir / 'manager').open('rb') as file:
             data = dill.load(file)
             for var, val in data.items():
                 try:
@@ -513,8 +513,8 @@ class GloMPOManager:
         # Setup Task
         try:
             self.task = None
-            if 'task' in os.listdir(tmp_dir):
-                with open(os.path.join(tmp_dir, 'task'), 'rb') as file:
+            if (tmp_dir / 'task').exists():
+                with (tmp_dir / 'task').open('rb') as file:
                     try:
                         self.task = dill.load(file)
                         self.logger.info("Task successfully unpickled")
@@ -549,9 +549,7 @@ class GloMPOManager:
         # Allow manual overrides
         permit_keys = dir(self)
         for key, val in glompo_kwargs.items():
-            if key in permit_keys:
-                setattr(self, key, val)
-            elif key == 'backend':
+            if key == 'backend':
                 backend = glompo_kwargs['backend']
                 self._proc_backend = 'processes' in backend
                 self.opts_daemonic = backend != 'processes_forced'
@@ -561,6 +559,10 @@ class GloMPOManager:
                 self._too_long = force_terminations_after
             elif key == 'visualisation_args':
                 pass
+            elif key == 'working_dir':
+                self.working_dir = Path(val).absolute()
+            elif key in permit_keys:
+                setattr(self, key, val)
             else:
                 self.logger.warning(f"Cannot parse keyword argument '{key}'. Ignoring.")
 
@@ -570,7 +572,7 @@ class GloMPOManager:
             self.scope = GloMPOScope(**glompo_kwargs['visualisation_args']) \
                 if 'visualisation_args' in glompo_kwargs else GloMPOScope()
 
-            if 'scope' in os.listdir(tmp_dir):
+            if (tmp_dir / 'scope').exists():
                 self.logger.info('Scope checkpoint found, extracting')
                 self.scope.load_state(tmp_dir)
 
@@ -599,8 +601,8 @@ class GloMPOManager:
         self.load_history.append((float('nan'),) * 3)
 
         # Load optimizer state
-        restarts = {int(opt): self.opt_checkpoints[int(opt)].slots for opt in
-                    os.listdir(os.path.join(tmp_dir, 'optimizers'))}
+        restarts = {int(opt.name): self.opt_checkpoints[int(opt.name)].slots for opt in
+                    (tmp_dir / 'optimizers').iterdir()}
         if self.max_jobs < sum(restarts.values()):
             self.logger.warning("The maximum number of jobs allowed is less than that demanded by the optimizers in "
                                 "the checkpoint. Attempting to adjust the number of workers in each optimizer to fit. "
@@ -622,15 +624,14 @@ class GloMPOManager:
             event = self._mp_manager.Event()
             event.set()
             try:
-                optimizer = self.opt_checkpoints[opt_id].opt_type.checkpoint_load(opt_id=opt_id,
-                                                                                  signal_pipe=child_pipe,
-                                                                                  results_queue=self.optimizer_queue,
-                                                                                  pause_flag=event,
-                                                                                  workers=slots,
-                                                                                  backend=backend,
-                                                                                  path=os.path.join(tmp_dir,
-                                                                                                    'optimizers',
-                                                                                                    f'{opt_id:04}'))
+                opt_class = self.opt_checkpoints[opt_id].opt_type
+                optimizer = opt_class.checkpoint_load(opt_id=opt_id,
+                                                      signal_pipe=child_pipe,
+                                                      results_queue=self.optimizer_queue,
+                                                      pause_flag=event,
+                                                      workers=slots,
+                                                      backend=backend,
+                                                      path=tmp_dir / 'optimizers' / f'{opt_id:04}')
 
                 optimizer.workers = slots
                 optimizer._backend = backend  # Overwrite in case load_state set old values
@@ -695,36 +696,31 @@ class GloMPOManager:
             self.converged = False
 
         # Move into or make working dir
-        os.makedirs(self.working_dir, exist_ok=True)
-        self._init_workdir = os.getcwd()
+        self.working_dir.mkdir(parents=True, exist_ok=True)
+        self._init_workdir = Path.cwd()
         os.chdir(self.working_dir)
 
         # Purge Old Results
-        files = os.listdir()
-        if any([file in files for file in ["glompo_manager_log.yml", "glompo_optimizer_logs"]]):
+        if Path("glompo_manager_log.yml").exists() or Path("glompo_optimizer_logs").exists():
             if self.overwrite_existing:
                 self.logger.debug("Old results found")
-                to_remove = ["glompo_manager_log.yml", "opt_best_summary.yml"]
-                to_remove += glob.glob("trajectories*.png", recursive=False)
-                to_remove += glob.glob("opt*_parms.png", recursive=False)
+                to_remove = [Path("glompo_manager_log.yml"), Path("opt_best_summary.yml")]
+                to_remove += self.working_dir.glob("trajectories*.png")
+                to_remove += self.working_dir.glob("opt*_parms.png")
                 for old in to_remove:
-                    try:
-                        os.remove(old)
-                    except FileNotFoundError:
-                        continue
+                    old.unlink()
                 shutil.rmtree("glompo_optimizer_logs", ignore_errors=True)
                 shutil.rmtree("glompo_optimizer_printstreams", ignore_errors=True)
                 self.logger.warning("Deleted old results.")
             else:
-                raise FileExistsError(
-                    "Previous results found. Remove, move or rename them. Alternatively, select "
-                    "another working_dir or set overwrite_existing=True.")
+                raise FileExistsError("Previous results found. Remove, move or rename them. Alternatively, select "
+                                      "another working_dir or set overwrite_existing=True.")
 
         if self.visualisation and self.scope.record_movie:
             self.scope.setup_moviemaker()  # Declared here to ensure no overwriting and creation in correct dir
 
         if self.split_printstreams:
-            os.makedirs("glompo_optimizer_printstreams", exist_ok=True)
+            Path("glompo_optimizer_printstreams").mkdir(exist_ok=True)
 
         # Setup system monitoring
         if HAS_PSUTIL:
@@ -740,7 +736,7 @@ class GloMPOManager:
                              f"    {'Core IDs:':.<26}{cores}\n"
                              f"    {'Memory Available:':.<26}{present_memory(psutil.virtual_memory().total)}\n"
                              f"    {'Hostname:':.<26}{socket.gethostname()}\n"
-                             f"    {'Working Dir:':.<26}{os.getcwd()}\n"
+                             f"    {'Working Dir:':.<26}{Path.cwd()}\n"
                              f"    {'Username:':.<26}{getpass.getuser()}")
 
         # Setup split printing for threads
@@ -927,133 +923,132 @@ class GloMPOManager:
         self.logger.info("Constructing Checkpoint")
 
         # Construct Checkpoint Name
-        chkpt_name = self.checkpoint_control.get_name()
-        path = os.path.join(self.checkpoint_control.checkpointing_dir, chkpt_name) + os.sep
+        path = self.checkpoint_control.checkpointing_dir / self.checkpoint_control.get_name()
+        path.mkdir(parents=True, exist_ok=True)
+
         overwriting_chkpt = False
+        ovw_path = path.parent / '_overwriting_chkpt.tar.gz'
 
         try:
-            with FileNameHandler(path):
+            # Pause optimizers
+            wait_reply = set()
+            for opt_id, pack in self.optimizer_packs.items():
+                if pack.process.is_alive():
+                    pack.signal_pipe.send(2)
+                    wait_reply.add(opt_id)
 
-                # Pause optimizers
-                wait_reply = set()
-                for opt_id, pack in self.optimizer_packs.items():
-                    if pack.process.is_alive():
-                        pack.signal_pipe.send(2)
-                        wait_reply.add(opt_id)
-
-                # Synchronise and wait for replies (end or paused)
-                living = wait_reply.copy()
-                while wait_reply:
-                    n_alive = len(living)
-                    if self.optimizer_queue.full():
-                        self._process_results(n_alive)  # Free space on queue to make sure none are blocking
-                    self.logger.debug(f"Blocking, {n_alive - len(wait_reply)}/{n_alive} optimizers synced")
-                    for opt_id in wait_reply.copy():
-                        pack = self.optimizer_packs[opt_id]
-                        if pack.process.is_alive():
-                            if pack.signal_pipe.poll(0.1):
-                                key, message = pack.signal_pipe.recv()
-                                if key == 0:
-                                    self.opt_log.put_metadata(opt_id, "Stop Time", str(datetime.now()))
-                                    self.opt_log.put_metadata(opt_id, "End Condition", message)
-                                    self.graveyard.add(opt_id)
-                                    self.conv_counter += 1
-                                elif key == 1:
-                                    if self.visualisation:
-                                        self.scope.update_pause(opt_id)
-                                    wait_reply.remove(opt_id)
-                                else:
-                                    raise RuntimeError(f"Unhandled message: {message}")
-                        else:
-                            wait_reply.remove(opt_id)
-                            living.remove(opt_id)
-                self.logger.info("Optimizers paused and synced.")
-
-                # Process outstanding results and hunts
-                self._process_results()
-                self.logger.info(f"Outstanding results processed")
-
-                assert self.optimizer_queue.empty()
-
-                # Send checkpoint_save signals
-                os.mkdir('optimizers')
-                for opt_id in living:
-                    if self.visualisation:
-                        self.scope.update_checkpoint(opt_id)
+            # Synchronise and wait for replies (end or paused)
+            living = wait_reply.copy()
+            while wait_reply:
+                n_alive = len(living)
+                if self.optimizer_queue.full():
+                    self._process_results(n_alive)  # Free space on queue to make sure none are blocking
+                self.logger.debug(f"Blocking, {n_alive - len(wait_reply)}/{n_alive} optimizers synced")
+                for opt_id in wait_reply.copy():
                     pack = self.optimizer_packs[opt_id]
                     if pack.process.is_alive():
-                        pack.signal_pipe.send((0, os.path.abspath(os.path.join('optimizers', f'{opt_id:04}'))))
-
-                # Wait for all checkpoint_save to complete
-                wait_reply = living.copy()
-                while wait_reply:
-                    for opt_id in wait_reply.copy():
-                        if not self.optimizer_packs[opt_id].allow_run_event.is_set():
-                            wait_reply.remove(opt_id)
-
-                # Confirm all restart files are found
-                saved_states = os.listdir('optimizers')
-                living_names = {f'{opt_id:04}' for opt_id in living}
-                for lv in living_names:
-                    if lv not in saved_states:
-                        raise CheckpointingError(f"Unable to identify restart file/folder for optimizer {lv}")
-                self.logger.info("All optimizer restart files detected.")
-
-                # Save timestamp and checkpoint name
-                if len(self.dt_starts) > 0:
-                    if len(self.dt_starts) == len(self.dt_ends):
-                        self.dt_ends[-1] = datetime.now()
+                        if pack.signal_pipe.poll(0.1):
+                            key, message = pack.signal_pipe.recv()
+                            if key == 0:
+                                self.opt_log.put_metadata(opt_id, "Stop Time", str(datetime.now()))
+                                self.opt_log.put_metadata(opt_id, "End Condition", message)
+                                self.graveyard.add(opt_id)
+                                self.conv_counter += 1
+                            elif key == 1:
+                                if self.visualisation:
+                                    self.scope.update_pause(opt_id)
+                                wait_reply.remove(opt_id)
+                            else:
+                                raise RuntimeError(f"Unhandled message: {message}")
                     else:
-                        self.dt_ends.append(datetime.now())
-                self.chkpt_history.append(chkpt_name)
+                        wait_reply.remove(opt_id)
+                        living.remove(opt_id)
+            self.logger.info("Optimizers paused and synced.")
 
-                # Select variables for pickling
-                pickle_vars = {}
-                for var in dir(self):
-                    val = getattr(self, var)
-                    if not (callable(getattr(self, var)) and hasattr(val, '__self__')) and \
-                            '__' not in var and \
-                            not any([var == no_pickle for no_pickle in ('logger', '_process', '_mp_manager',
-                                                                        'optimizer_packs', 'scope', 'task',
-                                                                        'optimizer_queue', 'is_initialised',
-                                                                        'queue_monitor_arrest', 'queue_monitor_end',
-                                                                        'queue_monitor_thread')]):
-                        if dill.pickles(val):
-                            pickle_vars[var] = val
-                        else:
-                            raise CheckpointingError(f"Cannot pickle {var}.")
+            # Process outstanding results and hunts
+            self._process_results()
+            self.logger.info(f"Outstanding results processed")
 
-                with open('manager', 'wb') as file:
-                    try:
-                        dill.dump(pickle_vars, file)
-                    except PickleError:
-                        raise CheckpointingError(f"Could not pickle manager.")
-                self.logger.debug("Manager successfully pickled")
+            assert self.optimizer_queue.empty()
 
-                # Save task
-                task_persisted = False
+            # Send checkpoint_save signals
+            (path / 'optimizers').mkdir()
+            for opt_id in living:
+                if self.visualisation:
+                    self.scope.update_checkpoint(opt_id)
+                pack = self.optimizer_packs[opt_id]
+                if pack.process.is_alive():
+                    pack.signal_pipe.send((0, (path / 'optimizers' / f'{opt_id:04}').absolute()))
 
-                if not self.checkpoint_control.force_task_save:
-                    try:
-                        with open('task', 'wb') as file:
-                            dill.dump(self.task, file)
-                        self.logger.info("Task successfully pickled")
-                        task_persisted = True
-                    except PickleError as pckl_err:
-                        self.logger.info(f"Pickle task failed: {pckl_err}. Attempting task.checkpoint_save()")
-                        os.remove('task')
+            # Wait for all checkpoint_save to complete
+            wait_reply = living.copy()
+            while wait_reply:
+                for opt_id in wait_reply.copy():
+                    if not self.optimizer_packs[opt_id].allow_run_event.is_set():
+                        wait_reply.remove(opt_id)
 
-                if not task_persisted:
-                    try:
-                        # noinspection PyUnresolvedReferences
-                        self.task.checkpoint_save('')
-                        self.logger.info("Task successfully saved")
-                    except AttributeError:
-                        self.logger.info(f"task.checkpoint_save not found.")
-                        self.logger.warning("Checkpointing without task.")
-                    except Exception as e:
-                        self.logger.warning("Task saving failed", exc_info=e)
-                        self.logger.warning("Checkpointing without task.")
+            # Confirm all restart files are found
+            living_names = {f'{opt_id:04}' for opt_id in living}
+            for lv in living_names:
+                if not (path / 'optimizers' / lv).exists():
+                    raise CheckpointingError(f"Unable to identify restart file/folder for optimizer {lv}")
+            self.logger.info("All optimizer restart files detected.")
+
+            # Save timestamp and checkpoint name
+            if len(self.dt_starts) > 0:
+                if len(self.dt_starts) == len(self.dt_ends):
+                    self.dt_ends[-1] = datetime.now()
+                else:
+                    self.dt_ends.append(datetime.now())
+            self.chkpt_history.append(path.resolve().with_suffix('.tar.gz'))
+
+            # Select variables for pickling
+            pickle_vars = {}
+            for var in dir(self):
+                val = getattr(self, var)
+                if not (callable(getattr(self, var)) and hasattr(val, '__self__')) and \
+                        '__' not in var and \
+                        not any([var == no_pickle for no_pickle in ('logger', '_process', '_mp_manager',
+                                                                    'optimizer_packs', 'scope', 'task',
+                                                                    'optimizer_queue', 'is_initialised',
+                                                                    'queue_monitor_arrest', 'queue_monitor_end',
+                                                                    'queue_monitor_thread')]):
+                    if dill.pickles(val):
+                        pickle_vars[var] = val
+                    else:
+                        raise CheckpointingError(f"Cannot pickle {var}.")
+
+            with (path / 'manager').open('wb') as file:
+                try:
+                    dill.dump(pickle_vars, file)
+                except PickleError:
+                    raise CheckpointingError(f"Could not pickle manager.")
+            self.logger.debug("Manager successfully pickled")
+
+            # Save task
+            task_persisted = False
+
+            if not self.checkpoint_control.force_task_save:
+                try:
+                    with (path / 'task').open('wb') as file:
+                        dill.dump(self.task, file)
+                    self.logger.info("Task successfully pickled")
+                    task_persisted = True
+                except PickleError as pckl_err:
+                    self.logger.info(f"Pickle task failed: {pckl_err}. Attempting task.checkpoint_save()")
+                    (path / 'task').unlink()
+
+            if not task_persisted:
+                try:
+                    # noinspection PyUnresolvedReferences
+                    self.task.checkpoint_save('')
+                    self.logger.info("Task successfully saved")
+                except AttributeError:
+                    self.logger.info(f"task.checkpoint_save not found.")
+                    self.logger.warning("Checkpointing without task.")
+                except Exception as e:
+                    self.logger.warning("Task saving failed", exc_info=e)
+                    self.logger.warning("Checkpointing without task.")
 
             # Save scope
             if self.visualisation:
@@ -1062,36 +1057,37 @@ class GloMPOManager:
 
             # Compress checkpoint
             self.logger.debug("Building TarFile")
-            tar_name = path[:-1] + '.tar.gz'
-            if os.path.exists(tar_name):
+            tar_path = path.with_suffix('.tar.gz')
+            if tar_path.exists():
                 self.logger.warning("Overwriting existing checkpoint. To avoid this change the checkpointing naming "
                                     "format")
                 warnings.warn("Overwriting existing checkpoint. To avoid this change the checkpointing naming "
                               "format")
-                os.rename(tar_name, '_overwriting_chkpt.tar.gz')
+                tar_path.replace(ovw_path)
+                tar_path.unlink()
                 overwriting_chkpt = True
 
             try:
-                with tarfile.open(tar_name, 'x:gz') as tfile:
+                with tarfile.open(tar_path, 'x:gz') as tfile:
                     tfile.add(path, recursive=True, arcname='')
-                self.logger.debug("TarFile built, directory removed.")
+                self.logger.debug("TarFile built")
             except tarfile.TarError as e:
                 self.logger.error("Error encountered during compression.")
                 if overwriting_chkpt:
                     self.logger.info("Overwritten checkpoint restored")
-                    os.rename('_overwriting_chkpt.tar.gz', tar_name)
+                    ovw_path.replace(tar_path)
                 raise CheckpointingError("Could not compress checkpoint", e)
 
             # Delete old checkpoints
             if self.checkpoint_control.keep_past > -1:
                 self.logger.debug("Finding old checkpoints to delete")
-                to_delete = sorted(filter(self.checkpoint_control.matches_naming_format,
-                                          os.listdir(self.checkpoint_control.checkpointing_dir)), reverse=True)
+                files = (file.name for file in self.checkpoint_control.checkpointing_dir.iterdir())
+                to_delete = sorted(filter(self.checkpoint_control.matches_naming_format, files), reverse=True)
                 self.logger.debug(f"Identified to delete: {to_delete[self.checkpoint_control.keep_past + 1:]}")
                 for old in to_delete[self.checkpoint_control.keep_past + 1:]:
-                    del_path = os.path.join(self.checkpoint_control.checkpointing_dir, old)
-                    if os.path.isfile(del_path):
-                        os.remove(del_path)
+                    del_path = self.checkpoint_control.checkpointing_dir / old
+                    if del_path.is_file():
+                        del_path.unlink()
 
         except CheckpointingError as e:
             caught_exception = "".join(traceback.TracebackException.from_exception(e).format())
@@ -1105,12 +1101,12 @@ class GloMPOManager:
         finally:
             shutil.rmtree(path, ignore_errors=True)
             if overwriting_chkpt:
-                os.remove('_overwriting_chkpt.tar.gz')
+                ovw_path.unlink()
 
         if self.converged:
             [pack.signal_pipe.send(1) for _, pack in self.optimizer_packs.items() if pack.process.is_alive()]
         self._toggle_optimizers(1)
-        self.logger.info(f"Checkpoint '{chkpt_name}' successfully built")
+        self.logger.info(f"Checkpoint '{path.name}' successfully built")
 
     def dump_state(self, summary_files: Optional[int] = None, dump_dir: Optional[Path] = None):
         """ Produces the same output files produced by start_manager without actually running any optimization. Useful
@@ -1128,8 +1124,7 @@ class GloMPOManager:
         self.logger.info("Dumping manager state")
         if dump_dir:
             path = Path(dump_dir)
-            if not path.exists():
-                path.mkdir()
+            path.mkdir(exist_ok=True)
         self._save_log(self.result, "Manual Save State", None, summary_files, dump_dir)
 
     def _fill_optimizer_slots(self):
@@ -1413,26 +1408,26 @@ class GloMPOManager:
         return victims
 
     def _is_manual_shutdowns(self):
-        files = os.listdir()
-        files = [file for file in files if "STOP_" in file]
-        for file in files:
+        stop_files = (x for x in self.working_dir.iterdir() if "STOP_" in x.name)
+        for file in stop_files:
             try:
-                _, opt_id = file.split('_')
+                _, opt_id = file.name.split('_')
                 opt_id = int(opt_id)
                 if opt_id not in self.graveyard:
                     self._shutdown_job(opt_id, None, "User STOP file intervention.")
                     self.logger.info(f"STOP file found for Optimizer {opt_id}")
-                    os.remove(file)
+                    file.unlink()
             except ValueError as e:
                 self.logger.debug("Error encountered trying to process STOP files.", exc_info=e)
                 continue
 
     def _is_manual_checkpoints(self):
-        if "CHKPT" in os.listdir():
-            os.remove("CHKPT")
+        chkpt_path = self.working_dir / "CHKPT"
+        if chkpt_path.exists():
+            chkpt_path.unlink()
 
-            temp_controls = None
-            if not self.checkpoint_control:
+            has_controls = bool(self.checkpoint_control)
+            if not has_controls:
                 self.logger.warning("Manual checkpoint requested but checkpointing control not setup during "
                                     "initialisation, constructing with defaults.")
                 self.checkpoint_control = CheckpointingControl()
@@ -1440,7 +1435,7 @@ class GloMPOManager:
             self.logger.info("Manual checkpoint requested")
             self.checkpoint()
 
-            if temp_controls:
+            if not has_controls:
                 self.checkpoint_control = None
 
     def _shutdown_job(self, opt_id: int, hunter_id: Optional[int], reason: str):
@@ -1525,7 +1520,7 @@ class GloMPOManager:
     def _save_log(self, result: Result, reason: str, caught_exception: Optional[str],
                   summary_files: Optional[int] = None, dump_dir: Optional[Path] = None):
         summary_files = summary_files if summary_files is not None else self.summary_files
-        dump_dir = dump_dir if dump_dir is not None else ''
+        dump_dir = Path(dump_dir) if dump_dir is not None else Path.cwd()
 
         if summary_files > 0:
             if caught_exception:
@@ -1599,7 +1594,7 @@ class GloMPOManager:
             data = {
                 "Assignment": {
                     "Task": type(self.task).__name__ if isinstance(type(self.task), object) else self.task.__name__,
-                    "Working Dir": os.getcwd(),
+                    "Working Dir": Path.cwd(),
                     "Username": getpass.getuser(),
                     "Hostname": socket.gethostname(),
                     "Time": {"Optimisation Periods": t_periods,
@@ -1624,25 +1619,24 @@ class GloMPOManager:
                 data["Run Information"] = run_info
 
             if self.checkpoint_control:
-                data["Checkpointing"] = {"Directory": os.path.abspath(self.checkpoint_control.checkpointing_dir),
-                                         "Checkpoints":
-                                             [os.path.abspath(chkpt) + '.tar.gz' for chkpt in self.chkpt_history]}
+                data["Checkpointing"] = {"Directory": self.checkpoint_control.checkpointing_dir.resolve(),
+                                         "Checkpoints": self.chkpt_history}
 
             data["Solution"] = {"fx": result.fx,
                                 "origin": result.origin,
                                 "exit cond.": LiteralWrapper(nested_string_formatting(reason)),
                                 "x": FlowList(result.x) if result.x else result.x}
 
-            with Path(dump_dir, "glompo_manager_log.yml").open("w") as file:
+            with (dump_dir / "glompo_manager_log.yml").open("w") as file:
                 self.logger.debug("Saving manager summary file.")
                 yaml.dump(data, file, Dumper=Dumper, default_flow_style=False, sort_keys=False)
 
             if summary_files >= 2:
                 self.logger.debug("Saving optimizers summary file.")
-                self.opt_log.save_summary(os.path.join(dump_dir, "opt_best_summary.yml"))
+                self.opt_log.save_summary(dump_dir / "opt_best_summary.yml")
             if summary_files >= 3:
                 self.logger.debug("Saving optimizer log files.")
-                self.opt_log.save_optimizer(os.path.join(dump_dir, "glompo_optimizer_logs"))
+                self.opt_log.save_optimizer(dump_dir / "glompo_optimizer_logs")
             if summary_files >= 4:
                 self.logger.debug("Saving trajectory plot.")
                 signs = set()

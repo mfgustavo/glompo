@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 import pytest
 import yaml
@@ -18,7 +18,7 @@ try:
 except (ModuleNotFoundError, ImportError):
     HAS_MATPLOTLIB = False
 
-from glompo.common.helpers import FileNameHandler, LiteralWrapper, literal_presenter, nested_string_formatting, \
+from glompo.common.helpers import WorkInDirectory, LiteralWrapper, literal_presenter, nested_string_formatting, \
     unknown_object_presenter, generator_presenter, optimizer_selector_presenter, present_memory, FlowList, \
     flow_presenter, BoundGroup, bound_group_presenter, is_bounds_valid, distance, glompo_colors
 from glompo.opt_selectors import BaseSelector, CycleSelector, IterSpawnStop
@@ -98,14 +98,11 @@ def test_distance():
     assert distance([1] * 9, [-1] * 9) == 6
 
 
-def test_file_name_handler(tmp_path):
-    start_direc = os.getcwd()
-    os.chdir(tmp_path)
-    with FileNameHandler(os.path.join(tmp_path, 'a', 'b', 'c')) as name:
-        assert os.getcwd() == os.path.join(tmp_path, 'a', 'b')
-        assert name == 'c'
-    assert os.getcwd() == str(tmp_path)
-    os.chdir(start_direc)
+def test_work_in_directory(tmp_path):
+    start_direc = Path.cwd()
+    with WorkInDirectory(Path(tmp_path, 'a', 'b', 'c')):
+        assert Path.cwd() == Path(tmp_path, 'a', 'b', 'c')
+    assert Path.cwd().samefile(start_direc)
 
 
 @pytest.mark.skipif(not HAS_MATPLOTLIB, reason="Requires matplotlib to use this function.")

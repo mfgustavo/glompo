@@ -1,5 +1,6 @@
 # noinspection PyTypeChecker
-from typing import Callable, Sequence, Tuple
+from pathlib import Path
+from typing import Callable, Sequence, Tuple, Union
 
 import numpy as np
 import pytest
@@ -71,7 +72,7 @@ class FakeLog:
 
 class FakeOpt(BaseOptimizer):
 
-    def checkpoint_load(self, path: str):
+    def checkpoint_load(self, path: Union[Path, str]):
         pass
 
     def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],

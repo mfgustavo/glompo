@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 import pytest
 from glompo.core.checkpointing import CheckpointingControl
@@ -26,9 +26,8 @@ def test_findcount_nocontent(tmp_path, cc):
 def test_find_count_matchingcontent(tmp_path, cc):
     # Test dir exist with only matching content
     cc.checkpointing_dir = tmp_path
-    os.mkdir(os.path.join(tmp_path, '000_s[p$e^c._{h}e|llo00000000000000_%(weird)_]000000000000000000'))
-    os.mkdir(os.path.join(tmp_path, '001_s[p$e^c._{h}e|llo00000000000000_%(weird)_]000000000000000000'))
-    os.mkdir(os.path.join(tmp_path, '002_s[p$e^c._{h}e|llo00000000000000_%(weird)_]000000000000000000'))
+    for i in range(3):
+        Path(tmp_path, f'00{i}_s[p$e^c._{{h}}e|llo00000000000000_%(weird)_]000000000000000000').mkdir()
     cc.get_name()
     assert cc.count == 4
 
@@ -36,8 +35,8 @@ def test_find_count_matchingcontent(tmp_path, cc):
 def test_find_count_mixedcontent(tmp_path, cc):
     # Test dir exist with matching and non-matching content
     cc.checkpointing_dir = tmp_path
-    os.mkdir(os.path.join(tmp_path, '000_s[p$e^c._{h}e|llo00000000000000_%(weird)_]000000000000000000'))
-    os.mkdir(os.path.join(tmp_path, '000_s[p$e^c._{h}e|llo0_%(weird)_]000000000000000000'))
+    Path(tmp_path, '000_s[p$e^c._{h}e|llo00000000000000_%(weird)_]000000000000000000').mkdir()
+    Path(tmp_path, '000_s[p$e^c._{h}e|llo0_%(weird)_]000000000000000000').mkdir()
     cc.get_name()
     assert cc.count == 2
 

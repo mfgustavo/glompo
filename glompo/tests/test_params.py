@@ -1,8 +1,8 @@
 import inspect
-import os
 import pickle
 import shutil
 import tempfile
+from pathlib import Path
 from typing import Dict
 
 import pytest
@@ -26,8 +26,7 @@ except (ModuleNotFoundError, ImportError):
 import glompo.tests
 from glompo.interfaces.params import _FunctionWrapper, ReaxFFError
 
-GLOMPO_PATH = inspect.getabsfile(glompo.tests).rstrip('__init__.py')
-INPUT_FILE_PATH = os.path.join(GLOMPO_PATH, '_test_inputs')
+INPUT_FILE_PATH = Path(inspect.getabsfile(glompo.tests)).parent / '_test_inputs'
 
 
 class FakeLossEvaluator(_LossEvaluator):
@@ -93,7 +92,7 @@ class TestReaxFFError:
 
     @pytest.fixture(scope='class')
     def check_result(self):
-        with open(os.path.join(INPUT_FILE_PATH, 'check_result.pkl'), 'rb') as file:
+        with (INPUT_FILE_PATH / 'check_result.pkl').open('rb') as file:
             result = pickle.load(file)
         return result
 
@@ -105,13 +104,13 @@ class TestReaxFFError:
             if 'params' in name:
                 suffix = name.split('_')[1]
                 for file in ('data_set.' + suffix, 'job_collection.' + suffix, 'reax_params.pkl'):
-                    shutil.copy(os.path.join(INPUT_FILE_PATH, file), os.path.join(tmp_dir, file))
+                    shutil.copy(INPUT_FILE_PATH / file, Path(tmp_dir, file))
                     if file != 'reax_params.pkl':
                         with pytest.raises(FileNotFoundError):
                             factory(tmp_dir)
             else:
                 for file in ('control', 'ffield_bool', 'ffield_max', 'ffield_min', 'ffield_init', 'geo', 'trainset.in'):
-                    shutil.copy(os.path.join(INPUT_FILE_PATH, file), os.path.join(tmp_dir, file))
+                    shutil.copy(INPUT_FILE_PATH / file, Path(tmp_dir, file))
             task = factory(tmp_dir)
 
         assert isinstance(task.dat_set, DataSet)
@@ -132,10 +131,9 @@ class TestReaxFFError:
             task = self.built_tasks[[*self.built_tasks.keys()][0]]
             getattr(task, method)(tmp_dir)
 
-            files = os.listdir(tmp_dir)
             for file in ('data_set.' + suffix, 'job_collection.' + suffix,
                          'reax_params.pkl' if suffix == 'pkl' else 'ffield'):
-                assert file in files
+                assert Path(tmp_dir, file).exists()
 
     @pytest.mark.parametrize("name", ['classic', 'params_pkl', 'params_yml'])
     def test_calculate(self, name, check_result):

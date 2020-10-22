@@ -1,9 +1,9 @@
 """ Decorators and wrappers used throughout GloMPO. """
 
 import inspect
-import os
 import sys
 from functools import wraps
+from pathlib import Path
 
 
 def process_print_redirect(opt_id, func):
@@ -11,8 +11,8 @@ def process_print_redirect(opt_id, func):
 
     @wraps(func)
     def wrapper(*args, **kwargs):
-        sys.stdout = open(os.path.join("glompo_optimizer_printstreams", f"printstream_{opt_id:04}.out"), "w")
-        sys.stderr = open(os.path.join("glompo_optimizer_printstreams", f"printstream_{opt_id:04}.err"), "w")
+        sys.stdout = open(Path("glompo_optimizer_printstreams", f"printstream_{opt_id:04}.out"), "w")
+        sys.stderr = open(Path("glompo_optimizer_printstreams", f"printstream_{opt_id:04}.err"), "w")
         func(*args, **kwargs)
 
     return wrapper

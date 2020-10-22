@@ -3,14 +3,14 @@
         Authors:        Robert Rüger, Leonid Komissarov
 """
 
-import os
 import pickle
 import shutil
 import warnings
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
-from typing import Callable, Optional, Sequence, Tuple
+from pathlib import Path
+from typing import Callable, Optional, Sequence, Tuple, Union
 
 import cma
 import numpy as np
@@ -30,7 +30,8 @@ class CMAOptimizer(BaseOptimizer):
     """
 
     @classmethod
-    def checkpoint_load(cls, path: str, opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
+    def checkpoint_load(cls, path: Union[Path, str], opt_id: Optional[int] = None,
+                        signal_pipe: Optional[Connection] = None,
                         results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
                         backend: str = 'threads') -> 'CMAOptimizer':
 
@@ -79,7 +80,7 @@ class CMAOptimizer(BaseOptimizer):
         self.es = None
         self.result = None
         self.keep_files = keep_files
-        self.folder_name = 'cmadata' if not self._opt_id else f'cmadata_{self._opt_id}'
+        self.folder_name = Path('cmadata') if not self._opt_id else Path(f'cmadata_{self._opt_id}')
         self.cmasettings = cmasettings
         self.restart = False
 
@@ -115,7 +116,7 @@ class CMAOptimizer(BaseOptimizer):
         elif sampler == 'vkd':
             self.cmasettings = GaussVkDSampler.extend_cma_options(self.cmasettings)
 
-        self.cmasettings.update({'verb_filenameprefix': self.folder_name + 'cma_'})
+        self.cmasettings.update({'verb_filenameprefix': self.folder_name.name + 'cma_'})
 
     def minimize(self,
                  function: Callable[[Sequence[float]], float],
@@ -126,7 +127,7 @@ class CMAOptimizer(BaseOptimizer):
         if not self.restart:
             self.logger.info("Setting up fresh CMA")
 
-            os.makedirs(self.folder_name, exist_ok=True)
+            self.folder_name.mkdir(parents=True, exist_ok=True)
 
             self.result = MinimizeResult()
             self.cmasettings.update({'bounds': np.transpose(bounds).tolist()})
@@ -214,7 +215,7 @@ class CMAOptimizer(BaseOptimizer):
 
         if self.es.stop() != "Checkpoint Shutdown":
             if self.keep_files:
-                with open(os.path.join(self.folder_name, 'cma_results.pkl'), 'wb') as file:
+                with (self.folder_name / 'cma_results.pkl').open('wb') as file:
                     self.logger.debug("Pickling results")
                     pickle.dump(self.es.result, file)
             else:
@@ -251,7 +252,7 @@ class CMAOptimizer(BaseOptimizer):
         self.es.callbackstop = 1
         self.result.success = all([reason != cond for cond in ("GloMPO Crash", "Manager termination signal")])
 
-    def checkpoint_save(self, path: str):
+    def checkpoint_save(self, path: Union[Path, str]):
         self.logger.debug("Creating restart file.")
 
         dump_collection = {}

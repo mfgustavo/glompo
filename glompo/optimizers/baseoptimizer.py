@@ -7,9 +7,10 @@ import traceback
 import warnings
 from abc import ABC, abstractmethod
 from multiprocessing.connection import Connection
+from pathlib import Path
 from queue import Full, Queue
 from threading import Event
-from typing import Callable, Optional, Sequence, Tuple
+from typing import Callable, Optional, Sequence, Tuple, Union
 
 from ..common.helpers import LiteralWrapper
 
@@ -46,7 +47,8 @@ class BaseOptimizer(ABC):
     """ Base class of parameter optimizers in GloMPO """
 
     @classmethod
-    def checkpoint_load(cls, path: str, opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
+    def checkpoint_load(cls, path: Union[Path, str], opt_id: Optional[int] = None,
+                        signal_pipe: Optional[Connection] = None,
                         results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
                         backend: str = 'threads') -> 'BaseOptimizer':
         """ Recreates a previous instance of the optimizer suitable to continue a optimization from its previous
@@ -54,7 +56,7 @@ class BaseOptimizer(ABC):
 
             Parameters
             ----------
-            path: str
+            path: Union[Path, str]
                 Path to checkpoint file from which to build from. It must be a file produced by the corresponding
                 BaseOptimizer().checkpoint_save method.
             opt_id, signal_pipe, results_queue, pause_flag, workers, backend
@@ -199,7 +201,7 @@ class BaseOptimizer(ABC):
         """
         raise NotImplementedError
 
-    def checkpoint_save(self, path: str):
+    def checkpoint_save(self, path: Union[Path, str]):
         """ Save current state, suitable for restarting. Path is the location for the file or folder to be constructed.
             Note that only the absolutely critical aspects of the state of the optimizer need to be saved. The manager
             will resupply multiprocessing parameters when the optimizer is reconstructed.

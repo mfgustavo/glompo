@@ -1,6 +1,7 @@
 import os
 import shutil
 import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -23,7 +24,7 @@ def work_in_tmp():
     """ Some test require moving into a temporary directory. This creates and moves to a temporary path and returns
         at the end of the test.
     """
-    home_dir = os.getcwd()
+    home_dir = Path.cwd()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         os.chdir(tmp_dir)
@@ -37,7 +38,7 @@ def save_outputs(request, pytestconfig):
     """ Fixture which will save contents of a test's tmp_path to tests/_saved_outputs"""
     yield
     if pytestconfig.getoption('--save-outs'):
-        dest_path = os.path.join(str(__file__).rsplit('/', 1)[0], '_saved_outputs', request.node.name)
+        dest_path = Path(__file__).parent / '_saved_outputs' / request.node.name
         src_path = request.getfixturevalue('tmp_path')
         shutil.rmtree(dest_path, ignore_errors=True)
         shutil.copytree(src_path, dest_path)

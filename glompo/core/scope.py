@@ -1,7 +1,7 @@
 """ Contains the GloMPOScope class which is a useful extension allowing a user to visualize GloMPO's behaviour. """
 import logging
-import os
 import warnings
+from pathlib import Path
 from typing import Any, Dict, Optional, Set, Tuple, Union
 
 import dill
@@ -359,7 +359,7 @@ class GloMPOScope:
         """
         plt.close(self.fig)
 
-    def checkpoint_save(self, path: Optional[str] = ''):
+    def checkpoint_save(self, path: Union[Path, str] = ''):
         """ Saves the state of the scope, suitable for resumption, during a checkpoint. Path is a directory in which to
             dump the generated files.
         """
@@ -370,29 +370,17 @@ class GloMPOScope:
             if '__' not in var and not callable(getattr(self, var)) and var != '_writer':
                 dump_variables[var] = getattr(self, var)
 
-        with open(os.path.join(path, 'scope'), 'wb') as file:
+        with Path(path, 'scope').open('wb') as file:
             dill.dump(dump_variables, file)
 
         if self.record_movie:
             warnings.warn("Movie saving is not supported with checkpointing")
             self.logger.warning("Movie saving is not supported with checkpointing")
 
-        # Attempt to make movie saving resumable
-        # --------------------------------------
-        # if self.record_movie:
-        #     self.generate_movie()
-        #     os.rename(self._writer.outfile, '_partial_movie.mp4')
-        #     sleep(0.5)
-        #     shutil.copy('_partial_movie.mp4', os.path.join(path, '_partial_movie.mp4'))
-        #     sleep(0.5)
-        #     self._new_writer()
-        #     self.setup_moviemaker()
-        #     self.partial_exists = True
-
-    def load_state(self, path: str):
+    def load_state(self, path: Union[Path, str]):
         """ Loads a saved scope state. Path is a directory containing the checkpoint files. """
 
-        with open(os.path.join(path, 'scope'), 'rb') as file:
+        with Path(path, 'scope').open('rb') as file:
             data = dill.load(file)
 
         for var, val in data.items():
@@ -401,11 +389,6 @@ class GloMPOScope:
         if self.record_movie:
             self._new_writer()
             self.setup_moviemaker()
-
-        # Attempt to make movie saving resumable
-        # --------------------------------------
-        # partial_movie = [*filter(lambda x: x == '_partial_movie.mp4', os.listdir())]
-        # self.partial_exists = bool(partial_movie)
 
         if self.interactive_mode:
             self.fig.show()

@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -112,7 +112,7 @@ class TestScope:
         scope.update_checkpoint(1)
         scope.logger = None  # Pytest intercepts loggers making pickling impossible
         scope.checkpoint_save(tmp_path)
-        assert 'scope' in os.listdir(tmp_path)
+        assert Path(tmp_path, 'scope').exists()
 
         loaded_scope = GloMPOScope()
         loaded_scope.load_state(tmp_path)
@@ -126,7 +126,7 @@ class TestScope:
     def test_generate_movie(self, tmp_path, save_outputs):
         scope = GloMPOScope(log_scale=True,
                             record_movie=True,
-                            movie_kwargs={'outfile': os.path.join(tmp_path, "test_gen_movie.mp4")})
+                            movie_kwargs={'outfile': Path(tmp_path, "test_gen_movie.mp4")})
         scope.setup_moviemaker()
         scope.add_stream(1)
         scope.add_stream(2)
@@ -140,4 +140,4 @@ class TestScope:
 
         scope.generate_movie()
 
-        assert os.path.exists(os.path.join(tmp_path, "test_gen_movie.mp4"))
+        assert Path(tmp_path, "test_gen_movie.mp4").exists()

@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Type, Union
 
 import pytest
@@ -28,7 +29,7 @@ class BasicOptimizer(BaseOptimizer):
     def checkpoint_save(self, *args):
         pass
 
-    def checkpoint_load(self, path: str):
+    def checkpoint_load(self, path: Union[Path, str]):
         pass
 
 

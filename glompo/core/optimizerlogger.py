@@ -1,6 +1,5 @@
 """ Contains classes which save log information for GloMPO and its optimizers. """
 
-import os
 import warnings
 from math import inf
 from pathlib import Path
@@ -21,7 +20,7 @@ try:
 except (ModuleNotFoundError, ImportError):
     HAS_MATPLOTLIB = False
 
-from glompo.common.helpers import FileNameHandler, LiteralWrapper, FlowList, literal_presenter, glompo_colors, \
+from glompo.common.helpers import LiteralWrapper, FlowList, literal_presenter, glompo_colors, \
     flow_presenter
 
 __all__ = ("OptimizerLogger",)
@@ -93,56 +92,55 @@ class OptimizerLogger:
         """ Returns metadata of a given optimizer and key. """
         return self._storage[opt_id].metadata[key]
 
-    def save_optimizer(self, name: str, opt_id: Optional[int] = None):
+    def save_optimizer(self, path: Union[Path, str], opt_id: Optional[int] = None):
         """ Saves the contents of the logger into yaml files. If an opt_id is provided only that optimizer will be
             saved using the provided name. Else all optimizers are saved by their opt_id numbers and type in a directory
             called name.
         """
-        with FileNameHandler(name) as filename:
-            if opt_id:
-                self._write_file(opt_id, filename)
-            else:
-                os.makedirs(filename, exist_ok=True)
-                os.chdir(filename)
+        path = Path(path)
+        if opt_id:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            self._write_file(opt_id, path)
+        else:
+            path.mkdir(parents=True, exist_ok=True)
 
-                digits = len(str(max(self._storage))) if self._storage else 1
-                for optimizer in self._storage:
-                    opt_id = int(self._storage[optimizer].metadata["Optimizer ID"])
-                    opt_type = self._storage[optimizer].metadata["Optimizer Type"]
-                    title = f"{opt_id:0{digits}}_{opt_type}"
-                    self._write_file(optimizer, title)
-
-    def save_summary(self, name: str):
-        """ Generates a summary file containing the best found point of each optimizer and the reason for their
-            termination. name is the path and filename of the summary file.
-        """
-        with FileNameHandler(name) as filename:
-            sum_data = {}
+            digits = len(str(max(self._storage))) if self._storage else 1
             for optimizer in self._storage:
-                opt_history = self.get_history(optimizer)
+                opt_id = int(self._storage[optimizer].metadata["Optimizer ID"])
+                opt_type = self._storage[optimizer].metadata["Optimizer Type"]
+                title = f"{opt_id:0{digits}}_{opt_type}"
+                self._write_file(optimizer, path / title)
 
-                i_tot = len(opt_history)
-                x_best = None
-                f_best = float('nan')
-                f_calls = None
-                if i_tot > 0 and opt_history[i_tot]['i_best'] > -1:
-                    last = opt_history[i_tot]
-                    i_best = last['i_best']
-                    f_calls = last['f_call_opt']
+    def save_summary(self, path: Union[Path, str]):
+        """ Generates a summary file containing the best found point of each optimizer and the reason for their
+            termination.
+        """
+        sum_data = {}
+        for optimizer in self._storage:
+            opt_history = self.get_history(optimizer)
 
-                    best = opt_history[i_best]
+            i_tot = len(opt_history)
+            x_best = None
+            f_best = float('nan')
+            f_calls = None
+            if i_tot > 0 and opt_history[i_tot]['i_best'] > -1:
+                last = opt_history[i_tot]
+                i_best = last['i_best']
+                f_calls = last['f_call_opt']
 
-                    x_best = FlowList(best['x'])
-                    f_best = best['fx_best']
-                end_cond = self._storage[optimizer].metadata["End Condition"] \
-                    if "End Condition" in self._storage[optimizer].metadata else None
-                sum_data[optimizer] = {'end_cond': end_cond,
-                                       'f_calls': f_calls,
-                                       'f_best': f_best,
-                                       'x_best': x_best}
+                best = opt_history[i_best]
 
-            with open(filename, "w+") as file:
-                yaml.dump(sum_data, file, Dumper=Dumper, default_flow_style=False, sort_keys=False)
+                x_best = FlowList(best['x'])
+                f_best = best['fx_best']
+            end_cond = self._storage[optimizer].metadata["End Condition"] \
+                if "End Condition" in self._storage[optimizer].metadata else None
+            sum_data[optimizer] = {'end_cond': end_cond,
+                                   'f_calls': f_calls,
+                                   'f_best': f_best,
+                                   'x_best': x_best}
+
+        with Path(path).open("w+") as file:
+            yaml.dump(sum_data, file, Dumper=Dumper, default_flow_style=False, sort_keys=False)
 
     def plot_optimizer_trials(self, path: Optional[Path] = None, opt_id: Optional[int] = None):
         if not HAS_MATPLOTLIB:
@@ -233,9 +231,11 @@ class OptimizerLogger:
         if is_interactive:
             plt.ion()
 
-    def _write_file(self, opt_id, filename):
+    def _write_file(self, opt_id, filename: Path):
         yaml.add_representer(LiteralWrapper, literal_presenter, Dumper=Dumper)
-        with open(f"{filename}.yml", 'w') as file:
+        if filename.suffix != '.yml':
+            filename = filename.with_suffix('.yml')
+        with filename.open('w') as file:
             data = {"DETAILS": self._storage[opt_id].metadata,
                     "MESSAGES": self._storage[opt_id].messages,
                     "ITERATION_HISTORY": self._storage[opt_id].history}

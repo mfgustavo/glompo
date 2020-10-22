@@ -1,7 +1,7 @@
 import logging
 import multiprocessing as mp
-import os
 from collections import namedtuple
+from pathlib import Path
 from time import sleep, time
 from typing import Callable, Sequence, Tuple
 
@@ -127,17 +127,15 @@ class TestBase:
         process.join()
         assert mp_package.queue.get() == "item"
 
-    def test_checkpointsave(self, mp_package):
+    def test_checkpointsave(self, mp_package, tmp_path):
         process = mp.Process(target=mp_package.opti.checkpoint_save, args=(None, None))
         process.start()
         process.join()
 
-        with open("savestate.txt", "r") as file:
+        with Path(tmp_path, "savestate.txt").open("r") as file:
             lines = file.readlines()
             assert lines[0] == "Start\n"
             assert lines[-1] == "End"
-
-        os.remove("savestate.txt")
 
     def test_checkpointload(self):
         pass
