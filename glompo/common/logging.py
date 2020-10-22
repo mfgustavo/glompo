@@ -45,7 +45,7 @@ class SplitOptimizerLogs(logging.Filter):
         """
         super().__init__('')
         self.opened = set()
-        self.filepath = filepath + os.sep if filepath else ""
+        self.filepath = filepath if filepath else ""
         self.propagate = int(propagate)
         self.fomatter = formatter
 
@@ -67,10 +67,10 @@ class SplitOptimizerLogs(logging.Filter):
             else:
                 message = record.getMessage()
 
-            with open(f"{self.filepath}optimizer_{opt_id}.log", 'w+') as file:
+            with open(os.path.join(self.filepath, f"optimizer_{opt_id}.log"), 'w+') as file:
                 file.write(f"{message}\n")
 
-            handler = logging.FileHandler(f"{self.filepath}optimizer_{opt_id}.log", 'a')
+            handler = logging.FileHandler(os.path.join(self.filepath, f"optimizer_{opt_id}.log"), 'a')
 
             if self.fomatter:
                 handler.setFormatter(self.fomatter)

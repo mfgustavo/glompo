@@ -1,4 +1,5 @@
 import os
+import shutil
 import tempfile
 
 import pytest
@@ -29,3 +30,14 @@ def work_in_tmp():
         yield tmp_dir
 
     os.chdir(home_dir)
+
+
+@pytest.fixture(scope='function')
+def save_outputs(request, pytestconfig):
+    """ Fixture which will save contents of a test's tmp_path to tests/_saved_outputs"""
+    yield
+    if pytestconfig.getoption('--save-outs'):
+        dest_path = os.path.join(str(__file__).rsplit('/', 1)[0], '_saved_outputs', request.node.name)
+        src_path = request.getfixturevalue('tmp_path')
+        shutil.rmtree(dest_path, ignore_errors=True)
+        shutil.copytree(src_path, dest_path)

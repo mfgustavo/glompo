@@ -62,8 +62,8 @@ class TestScope:
             scope.update_optimizer(1, (i, i ** 2 / 6))
         scope._redraw_graph()
 
-        x = scope.streams[1]['all_opt'].get_xdata()
-        y = scope.streams[1]['all_opt'].get_ydata()
+        x = scope.opt_streams[1].get_xdata()
+        y = scope.opt_streams[1].get_ydata()
 
         if max_val > scope.truncated:
             assert min(x) == max_val - scope.truncated - 10
@@ -84,8 +84,8 @@ class TestScope:
         scope.update_optimizer(2, (600, 1))
         scope._redraw_graph(True)
 
-        x = scope.streams[1]['all_opt'].get_xdata()
-        y = scope.streams[1]['all_opt'].get_ydata()
+        x = scope.opt_streams[1].get_xdata()
+        y = scope.opt_streams[1].get_ydata()
 
         assert len(x) == 0
         assert len(y) == 0
@@ -102,13 +102,31 @@ class TestScope:
         for x, y in enumerate(path):
             scope.update_optimizer(1, (x, y))
 
-        y_vals = scope.streams[1]['all_opt'].get_ydata()
+        y_vals = scope.opt_streams[1].get_ydata()
 
         assert all([y == int(not log) for y in y_vals])
 
-    def test_generate_movie(self):
+    def test_checkpointing(self, scope, tmp_path):
+        scope.add_stream(1, None)
+        scope.update_optimizer(1, (1, 1))
+        scope.update_checkpoint(1)
+        scope.logger = None  # Pytest intercepts loggers making pickling impossible
+        scope.checkpoint_save(tmp_path)
+        assert 'scope' in os.listdir(tmp_path)
+
+        loaded_scope = GloMPOScope()
+        loaded_scope.load_state(tmp_path)
+        assert 1 in loaded_scope.opt_streams
+        assert loaded_scope.opt_streams[1].get_xdata() == [1]
+        assert loaded_scope.opt_streams[1].get_ydata() == [1]
+        assert loaded_scope.gen_streams['chkpt'].get_xdata() == [1]
+        assert loaded_scope.gen_streams['chkpt'].get_ydata() == [1]
+        loaded_scope.close_fig()
+
+    def test_generate_movie(self, tmp_path, save_outputs):
         scope = GloMPOScope(log_scale=True,
-                            record_movie=True)
+                            record_movie=True,
+                            movie_kwargs={'outfile': os.path.join(tmp_path, "test_gen_movie.mp4")})
         scope.setup_moviemaker()
         scope.add_stream(1)
         scope.add_stream(2)
@@ -116,8 +134,10 @@ class TestScope:
             scope.update_optimizer(1, (i, np.sin(i) + 3))
             scope.update_optimizer(2, (i, np.cos(i) + 3))
         scope.update_kill(1)
+        scope.update_pause(2)
+        scope.update_checkpoint(2)
         scope.update_norm_terminate(2)
 
         scope.generate_movie()
 
-        assert os.path.exists("glomporecording.mp4")
+        assert os.path.exists(os.path.join(tmp_path, "test_gen_movie.mp4"))

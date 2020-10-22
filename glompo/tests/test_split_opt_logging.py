@@ -1,6 +1,5 @@
 import logging
 import os
-from os.path import join as pjoin
 
 import pytest
 from glompo.common.logging import SplitOptimizerLogs
@@ -8,9 +7,9 @@ from glompo.common.logging import SplitOptimizerLogs
 
 class TestSplitLogging:
 
-    def run_log(self, propogate, formatter=logging.Formatter()):
-        opt_filter = SplitOptimizerLogs("diverted_logs", propagate=propogate, formatter=formatter)
-        opt_handler = logging.FileHandler("propogate.txt", "w")
+    def run_log(self, directory, propogate, formatter=logging.Formatter()):
+        opt_filter = SplitOptimizerLogs(directory, propagate=propogate, formatter=formatter)
+        opt_handler = logging.FileHandler(os.path.join(directory, "propogate.txt"), "w")
         opt_handler.addFilter(opt_filter)
 
         opt_handler.setLevel('DEBUG')
@@ -21,37 +20,36 @@ class TestSplitLogging:
         logging.getLogger("glompo.optimizers.opt1").debug('8452')
         logging.getLogger("glompo.optimizers.opt2").debug('9216')
 
-    def test_split(self):
-        self.run_log(False)
-        with open(pjoin("diverted_logs", "optimizer_1.log"), 'r') as file:
+    def test_split(self, tmp_path):
+        self.run_log(tmp_path, False)
+        with open(os.path.join(tmp_path, "optimizer_1.log"), 'r') as file:
             key = file.readline()
             assert key == '8452\n'
 
-        with open(pjoin("diverted_logs", "optimizer_2.log"), 'r') as file:
+        with open(os.path.join(tmp_path, "optimizer_2.log"), 'r') as file:
             key = file.readline()
             assert key == '9216\n'
 
-    def test_formatting(self):
+    def test_formatting(self, tmp_path):
         formatter = logging.Formatter("OPT :: %(message)s :: DONE")
-        self.run_log(False, formatter)
-        with open(pjoin("diverted_logs", "optimizer_1.log"), 'r') as file:
+        self.run_log(tmp_path, False, formatter)
+        with open(os.path.join(tmp_path, "optimizer_1.log"), 'r') as file:
             key = file.readline()
             assert key == "OPT :: 8452 :: DONE\n"
 
-        with open(pjoin("diverted_logs", "optimizer_2.log"), 'r') as file:
+        with open(os.path.join(tmp_path, "optimizer_2.log"), 'r') as file:
             key = file.readline()
             assert key == "OPT :: 9216 :: DONE\n"
 
     @pytest.mark.parametrize("propogate", [True, False])
-    def test_propogate(self, propogate):
-        self.run_log(propogate)
-        with open("propogate.txt", "r") as file:
+    def test_propogate(self, propogate, tmp_path):
+        self.run_log(tmp_path, propogate)
+        with open(os.path.join(tmp_path, "propogate.txt"), "r") as file:
             lines = file.readlines()
 
         if propogate:
             assert lines[0] == '8452\n'
             assert lines[1] == '9216\n'
             assert len(lines) == 2
-            os.remove("propogate.txt")
         else:
             assert len(lines) == 0

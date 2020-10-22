@@ -152,7 +152,6 @@ class GloMPOScope:
             raise TypeError(f"Cannot parse y_range = {y_range}. Only a tuple can be used.")
 
         self.record_movie = record_movie
-        self.movie_name = None
         if record_movie:
             self._writer_kwargs = writer_kwargs
             self._new_writer()
@@ -161,10 +160,7 @@ class GloMPOScope:
                 movie_kwargs = {}
             if 'outfile' not in movie_kwargs:
                 movie_kwargs['outfile'] = 'glomporecording.mp4'
-                self.movie_name = 'glomporecording.mp4'
                 self.logger.info("Saving scope recording as glomporecording.mp4")
-            else:
-                self.movie_name = movie_kwargs['outfile']
             self._movie_kwargs = movie_kwargs
 
         self.logger.debug("Scope initialised successfully")
@@ -187,7 +183,7 @@ class GloMPOScope:
 
             # Purge old results
             if self.truncated:
-                for opt_id, line in self.opt_streams:
+                for opt_id, line in self.opt_streams.items():
                     if opt_id not in self._dead_streams:
                         done = []
                         x_vals = np.array(line.get_xdata())

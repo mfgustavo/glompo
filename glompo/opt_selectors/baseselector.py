@@ -19,7 +19,8 @@ class BaseSelector(ABC):
 
     def __init__(self,
                  avail_opts: List[Union[Type[BaseOptimizer],
-                                        Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]]]],
+                                        Tuple[Type[BaseOptimizer],
+                                              Optional[Dict[str, Any]], Optional[Dict[str, Any]]]]],
                  allow_spawn: Optional[Callable[['GloMPOManager'], bool]] = None):
         """ Parameters
             ----------

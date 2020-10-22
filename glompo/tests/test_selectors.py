@@ -10,8 +10,6 @@ from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 
 
 class BasicOptimizer(BaseOptimizer):
-    needscaler = False
-
     def __init__(self, a: int = 0, b: Optional[Sequence[float]] = None, c: Dict[str, Any] = None):
         self.a = a
         self.b = b
@@ -28,6 +26,9 @@ class BasicOptimizer(BaseOptimizer):
         pass
 
     def checkpoint_save(self, *args):
+        pass
+
+    def checkpoint_load(self, path: str):
         pass
 
 
@@ -47,6 +48,11 @@ class BasicSelector(BaseSelector):
                          slots_available: int) -> Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]],
                                                         None]:
         return self.avail_opts[0]
+
+
+class SpawnStopper:
+    def __call__(self, *args, **kwargs):
+        return False
 
 
 class TestSelectors:
@@ -81,7 +87,7 @@ class TestSelectors:
 
 class TestCycleSelector:
 
-    def test_select(self):
+    def test_selection(self):
         selector = CycleSelector([OptimizerA, OptimizerB])
 
         for i in range(5):
@@ -108,6 +114,10 @@ class TestCycleSelector:
 
         selection = selector.select_optimizer(None, None, 2)
         assert selection[0] is OptimizerA
+
+    def test_no_spawning(self):
+        selector = CycleSelector([OptimizerA, OptimizerB], allow_spawn=SpawnStopper())
+        assert selector.select_optimizer(None, None, 1) is False
 
 
 class TestChain:
@@ -149,14 +159,26 @@ class TestChain:
         selection = selector.select_optimizer(manager, None, 10)
         assert selection[0] == OptimizerB
 
+    def test_no_spawning(self):
+        selector = ChainSelector([OptimizerA, OptimizerB], [10], allow_spawn=SpawnStopper())
+        assert selector.select_optimizer(None, None, 1) is False
+
 
 class TestRandom:
 
-    def test_no_space(self):
-        selector = RandomSelector([OptimizerA, (OptimizerB, {'workers': 2}, None)])
+    @pytest.mark.parametrize("workers_a", [1, 2])
+    def test_no_space(self, workers_a):
+        selector = RandomSelector([(OptimizerA, {'workers': workers_a}, None), (OptimizerB, {'workers': 2}, None)])
 
-        for i in range(100):
-            assert selector.select_optimizer(None, None, 1)[0] == OptimizerA
+        if workers_a == 1:
+            for i in range(10):
+                assert selector.select_optimizer(None, None, 1)[0] == OptimizerA
+        else:
+            assert selector.select_optimizer(None, None, 1) is None
+
+    def test_no_spawning(self):
+        selector = RandomSelector([OptimizerA, OptimizerB], allow_spawn=SpawnStopper())
+        assert selector.select_optimizer(None, None, 1) is False
 
     def test_selection(self):
         selector = RandomSelector([OptimizerA, OptimizerB])
