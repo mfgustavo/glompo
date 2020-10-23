@@ -296,17 +296,27 @@ class GloMPOScope:
         self._update_point(opt_id, 'chkpt')
         self._redraw_graph()
 
-    def setup_moviemaker(self):
+    def setup_moviemaker(self, path: Union[Path, str, None] = None):
         """ Setups up the movie recording framework. Must be called before the scope begins to be filled in order to
-            begin generating movies correctly. Declared outside the init so that it can be called in the
-            appropriate directory by the manager.
+            begin generating movies correctly.
+
+            Parameters
+            ----------
+            path: Optional[Path, str] = None
+                An optional directory into which the movie file will be directed.
         """
+        if path and 'outfile' in self._movie_kwargs:
+            path = Path(path, self._movie_kwargs['outfile'])
+            self._movie_kwargs['outfile'] = path
+        else:
+            path = Path(path, 'glomporecording.mp4')
+
         try:
             self._writer.setup(fig=self.fig, **self._movie_kwargs)
         except TypeError:
             warnings.warn("Unidentified key in writer_kwargs. Using default values.", UserWarning)
             self.logger.warning("Unidentified key in writer_kwargs. Using default values.")
-            self._writer.setup(fig=self.fig, outfile='glomporecording.mp4')
+            self._writer.setup(fig=self.fig, outfile=path)
 
     def generate_movie(self):
         """ Final call to write the saved frames into a single movie. """

@@ -171,7 +171,7 @@ class OptimizerLogger:
         if is_interactive:
             plt.ion()
 
-    def plot_trajectory(self, title: str, log_scale: bool = False, best_fx: bool = False):
+    def plot_trajectory(self, title: Union[Path, str], log_scale: bool = False, best_fx: bool = False):
         if not HAS_MATPLOTLIB:
             warnings.warn("Matplotlib not present cannot create plots.", ImportWarning)
             return

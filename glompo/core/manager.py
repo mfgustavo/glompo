@@ -4,7 +4,6 @@ import copy
 import getpass
 import logging
 import multiprocessing as mp
-import os
 import queue
 import shutil
 import socket
@@ -76,7 +75,6 @@ class GloMPOManager:
         self._is_restart: bool = None
 
         self.logger = logging.getLogger('glompo.manager')
-        self._init_workdir: Path = None
         self.working_dir: Path = None
 
         self._mp_manager = mp.Manager()
@@ -314,11 +312,11 @@ class GloMPOManager:
         self.logger.info("Initializing Manager ... ")
 
         # Setup working directory
-        if not isinstance(working_dir, str):
+        if not (isinstance(working_dir, str) or isinstance(working_dir, Path)):
             warnings.warn(f"Cannot parse working_dir = {working_dir}. str or bytes expected. Using current "
                           f"work directory.", UserWarning)
             working_dir = "."
-        self.working_dir = Path(working_dir).absolute()
+        self.working_dir = Path(working_dir).resolve()
 
         # Save and wrap task
         if not callable(task):
@@ -564,7 +562,7 @@ class GloMPOManager:
             elif key == 'visualisation_args':
                 pass
             elif key == 'working_dir':
-                self.working_dir = Path(val).absolute()
+                self.working_dir = Path(val).resolve()
             elif key in permit_keys:
                 setattr(self, key, val)
             else:
@@ -648,7 +646,7 @@ class GloMPOManager:
 
                 if self.split_printstreams and self._proc_backend:
                     # noinspection PyProtectedMember
-                    target = process_print_redirect(opt_id, optimizer._minimize)
+                    target = process_print_redirect(opt_id, self.working_dir, optimizer._minimize)
 
                 kwargs = {'target': target,
                           'args': (self.task, x0, bounds),
@@ -657,7 +655,8 @@ class GloMPOManager:
                 if self._proc_backend:
                     process = mp.Process(**kwargs)
                 else:
-                    process = CustomThread(redirect_print=self.split_printstreams, **kwargs)
+                    process = CustomThread(working_directory=self.working_dir,
+                                           redirect_print=self.split_printstreams, **kwargs)
 
                 self.optimizer_packs[opt_id] = ProcessPackage(process, parent_pipe, event, slots)
 
@@ -700,32 +699,31 @@ class GloMPOManager:
             reason = "None"
             self.converged = False
 
-        # Move into or make working dir
+        # Make working dir
         self.working_dir.mkdir(parents=True, exist_ok=True)
-        self._init_workdir = Path.cwd()
-        os.chdir(self.working_dir)
 
         # Purge Old Results
-        if Path("glompo_manager_log.yml").exists() or Path("glompo_optimizer_logs").exists():
+        if (self.working_dir / "glompo_manager_log.yml").exists() or \
+                (self.working_dir / "glompo_optimizer_logs").exists():
             if self.overwrite_existing:
                 self.logger.debug("Old results found")
-                to_remove = [Path("glompo_manager_log.yml"), Path("opt_best_summary.yml")]
+                to_remove = [self.working_dir / "glompo_manager_log.yml", self.working_dir / "opt_best_summary.yml"]
                 to_remove += self.working_dir.glob("trajectories*.png")
                 to_remove += self.working_dir.glob("opt*_parms.png")
                 for old in to_remove:
                     old.unlink()
-                shutil.rmtree("glompo_optimizer_logs", ignore_errors=True)
-                shutil.rmtree("glompo_optimizer_printstreams", ignore_errors=True)
+                shutil.rmtree(self.working_dir / "glompo_optimizer_logs", ignore_errors=True)
+                shutil.rmtree(self.working_dir / "glompo_optimizer_printstreams", ignore_errors=True)
                 self.logger.warning("Deleted old results.")
             else:
                 raise FileExistsError("Previous results found. Remove, move or rename them. Alternatively, select "
                                       "another working_dir or set overwrite_existing=True.")
 
         if self.visualisation and self.scope.record_movie:
-            self.scope.setup_moviemaker()  # Declared here to ensure no overwriting and creation in correct dir
+            self.scope.setup_moviemaker(self.working_dir)
 
         if self.split_printstreams:
-            Path("glompo_optimizer_printstreams").mkdir(exist_ok=True)
+            (self.working_dir / "glompo_optimizer_printstreams").mkdir(exist_ok=True)
 
         # Setup system monitoring
         if HAS_PSUTIL:
@@ -889,7 +887,7 @@ class GloMPOManager:
                 self.scope.close_fig()
 
             self.logger.debug("Saving summary file results")
-            self._save_log(self.result, reason, caught_exception)
+            self._save_log(self.result, reason, caught_exception, self.working_dir, self.summary_files)
 
             self.result = Result(self.result.x,
                                  self.result.fx,
@@ -900,8 +898,6 @@ class GloMPOManager:
             if not self._proc_backend and self.split_printstreams:
                 sys.stdout.close()
                 sys.stderr.close()
-
-            os.chdir(self._init_workdir)
 
             self.logger.info("GloMPO Optimization Routine Done")
 
@@ -1127,9 +1123,11 @@ class GloMPOManager:
         """
         self.logger.info("Dumping manager state")
         if dump_dir:
-            path = Path(dump_dir)
-            path.mkdir(exist_ok=True)
-        self._save_log(self.result, "Manual Save State", None, summary_files, dump_dir)
+            dump_dir = Path(dump_dir).resolve()
+            dump_dir.mkdir(exist_ok=True)
+        else:
+            dump_dir = self.working_dir
+        self._save_log(self.result, "Manual Save State", None, dump_dir, summary_files)
 
     def _fill_optimizer_slots(self):
         """ Starts new optimizers if there are slots available. """
@@ -1178,7 +1176,7 @@ class GloMPOManager:
 
         if self.split_printstreams and self._proc_backend:
             # noinspection PyProtectedMember
-            target = process_print_redirect(opt_id, optimizer._minimize)
+            target = process_print_redirect(opt_id, self.working_dir, optimizer._minimize)
 
         kwargs = {'target': target,
                   'args': (task, x0, bounds),
@@ -1188,7 +1186,7 @@ class GloMPOManager:
         if self._proc_backend:
             process = mp.Process(**kwargs)
         else:
-            process = CustomThread(redirect_print=self.split_printstreams, **kwargs)
+            process = CustomThread(working_directory=self.working_dir, redirect_print=self.split_printstreams, **kwargs)
 
         self.optimizer_packs[opt_id] = ProcessPackage(process, pipe, event, workers)
         self.optimizer_packs[opt_id].process.start()
@@ -1521,11 +1519,8 @@ class GloMPOManager:
                         self.logger.warning(f"Could not join optimizer {opt_id}. May crash out with it still running "
                                             f"and thus generate errors. Terminations cannot be sent to threads.")
 
-    def _save_log(self, result: Result, reason: str, caught_exception: Optional[str],
-                  summary_files: Optional[int] = None, dump_dir: Optional[Path] = None):
-        summary_files = summary_files if summary_files is not None else self.summary_files
-        dump_dir = Path(dump_dir) if dump_dir is not None else Path.cwd()
-
+    def _save_log(self, result: Result, reason: str, caught_exception: Optional[str], dump_dir: Path,
+                  summary_files: int):
         if summary_files > 0:
             if caught_exception:
                 reason = f"Process Crash: {caught_exception}"
@@ -1662,7 +1657,7 @@ class GloMPOManager:
                     name += "best_" if best_fx else ""
                     name = name[:-1] if name.endswith("_") else name
                     name += ".png"
-                    self.opt_log.plot_trajectory(Path(dump_dir, name), log_scale, best_fx)
+                    self.opt_log.plot_trajectory(dump_dir / name, log_scale, best_fx)
             if summary_files == 5:
                 self.logger.debug("Saving optimizer parameter trials.")
                 self.opt_log.plot_optimizer_trials(dump_dir)

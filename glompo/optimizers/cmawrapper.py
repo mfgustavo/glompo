@@ -4,7 +4,6 @@
 """
 import copy
 import pickle
-import shutil
 import warnings
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from multiprocessing import Event, Queue
@@ -64,9 +63,9 @@ class CMAOptimizer(BaseOptimizer):
             workers: int = 1
                 The number of parallel evaluators used by this instance of CMA.
             keep_files: bool = False
-                If True the files produced by CMA are retained otherwise they are deleted. Deletion is the default
-                behaviour since, when using GloMPO, GloMPO log files are created. Note, however, that GloMPO log files
-                are different from CMA ones.
+                If True the files produced by CMA are retained otherwise they are dumped in a temporary directory and
+                dumped. Deletion is the default behaviour since, when using GloMPO, GloMPO log files are created.
+                Note, however, that GloMPO log files are different from CMA ones.
             cmasettings: Optional[Dict[str, Any]]
                 cma module-specific settings as ``k,v`` pairs. See ``cma.s.pprint(cma.CMAOptions())`` for a list of
                 available options. Most useful keys are: `timeout`, `tolstagnation`, `popsize`. Additionally,
@@ -78,7 +77,6 @@ class CMAOptimizer(BaseOptimizer):
         self.es = None
         self.result = None
         self.keep_files = keep_files
-        self.folder_name = Path('cmadata') if not self._opt_id else Path(f'cmadata_{self._opt_id}')
         self.cmasettings = cmasettings
         self.restart = False
         self.popsize = cmasettings['popsize'] if 'popsize' in cmasettings else None
@@ -105,8 +103,6 @@ class CMAOptimizer(BaseOptimizer):
             self.cmasettings = GaussVDSampler.extend_cma_options(self.cmasettings)
         elif sampler == 'vkd':
             self.cmasettings = GaussVkDSampler.extend_cma_options(self.cmasettings)
-
-        self.cmasettings.update({'verb_filenameprefix': self.folder_name.name + 'cma_'})
 
     def minimize(self,
                  function: Callable[[Sequence[float]], float],
@@ -157,8 +153,6 @@ class CMAOptimizer(BaseOptimizer):
 
         if not self.restart:
             self.logger.info("Setting up fresh CMA")
-
-            self.folder_name.mkdir(parents=True, exist_ok=True)
 
             self.result = MinimizeResult()
             task_settings.update({'bounds': np.transpose(bounds).tolist()})
@@ -246,11 +240,13 @@ class CMAOptimizer(BaseOptimizer):
 
         if self.es.stop() != "Checkpoint Shutdown":
             if self.keep_files:
-                with (self.folder_name / 'cma_results.pkl').open('wb') as file:
+                name = 'cma_'
+                if self._opt_id:
+                    name += f'opt{self._opt_id}_'
+                name += '_results.pkl'
+                with open(name, 'wb') as file:
                     self.logger.debug("Pickling results")
                     pickle.dump(self.es.result, file)
-            else:
-                shutil.rmtree(self.folder_name, ignore_errors=True)
 
         return self.result
 
