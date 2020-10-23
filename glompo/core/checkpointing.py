@@ -121,17 +121,16 @@ class CheckpointingControl:
         for key, val in codes.items():
             name = name.replace(key, time.strftime(val))
 
-        if not self.count:
-            if self.checkpointing_dir.exists():
-                max_index = -1
-                matches = [re.match(self.naming_format_re, folder.name) for folder in self.checkpointing_dir.iterdir()]
-                for match in matches:
-                    if match and match.lastgroup == 'index':
-                        i = int(match.group('index'))
-                        max_index = i if i > max_index else max_index
-                self.count = max_index + 1
-            else:
-                self.count = 0
+        if self.checkpointing_dir.exists():
+            max_index = -1
+            matches = [re.match(self.naming_format_re, folder.name) for folder in self.checkpointing_dir.iterdir()]
+            for match in matches:
+                if match and match.lastgroup == 'index':
+                    i = int(match.group('index'))
+                    max_index = i if i > max_index else max_index
+            self.count = max_index + 1
+        else:
+            self.count = 0
 
         name = name.replace('%(count)', f'{self.count:03}')
         self.count += 1

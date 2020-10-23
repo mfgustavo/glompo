@@ -134,6 +134,7 @@ class GloMPOManager:
         self.split_printstreams: bool = None
         self.overwrite_existing: bool = None
         self.visualisation: bool = None
+        self.visualisation_args: Dict[str, Any] = {}
         self.hunt_frequency: int = None
         self.spawning_opts: bool = None
         self.status_frequency: float = None
@@ -396,8 +397,6 @@ class GloMPOManager:
         if isinstance(checkpoint_control, CheckpointingControl):
             if HAS_DILL:
                 self.checkpoint_control = checkpoint_control
-                if self.checkpoint_control.checkpoint_at_init:
-                    self.checkpoint()
             else:
                 self.logger.warning("Checkpointing controls ignored. Cannot setup infrastructure without dill package.")
                 warnings.warn("Checkpointing controls ignored. Cannot setup infrastructure without dill package.")
@@ -408,6 +407,7 @@ class GloMPOManager:
         # Initialise support classes
         if visualisation:
             from .scope import GloMPOScope  # Only imported if needed to avoid matplotlib compatibility issues
+            self.visualisation_args = visualisation_args if visualisation_args else {}
             self.scope = GloMPOScope(**visualisation_args) if visualisation_args else GloMPOScope()
 
         # Setup backend
@@ -431,6 +431,10 @@ class GloMPOManager:
                 self.end_timeout = None
 
         self._is_restart = False
+
+        if self.checkpoint_control and self.checkpoint_control.checkpoint_at_init:
+            self.checkpoint()
+
         self.logger.info("Initialization Done")
 
     def load_checkpoint(self, path: Union[Path, str],
@@ -569,12 +573,13 @@ class GloMPOManager:
         # Extract scope and rebuild writer if still visualizing
         if self.visualisation:
             from .scope import GloMPOScope
-            self.scope = GloMPOScope(**glompo_kwargs['visualisation_args']) \
-                if 'visualisation_args' in glompo_kwargs else GloMPOScope()
 
             if (tmp_dir / 'scope').exists():
                 self.logger.info('Scope checkpoint found, extracting')
+                self.scope = GloMPOScope()
                 self.scope.load_state(tmp_dir)
+            else:
+                self.scope = GloMPOScope(**self.visualisation_args)
 
         # Modify/create missing variables
         assert len(self.dt_starts) == len(self.dt_ends), "Timestamps missing from checkpoint."
@@ -1000,7 +1005,7 @@ class GloMPOManager:
                     self.dt_ends[-1] = datetime.now()
                 else:
                     self.dt_ends.append(datetime.now())
-            self.chkpt_history.append(path.resolve().with_suffix('.tar.gz'))
+            self.chkpt_history.append(str(path.resolve().with_suffix('.tar.gz')))
 
             # Select variables for pickling
             pickle_vars = {}
@@ -1051,7 +1056,7 @@ class GloMPOManager:
                     self.logger.warning("Checkpointing without task.")
 
             # Save scope
-            if self.visualisation:
+            if self.visualisation and self.scope:
                 self.scope.checkpoint_save(path)
             self.logger.debug("Scope successfully pickled")
 
@@ -1064,7 +1069,6 @@ class GloMPOManager:
                 warnings.warn("Overwriting existing checkpoint. To avoid this change the checkpointing naming "
                               "format")
                 tar_path.replace(ovw_path)
-                tar_path.unlink()
                 overwriting_chkpt = True
 
             try:
@@ -1100,7 +1104,7 @@ class GloMPOManager:
             warnings.warn(f"Checkpointing failed: {caught_exception}.\nAborting checkpoint construction.")
         finally:
             shutil.rmtree(path, ignore_errors=True)
-            if overwriting_chkpt:
+            if ovw_path.exists():
                 ovw_path.unlink()
 
         if self.converged:
@@ -1594,7 +1598,7 @@ class GloMPOManager:
             data = {
                 "Assignment": {
                     "Task": type(self.task).__name__ if isinstance(type(self.task), object) else self.task.__name__,
-                    "Working Dir": Path.cwd(),
+                    "Working Dir": str(Path.cwd()),
                     "Username": getpass.getuser(),
                     "Hostname": socket.gethostname(),
                     "Time": {"Optimisation Periods": t_periods,
@@ -1619,7 +1623,7 @@ class GloMPOManager:
                 data["Run Information"] = run_info
 
             if self.checkpoint_control:
-                data["Checkpointing"] = {"Directory": self.checkpoint_control.checkpointing_dir.resolve(),
+                data["Checkpointing"] = {"Directory": str(self.checkpoint_control.checkpointing_dir.resolve()),
                                          "Checkpoints": self.chkpt_history}
 
             data["Solution"] = {"fx": result.fx,

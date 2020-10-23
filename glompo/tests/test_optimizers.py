@@ -3,7 +3,7 @@ import multiprocessing as mp
 from collections import namedtuple
 from pathlib import Path
 from time import sleep, time
-from typing import Callable, Sequence, Tuple
+from typing import Callable, Sequence, Tuple, Union
 
 import pytest
 from glompo.common.namedtuples import IterationResult
@@ -60,8 +60,8 @@ class PlainOptimizer(BaseOptimizer):
         self.terminate = True
         self.message_manager(code, MinimizeResult())
 
-    def checkpoint_save(self, *args):
-        with open("savestate.txt", "w+") as file:
+    def checkpoint_save(self, path: Union[Path, str]):
+        with Path(path, "savestate.txt").open("w+") as file:
             file.write("Start\n")
             for i in dir(self):
                 file.write(f"{i}\n")
@@ -128,7 +128,7 @@ class TestBase:
         assert mp_package.queue.get() == "item"
 
     def test_checkpointsave(self, mp_package, tmp_path):
-        process = mp.Process(target=mp_package.opti.checkpoint_save, args=(None, None))
+        process = mp.Process(target=mp_package.opti.checkpoint_save, args=(tmp_path,))
         process.start()
         process.join()
 
@@ -137,11 +137,8 @@ class TestBase:
             assert lines[0] == "Start\n"
             assert lines[-1] == "End"
 
-    def test_checkpointload(self):
-        pass
 
-
-@pytest.mark.parametrize("opti, kwargs", zip(available_classes))
+@pytest.mark.parametrize("opti, init_kwargs", available_classes)
 class TestSubclassesGlompoCompatible:
     package = namedtuple("package", "queue p_pipe c_pipe event")
 
@@ -177,10 +174,11 @@ class TestSubclassesGlompoCompatible:
 
         return Task()
 
-    def test_result_in_queue(self, opti, mp_package, task):
+    def test_result_in_queue(self, opti, init_kwargs, mp_package, task):
         opti = opti(results_queue=mp_package.queue,
                     signal_pipe=mp_package.p_pipe,
-                    pause_flag=mp_package.event)
+                    pause_flag=mp_package.event,
+                    **init_kwargs)
 
         opti.minimize(function=task,
                       x0=(0.5, 0.5, 0.5),
@@ -190,10 +188,11 @@ class TestSubclassesGlompoCompatible:
         assert not mp_package.queue.empty()
         assert isinstance(mp_package.queue.get_nowait(), IterationResult)
 
-    def test_final(self, opti, mp_package, task):
+    def test_final(self, opti, init_kwargs, mp_package, task):
         opti = opti(results_queue=mp_package.queue,
                     signal_pipe=mp_package.c_pipe,
-                    pause_flag=mp_package.event)
+                    pause_flag=mp_package.event,
+                    **init_kwargs)
 
         opti.minimize(function=task,
                       x0=(0.5, 0.5, 0.5),
@@ -212,10 +211,11 @@ class TestSubclassesGlompoCompatible:
         assert mp_package.p_pipe.poll()
         assert mp_package.p_pipe.recv()[0] == 0
 
-    def test_callstop(self, opti, mp_package, task):
+    def test_callstop(self, opti, init_kwargs, mp_package, task):
         opti = opti(results_queue=mp_package.queue,
                     signal_pipe=mp_package.c_pipe,
-                    pause_flag=mp_package.event)
+                    pause_flag=mp_package.event,
+                    **init_kwargs)
 
         mp_package.p_pipe.send(1)
         opti.minimize(function=task,
@@ -227,10 +227,11 @@ class TestSubclassesGlompoCompatible:
             assert mp_package.queue.get_nowait().n_iter < 10
 
     @pytest.mark.parametrize("task", [10], indirect=["task"])
-    def test_pause(self, opti, mp_package, task):
+    def test_pause(self, opti, init_kwargs, mp_package, task):
         opti = opti(results_queue=mp_package.queue,
                     signal_pipe=mp_package.c_pipe,
-                    pause_flag=mp_package.event)
+                    pause_flag=mp_package.event,
+                    **init_kwargs)
 
         p = mp.Process(target=opti.minimize,
                        kwargs={'function': task,
@@ -246,10 +247,11 @@ class TestSubclassesGlompoCompatible:
         p.join()
         assert not p.is_alive()
 
-    def test_haslogger(self, opti, mp_package):
+    def test_haslogger(self, opti, init_kwargs, mp_package):
         opti = opti(results_queue=mp_package.queue,
                     signal_pipe=mp_package.c_pipe,
-                    pause_flag=mp_package.event)
+                    pause_flag=mp_package.event,
+                    **init_kwargs)
 
         assert hasattr(opti, 'logger')
         assert isinstance(opti.logger, logging.Logger)

@@ -2,7 +2,7 @@
         Adapted from:   SCM ParAMS
         Authors:        Robert Rüger, Leonid Komissarov
 """
-
+import copy
 import pickle
 import shutil
 import warnings
@@ -10,7 +10,7 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_compl
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
 from pathlib import Path
-from typing import Callable, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Optional, Sequence, Tuple, Union
 
 import cma
 import numpy as np
@@ -48,16 +48,15 @@ class CMAOptimizer(BaseOptimizer):
         opt.logger.info("Successfully loaded from restart file.")
         return opt
 
-    def __init__(self, sigma, sampler: str = 'full', verbose: bool = True, keep_files: bool = False,
+    def __init__(self, sampler: str = 'full', verbose: bool = True, keep_files: bool = False,
                  opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
                  results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
                  backend: str = 'threads', **cmasettings):
-        """ Parameters
+        """ Initialises the optimizer. It is built in such a way that it minimize can be called multiple times on
+            different functions.
+
+            Parameters
             ----------
-            sigma: float
-                Standard deviation for all parameters (all parameters must be scaled accordingly).
-                Defines the search space as the std dev from an initial x0. Larger values will sample a wider Gaussian.
-                If a restart_file is not provided this argument must be given.
             sampler: Literal['full', 'vkd', 'vd'] = 'full'
                 Allows the use of `GaussVDSampler` and `GaussVkDSampler` settings.
             verbose: bool = True
@@ -75,7 +74,6 @@ class CMAOptimizer(BaseOptimizer):
         """
         super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
 
-        self.sigma = sigma
         self.verbose = verbose
         self.es = None
         self.result = None
@@ -83,6 +81,7 @@ class CMAOptimizer(BaseOptimizer):
         self.folder_name = Path('cmadata') if not self._opt_id else Path(f'cmadata_{self._opt_id}')
         self.cmasettings = cmasettings
         self.restart = False
+        self.popsize = cmasettings['popsize'] if 'popsize' in cmasettings else None
 
         # Sort all non-native CMA options into the custom cmaoptions key 'vv':
         customopts = {}
@@ -102,15 +101,6 @@ class CMAOptimizer(BaseOptimizer):
         if 'tolfun' not in self.cmasettings:
             self.cmasettings['tolfun'] = 1e-20
 
-        if 'popsize' not in self.cmasettings:
-            self.cmasettings['popsize'] = self.workers
-        self.popsize = self.cmasettings['popsize']
-        if self.popsize < self.workers:
-            warnings.warn(f"'popsize'={self.popsize} is less than 'workers'={self.workers}. "
-                          f"This is an inefficient use of resources")
-            self.logger.warning(f"'popsize'={self.popsize} is less than 'workers'={self.workers}. "
-                                f"This is an inefficient use of resources")
-
         if sampler == 'vd':
             self.cmasettings = GaussVDSampler.extend_cma_options(self.cmasettings)
         elif sampler == 'vkd':
@@ -122,7 +112,48 @@ class CMAOptimizer(BaseOptimizer):
                  function: Callable[[Sequence[float]], float],
                  x0: Sequence[float],
                  bounds: Sequence[Tuple[float, float]],
-                 callbacks: Callable = None, **kwargs) -> MinimizeResult:
+                 callbacks: Callable[[], Optional[Any]] = None,
+                 sigma0: float = 0, **kwargs) -> MinimizeResult:
+        """ Minimize function with a starting distribution defined by mean x0 and standard deviation sigma0. Parameters
+            are bounded by bounds. Callbacks are executed once per iteration.
+
+            Parameters
+            ----------
+            function: Callable[[Sequence[float]], float]
+                Task to be minimised accepting a sequence of unknown parameters and returning a float result.
+            x0: Sequence[float]
+                Initial mean of the distribution from with trial parameter sets are sampled.
+            bounds: Sequence[Tuple[float, float]]
+                Bounds on the sampling limits of each dimension. CMA supports handling bounds as non-linear
+                transformations so that they are never exceeded (but bounds are likely to be over sampled) or with a
+                penalty function. See cma documentation for more on this.
+            callbacks: Callable[[], Optional[Any]]
+                Callbacks are called once per iteration. They receive no arguments. If they return anything other than
+                None the minimization will terminate early.
+            sigma0: float = 0
+                Standard deviation for all parameters (all parameters must be scaled accordingly).
+                Defines the search space as the std dev from an initial x0. Larger values will sample a wider
+                Gaussian. Default is zero which will not accepted by the optimizer, thus this argument must be provided.
+
+            Notes
+            -----
+            If 'popsize' is not provided in the cmasettings directory at init, it will be set to the number of workers
+            (if this is larger than 1) or failing that it will be set to the default 4 + int(3 * log(d)).
+        """
+        task_settings = copy.deepcopy(self.cmasettings)
+
+        if not self.popsize:
+            if self.workers > 1:
+                task_settings['popsize'] = self.workers
+            else:
+                task_settings['popsize'] = 4 + int(3 * np.log(len(x0)))
+        self.popsize = task_settings['popsize']
+
+        if self.popsize < self.workers:
+            warnings.warn(f"'popsize'={self.popsize} is less than 'workers'={self.workers}. "
+                          f"This is an inefficient use of resources")
+            self.logger.warning(f"'popsize'={self.popsize} is less than 'workers'={self.workers}. "
+                                f"This is an inefficient use of resources")
 
         if not self.restart:
             self.logger.info("Setting up fresh CMA")
@@ -130,8 +161,8 @@ class CMAOptimizer(BaseOptimizer):
             self.folder_name.mkdir(parents=True, exist_ok=True)
 
             self.result = MinimizeResult()
-            self.cmasettings.update({'bounds': np.transpose(bounds).tolist()})
-            self.es = cma.CMAEvolutionStrategy(x0, self.sigma, self.cmasettings)
+            task_settings.update({'bounds': np.transpose(bounds).tolist()})
+            self.es = cma.CMAEvolutionStrategy(x0, sigma0, task_settings)
 
         self.logger.debug("Entering optimization loop")
 
@@ -191,7 +222,7 @@ class CMAOptimizer(BaseOptimizer):
                 self.logger.debug("Checked messages")
                 self._pause_signal.wait()
                 self.logger.debug("Passed pause test")
-            self._customtermination()
+            self._customtermination(task_settings)
             if callbacks and callbacks():
                 self.callstop("Callbacks termination.")
             self.logger.debug("callbacks called")
@@ -223,8 +254,8 @@ class CMAOptimizer(BaseOptimizer):
 
         return self.result
 
-    def _customtermination(self):
-        if 'tolstagnation' in self.cmasettings:
+    def _customtermination(self, settings):
+        if 'tolstagnation' in settings:
             # The default 'tolstagnation' criterium is way too complex (as most 'tol*' criteria are).
             # Here we hack it to actually do what it is supposed to do: Stop when no change after last x iterations.
             if not hasattr(self, '_stagnationcounter'):
@@ -237,10 +268,10 @@ class CMAOptimizer(BaseOptimizer):
                 self._prev_best = self.es.best.f
                 self._stagnationcounter = 0
 
-            if self._stagnationcounter > self.cmasettings['tolstagnation']:
+            if self._stagnationcounter > settings['tolstagnation']:
                 self.callstop("Early CMA stop: 'tolstagnation'.")
 
-        opts = self.cmasettings['vv']
+        opts = settings['vv']
         if 'minsigma' in opts and self.es.sigma < opts['minsigma']:
             # Stop if sigma falls below minsigma
             self.callstop("Early CMA stop: 'minsigma'.")
