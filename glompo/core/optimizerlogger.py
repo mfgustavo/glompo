@@ -200,7 +200,7 @@ class OptimizerLogger:
                 stub = "fx_best" if best_fx else "fx"
                 y_lab = f"sign({stub}) * log10(|{stub}|)"
 
-            ax.plot(f_calls, traj, c=colors(opt_id))
+            ax.plot(f_calls, traj, ls='-', marker='.', c=colors(opt_id))
             leg_elements.append(lines.Line2D([], [], ls='-', c=colors(opt_id),
                                              label=f"{opt_id}: {self.get_metadata(opt_id, 'Optimizer Type')}"))
 
