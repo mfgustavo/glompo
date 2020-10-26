@@ -152,6 +152,7 @@ class GloMPOScope:
             raise TypeError(f"Cannot parse y_range = {y_range}. Only a tuple can be used.")
 
         self.record_movie = record_movie
+        self.is_setup = False
         if record_movie:
             self._writer_kwargs = writer_kwargs
             self._new_writer()
@@ -159,7 +160,7 @@ class GloMPOScope:
             if not movie_kwargs:
                 movie_kwargs = {}
             if 'outfile' not in movie_kwargs:
-                movie_kwargs['outfile'] = 'glomporecording.mp4'
+                movie_kwargs['outfile'] = Path('glomporecording.mp4')
                 self.logger.info("Saving scope recording as glomporecording.mp4")
             self._movie_kwargs = movie_kwargs
 
@@ -208,9 +209,13 @@ class GloMPOScope:
             self.fig.canvas.draw()
             self.fig.canvas.flush_events()
             if self.record_movie:
-                self.logger.debug('Grabbing frame')
-                self._writer.grab_frame()
-                self.logger.debug('Frame grabbed')
+                if self.is_setup:
+                    self.logger.debug('Grabbing frame')
+                    self._writer.grab_frame()
+                    self.logger.debug('Frame grabbed')
+                else:
+                    self.logger.error("Cannot record movie without calling setup_moviemaker first.")
+                    raise RuntimeError("Cannot record movie without calling setup_moviemaker first.")
         else:
             self._event_counter += 1
 
@@ -303,47 +308,38 @@ class GloMPOScope:
             Parameters
             ----------
             path: Optional[Path, str] = None
-                An optional directory into which the movie file will be directed.
+                An optional directory into which the movie file will be directed. Will overwrite any 'outfile' argument
+                sent during scope initialisation.
         """
-        if path and 'outfile' in self._movie_kwargs:
-            path = Path(path, self._movie_kwargs['outfile'])
+        if not self.record_movie:
+            warnings.warn("Cannot initialise movie writer. record_movie must be True at initialisation. Aborting.",
+                          UserWarning)
+            self.logger.warning("Cannot initialise movie writer. record_movie must be True at initialisation. "
+                                "Aborting.")
+            return
+
+        old_outfile = self._movie_kwargs['outfile']
+        if path:
+            path = Path(path).with_suffix('.mp4')
             self._movie_kwargs['outfile'] = path
-        else:
-            path = Path(path, 'glomporecording.mp4')
 
         try:
             self._writer.setup(fig=self.fig, **self._movie_kwargs)
+            self.is_setup = True
         except TypeError:
             warnings.warn("Unidentified key in writer_kwargs. Using default values.", UserWarning)
             self.logger.warning("Unidentified key in writer_kwargs. Using default values.")
             self._writer.setup(fig=self.fig, outfile=path)
+            self.is_setup = True
+        finally:
+            self._movie_kwargs['outfile'] = old_outfile
 
     def generate_movie(self):
         """ Final call to write the saved frames into a single movie. """
-        self._redraw_graph(True)
         if self.record_movie:
             try:
+                self._redraw_graph(True)
                 self._writer.finish()
-
-                # Attempt to make movie saving resumable
-                # --------------------------------------
-                # if self.partial_exists:
-                #     with open('join.txt', 'w') as file:
-                #         file.write("file '_partial_movie.mp4'\n")
-                #         file.write(f"file '{self._writer.outfile}'")
-                #
-                #     if '_concat.mp4' in os.listdir():
-                #         os.remove('_concat.mp4')
-                #     joiner = subprocess.Popen('ffmpeg -f concat -i join.txt -c copy _concat.mp4'.split(' '),
-                #                               stdin=subprocess.PIPE,
-                #                               stdout=subprocess.PIPE,
-                #                               stderr=subprocess.PIPE)
-                #     joiner.wait()
-                #     os.remove('_partial_movie.mp4')
-                #     os.remove(self._writer.outfile)
-                #     os.rename('_concat.mp4', self._writer.outfile)
-                #     os.remove('join.txt')
-
             except Exception as e:
                 self.logger.exception("generate_movie failed", exc_info=e)
                 warnings.warn(f"Exception caught while trying to save movie: {e}", RuntimeWarning)

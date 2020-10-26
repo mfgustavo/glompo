@@ -45,13 +45,13 @@ class TestScope:
 
     @pytest.mark.parametrize("kwargs", [{'movie_kwargs': {'key1': 'xxx', 'key2': 'xxx'}},
                                         {'writer_kwargs': {'key': 'xxx'}}])
-    def test_init_keyerr(self, kwargs):
+    def test_init_keyerr(self, kwargs, tmp_path):
         with pytest.warns(UserWarning):
             scope = GloMPOScope(record_movie=True,
                                 x_range=(0, 1000),
                                 y_range=(0, 1000),
                                 **kwargs)
-            scope.setup_moviemaker()
+            scope.setup_moviemaker(tmp_path / 'movie.mp4')
             scope._writer.cleanup()
 
     @pytest.mark.parametrize("max_val", [510, 910, 210, 80, 300, 310])
@@ -123,21 +123,41 @@ class TestScope:
         assert loaded_scope.gen_streams['chkpt'].get_ydata() == [1]
         loaded_scope.close_fig()
 
-    def test_generate_movie(self, tmp_path, save_outputs):
+    @pytest.mark.parametrize("record", [True, False])
+    @pytest.mark.parametrize("setup", [True, False])
+    def test_generate_movie(self, tmp_path, record, setup, save_outputs):
         scope = GloMPOScope(log_scale=True,
-                            record_movie=True,
+                            record_movie=record,
                             movie_kwargs={'outfile': Path(tmp_path, "test_gen_movie.mp4")})
-        scope.setup_moviemaker()
+        if setup:
+            if record:
+                scope.setup_moviemaker()
+            else:
+                with pytest.warns(UserWarning, match="Cannot initialise movie writer."):
+                    scope.setup_moviemaker()
+
         scope.add_stream(1)
         scope.add_stream(2)
-        for i in range(0, 510, 10):
-            scope.update_optimizer(1, (i, np.sin(i) + 3))
-            scope.update_optimizer(2, (i, np.cos(i) + 3))
-        scope.update_kill(1)
-        scope.update_pause(2)
-        scope.update_checkpoint(2)
-        scope.update_norm_terminate(2)
 
-        scope.generate_movie()
+        if record and setup:
+            for i in range(0, 510, 10):
+                scope.update_optimizer(1, (i, np.sin(i) + 3))
+                scope.update_optimizer(2, (i, np.cos(i) + 3))
+            scope.update_kill(1)
+            scope.update_pause(2)
+            scope.update_checkpoint(2)
+            scope.update_norm_terminate(2)
 
-        assert Path(tmp_path, "test_gen_movie.mp4").exists()
+            scope.generate_movie()
+            assert Path(tmp_path, "test_gen_movie.mp4").exists()
+        elif record and not setup:
+            assert scope.record_movie
+            assert not scope.is_setup
+            with pytest.raises(RuntimeError, match="Cannot record movie without calling setup_moviemaker first."):
+                scope.update_optimizer(1, (3, np.sin(3) + 3))
+                scope._redraw_graph(True)
+            with pytest.warns(RuntimeWarning, match="Exception caught while trying to save movie"):
+                scope.generate_movie()
+        elif not record:
+            with pytest.warns(UserWarning, match="Unable to generate movie file as data was not collected"):
+                scope.generate_movie()
