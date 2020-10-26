@@ -47,9 +47,12 @@ class RandomOptimizer(BaseOptimizer):
             fx = function(vector)
             self.logger.debug(f"Function returned fx = {fx}")
 
+            if callbacks():
+                self.stop_called = True
+
             if self._results_queue:
                 self.logger.debug("Pushing result")
-                result = IterationResult(self._opt_id, i, 1, vector, fx, i >= self.iters)
+                result = IterationResult(self._opt_id, i, 1, vector, fx, i >= self.iters or self.stop_called)
                 self.push_iter_result(result)
                 self.logger.debug("Checking messages")
                 self.check_messages()
@@ -60,9 +63,6 @@ class RandomOptimizer(BaseOptimizer):
                 best_x = vector
                 self.logger.debug("Updating best")
                 self.result.x, self.result.fx = best_x, best_f
-
-            if callbacks():
-                break
 
         self.result.success = True
         self.logger.debug("Termination successful")
