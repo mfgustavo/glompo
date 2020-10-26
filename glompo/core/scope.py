@@ -84,6 +84,8 @@ class GloMPOScope:
         self._event_counter = 0
         self.color_map = glompo_colors()
         self.interactive_mode = interactive_mode
+        self.record_movie = record_movie
+        self.is_setup = False
 
         plt.ion() if interactive_mode else plt.ioff()
 
@@ -151,8 +153,6 @@ class GloMPOScope:
             self.close_fig()
             raise TypeError(f"Cannot parse y_range = {y_range}. Only a tuple can be used.")
 
-        self.record_movie = record_movie
-        self.is_setup = False
         if record_movie:
             self._writer_kwargs = writer_kwargs
             self._new_writer()
@@ -363,6 +363,8 @@ class GloMPOScope:
             many figures being open if GloMPO is looped in some way. The manager will explicitly call this method to
             close the matplotlib figure at the end of the optimization routine to stop figures building up in this way.
         """
+        if self.record_movie and self.is_setup:
+            self._writer.cleanup()
         plt.close(self.fig)
 
     def checkpoint_save(self, path: Union[Path, str] = ''):
@@ -373,14 +375,15 @@ class GloMPOScope:
 
         dump_variables = {}
         for var in dir(self):
-            if '__' not in var and not callable(getattr(self, var)) and var != '_writer':
+            if '__' not in var and not callable(getattr(self, var)) and \
+                    all([var != block for block in ('_writer', 'logger')]):
                 dump_variables[var] = getattr(self, var)
 
         with Path(path, 'scope').open('wb') as file:
             dill.dump(dump_variables, file)
 
         if self.record_movie:
-            warnings.warn("Movie saving is not supported with checkpointing")
+            warnings.warn("Movie saving is not supported with checkpointing", RuntimeWarning)
             self.logger.warning("Movie saving is not supported with checkpointing")
 
     def load_state(self, path: Union[Path, str]):

@@ -1,4 +1,5 @@
 from pathlib import Path
+from time import sleep
 
 import numpy as np
 import pytest
@@ -106,21 +107,35 @@ class TestScope:
 
         assert all([y == int(not log) for y in y_vals])
 
-    def test_checkpointing(self, scope, tmp_path):
+    @pytest.mark.parametrize("record", [True, False])
+    def test_checkpointing(self, record, tmp_path):
+        scope = GloMPOScope(log_scale=False,
+                            record_movie=record,
+                            movie_kwargs={'outfile': Path(tmp_path, "test_gen_movie.mp4")})
+
+        if record:
+            scope.setup_moviemaker()
         scope.add_stream(1, None)
-        scope.update_optimizer(1, (1, 1))
+        scope.update_optimizer(1, (231, 789))
         scope.update_checkpoint(1)
-        scope.logger = None  # Pytest intercepts loggers making pickling impossible
-        scope.checkpoint_save(tmp_path)
+        if record:
+            warn = RuntimeWarning
+            match = "Movie saving is not supported with checkpointing"
+        else:
+            warn = None
+            match = ''
+        with pytest.warns(warn, match=match):
+            scope.checkpoint_save(tmp_path)
         assert Path(tmp_path, 'scope').exists()
+        scope.close_fig()
 
         loaded_scope = GloMPOScope()
         loaded_scope.load_state(tmp_path)
         assert 1 in loaded_scope.opt_streams
-        assert loaded_scope.opt_streams[1].get_xdata() == [1]
-        assert loaded_scope.opt_streams[1].get_ydata() == [1]
-        assert loaded_scope.gen_streams['chkpt'].get_xdata() == [1]
-        assert loaded_scope.gen_streams['chkpt'].get_ydata() == [1]
+        assert loaded_scope.opt_streams[1].get_xdata() == [231]
+        assert loaded_scope.opt_streams[1].get_ydata() == [789]
+        assert loaded_scope.gen_streams['chkpt'].get_xdata() == [231]
+        assert loaded_scope.gen_streams['chkpt'].get_ydata() == [789]
         loaded_scope.close_fig()
 
     @pytest.mark.parametrize("record", [True, False])
@@ -150,6 +165,7 @@ class TestScope:
 
             scope.generate_movie()
             assert Path(tmp_path, "test_gen_movie.mp4").exists()
+            sleep(0.5)  # Due to matplotlib semantics we need a pause here otherwise the stream will not close properly
         elif record and not setup:
             assert scope.record_movie
             assert not scope.is_setup
