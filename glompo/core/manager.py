@@ -1587,7 +1587,8 @@ class GloMPOManager:
             else:
                 run_info = None
 
-            t_total = str(timedelta(seconds=sum([(t - t0).seconds for t0, t in zip(self.dt_starts, self.dt_ends)])))
+            t_total = str(
+                timedelta(seconds=sum([(t - t0).total_seconds() for t0, t in zip(self.dt_starts, self.dt_ends)])))
             t_session = str(timedelta(seconds=time() - self.t_start)) if self.t_start else None
             t_periods = [{"Start": str(t0), "End": str(t)} for t0, t in zip(self.dt_starts, self.dt_ends)]
             data = {
