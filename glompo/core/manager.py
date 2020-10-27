@@ -703,13 +703,13 @@ class GloMPOManager:
         self.working_dir.mkdir(parents=True, exist_ok=True)
 
         # Purge Old Results
-        if (self.working_dir / "glompo_manager_log.yml").exists() or \
-                (self.working_dir / "glompo_optimizer_logs").exists():
+        to_remove = [*self.working_dir.glob("glompo_manager_log.yml")]
+        to_remove += [*self.working_dir.glob("opt_best_summary.yml")]
+        to_remove += [*self.working_dir.glob("trajectories*.png")]
+        to_remove += [*self.working_dir.glob("opt*_parms.png")]
+        if to_remove:
             if self.overwrite_existing:
                 self.logger.debug("Old results found")
-                to_remove = [self.working_dir / "glompo_manager_log.yml", self.working_dir / "opt_best_summary.yml"]
-                to_remove += self.working_dir.glob("trajectories*.png")
-                to_remove += self.working_dir.glob("opt*_parms.png")
                 for old in to_remove:
                     old.unlink()
                 shutil.rmtree(self.working_dir / "glompo_optimizer_logs", ignore_errors=True)
@@ -724,6 +724,9 @@ class GloMPOManager:
 
         if self.split_printstreams:
             (self.working_dir / "glompo_optimizer_printstreams").mkdir(exist_ok=True)
+            if not self._proc_backend:
+                sys.stdout = ThreadPrintRedirect(sys.stdout)
+                sys.stderr = ThreadPrintRedirect(sys.stderr)
 
         # Setup system monitoring
         if HAS_PSUTIL:
@@ -731,8 +734,6 @@ class GloMPOManager:
             self._process.cpu_percent()  # First return is zero and must be ignored
             psutil.getloadavg()
 
-        # Detect system information
-        if HAS_PSUTIL:
             cores = self._process.cpu_affinity()
             self.logger.info(f"System Info:\n"
                              f"    {'Cores Available:':.<26}{len(cores)}\n"
@@ -741,11 +742,6 @@ class GloMPOManager:
                              f"    {'Hostname:':.<26}{socket.gethostname()}\n"
                              f"    {'Working Dir:':.<26}{Path.cwd()}\n"
                              f"    {'Username:':.<26}{getpass.getuser()}")
-
-        # Setup split printing for threads
-        if self.split_printstreams and not self._proc_backend:
-            sys.stdout = ThreadPrintRedirect(sys.stdout)
-            sys.stderr = ThreadPrintRedirect(sys.stderr)
 
         # Settings check
         if self.allow_forced_terminations and not self._proc_backend:
@@ -767,7 +763,6 @@ class GloMPOManager:
                     self.last_feedback[opt_id] = time()
 
             while not self.converged:
-
                 self.logger.debug("Checking for available optimizer slots")
                 self._fill_optimizer_slots()
                 self.logger.debug("New optimizer check done")
