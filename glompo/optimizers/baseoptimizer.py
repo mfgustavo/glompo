@@ -70,7 +70,7 @@ class BaseOptimizer(ABC):
 
         with open(path, 'rb') as file:
             state = dill.load(file)
-        print(state)
+
         for var, val in state.items():
             opt.__setattr__(var, val)
         opt._is_restart = True

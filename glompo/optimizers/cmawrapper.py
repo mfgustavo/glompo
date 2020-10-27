@@ -43,9 +43,7 @@ class CMAOptimizer(BaseOptimizer):
             workers: int = 1
                 The number of parallel evaluators used by this instance of CMA.
             keep_files: bool = False
-                If True the files produced by CMA are retained otherwise they are dumped in a temporary directory and
-                dumped. Deletion is the default behaviour since, when using GloMPO, GloMPO log files are created.
-                Note, however, that GloMPO log files are different from CMA ones.
+                If True the files produced by CMA are retained otherwise they are not produced..
             cmasettings: Optional[Dict[str, Any]]
                 cma module-specific settings as ``k,v`` pairs. See ``cma.s.pprint(cma.CMAOptions())`` for a list of
                 available options. Most useful keys are: `timeout`, `tolstagnation`, `popsize`. Additionally,
@@ -147,28 +145,7 @@ class CMAOptimizer(BaseOptimizer):
             x = self.es.ask()
             self.logger.debug("Parameter vectors generated")
 
-            if self.workers > 1:
-                pool_executor = ProcessPoolExecutor if self._backend == 'processes' else ThreadPoolExecutor
-                self.logger.debug(f"Executing within {pool_executor.__name__} with {self.workers} workers")
-                with pool_executor(max_workers=self.workers) as executor:
-                    submitted = {slot: executor.submit(function, parms) for slot, parms in enumerate(x)}
-                    # For very slow evaluations this will allow evaluations to be interrupted.
-                    if self._results_queue:
-                        loop = 0
-                        for _ in as_completed(submitted.values()):
-                            loop += 1
-                            self.logger.debug(f"Result {loop}/{self.popsize} returned.")
-                            self._pause_signal.wait()
-                            self.check_messages()
-                            if self.es.callbackstop == 1:
-                                self.logger.debug("Stop command received during function evaluations.")
-                                cancelled = [future.cancel() for future in submitted.values()]
-                                self.logger.debug(f"Aborted {sum(cancelled)} calls.")
-                                break
-                    fx = [future.result() for future in submitted.values() if not future.cancelled()]
-            else:
-                self.logger.debug("Executing serially")
-                fx = [function(i) for i in x]
+            fx = self._parallel_map(function, x)
 
             if len(x) != len(fx):
                 self.logger.debug("Unfinished evaluation detected. Breaking out of loop")
@@ -223,7 +200,7 @@ class CMAOptimizer(BaseOptimizer):
                 name = 'cma_'
                 if self._opt_id:
                     name += f'opt{self._opt_id}_'
-                name += '_results.pkl'
+                name += 'results.pkl'
                 with open(name, 'wb') as file:
                     self.logger.debug("Pickling results")
                     pickle.dump(self.es.result, file)
@@ -251,6 +228,36 @@ class CMAOptimizer(BaseOptimizer):
         if 'minsigma' in opts and self.es.sigma < opts['minsigma']:
             # Stop if sigma falls below minsigma
             self.callstop("Early CMA stop: 'minsigma'.")
+
+    def _parallel_map(self, function: Callable[[Sequence[float]], float],
+                      x: Sequence[Sequence[float]]) -> Sequence[float]:
+        """ Returns the function evaluations for a given set of trial parameters, x.
+            Calculations are distributed over threads or processes depending on the number of workers and backend
+            selected.
+        """
+        if self.workers > 1:
+            pool_executor = ProcessPoolExecutor if self._backend == 'processes' else ThreadPoolExecutor
+            self.logger.debug(f"Executing within {pool_executor.__name__} with {self.workers} workers")
+            with pool_executor(max_workers=self.workers) as executor:
+                submitted = {slot: executor.submit(function, parms) for slot, parms in enumerate(x)}
+                # For very slow evaluations this will allow evaluations to be interrupted.
+                if self._results_queue:
+                    loop = 0
+                    for _ in as_completed(submitted.values()):
+                        loop += 1
+                        self.logger.debug(f"Result {loop}/{len(x)} returned.")
+                        self._pause_signal.wait()
+                        self.check_messages()
+                        if self.es.callbackstop == 1:
+                            self.logger.debug("Stop command received during function evaluations.")
+                            cancelled = [future.cancel() for future in submitted.values()]
+                            self.logger.debug(f"Aborted {sum(cancelled)} calls.")
+                            break
+                fx = [future.result() for future in submitted.values() if not future.cancelled()]
+        else:
+            self.logger.debug("Executing serially")
+            fx = [function(i) for i in x]
+        return fx
 
     def callstop(self, reason="Manager termination signal"):
         if reason and self.verbose:

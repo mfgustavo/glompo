@@ -1,36 +1,38 @@
 import logging
 import multiprocessing as mp
-from collections import namedtuple
+import pickle
+from pathlib import Path
 from time import sleep, time
-from typing import Callable, Sequence, Tuple
+from typing import Callable, NamedTuple, Sequence, Tuple
 
 import pytest
 from dill import dill
+
 from glompo.common.namedtuples import IterationResult
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from glompo.optimizers.random import RandomOptimizer
 
 # Append new optimizer classes to this list to run tests for GloMPO compatibility
 # Expected: Tuple[Type[BaseOptimizer], Dict[str, Any] (init arguments), Dict[str, Any] (minimize arguments)]
-available_classes = [(RandomOptimizer, {}, {})]
+AVAILABLE_CLASSES = {'RandomOptimizer': (RandomOptimizer, {}, {})}
 try:
     from glompo.optimizers.cmawrapper import CMAOptimizer
 
-    available_classes.append((CMAOptimizer, {}, {'sigma0': 0.5}))
+    AVAILABLE_CLASSES['CMAOptimizer'] = (CMAOptimizer, {}, {'sigma0': 0.5})
 except ModuleNotFoundError:
     pass
 
 try:
     from glompo.optimizers.gflswrapper import GFLSOptimizer
 
-    available_classes.append((GFLSOptimizer, {}, {}))
+    AVAILABLE_CLASSES['GFLSOptimizer'] = (GFLSOptimizer, {}, {})
 except ModuleNotFoundError:
     pass
 
 try:
     from glompo.optimizers.nevergrad import Nevergrad
 
-    available_classes.append((Nevergrad, {}, {}))
+    AVAILABLE_CLASSES['Nevergrad'] = (Nevergrad, {}, {})
 except ModuleNotFoundError:
     pass
 
@@ -47,7 +49,7 @@ class PlainOptimizer(BaseOptimizer):
                  function: Callable,
                  x0: Sequence[float],
                  bounds: Sequence[Tuple[float, float]],
-                 callbacks: Callable = None, **kwargs) -> MinimizeResult:
+                 callbacks: Callable = None, **kwargs):
         while not self.terminate:
             self.i += 1
             self.check_messages()
@@ -63,20 +65,67 @@ class PlainOptimizer(BaseOptimizer):
         self.message_manager(code, MinimizeResult())
 
 
+class MPPackage(NamedTuple):
+    queue: mp.Queue
+    p_pipe: mp.Pipe
+    c_pipe: mp.Pipe
+    event: mp.Event
+
+
+@pytest.fixture(scope='function')
+def mp_package():
+    manager = mp.Manager()
+    queue = manager.Queue(10)
+    p_pipe, c_pipe = mp.Pipe()
+    event = manager.Event()
+    event.set()
+    return MPPackage(queue, p_pipe, c_pipe, event)
+
+
+class MaxIter:
+    def __init__(self, max_iter: int):
+        self.max_iter = max_iter
+        self.called = 0
+
+    def __call__(self, *args, **kwargs):
+        self.called += 1
+        if self.called >= self.max_iter:
+            return "MaxIter"
+
+        return None
+
+
 class TestBase:
-    package = namedtuple("package", "opti queue p_pipe event")
 
     @pytest.fixture(scope='function')
-    def mp_package(self):
-        manager = mp.Manager()
-        queue = manager.Queue(10)
-        p_pipe, c_pipe = mp.Pipe()
-        event = manager.Event()
-        opti = PlainOptimizer(1, c_pipe, queue, event)
-        return self.package(opti, queue, p_pipe, event)
+    def intercept_logging(self):
+        """ pytest does not support capturing logs from child processes. This fixture intercepts and turns them into
+            print statements.
+        """
+
+        def print_log(mess):
+            print(mess)
+
+        logger = logging.getLogger('glompo.optimizers.opt1')
+        orig_methods = (logger.debug, logger.info, logger.warning, logger.error, logger.critical)
+
+        logger.debug = print_log
+        logger.info = print_log
+        logger.warning = print_log
+        logger.error = print_log
+        logger.critical = print_log
+
+        yield
+
+        logger.debug = orig_methods[0]
+        logger.info = orig_methods[1]
+        logger.warning = orig_methods[2]
+        logger.error = orig_methods[3]
+        logger.critical = orig_methods[4]
 
     def test_pipe(self, mp_package):
-        process = mp.Process(target=mp_package.opti.minimize, args=(None, None, None))
+        opti = PlainOptimizer(1, mp_package.c_pipe, mp_package.queue, mp_package.event)
+        process = mp.Process(target=opti.minimize, args=(None, None, None))
         t_start = time()
         process.start()
 
@@ -94,7 +143,8 @@ class TestBase:
         assert mess[1].fx == float('inf')
 
     def test_invalid_message(self, mp_package):
-        process = mp.Process(target=mp_package.opti.minimize, args=(None, None, None))
+        opti = PlainOptimizer(1, mp_package.c_pipe, mp_package.queue, mp_package.event)
+        process = mp.Process(target=opti.minimize, args=(None, None, None))
         process.start()
 
         sleep(0.01)
@@ -103,14 +153,15 @@ class TestBase:
         process.join(timeout=1.5)
 
     def test_push_result(self, mp_package, capfd):
-        def minimize(self, *args, **kwargs) -> MinimizeResult:
+        def minimize(self, *args, **kwargs):
             for i in range(1, 12):
                 self.push_iter_result(self, IterationResult(1, i, 1, [i], i ** 2, False))
                 print(i)
 
-        mp_package.opti.minimize = minimize
-        mp_package.opti.push_iter_result = BaseOptimizer.push_iter_result
-        process = mp.Process(target=mp_package.opti.minimize, args=(mp_package.opti,))
+        opti = PlainOptimizer(1, mp_package.c_pipe, mp_package.queue, mp_package.event)
+        opti.minimize = minimize
+        opti.push_iter_result = BaseOptimizer.push_iter_result
+        process = mp.Process(target=opti.minimize, args=(opti,))
         process.start()
 
         sleep(0.5)
@@ -124,7 +175,8 @@ class TestBase:
         process.join()
 
     def test_event(self, mp_package):
-        process = mp.Process(target=mp_package.opti.minimize, args=(None, None, None))
+        opti = PlainOptimizer(1, mp_package.c_pipe, mp_package.queue, mp_package.event)
+        process = mp.Process(target=opti.minimize, args=(None, None, None))
         t_start = time()
         process.start()
 
@@ -138,14 +190,16 @@ class TestBase:
         assert process.exitcode == 0 and 0.5 < time() - t_start < 1.5
 
     def test_queue(self, mp_package):
-        process = mp.Process(target=mp_package.opti.push_iter_result)
+        opti = PlainOptimizer(1, mp_package.c_pipe, mp_package.queue, mp_package.event)
+        process = mp.Process(target=opti.push_iter_result)
         process.start()
         process.join()
         assert mp_package.queue.get() == "item"
 
     def test_checkpointsave(self, mp_package, tmp_path, capfd):
-        mp_package.opti.workers = 685
-        process = mp.Process(target=mp_package.opti.minimize, args=(None, None, None))
+        opti = PlainOptimizer(1, mp_package.c_pipe, mp_package.queue, mp_package.event)
+        opti.workers = 685
+        process = mp.Process(target=opti.minimize, args=(None, None, None))
         process.start()
 
         mp_package.p_pipe.send((0, tmp_path / '0001'))
@@ -171,9 +225,10 @@ class TestBase:
         def minimize(*args, **kwargs) -> MinimizeResult:
             raise exception
 
-        mp_package.opti.minimize = minimize
+        opti = PlainOptimizer(1, mp_package.c_pipe, mp_package.queue, mp_package.event)
+        opti.minimize = minimize
 
-        process = mp.Process(target=mp_package.opti._minimize, args=(None, None, None))
+        process = mp.Process(target=opti._minimize, args=(None, None, None))
         process.start()
         process.join()
 
@@ -183,23 +238,15 @@ class TestBase:
             assert process.exitcode != 0
             assert mp_package.p_pipe.recv()[0] == 9
 
-    def test_prepare_checkpoint(self, mp_package, capfd):
+    def test_prepare_checkpoint(self, mp_package, capfd, intercept_logging):
         def checkpoint_save(*args, **kwargs):
             print("SAVED")
 
-        # pytest does not support capturing logs from child processes
-        def print_log(mess):
-            print(mess)
+        opti = PlainOptimizer(1, mp_package.c_pipe, mp_package.queue, mp_package.event)
+        opti._result_cache = IterationResult(1, 3, 1, [5], 700, False)
+        opti._FROM_MANAGER_SIGNAL_DICT[0] = checkpoint_save
 
-        mp_package.opti._result_cache = IterationResult(1, 3, 1, [5], 700, False)
-        mp_package.opti._FROM_MANAGER_SIGNAL_DICT[0] = checkpoint_save
-        mp_package.opti.logger.debug = print_log
-        mp_package.opti.logger.info = print_log
-        mp_package.opti.logger.warning = print_log
-        mp_package.opti.logger.error = print_log
-        mp_package.opti.logger.critical = print_log
-
-        process = mp.Process(target=mp_package.opti._prepare_checkpoint)
+        process = mp.Process(target=opti._prepare_checkpoint, daemon=True)
         process.start()
 
         sleep(0.3)
@@ -230,30 +277,8 @@ class TestBase:
         process.join()
 
 
-@pytest.mark.parametrize("opti, init_kwargs, call_kwargs", available_classes)
+@pytest.mark.parametrize("opti, init_kwargs, call_kwargs", AVAILABLE_CLASSES.values())
 class TestSubclassesGlompoCompatible:
-    package = namedtuple("package", "queue p_pipe c_pipe event")
-
-    @pytest.fixture()
-    def mp_package(self):
-        manager = mp.Manager()
-        queue = manager.Queue()
-        p_pipe, c_pipe = mp.Pipe()
-        event = manager.Event()
-        event.set()
-        return self.package(queue, p_pipe, c_pipe, event)
-
-    class MaxIter:
-        def __init__(self, max_iter: int):
-            self.max_iter = max_iter
-            self.called = 0
-
-        def __call__(self, *args, **kwargs):
-            self.called += 1
-            if self.called >= self.max_iter:
-                return "MaxIter"
-
-            return None
 
     @pytest.fixture
     def task(self):
@@ -275,7 +300,7 @@ class TestSubclassesGlompoCompatible:
         opti.minimize(function=task,
                       x0=(0.5, 0.5, 0.5),
                       bounds=((0, 1), (0, 1), (0, 1)),
-                      callbacks=self.MaxIter(10),
+                      callbacks=MaxIter(10),
                       **call_kwargs)
 
         assert not mp_package.queue.empty()
@@ -290,7 +315,7 @@ class TestSubclassesGlompoCompatible:
         opti.minimize(function=task,
                       x0=(0.5, 0.5, 0.5),
                       bounds=((0, 1), (0, 1), (0, 1)),
-                      callbacks=self.MaxIter(10),
+                      callbacks=MaxIter(10),
                       **call_kwargs)
 
         res = False
@@ -318,7 +343,7 @@ class TestSubclassesGlompoCompatible:
         opti.minimize(function=task,
                       x0=(0.5, 0.5, 0.5),
                       bounds=((0, 1), (0, 1), (0, 1)),
-                      callbacks=self.MaxIter(10),
+                      callbacks=MaxIter(10),
                       **call_kwargs)
 
         while not mp_package.queue.empty():
@@ -335,7 +360,7 @@ class TestSubclassesGlompoCompatible:
                        kwargs={'function': task,
                                'x0': (0.5, 0.5, 0.5),
                                'bounds': ((0, 1), (0, 1), (0, 1)),
-                               'callbacks': self.MaxIter(10),
+                               'callbacks': MaxIter(10),
                                **call_kwargs})
         p.start()
         mp_package.event.clear()
@@ -368,7 +393,7 @@ class TestSubclassesGlompoCompatible:
         opti.minimize(function=task,
                       x0=(0.5, 0.5, 0.5),
                       bounds=((0, 1), (0, 1), (0, 1)),
-                      callbacks=self.MaxIter(5),
+                      callbacks=MaxIter(5),
                       **call_kwargs)
         opti.checkpoint_save(tmp_path / '0001')
 
@@ -389,9 +414,91 @@ class TestSubclassesGlompoCompatible:
         loaded_opti.minimize(function=task,
                              x0=(0.5, 0.5, 0.5),
                              bounds=((0, 1), (0, 1), (0, 1)),
-                             callbacks=self.MaxIter(5),
+                             callbacks=MaxIter(5),
                              **call_kwargs)
 
         while not mp_package.queue.empty():
             iter_count += 1
             assert mp_package.queue.get_nowait().n_iter == iter_count
+
+
+@pytest.mark.skipif('CMAOptimizer' not in AVAILABLE_CLASSES, reason="CMA not loaded.")
+class TestCMA:
+    """ Specific CMAOptimizer tests not covered by TestSubclassesGlompoCompatible """
+
+    class FakeES:
+        callbackstop = 0
+
+    @pytest.fixture()
+    def optimizer(self, mp_package):
+        return CMAOptimizer(opt_id=1,
+                            signal_pipe=mp_package.c_pipe,
+                            results_queue=mp_package.queue,
+                            pause_flag=mp_package.event,
+                            workers=1,
+                            backend='threads',
+                            popsize=3)
+
+    @pytest.fixture()
+    def task(self):
+        def f(x):
+            sleep(x[0])
+            return x[0] ** 2 + 3 * x[1] ** 4 - x[2] ** 0.5
+
+        return f
+
+    @pytest.mark.parametrize('workers', [1, 3])
+    @pytest.mark.parametrize('backend', ['threads', 'processes'])
+    def test_parallel_map(self, backend, optimizer, workers, task, caplog):
+        if workers == 3 and backend == 'processes':
+            pytest.xfail("Known pytest bug cannot test ProcessPoolExecutor in Pytest environment.")
+
+        caplog.set_level(logging.DEBUG, logger="glompo.optimizers.opt1")
+        optimizer.workers = workers
+        optimizer._backend = backend
+        optimizer.es = self.FakeES()
+
+        t_start = time()
+        fx = optimizer._parallel_map(task, [[0.5] * 3] * 3)
+
+        assert len(fx) == 3
+        assert len(set(fx)) == 1
+        if workers == 1:
+            assert 1.5 < time() - t_start < 2
+            assert caplog.messages == ["Executing serially"]
+        else:
+            pool_executor = "ThreadPoolExecutor" if backend == 'threads' else "ProcessPoolExecutor"
+            assert 0.5 < time() - t_start < 1
+            assert caplog.messages == [f"Executing within {pool_executor} with 3 workers",
+                                       "Result 1/3 returned.", "Result 2/3 returned.", "Result 3/3 returned."]
+
+    def test_interrupt_calc(self, optimizer, task, caplog, mp_package):
+        assert mp_package.queue is optimizer._results_queue
+        optimizer.workers = 2
+        optimizer._backend = 'threads'
+        optimizer.es = self.FakeES()
+        optimizer.result = MinimizeResult()
+        caplog.set_level(logging.DEBUG, logger="glompo.optimizers.opt1")
+
+        mp_package.p_pipe.send((1, None))
+        fx = optimizer._parallel_map(task, [[0] * 3] + [[0.5] * 3] * 9)
+        assert len(fx) == 3
+        assert caplog.messages == ["Executing within ThreadPoolExecutor with 2 workers",
+                                   "Result 1/10 returned.",
+                                   "Received signal: (1, None)",
+                                   "Executing: callstop",
+                                   "Calling stop. Reason = None",
+                                   "Stop command received during function evaluations.",
+                                   "Aborted 7 calls."]
+
+    def test_save(self, work_in_tmp, optimizer):
+        optimizer.keep_files = True
+        optimizer.minimize(function=lambda x: x[0] ** 2 + x[1] ** 2,
+                           x0=[1, 1],
+                           bounds=[(-3, 3), (-3, 3)],
+                           sigma0=1,
+                           callbacks=MaxIter(10))
+        dump = Path('cma_opt1_results.pkl')
+        assert dump.exists()
+        with dump.open('rb') as file:
+            pickle.load(file)

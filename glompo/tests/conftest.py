@@ -1,6 +1,5 @@
 import os
 import shutil
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -20,16 +19,13 @@ def pytest_runtest_setup(item):
 
 
 @pytest.fixture(scope='function')
-def work_in_tmp():
+def work_in_tmp(tmp_path):
     """ Some test require moving into a temporary directory. This creates and moves to a temporary path and returns
         at the end of the test.
     """
     home_dir = Path.cwd()
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        os.chdir(tmp_dir)
-        yield tmp_dir
-
+    os.chdir(tmp_path)
+    yield tmp_path
     os.chdir(home_dir)
 
 
