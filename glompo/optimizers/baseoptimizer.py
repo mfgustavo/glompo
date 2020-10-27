@@ -10,7 +10,9 @@ from multiprocessing.connection import Connection
 from pathlib import Path
 from queue import Full, Queue
 from threading import Event
-from typing import Callable, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Optional, Sequence, Set, Tuple, Type, Union
+
+from dill import dill
 
 from ..common.helpers import LiteralWrapper
 
@@ -47,12 +49,12 @@ class BaseOptimizer(ABC):
     """ Base class of parameter optimizers in GloMPO """
 
     @classmethod
-    def checkpoint_load(cls, path: Union[Path, str], opt_id: Optional[int] = None,
+    def checkpoint_load(cls: Type['BaseOptimizer'], path: Union[Path, str], opt_id: Optional[int] = None,
                         signal_pipe: Optional[Connection] = None,
                         results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
                         backend: str = 'threads') -> 'BaseOptimizer':
         """ Recreates a previous instance of the optimizer suitable to continue a optimization from its previous
-            state.
+            state. Below is a basic implementation which should suit most optimizers, may need to be overwritten.
 
             Parameters
             ----------
@@ -63,12 +65,29 @@ class BaseOptimizer(ABC):
                 These parameters are the same as the corresponding ones in BaseOptimizer.__init__. These will be
                 regenerated and supplied by the manager during reconstruction.
         """
-        raise NotImplementedError
+        opt = cls.__new__(cls)
+        super(cls, opt).__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
+
+        with open(path, 'rb') as file:
+            state = dill.load(file)
+        print(state)
+        for var, val in state.items():
+            opt.__setattr__(var, val)
+        opt._is_restart = True
+
+        opt.logger.info("Successfully loaded from restart file.")
+        return opt
+
+    @property
+    def is_restart(self):
+        return self._is_restart
 
     def __init__(self, opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
                  results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
                  backend: str = 'threads', **kwargs):
         """
+        Initialisation of the base optimizer. Must be called by any child classes.
+
         Parameters
         ----------
         opt_id: Optional[int] = None
@@ -98,6 +117,7 @@ class BaseOptimizer(ABC):
         self._pause_signal = pause_flag  # If set allow run, if cleared wait.
         self._backend = backend
         self._result_cache = None
+        self._is_restart = False
 
         self._FROM_MANAGER_SIGNAL_DICT = {0: self.checkpoint_save,
                                           1: self.callstop,
@@ -149,6 +169,8 @@ class BaseOptimizer(ABC):
               be paused by the manager as needed.
             - The TestSubclassGlompoCompatible test in test_optimizers.py can be used to test that an optimizer meets
               these criteria and is GloMPO compatible.
+            - Should be able to handle resuming an optimization from any point using the checkpoint_save and
+              checkpoint_load methods.
 
 
         Example:
@@ -165,7 +187,8 @@ class BaseOptimizer(ABC):
 
         """
 
-    def check_messages(self, *args):
+    def check_messages(self):
+        """ Processes and executes manager signals from the manager. Should not be overwritten. """
         while self._signal_pipe.poll():
             message = self._signal_pipe.recv()
             self.logger.debug(f"Received signal: {message}")
@@ -192,21 +215,44 @@ class BaseOptimizer(ABC):
             except Full:
                 self.check_messages()
 
-    def message_manager(self, key: int, message: Optional[str] = None):
+    def message_manager(self, key: int, message: Optional[Any] = None):
+        """ Sends arguments to the manager. key indicates the type of signal sent (see _TO_MANAGER_SIGNAL_DICT) and
+            message contains extra information which may be needed to process the request. Should not be overwritten.
+        """
         self._signal_pipe.send((key, message))
 
+    @abstractmethod
     def callstop(self, *args):
-        """
-        Signal to terminate the :meth:`minimize` loop while still returning a result
-        """
-        raise NotImplementedError
+        """ Signal to terminate the minimize loop while still returning a result. """
 
-    def checkpoint_save(self, path: Union[Path, str]):
+    def checkpoint_save(self, path: Union[Path, str], force: Optional[Set[str]] = None):
         """ Save current state, suitable for restarting. Path is the location for the file or folder to be constructed.
             Note that only the absolutely critical aspects of the state of the optimizer need to be saved. The manager
-            will resupply multiprocessing parameters when the optimizer is reconstructed.
+            will resupply multiprocessing parameters when the optimizer is reconstructed. Below is a basic
+            implementation which should suit most optimizers, may need to be overwritten.
+
+            Parameters
+            ----------
+            path: Union[Path, str]
+                Path to file into which the object will be dumped.
+            force: Optional[str]
+                Set of variable names which will be forced into the dumped file. Convenient shortcut for overwriting if
+                fails for a particular optimizer because a certain variable is filtered out of the data dump.
         """
-        raise NotImplementedError
+        self.logger.debug("Creating restart file.")
+
+        force = set(force) if force else set()
+        dump_collection = {}
+        for var in dir(self):
+            if not callable(getattr(self, var)) and \
+                    not var.startswith('_') and \
+                    all([var != forbidden for forbidden in ('logger', 'is_restart')]) or \
+                    var in force:
+                dump_collection[var] = getattr(self, var)
+        with open(path, 'wb') as file:
+            dill.dump(dump_collection, file)
+
+        self.logger.info("Restart file created successfully.")
 
     def _prepare_checkpoint(self):
         """ Process to pause, synchronize and save optimizers. Should not be overwritten. """

@@ -2,7 +2,8 @@ import warnings
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
-from typing import Callable, Sequence, Union
+from pathlib import Path
+from typing import Callable, Optional, Sequence, Set, Union
 
 import nevergrad as ng
 import numpy as np
@@ -32,36 +33,45 @@ class Nevergrad(BaseOptimizer):
         super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
 
         self.opt_algo = ng.optimizers.registry[optimizer]
+        self.optimizer = None
         if self.opt_algo.no_parallelization is True:
             warnings.warn("The selected algorithm does not support parallel execution, workers overwritten and set to"
                           " one.", RuntimeWarning)
             self.workers = 1
         self.zero = zero
         self.stop = False
+        self.ng_callbacks = None
 
     def minimize(self, function, x0, bounds, callbacks=None, **kwargs) -> MinimizeResult:
         lower, upper = np.transpose(bounds)
         parametrization = ng.p.Array(init=x0)
         parametrization.set_bounds(lower, upper)
 
-        optimizer = self.opt_algo(parametrization=parametrization, budget=int(4e50), num_workers=self.workers, **kwargs)
-        self.logger.debug("Created nevergrad optimizer object")
+        if self.is_restart and self.optimizer:
+            self.ng_callbacks.parent = self
+            self.ng_callbacks.callbacks = callbacks
+            self.stop = False
+            self.logger.debug("Loaded nevergrad optimizer")
+        else:
+            self.optimizer = self.opt_algo(parametrization=parametrization, budget=int(4e50),
+                                           num_workers=self.workers, **kwargs)
+            self.ng_callbacks = _NevergradCallbacksWrapper(self, callbacks)
+            self.logger.debug("Created nevergrad optimizer object")
 
-        ng_callbacks = _NevergradCallbacksWrapper(self, callbacks)
         self.logger.debug("Created callbacks object")
-        optimizer.register_callback('tell', ng_callbacks)
+        self.optimizer.register_callback('tell', self.ng_callbacks)
         self.logger.debug("Callbacks registered with optimizer")
         if self.workers > 1:
             self.logger.debug(f"Executing within pool with {self.workers} workers")
             if self._backend == 'processes':
                 with ProcessPoolExecutor(max_workers=self.workers) as executor:
-                    opt_vec = optimizer.minimize(function, executor=executor, batch_mode=False)
+                    opt_vec = self.optimizer.minimize(function, executor=executor, batch_mode=False)
             else:
                 with ThreadPoolExecutor(max_workers=self.workers) as executor:
-                    opt_vec = optimizer.minimize(function, executor=executor, batch_mode=False)
+                    opt_vec = self.optimizer.minimize(function, executor=executor, batch_mode=False)
         else:
             self.logger.debug("Executing serially.")
-            opt_vec = optimizer.minimize(function, batch_mode=False)
+            opt_vec = self.optimizer.minimize(function, batch_mode=False)
 
         self.logger.debug("Optimization complete. Formatting into MinimizeResult instance")
         results = MinimizeResult()
@@ -72,11 +82,22 @@ class Nevergrad(BaseOptimizer):
 
         return results
 
-    def push_iter_result(self, iter_res: IterationResult):
-        self._results_queue.put(iter_res)
-
     def callstop(self, *args):
         self.stop = True
+
+    def checkpoint_save(self, path: Union[Path, str], force: Optional[Set[str]] = None):
+        # Remove attributes which should not be saved
+        if self.ng_callbacks:
+            self.ng_callbacks.parent = None
+            callbacks = self.ng_callbacks.callbacks
+            self.ng_callbacks.callbacks = None
+
+        super().checkpoint_save(path, {'opt_algo', 'ng_callbacks'})
+
+        # Restore attributes
+        if self.ng_callbacks:
+            self.ng_callbacks.parent = self
+            self.ng_callbacks.callbacks = callbacks
 
 
 class _NevergradCallbacksWrapper:
@@ -92,7 +113,6 @@ class _NevergradCallbacksWrapper:
         """ Passes pipe and queue references into the algorithm iteration. """
         self.parent = parent
         self.i_fcalls = 0
-        self.in_glompo = bool(self.parent._results_queue)
 
         if callable(callbacks):
             self.callbacks = [callbacks]
@@ -117,7 +137,7 @@ class _NevergradCallbacksWrapper:
             self.parent.logger.debug(f"Stop = {bool(stop_cond)} at user callbacks (iter: {opt.num_tell})")
 
             # GloMPO specific callbacks
-            if self.in_glompo:
+            if self.parent._results_queue:
                 self.parent._pause_signal.wait()
                 self.parent.check_messages()
                 if not stop_cond and self.parent.stop:

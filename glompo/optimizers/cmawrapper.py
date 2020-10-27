@@ -8,8 +8,7 @@ import warnings
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
-from pathlib import Path
-from typing import Any, Callable, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Optional, Sequence, Tuple
 
 import cma
 import numpy as np
@@ -27,25 +26,6 @@ class CMAOptimizer(BaseOptimizer):
         * Home:   http://cma.gforge.inria.fr/
         * Module: https://github.com/CMA-ES/pycma
     """
-
-    @classmethod
-    def checkpoint_load(cls, path: Union[Path, str], opt_id: Optional[int] = None,
-                        signal_pipe: Optional[Connection] = None,
-                        results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
-                        backend: str = 'threads') -> 'CMAOptimizer':
-
-        opt = cls.__new__(cls)
-        super(CMAOptimizer, opt).__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
-
-        with open(path, 'rb') as file:
-            state = pickle.load(file)
-
-        for var, val in state.items():
-            opt.__setattr__(var, val)
-        opt.restart = True
-
-        opt.logger.info("Successfully loaded from restart file.")
-        return opt
 
     def __init__(self, sampler: str = 'full', verbose: bool = True, keep_files: bool = False,
                  opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
@@ -78,7 +58,6 @@ class CMAOptimizer(BaseOptimizer):
         self.result = None
         self.keep_files = keep_files
         self.cmasettings = cmasettings
-        self.restart = False
         self.popsize = cmasettings['popsize'] if 'popsize' in cmasettings else None
 
         # Sort all non-native CMA options into the custom cmaoptions key 'vv':
@@ -143,7 +122,7 @@ class CMAOptimizer(BaseOptimizer):
                 task_settings['popsize'] = self.workers
             else:
                 task_settings['popsize'] = 4 + int(3 * np.log(len(x0)))
-        self.popsize = task_settings['popsize']
+            self.popsize = task_settings['popsize']
 
         if self.popsize < self.workers:
             warnings.warn(f"'popsize'={self.popsize} is less than 'workers'={self.workers}. "
@@ -151,7 +130,7 @@ class CMAOptimizer(BaseOptimizer):
             self.logger.warning(f"'popsize'={self.popsize} is less than 'workers'={self.workers}. "
                                 f"This is an inefficient use of resources")
 
-        if not self.restart:
+        if not self.is_restart:
             self.logger.info("Setting up fresh CMA")
 
             self.result = MinimizeResult()
@@ -279,16 +258,3 @@ class CMAOptimizer(BaseOptimizer):
         self.logger.debug(f"Calling stop. Reason = {reason}")
         self.es.callbackstop = 1
         self.result.success = all([reason != cond for cond in ("GloMPO Crash", "Manager termination signal")])
-
-    def checkpoint_save(self, path: Union[Path, str]):
-        self.logger.debug("Creating restart file.")
-
-        dump_collection = {}
-        for var in dir(self):
-            if not callable(getattr(self, var)) and not var.startswith('_') and var != 'logger':
-                dump_collection[var] = getattr(self, var)
-        print(f"Checkpoint at iter={self.es.countiter}")
-        with open(path, 'wb') as file:
-            pickle.dump(dump_collection, file)
-
-        self.logger.info("Restart file created successfully.")

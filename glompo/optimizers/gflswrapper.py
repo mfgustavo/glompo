@@ -3,7 +3,8 @@ import os
 import warnings
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
-from typing import Any, Callable, Optional, Sequence, Tuple, Type, Union
+from pathlib import Path
+from typing import Any, Callable, Optional, Sequence, Set, Tuple, Type, Union
 
 import numpy as np
 from optsam.algo_base import AlgoBase
@@ -66,6 +67,7 @@ class GFLSOptimizer(BaseOptimizer):
         self.verbose = verbose
         self.save_logger = save_logger
         self.vector_codec = None
+        self.gfls_logger = None
 
         gfls_kwargs = gfls_kwargs if gfls_kwargs else {}
         gfls_kwargs['tr_max'] = 1 if 'tr_max' not in gfls_kwargs else gfls_kwargs['tr_max']
@@ -145,30 +147,30 @@ class GFLSOptimizer(BaseOptimizer):
         # noinspection PyUnresolvedReferences
         fw = ResidualsWrapper(function.resids, self.vector_codec.decode)
         self.logger.debug("Starting GFLS driver.")
-        logger = driver(
-            fw,
-            self.vector_codec.encode(x0),
-            self.algorithm,
-            self.tmax,
-            self.imax,
-            self.fmax,
-            self.verbose,
-            callbacks
-        )
+        if not self.is_restart:
+            self.gfls_logger = driver(fw,
+                                      self.vector_codec.encode(x0),
+                                      self.algorithm,
+                                      self.tmax,
+                                      self.imax,
+                                      self.fmax,
+                                      self.verbose,
+                                      callbacks
+                                      )
         if self.save_logger:
             if os.sep in self.save_logger:
                 path, name = tuple(self.save_logger.rsplit(os.sep, 1))
                 os.makedirs(path)
             else:
                 name = self.save_logger
-            logger.save(name)
+            self.gfls_logger.save(name)
 
-        cond = logger.aux["stopcond"]
+        cond = self.gfls_logger.aux["stopcond"]
         success = any(cond == k for k in ["xtol", "tr_min"])
-        fx = logger.get("func_best", -1)
-        history = logger.get_tracks("func")[0]
+        fx = self.gfls_logger.get("func_best", -1)
+        history = self.gfls_logger.get_tracks("func")[0]
         index = np.where(history == fx)[0][0]
-        x = logger.get("pars", index)
+        x = self.gfls_logger.get("pars", index)
 
         if self._signal_pipe:
             self.message_manager(0, cond)
@@ -185,7 +187,7 @@ class GFLSOptimizer(BaseOptimizer):
         fx = logger.get("func")
         fin = False if stopcond is None else True
         self.logger.debug(f"Pushing iteration: {IterationResult(self._opt_id, i, 1, x, fx, fin)}")
-        self._results_queue.put(IterationResult(self._opt_id, i, 1, x, fx, fin))
+        super().push_iter_result(IterationResult(self._opt_id, i, 1, x, fx, fin))
 
     def check_messages(self, logger: Logger, algorithm, stopcond):
         conds = []
@@ -209,3 +211,6 @@ class GFLSOptimizer(BaseOptimizer):
 
     def check_pause_flag(self, *args, **kwargs):
         self._pause_signal.wait()
+
+    def checkpoint_save(self, path: Union[Path, str], force: Optional[Set[str]] = None):
+        super().checkpoint_save(path, {'gfls_logger'})

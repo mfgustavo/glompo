@@ -1,12 +1,11 @@
 import logging
 import multiprocessing as mp
 from collections import namedtuple
-from pathlib import Path
 from time import sleep, time
-from typing import Callable, Sequence, Tuple, Union
+from typing import Callable, Sequence, Tuple
 
 import pytest
-
+from dill import dill
 from glompo.common.namedtuples import IterationResult
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from glompo.optimizers.random import RandomOptimizer
@@ -37,12 +36,12 @@ except ModuleNotFoundError:
 
 
 class PlainOptimizer(BaseOptimizer):
-    needscaler = False
 
     def __init__(self, opt_id: int = None, signal_pipe: mp.connection.Connection = None, results_queue: mp.Queue = None,
                  pause_flag: mp.Event = None):
         super().__init__(opt_id, signal_pipe, results_queue, pause_flag)
         self.terminate = False
+        self.i = 0
 
     def minimize(self,
                  function: Callable,
@@ -50,6 +49,7 @@ class PlainOptimizer(BaseOptimizer):
                  bounds: Sequence[Tuple[float, float]],
                  callbacks: Callable = None, **kwargs) -> MinimizeResult:
         while not self.terminate:
+            self.i += 1
             self.check_messages()
 
     def push_iter_result(self, *args):
@@ -61,13 +61,6 @@ class PlainOptimizer(BaseOptimizer):
         """
         self.terminate = True
         self.message_manager(code, MinimizeResult())
-
-    def checkpoint_save(self, path: Union[Path, str]):
-        with Path(path, "savestate.txt").open("w+") as file:
-            file.write("Start\n")
-            for i in dir(self):
-                file.write(f"{i}\n")
-            file.write("End")
 
 
 class TestBase:
@@ -150,15 +143,28 @@ class TestBase:
         process.join()
         assert mp_package.queue.get() == "item"
 
-    def test_checkpointsave(self, mp_package, tmp_path):
-        process = mp.Process(target=mp_package.opti.checkpoint_save, args=(tmp_path,))
+    def test_checkpointsave(self, mp_package, tmp_path, capfd):
+        mp_package.opti.workers = 685
+        process = mp.Process(target=mp_package.opti.minimize, args=(None, None, None))
         process.start()
+
+        mp_package.p_pipe.send((0, tmp_path / '0001'))
+        mp_package.p_pipe.send(1)
         process.join()
 
-        with Path(tmp_path, "savestate.txt").open("r") as file:
-            lines = file.readlines()
-            assert lines[0] == "Start\n"
-            assert lines[-1] == "End"
+        assert not capfd.readouterr().err
+        with (tmp_path / "0001").open("rb") as file:
+            data = dill.load(file)
+
+            assert len(data) == 3
+            assert data['terminate'] is False
+            assert data['i'] > 0
+            assert data['workers'] == 685
+
+            loaded_opt = PlainOptimizer.checkpoint_load(tmp_path / '0001', 1)
+            assert loaded_opt.i == data['i']
+            assert loaded_opt.terminate is False
+            assert loaded_opt.workers == 685
 
     @pytest.mark.parametrize("exception", [KeyboardInterrupt, Exception])
     def test_min_wrapper(self, mp_package, exception, capfd):
@@ -244,7 +250,7 @@ class TestSubclassesGlompoCompatible:
 
         def __call__(self, *args, **kwargs):
             self.called += 1
-            if self.called > self.max_iter:
+            if self.called >= self.max_iter:
                 return "MaxIter"
 
             return None
@@ -349,3 +355,43 @@ class TestSubclassesGlompoCompatible:
         assert hasattr(opti, 'logger')
         assert isinstance(opti.logger, logging.Logger)
         assert "glompo.optimizers.opt" in opti.logger.name
+
+    def test_checkpointing(self, opti, init_kwargs, call_kwargs, mp_package, task, tmp_path):
+        opti = opti(results_queue=mp_package.queue,
+                    signal_pipe=mp_package.c_pipe,
+                    pause_flag=mp_package.event,
+                    **init_kwargs)
+
+        opti.added_to_check = 555
+        assert not opti.is_restart
+
+        opti.minimize(function=task,
+                      x0=(0.5, 0.5, 0.5),
+                      bounds=((0, 1), (0, 1), (0, 1)),
+                      callbacks=self.MaxIter(5),
+                      **call_kwargs)
+        opti.checkpoint_save(tmp_path / '0001')
+
+        iter_count = 0
+        while not mp_package.queue.empty():
+            iter_count += 1
+            assert mp_package.queue.get_nowait().n_iter == iter_count
+
+        loaded_opti = opti.checkpoint_load(tmp_path / '0001',
+                                           results_queue=mp_package.queue,
+                                           signal_pipe=mp_package.c_pipe,
+                                           pause_flag=mp_package.event,
+                                           **init_kwargs)
+
+        assert loaded_opti.added_to_check == 555
+        assert loaded_opti.is_restart
+
+        loaded_opti.minimize(function=task,
+                             x0=(0.5, 0.5, 0.5),
+                             bounds=((0, 1), (0, 1), (0, 1)),
+                             callbacks=self.MaxIter(5),
+                             **call_kwargs)
+
+        while not mp_package.queue.empty():
+            iter_count += 1
+            assert mp_package.queue.get_nowait().n_iter == iter_count
