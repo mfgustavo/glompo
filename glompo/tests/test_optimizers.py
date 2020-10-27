@@ -460,15 +460,16 @@ class TestCMA:
 
         t_start = time()
         fx = optimizer._parallel_map(task, [[0.5] * 3] * 3)
+        t_end = time()
 
         assert len(fx) == 3
         assert len(set(fx)) == 1
         if workers == 1:
-            assert 1.5 < time() - t_start < 2
+            assert 1.5 < t_end - t_start < 2
             assert caplog.messages == ["Executing serially"]
         else:
             pool_executor = "ThreadPoolExecutor" if backend == 'threads' else "ProcessPoolExecutor"
-            assert 0.5 < time() - t_start < 1
+            assert 0.5 < t_end - t_start < 1
             assert caplog.messages == [f"Executing within {pool_executor} with 3 workers",
                                        "Result 1/3 returned.", "Result 2/3 returned.", "Result 3/3 returned."]
 
