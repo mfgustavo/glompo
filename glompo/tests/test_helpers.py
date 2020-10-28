@@ -161,8 +161,7 @@ class MaxCallsCallback:
                           ([2] * 3, "- 2\n- 2\n- 2\n"),
 
                           (BoundGroup([Bound(0, 1)] * 5 + [Bound(3, 6)] * 4),
-                           "? Bound:\n    max: 1\n    min: 0\n: [0, 1, 2, 3, 4]\n"
-                           "? Bound:\n    max: 6\n    min: 3\n: [5, 6, 7, 8]\n"),
+                           '(0, 1): [0, 1, 2, 3, 4]\n(3, 6): [5, 6, 7, 8]\n'),
 
                           (CycleSelector([(CMAOptimizer, {'sigma': 0.5, 'workers': 1, 'popsize': 10},
                                            {'callbacks': MaxCallsCallback(100, 1)})], allow_spawn=IterSpawnStop(300)),
@@ -173,5 +172,11 @@ class MaxCallsCallback:
                            'max_iter: 100\n'),
 
                           (RandomGenerator([(6, 7)] * 30), 'Generator: RandomGenerator\nn_params: 30\n')])
-def test_yaml_presenters(dump, load):
-    assert yaml.dump(dump, Dumper=Dumper, default_flow_style=False, sort_keys=False) == load
+def test_yaml_presenters(dump, load, tmp_path):
+    with (tmp_path / 'dump.yml').open('w+') as file:
+        yaml_dump = yaml.dump(dump, Dumper=Dumper, default_flow_style=False, sort_keys=False)
+        print(repr(yaml_dump))
+        assert yaml_dump == load
+        file.write(yaml_dump)
+        file.seek(0)
+        yaml.load(file, Loader=Loader)

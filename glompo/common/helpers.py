@@ -184,9 +184,9 @@ def flow_presenter(dumper, lst):
 
 
 def bound_group_presenter(dumper, bound_group):
-    grouped = {bound: FlowList([]) for bound in set(bound_group)}
+    grouped = {f"({bound.min}, {bound.max})": FlowList([]) for bound in set(bound_group)}
     for i, bound in enumerate(bound_group):
-        grouped[bound].append(i)
+        grouped[f"({bound.min}, {bound.max})"].append(i)
 
     return dumper.represent_mapping('tag:yaml.org,2002:map', grouped)
 
@@ -203,7 +203,11 @@ def unknown_object_presenter(dumper, unknown_class: object):
     for k in dir(unknown_class):
         if not k.startswith('_') and not callable(getattr(unknown_class, k)):
             inst_vars[k] = getattr(unknown_class, k)
-    return dumper.represent_mapping('tag:yaml.org,2002:map', {type(unknown_class).__name__: inst_vars})
+
+    if inst_vars:
+        return dumper.represent_mapping('tag:yaml.org,2002:map', {type(unknown_class).__name__: inst_vars})
+    else:
+        return dumper.represent_mapping('tag:yaml.org,2002:map', {type(unknown_class).__name__: None})
 
 
 """ Context Managers """

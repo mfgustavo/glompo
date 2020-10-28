@@ -142,7 +142,7 @@ class GloMPOManager:
         # noinspection PyUnresolvedReferences
         self.scope: Optional['GloMPOScope'] = None
 
-        self._proc_backend: str = None
+        self._proc_backend: bool = None
         self.opts_daemonic: bool = None
 
     @property
@@ -397,7 +397,8 @@ class GloMPOManager:
                 self.checkpoint_control = checkpoint_control
             else:
                 self.logger.warning("Checkpointing controls ignored. Cannot setup infrastructure without dill package.")
-                warnings.warn("Checkpointing controls ignored. Cannot setup infrastructure without dill package.")
+                warnings.warn("Checkpointing controls ignored. Cannot setup infrastructure without dill package.",
+                              UserWarning)
                 self.checkpoint_control = None
         else:
             self.checkpoint_control = None
@@ -864,7 +865,7 @@ class GloMPOManager:
             self._stop_all_children("User Interrupt")
 
         except Exception as e:
-            caught_exception = str(e)
+            caught_exception = "".join(traceback.TracebackException.from_exception(e).format())
             self.logger.critical("Critical error encountered. Attempting to close GloMPO gracefully", exc_info=e)
             warnings.warn(f"Optimization failed. Caught exception: {e}", RuntimeWarning)
             self._stop_all_children("GloMPO Crash")

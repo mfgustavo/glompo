@@ -75,7 +75,7 @@ class BaseSelector(ABC):
         if callable(allow_spawn):
             self.allow_spawn = allow_spawn
         else:
-            self.allow_spawn = lambda x: True
+            self.allow_spawn = _AlwaysSpawn()
 
     @abstractmethod
     def select_optimizer(self,
@@ -126,4 +126,9 @@ class IterSpawnStop:
     def __call__(self, mng: 'GloMPOManager'):
         if mng.f_counter >= self.max_calls:
             return False
+        return True
+
+
+class _AlwaysSpawn:
+    def __call__(self, *args, **kwargs):
         return True
