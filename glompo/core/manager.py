@@ -102,10 +102,10 @@ class GloMPOManager:
             History of CPU percentage usage snapshots (taken every status_frequency seconds). This is the CPU percentage
             used only by the process and its children not the load on the whole system.
         dt_ends: List[datetime]
-            List of datetime objects recording the end of each optimisation session for a problem optimized through
+            List of datetime objects recording the end of each optimization session for a problem optimized through
             several checkpoints.
         dt_starts: List[datetime]
-            List of datetime objects recording the start of each optimisation session for a problem optimized through
+            List of datetime objects recording the start of each optimization session for a problem optimized through
             several checkpoints.
         end_timeout: float
             Amount of time the manager will wait to join child processes before forcibly terminating them (if children
@@ -195,14 +195,14 @@ class GloMPOManager:
         t_start: float
             Timestamp of the starting time of an optimization run.
         t_used: float
-            Total time in seconds used by PREVIOUS optimisation runs. This will be zero unless the manager has been
+            Total time in seconds used by PREVIOUS optimization runs. This will be zero unless the manager has been
             loaded from a checkpoint.
         task: Callable[[Sequence[float]], float]
             Function being minimize by the optimizers.
         visualisation: bool
             True if the optimization is presented graphically in real time using glompo.core.scope.GloMPOScope.
         visualisation_args: Dict[str, Any]
-            Configuration arguments used for glompo.core.scope.GloMPOScope if the optimisation is being visualised
+            Configuration arguments used for glompo.core.scope.GloMPOScope if the optimization is being visualised
             dynamically.
         working_dir: Path
             Working directory in which all output files and directories are created. Note, the manager does not change
@@ -419,10 +419,10 @@ class GloMPOManager:
                 E.g.: killing_conditions = (BestUnmoving(100, 0.01) & TimeAnnealing(2) & ValueAnnealing()) |
                                            ParameterDistance(0.1)
                 In this case GloMPO will only allow a hunt to terminate an optimizer if
-                    1) an optimiser's best value has not improved by more than 1% in 100 function calls,
+                    1) an optimizer's best value has not improved by more than 1% in 100 function calls,
                     2) and it fails an annealing type test based on how many iterations it has run,
                     3) and if fails an annealing type test based on how far the victim's value is from the best
-                    optimiser's best value,
+                    optimizer's best value,
                     4) or the two optimizers are iterating very close to one another in parameter space
                 Default (None): Killing is not used, i.e. the optimizer will not terminate optimizers.
             Note, for performance and to allow conditionality between hunters conditions are evaluated 'lazily' i.e.
@@ -620,7 +620,7 @@ class GloMPOManager:
         self.logger.info("Initialization Done")
 
     def load_checkpoint(self, path: Union[Path, str],
-                        task_loader: Optional[Callable[[str], Callable[[Sequence[float]], float]]] = None,
+                        task_loader: Optional[Callable[[Union[Path, str]], Callable[[Sequence[float]], float]]] = None,
                         task: Optional[Callable[[Sequence[float]], float]] = None, **glompo_kwargs):
         """ Initialise GloMPO from the provided checkpoint file and allows an optimization to resume from that point.
 
@@ -629,7 +629,7 @@ class GloMPOManager:
             path: Union[Path, str]
                 Path to GloMPO checkpoint file.
 
-            task_loader: Optional[Callable[[str], Callable[[Sequence[float]], float]]] = None
+            task_loader: Optional[Callable[[Union[Path, str]], Callable[[Sequence[float]], float]]] = None
                 It is possible for checkpoint files to not contain the optimization task within them. This is because
                 some functions may be too complex to reduce to a persistent state and need to be reconstructed. A task
                 loader method can be executed to construct a task from the files dumped in the checkpoint by
@@ -779,10 +779,10 @@ class GloMPOManager:
             self.converged = False
         if self.converged:
             self.logger.warning(f"The convergence criteria already evaluates to True. The manager will be unable to"
-                                f" resume the optimisation. Consider changing the convergence criteria.\n"
+                                f" resume the optimization. Consider changing the convergence criteria.\n"
                                 f"{nested_string_formatting(self.convergence_checker.str_with_result())}")
             warnings.warn("The convergence criteria already evaluates to True. The manager will be unable to resume"
-                          " the optimisation. Consider changing the convergence criteria.", RuntimeWarning)
+                          " the optimization. Consider changing the convergence criteria.", RuntimeWarning)
 
         # Append nan to histories to show break in optimizations
         self.cpu_history.append(float('nan'))
@@ -880,7 +880,9 @@ class GloMPOManager:
                 "No optimizers alive, spawning stopped."
             self.converged = checker_condition or (len(self._optimizer_packs) == 0 and not self.spawning_opts)
             if self.converged:
-                self.logger.warning("Convergence conditions met before optimizer start")
+                self.logger.warning("Convergence conditions met before optimizer start. Aborting start.")
+                warnings.warn("Convergence conditions met before optimizer start. Aborting start.", RuntimeWarning)
+                return self.result
         except Exception:
             reason = "None"
             self.converged = False
@@ -888,22 +890,7 @@ class GloMPOManager:
         # Make working dir
         self.working_dir.mkdir(parents=True, exist_ok=True)
 
-        # Purge Old Results
-        to_remove = [*self.working_dir.glob("glompo_manager_log.yml")]
-        to_remove += [*self.working_dir.glob("opt_best_summary.yml")]
-        to_remove += [*self.working_dir.glob("trajectories*.png")]
-        to_remove += [*self.working_dir.glob("opt*_parms.png")]
-        if to_remove:
-            if self.overwrite_existing:
-                self.logger.debug("Old results found")
-                for old in to_remove:
-                    old.unlink()
-                shutil.rmtree(self.working_dir / "glompo_optimizer_logs", ignore_errors=True)
-                shutil.rmtree(self.working_dir / "glompo_optimizer_printstreams", ignore_errors=True)
-                self.logger.warning("Deleted old results.")
-            else:
-                raise FileExistsError("Previous results found. Remove, move or rename them. Alternatively, select "
-                                      "another working_dir or set overwrite_existing=True.")
+        self._purge_old_results()
 
         if self.visualisation and self.scope.record_movie:
             self.scope.setup_moviemaker(self.working_dir)
@@ -916,18 +903,7 @@ class GloMPOManager:
 
         # Setup system monitoring
         if HAS_PSUTIL:
-            self._process = psutil.Process()
-            self._process.cpu_percent()  # First return is zero and must be ignored
-            psutil.getloadavg()
-
-            cores = self._process.cpu_affinity()
-            self.logger.info(f"System Info:\n"
-                             f"    {'Cores Available:':.<26}{len(cores)}\n"
-                             f"    {'Core IDs:':.<26}{cores}\n"
-                             f"    {'Memory Available:':.<26}{present_memory(psutil.virtual_memory().total)}\n"
-                             f"    {'Hostname:':.<26}{socket.gethostname()}\n"
-                             f"    {'Working Dir:':.<26}{Path.cwd()}\n"
-                             f"    {'Username:':.<26}{getpass.getuser()}")
+            self._setup_system_monitoring()
 
         # Settings check
         if self.allow_forced_terminations and not self.proc_backend:
@@ -940,7 +916,7 @@ class GloMPOManager:
             self.t_start = time()
             self.last_status = self.t_start
             self.last_time_checkpoint = self.t_start
-            self.dt_starts.append(datetime.now())
+            self.dt_starts.append(datetime.fromtimestamp(self.t_start))
 
             # Restart specific tasks
             if self._is_restart:
@@ -985,45 +961,7 @@ class GloMPOManager:
                     self.logger.info("Convergence Reached")
 
                 if time() - self.last_status > self.status_frequency:
-                    self.last_status = time()
-                    processes = []
-                    f_best = f'{self.result.fx:.3E}' if self.result.fx is not None else None
-                    live_opts_status = ""
-
-                    for opt_id, pack in self._optimizer_packs.items():
-                        if pack.process.is_alive():
-                            processes.append(pack.slots)
-                            hist = self.opt_log.get_history(opt_id, 'fx')
-                            if len(hist) > 0:
-                                width = 21 if hist[-1] < 0 else 22
-                                live_opts_status += f"        {f'Optimizer {opt_id}':.<{width}} {hist[-1]:.3E}\n"
-
-                    evals = f"{self.f_counter:,}".replace(',', ' ')
-                    status_mess = f"Status: \n" \
-                                  f"    {'Time Elapsed:':.<26} {timedelta(seconds=time() - self.t_start)}\n" \
-                                  f"    {'Optimizers Alive:':.<26} {len(processes)}\n" \
-                                  f"    {'Slots Filled:':.<26} {sum(processes)}/{self.max_jobs}\n" \
-                                  f"    {'Function Evaluations:':.<26} {evals}\n" \
-                                  f"    Current Optimizer f_vals:\n"
-                    status_mess += live_opts_status
-                    status_mess += f"    {'Overall f_best:':.<25} {f_best}\n"
-                    if HAS_PSUTIL:
-                        with self._process.oneshot():
-                            self.cpu_history.append(self._process.cpu_percent())
-
-                            mem = self._process.memory_full_info().uss
-                            for child in self._process.children(recursive=True):
-                                try:
-                                    mem += child.memory_full_info().uss
-                                except psutil.NoSuchProcess:
-                                    continue
-                            self.mem_history.append(mem)
-
-                        status_mess += f"    {'CPU Usage:':.<26} {self.cpu_history[-1]}%\n"
-                        status_mess += f"    {'Virtual Memory:':.<26} {present_memory(self.mem_history[-1])}\n"
-                        self.load_history.append(psutil.getloadavg())
-                        status_mess += f"    {'System Load:':.<26} {self.load_history[-1]}\n"
-                    self.logger.info(status_mess)
+                    self.logger.info(self._build_status_message())
 
                 if self.checkpoint_control:
                     if time() - self.last_time_checkpoint > self.checkpoint_control.checkpoint_time_frequency:
@@ -1060,7 +998,11 @@ class GloMPOManager:
             self.logger.info("Cleaning up and closing GloMPO")
 
             self.t_end = time()
-            self.dt_ends.append(datetime.now())
+            dt_end = datetime.fromtimestamp(self.t_end)
+            if len(self.dt_starts) == len(self.dt_ends):
+                self.dt_ends[-1] = dt_end
+            else:
+                self.dt_ends.append(dt_end)
 
             if self.visualisation:
                 if self.scope.record_movie and not caught_exception:
@@ -1796,7 +1738,7 @@ class GloMPOManager:
                     "Working Dir": str(Path.cwd()),
                     "Username": getpass.getuser(),
                     "Hostname": socket.gethostname(),
-                    "Time": {"Optimisation Periods": t_periods,
+                    "Time": {"optimization Periods": t_periods,
                              "Total": t_total,
                              "Session": t_session}},
                 "Settings": {"x0 Generator": self.x0_generator,
@@ -1874,3 +1816,83 @@ class GloMPOManager:
                     pack.allow_run_event.set()
                 else:
                     pack.allow_run_event.clear()
+
+    def _setup_system_monitoring(self):
+        """ Configures the psutil monitoring of the optimization and produces a system info log message. """
+
+        self._process = psutil.Process()
+        self._process.cpu_percent()  # First return is zero and must be ignored
+        psutil.getloadavg()
+
+        cores = self._process.cpu_affinity()
+        self.logger.info(f"System Info:\n"
+                         f"    {'Cores Available:':.<26}{len(cores)}\n"
+                         f"    {'Core IDs:':.<26}{cores}\n"
+                         f"    {'Memory Available:':.<26}{present_memory(psutil.virtual_memory().total)}\n"
+                         f"    {'Hostname:':.<26}{socket.gethostname()}\n"
+                         f"    {'Working Dir:':.<26}{Path.cwd()}\n"
+                         f"    {'Username:':.<26}{getpass.getuser()}")
+
+    def _purge_old_results(self):
+        """ Identifies and removes old log files if allowed. """
+
+        to_remove = [*self.working_dir.glob("glompo_manager_log.yml")]
+        to_remove += [*self.working_dir.glob("opt_best_summary.yml")]
+        to_remove += [*self.working_dir.glob("trajectories*.png")]
+        to_remove += [*self.working_dir.glob("opt*_parms.png")]
+        if to_remove:
+            if self.overwrite_existing:
+                self.logger.debug("Old results found")
+                for old in to_remove:
+                    old.unlink()
+                shutil.rmtree(self.working_dir / "glompo_optimizer_logs", ignore_errors=True)
+                shutil.rmtree(self.working_dir / "glompo_optimizer_printstreams", ignore_errors=True)
+                self.logger.warning("Deleted old results.")
+            else:
+                raise FileExistsError("Previous results found. Remove, move or rename them. Alternatively, select "
+                                      "another working_dir or set overwrite_existing=True.")
+
+    def _build_status_message(self) -> str:
+        """ Constructs and returns a formatted status message about the optimization progress. """
+
+        self.last_status = time()
+        processes = []
+        f_best = f'{self.result.fx:.3E}' if self.result.fx is not None else None
+        live_opts_status = ""
+
+        for opt_id, pack in self._optimizer_packs.items():
+            if pack.process.is_alive():
+                processes.append(pack.slots)
+                hist = self.opt_log.get_history(opt_id, 'fx')
+                if len(hist) > 0:
+                    width = 21 if hist[-1] < 0 else 22
+                    live_opts_status += f"        {f'Optimizer {opt_id}':.<{width}} {hist[-1]:.3E}\n"
+
+        evals = f"{self.f_counter:,}".replace(',', ' ')
+        status_mess = f"Status: \n" \
+                      f"    {'Time Elapsed:':.<26} {timedelta(seconds=time() - self.t_start)}\n" \
+                      f"    {'Optimizers Alive:':.<26} {len(processes)}\n" \
+                      f"    {'Slots Filled:':.<26} {sum(processes)}/{self.max_jobs}\n" \
+                      f"    {'Function Evaluations:':.<26} {evals}\n" \
+                      f"    Current Optimizer f_vals:\n"
+        status_mess += live_opts_status
+        status_mess += f"    {'Overall f_best:':.<25} {f_best}\n"
+
+        if HAS_PSUTIL:
+            with self._process.oneshot():
+                self.cpu_history.append(self._process.cpu_percent())
+
+                mem = self._process.memory_full_info().uss
+                for child in self._process.children(recursive=True):
+                    try:
+                        mem += child.memory_full_info().uss
+                    except psutil.NoSuchProcess:
+                        continue
+                self.mem_history.append(mem)
+
+            status_mess += f"    {'CPU Usage:':.<26} {self.cpu_history[-1]}%\n"
+            status_mess += f"    {'Virtual Memory:':.<26} {present_memory(self.mem_history[-1])}\n"
+            self.load_history.append(psutil.getloadavg())
+            status_mess += f"    {'System Load:':.<26} {self.load_history[-1]}\n"
+
+        return status_mess
