@@ -166,8 +166,7 @@ class CMAOptimizer(BaseOptimizer):
                 self.callstop("Callbacks termination.")
 
             if self._results_queue:
-                i_best = np.argmin(fx)
-                result = IterationResult(self._opt_id, self.es.countiter, self.popsize, x[i_best], fx[i_best],
+                result = IterationResult(self._opt_id, self.es.countiter, self.popsize, self.result.x, self.result.fx,
                                          bool(self.es.stop()))
                 self.push_iter_result(result)
                 self.logger.debug("Pushed result to queue")

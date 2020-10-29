@@ -1,3 +1,4 @@
+import logging
 import multiprocessing as mp
 from pathlib import Path
 from time import sleep, time
@@ -6,7 +7,6 @@ from typing import Any, Callable, Dict, Sequence, Tuple, Type, Union
 import numpy as np
 import pytest
 import yaml
-
 from glompo.common.namedtuples import IterationResult, ProcessPackage, Result
 from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxFuncCalls, MaxOptsStarted, MaxSeconds
 from glompo.core._backends import CustomThread
@@ -17,6 +17,7 @@ from glompo.generators import BaseGenerator, RandomGenerator
 from glompo.hunters import BaseHunter, MinIterations
 from glompo.opt_selectors import BaseSelector, CycleSelector, IterSpawnStop
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
+from glompo.optimizers.random import RandomOptimizer
 
 
 class DummySelector(BaseSelector):
@@ -531,12 +532,53 @@ class TestManager:
 
         assert len(set(gathered)) == 1
 
+    def test_init_checkpoint(self, manager, tmp_path, monkeypatch):
+        class FakeLog(logging.Logger):
+            """ Pytest incompatible with dill dumping Logger instances. This intercepts log creations. """
+
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __call__(self, *args, **kwargs):
+                pass
+
+            def debug(self, *args, **kwargs):
+                pass
+
+            def info(self, *args, **kwargs):
+                pass
+
+            def warning(self, *args, **kwargs):
+                pass
+
+            def error(self, *args, **kwargs):
+                pass
+
+            def critical(self, *args, **kwargs):
+                pass
+
+            def handlers(self):
+                return []
+
+        monkeypatch.setattr(logging, 'getLogger', FakeLog)
+
+        manager.setup(task=lambda x: x[0] ** 2 + 3 * x[1] ** 4 - x[2] ** 0.5,
+                      bounds=[(-100, 100)] * 3,
+                      opt_selector=CycleSelector([(RandomOptimizer, {'iters': 1000}, None)]),
+                      working_dir=tmp_path,
+                      max_jobs=2,
+                      backend='processes',
+                      convergence_checker=None,
+                      x0_generator=None,
+                      killing_conditions=None,
+                      checkpoint_control=CheckpointingControl(checkpoint_at_init=True, naming_format='chkpt_%(count)'),
+                      visualisation=True)
+        assert (tmp_path / 'chkpt_001.tar.gz').exists()
+
     @pytest.mark.mini
     @pytest.mark.parametrize('backend', ['processes', 'threads'])
     def test_mwe(self, backend, manager):
         class SteepestGradient(BaseOptimizer):
-
-            needscaler = False
 
             def __init__(self, max_iters, gamma, precision, opt_id: int = None, signal_pipe=None,
                          results_queue=None, pause_flag=None, workers: int = 1,
