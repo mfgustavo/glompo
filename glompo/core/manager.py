@@ -60,12 +60,190 @@ __all__ = ("GloMPOManager",)
 class GloMPOManager:
     """ Attempts to minimize a given function using numerous optimizers in parallel, based on their performance and
         decision criteria, will stop and intelligently restart others.
+
+        Methods
+        -------
+        new_manager
+            Class method. Configure a new manager object. Equivalent to GloMPOManager().setup()
+        load_manager
+            Class method. Extract manager from a GloMPO checkpoint file. Equivalent to GloMPOManager().load_checkpoint
+        setup
+            Configure a new optimization management with the arguments provided.
+        load_checkpoint
+            Extract optimization state from a GloMPO checkpoint.
+        start_manager
+            Start the managed optimization.
+        checkpoint
+            Create a GloMPO checkpoint file preserving the state of the manager.
+        dump_state
+            Produce GloMPO log files from the current manager state.
+
+        Attributes
+        ----------
+        allow_forced_terminations: bool
+            True if the manager is allowed to force terminate optimizers which appear non-responsive (i.e. do not
+            provide feedback within a specified period of time.
+        bounds: Sequence[Bound]
+            (Min, max) tuples for each parameter being optimized beyond which optimizers will not explore.
+        checkpoint_control: CheckpointingControl
+            GloMPO object containing all checkpointing settings if this feature is being used.
+            (See glompo.core.checkpointing.CheckpointingControl)
+        checkpoint_history: Set[str]
+            Set of names of checkpoints constructed by the manager.
+        converged: bool
+            True if the conditions of convergence_checker have been met.
+        conv_counter: int
+            Count of the number of optimizers which converged according to their own configuration (as opposed to being
+            terminated by the manager).
+        convergence_checker: BaseChecker
+            GloMPO object which evaluates whether conditions are met for overall manager termination.
+            (See glompo.convergence.basechecker.BaseChecker).
+        cpu_history: List[float]
+            History of CPU percentage usage snapshots (taken every status_frequency seconds). This is the CPU percentage
+            used only by the process and its children not the load on the whole system.
+        dt_ends: List[datetime]
+            List of datetime objects recording the end of each optimisation session for a problem optimized through
+            several checkpoints.
+        dt_starts: List[datetime]
+            List of datetime objects recording the start of each optimisation session for a problem optimized through
+            several checkpoints.
+        end_timeout: float
+            Amount of time the manager will wait to join child processes before forcibly terminating them (if children
+            are processes) or allowing them to eventually crash out themselves (if children are threads). The latter is
+            not recommended as essentially these threads can become orphaned and continue to use resources in the
+            background. Unfortunately, threads cannot be forcibly terminated.
+        f_counter: int
+            Number of times the optimization task has been evaluated.
+        hunt_counter: int
+            Count of the number of times the manager has evaluated killing_conditions in an attempt to terminate one of
+            its children.
+        hunt_frequency: int
+            Frequency (in terms of number of function evaluations) between manager 'hunts' (i.e. evaluation of
+            killing_conditions in an attempt to terminate children.
+        hunt_victims: Dict[int, float]
+            Mapping of manager-killed optimizer ID numbers and timestamps when they were terminated.
+        killing_conditions: BaseHunter
+            GloMPO object which evaluates whether an optimizer meets its conditions to be terminated early.
+            (See glompo.hunters.basehunter.BaseHunter).
+        last_hunt: int
+            Evaluation number at which the last hunt was executed.
+        last_iter_checkpoint: int
+            f_counter of last attempted checkpoint (regardless of success or failure)
+        last_opt_spawn: Tuple[int, int]
+            Tuple of f_counter and o_counter at which the last child optimizer was started.
+        last_status: float
+            Timestamp when the last logging status message was printed.
+        last_time_checkpoint: float
+            Timestamp of last attempted checkpoint (regardless of success or failure)
+        load_history: List[Tuple[float, float, float]]
+            History of system load snapshots (taken every status_frequency seconds). This is is a system wide value, not
+            tied to the specific process.
+        logger: logging.Logger
+            GloMPO has built-in logging to allowed tracking during an optimization. See README for more details. This
+            attribute accesses the manager logger object.
+        max_jobs: int
+            Maximum number of calculation `slots` used by all the child optimizers. This generally equates to the number
+            of processing cores available which the child optimizers may fill with threads or processes depending on
+            their configuration. Alternativly, each child optimizer may work serially and take one of these slots.
+        mem_history: List[float]
+            History of memory usage snapshots (taken every status_frequency seconds). Details memeory used by the
+            process and its children.
+        n_parms: int
+            Dimensionality of the optimization problem.
+        o_counter: int
+            Number of optimizers started.
+        opt_crashed: bool
+            True if any child optimizer crashed during its execution.
+        opt_log: OptimizerLogger
+            GloMPO object collecting the entire iteration history and metadata of the manager's children.
+            (See glompo.core.optimizerlogger.OptimizerLogger)
+        opt_selector: BaseSelector
+            Object which returns an optimizer class and its configuration when requested by the manager. Can be based on
+            previous results delivered by other optimizers. (See glompo.opt_selectors.baseselector.BaseSelector)
+        optimizer_queue: queue.Queue
+            Common concurrency tool into which all results are paced by child optimizers.
+        opts_daemonic: bool
+            True if manager children are spawned as daemons. Default is True but can be set to False if double process
+            layers are needed (see README for details on this).
+        overwrite_existing: bool
+            True if any old files detected in the working directory maybe be deleted when the optimization run begins.
+        proc_backend: bool
+            True if the manager children are spawned as processes, False if they are spawned as threads.
+        result: Result
+            Incumbent best solution found by any child optimizer.
+        scope: Optional['GloMPOScope']
+            GloMPO object presenting the optimization graphically in real time.
+            (See glompo.core.scope.GloMPOScope).
+        split_printstreams: bool
+            True if the printstreams for children are redirected to individual files.
+        spawning_opts: bool
+            True if the manager is allowed to create new children. The manager will shutdown if all children terminate
+            and this is False.
+        status_frequency: float
+            Frequency (in seconds) with which a status message is produced for the logger.
+        summary_files: int
+            Indicates the level of saving the user would like in terms of datafiles and plots:
+                0 - No opt_log files are saved;
+                1 - Only the manager summary file is saved;
+                2 - The manager summary log and combined optimizers summary files are saved;
+                3 - All of the above plus all the individual optimizer log files are saved;
+                4 - All of the above plus plot of the optimizer trajectories
+                5 - All of the above plus plots of trailed parameters as a function of optimizer iteration for each
+                    optimizer.
+        t_end: float
+            Timestamp of the ending time of an optimization run.
+        t_start: float
+            Timestamp of the starting time of an optimization run.
+        t_used: float
+            Total time in seconds used by PREVIOUS optimisation runs. This will be zero unless the manager has been
+            loaded from a checkpoint.
+        task: Callable[[Sequence[float]], float]
+            Function being minimize by the optimizers.
+        visualisation: bool
+            True if the optimization is presented graphically in real time using glompo.core.scope.GloMPOScope.
+        visualisation_args: Dict[str, Any]
+            Configuration arguments used for glompo.core.scope.GloMPOScope if the optimisation is being visualised
+            dynamically.
+        working_dir: Path
+            Working directory in which all output files and directories are created. Note, the manager does not change
+            the current working directory during the run.
+        x0_generator: BaseGenerator
+            GloMPO object which returns a starting location for a new child optimizer. Can be based on previous results
+            delivered by other optimizers. (See glompo.generators.basegenerator.BaseGenerator).
     """
+
+    @classmethod
+    def new_manager(cls, *args, **kwargs) -> 'GloMPOManager':
+        """ Class method wrapper around GloMPOManager.setup method to directly initialise a new manager instance.
+
+            See Also
+            --------
+            GloMPOManager.setup for argument specs
+        """
+
+        manager = cls()
+        manager.setup(*args, **kwargs)
+        return manager
+
+    @classmethod
+    def load_manager(cls, *args, **kwargs) -> 'GloMPOManager':
+        """ Class method wrapper around GloMPOManager.load_checkpoint to directly initialise a manager from a
+            checkpoint.
+
+            See Also
+            --------
+            GloMPOManager.load_checkpoint for argument specs
+        """
+
+        manager = cls()
+        manager.load_checkpoint(*args, **kwargs)
+        return manager
 
     # noinspection PyTypeChecker
     def __init__(self):
         """ The manager is not initialised directly. Either use GloMPOManager().setup() to build a new optimization
             or GloMPOManager.load_checkpoint() to resume an optimization from a previously saved checkpoint file.
+            Alternatively, class methods GloMPOManager.new_manager and GloMPOManager.load_manager are also provided.
         """
 
         # Filter Warnings
@@ -98,6 +276,7 @@ class GloMPOManager:
 
         self.result = Result(None, None, None, None)
         self.t_start: float = None  # Session start time
+        self.t_end: float = None  # Session end time
         self.t_used: float = 0  # Time used during previous sessions if loading from checkpoint
         self.dt_starts: List[datetime] = []
         self.dt_ends: List[datetime] = []
@@ -113,7 +292,7 @@ class GloMPOManager:
         self.last_opt_spawn = (0, 0)
         self.last_time_checkpoint = 0
         self.last_iter_checkpoint = 0
-        self.chkpt_history: List[str] = []
+        self.checkpoint_history: Set[str] = set()
 
         self._process: Optional['psutil.Process'] = None
         self.cpu_history: List[float] = []
@@ -121,10 +300,10 @@ class GloMPOManager:
         self.load_history: List[Tuple[float, float, float]] = []
 
         self.hunt_victims: Dict[int, float] = {}  # opt_ids of killed jobs and timestamps when the signal was sent
-        self.optimizer_packs: Dict[int, ProcessPackage] = {}  # Dictionary of living or recently living optimizers.
-        self.graveyard: Set[int] = set()
-        self.last_feedback: Dict[int, float] = {}
-        self.opt_checkpoints: Dict[int, OptimizerCheckpoint] = {}  # Type & slots of every opt for checkpt loading
+        self._optimizer_packs: Dict[int, ProcessPackage] = {}  # Dictionary of living or recently living optimizers.
+        self._graveyard: Set[int] = set()
+        self._last_feedback: Dict[int, float] = {}
+        self._opt_checkpoints: Dict[int, OptimizerCheckpoint] = {}  # Type & slots of every opt for checkpt loading
 
         self.allow_forced_terminations: bool = None
         self._too_long: float = None
@@ -142,11 +321,14 @@ class GloMPOManager:
         # noinspection PyUnresolvedReferences
         self.scope: Optional['GloMPOScope'] = None
 
-        self._proc_backend: bool = None
+        self.proc_backend: bool = None
         self.opts_daemonic: bool = None
 
     @property
-    def is_initialised(self):
+    def is_initialised(self) -> bool:
+        """ Returns True if this GloMPOManager instance has been initialised. Multiple initialisations are not allowed.
+        """
+
         return self._is_restart is not None
 
     def setup(self,
@@ -303,6 +485,7 @@ class GloMPOManager:
         split_printstreams: bool = True
             If True, optimizer print messages will be intercepted and saved to separate files.
         """
+
         if self.is_initialised:
             warnings.warn("Manager already initialised, cannot reinitialise. Aborting", UserWarning)
             self.logger.warning("Manager already initialised, cannot reinitialise. Aborting")
@@ -411,10 +594,10 @@ class GloMPOManager:
 
         # Setup backend
         if any([backend == valid_opt for valid_opt in ('processes', 'threads', 'processes_forced')]):
-            self._proc_backend = 'processes' in backend
+            self.proc_backend = 'processes' in backend
             self.opts_daemonic = backend != 'processes_forced'
         else:
-            self._proc_backend = True
+            self.proc_backend = True
             self.opts_daemonic = True
             self.logger.warning(f"Unable to parse backend '{backend}'. 'processes' or 'threads' expected."
                                 f"Defaulting to 'processes'.")
@@ -424,7 +607,7 @@ class GloMPOManager:
         if end_timeout:
             self.end_timeout = end_timeout
         else:
-            if self._proc_backend:
+            if self.proc_backend:
                 self.end_timeout = 10
             else:
                 self.end_timeout = None
@@ -490,6 +673,7 @@ class GloMPOManager:
             resumed at some point. However, at the end of each section a movie file is made and these can be stitched
             together to make a continuous recording.
         """
+
         if self.is_initialised:
             warnings.warn("Manager already initialised, cannot reinitialise. Aborting", UserWarning)
             self.logger.warning("Manager already initialised, cannot reinitialise. Aborting")
@@ -554,7 +738,7 @@ class GloMPOManager:
         for key, val in glompo_kwargs.items():
             if key == 'backend':
                 backend = glompo_kwargs['backend']
-                self._proc_backend = 'processes' in backend
+                self.proc_backend = 'processes' in backend
                 self.opts_daemonic = backend != 'processes_forced'
             elif key == 'force_terminations_after':
                 force_terminations_after = glompo_kwargs['force_terminations_after']
@@ -582,9 +766,10 @@ class GloMPOManager:
 
         # Modify/create missing variables
         assert len(self.dt_starts) == len(self.dt_ends), "Timestamps missing from checkpoint."
-        self.optimizer_packs: Dict[int, ProcessPackage] = {}
-        self.t_used = sum([(end - start).seconds for start, end in zip(self.dt_starts, self.dt_ends)])
+        self._optimizer_packs: Dict[int, ProcessPackage] = {}
+        self.t_used = sum([(end - start).total_seconds() for start, end in zip(self.dt_starts, self.dt_ends)])
         self.t_start = None
+        self.t_end = None
         self.opt_crashed = False
         self.last_opt_spawn = (0, 0)
         # noinspection PyBroadException
@@ -605,7 +790,7 @@ class GloMPOManager:
         self.load_history.append((float('nan'),) * 3)
 
         # Load optimizer state
-        restarts = {int(opt.name): self.opt_checkpoints[int(opt.name)].slots for opt in
+        restarts = {int(opt.name): self._opt_checkpoints[int(opt.name)].slots for opt in
                     (tmp_dir / 'optimizers').iterdir()}
         if self.max_jobs < sum(restarts.values()):
             self.logger.warning("The maximum number of jobs allowed is less than that demanded by the optimizers in "
@@ -628,7 +813,7 @@ class GloMPOManager:
             event = self._mp_manager.Event()
             event.set()
             try:
-                opt_class = self.opt_checkpoints[opt_id].opt_type
+                opt_class = self._opt_checkpoints[opt_id].opt_type
                 optimizer = opt_class.checkpoint_load(opt_id=opt_id,
                                                       signal_pipe=child_pipe,
                                                       results_queue=self.optimizer_queue,
@@ -645,7 +830,7 @@ class GloMPOManager:
                 # noinspection PyProtectedMember
                 target = optimizer._minimize
 
-                if self.split_printstreams and self._proc_backend:
+                if self.split_printstreams and self.proc_backend:
                     # noinspection PyProtectedMember
                     target = process_print_redirect(opt_id, self.working_dir, optimizer._minimize)
 
@@ -653,13 +838,13 @@ class GloMPOManager:
                           'args': (self.task, x0, bounds),
                           'name': f"Opt{opt_id}",
                           'daemon': self.opts_daemonic}
-                if self._proc_backend:
+                if self.proc_backend:
                     process = mp.Process(**kwargs)
                 else:
                     process = CustomThread(working_directory=self.working_dir,
                                            redirect_print=self.split_printstreams, **kwargs)
 
-                self.optimizer_packs[opt_id] = ProcessPackage(process, parent_pipe, event, slots)
+                self._optimizer_packs[opt_id] = ProcessPackage(process, parent_pipe, event, slots)
 
                 if self.visualisation and opt_id not in self.scope.opt_streams:
                     self.scope.add_stream(opt_id, type(optimizer).__name__)
@@ -668,7 +853,7 @@ class GloMPOManager:
                 self.logger.error(f"Failed to initialise optimizer {opt_id}", exc_info=e)
                 warnings.warn(f"Failed to initialise optimizer {opt_id}: {e}")
 
-        if len(self.optimizer_packs) == 0 and len(restarts) > 0:
+        if len(self._optimizer_packs) == 0 and len(restarts) > 0:
             raise CheckpointingError("Unable to successfully built any optimizers from the checkpoint.")
 
         self._is_restart = True
@@ -693,7 +878,7 @@ class GloMPOManager:
             checker_condition = self.convergence_checker(self)
             reason = self.convergence_checker.str_with_result() if checker_condition else \
                 "No optimizers alive, spawning stopped."
-            self.converged = checker_condition or (len(self.optimizer_packs) == 0 and not self.spawning_opts)
+            self.converged = checker_condition or (len(self._optimizer_packs) == 0 and not self.spawning_opts)
             if self.converged:
                 self.logger.warning("Convergence conditions met before optimizer start")
         except Exception:
@@ -725,7 +910,7 @@ class GloMPOManager:
 
         if self.split_printstreams:
             (self.working_dir / "glompo_optimizer_printstreams").mkdir(exist_ok=True)
-            if not self._proc_backend:
+            if not self.proc_backend:
                 sys.stdout = ThreadPrintRedirect(sys.stdout)
                 sys.stderr = ThreadPrintRedirect(sys.stderr)
 
@@ -745,7 +930,7 @@ class GloMPOManager:
                              f"    {'Username:':.<26}{getpass.getuser()}")
 
         # Settings check
-        if self.allow_forced_terminations and not self._proc_backend:
+        if self.allow_forced_terminations and not self.proc_backend:
             warnings.warn("Cannot use force terminations with threading.", UserWarning)
             self.logger.warning("Cannot use force terminations with threading.")
 
@@ -759,9 +944,9 @@ class GloMPOManager:
 
             # Restart specific tasks
             if self._is_restart:
-                for opt_id, pack in self.optimizer_packs.items():
+                for opt_id, pack in self._optimizer_packs.items():
                     pack.process.start()
-                    self.last_feedback[opt_id] = time()
+                    self._last_feedback[opt_id] = time()
 
             while not self.converged:
                 self.logger.debug("Checking for available optimizer slots")
@@ -769,7 +954,7 @@ class GloMPOManager:
                 self.logger.debug("New optimizer check done")
 
                 self.logger.debug("Checking optimizer signals")
-                for opt_id in self.optimizer_packs:
+                for opt_id in self._optimizer_packs:
                     self._check_signals(opt_id)
                 self.logger.debug("Signal check done.")
 
@@ -785,11 +970,11 @@ class GloMPOManager:
                 self._inspect_children()
 
                 # Purge old processes
-                for opt_id, pack in [*self.optimizer_packs.items()]:
-                    if not pack.process.is_alive() and opt_id in self.graveyard:
-                        del self.optimizer_packs[opt_id]
+                for opt_id, pack in [*self._optimizer_packs.items()]:
+                    if not pack.process.is_alive() and opt_id in self._graveyard:
+                        del self._optimizer_packs[opt_id]
 
-                all_dead = len([p for p in self.optimizer_packs.values() if p.process.is_alive()]) == 0
+                all_dead = len([p for p in self._optimizer_packs.values() if p.process.is_alive()]) == 0
                 checker_condition = self.convergence_checker(self)
 
                 if checker_condition:
@@ -805,7 +990,7 @@ class GloMPOManager:
                     f_best = f'{self.result.fx:.3E}' if self.result.fx is not None else None
                     live_opts_status = ""
 
-                    for opt_id, pack in self.optimizer_packs.items():
+                    for opt_id, pack in self._optimizer_packs.items():
                         if pack.process.is_alive():
                             processes.append(pack.slots)
                             hist = self.opt_log.get_history(opt_id, 'fx')
@@ -874,6 +1059,7 @@ class GloMPOManager:
 
             self.logger.info("Cleaning up and closing GloMPO")
 
+            self.t_end = time()
             self.dt_ends.append(datetime.now())
 
             if self.visualisation:
@@ -891,7 +1077,7 @@ class GloMPOManager:
                                      'end_cond': reason},
                                  self.result.origin)
 
-            if not self._proc_backend and self.split_printstreams:
+            if not self.proc_backend and self.split_printstreams:
                 sys.stdout.close()
                 sys.stderr.close()
 
@@ -929,7 +1115,7 @@ class GloMPOManager:
         try:
             # Pause optimizers
             wait_reply = set()
-            for opt_id, pack in self.optimizer_packs.items():
+            for opt_id, pack in self._optimizer_packs.items():
                 if pack.process.is_alive():
                     pack.signal_pipe.send(2)
                     wait_reply.add(opt_id)
@@ -942,14 +1128,14 @@ class GloMPOManager:
                     self._process_results(n_alive)  # Free space on queue to make sure none are blocking
                 self.logger.debug(f"Blocking, {n_alive - len(wait_reply)}/{n_alive} optimizers synced")
                 for opt_id in wait_reply.copy():
-                    pack = self.optimizer_packs[opt_id]
+                    pack = self._optimizer_packs[opt_id]
                     if pack.process.is_alive():
                         if pack.signal_pipe.poll(0.1):
                             key, message = pack.signal_pipe.recv()
                             if key == 0:
                                 self.opt_log.put_metadata(opt_id, "Stop Time", str(datetime.now()))
                                 self.opt_log.put_metadata(opt_id, "End Condition", message)
-                                self.graveyard.add(opt_id)
+                                self._graveyard.add(opt_id)
                                 self.conv_counter += 1
                             elif key == 1:
                                 if self.visualisation:
@@ -973,7 +1159,7 @@ class GloMPOManager:
             for opt_id in living:
                 if self.visualisation:
                     self.scope.update_checkpoint(opt_id)
-                pack = self.optimizer_packs[opt_id]
+                pack = self._optimizer_packs[opt_id]
                 if pack.process.is_alive():
                     pack.signal_pipe.send((0, (path / 'optimizers' / f'{opt_id:04}').absolute()))
 
@@ -981,7 +1167,7 @@ class GloMPOManager:
             wait_reply = living.copy()
             while wait_reply:
                 for opt_id in wait_reply.copy():
-                    if not self.optimizer_packs[opt_id].allow_run_event.is_set():
+                    if not self._optimizer_packs[opt_id].allow_run_event.is_set():
                         wait_reply.remove(opt_id)
 
             # Confirm all restart files are found
@@ -997,7 +1183,7 @@ class GloMPOManager:
                     self.dt_ends[-1] = datetime.now()
                 else:
                     self.dt_ends.append(datetime.now())
-            self.chkpt_history.append(str(path.resolve().with_suffix('.tar.gz')))
+            self.checkpoint_history.add(str(path.resolve().with_suffix('.tar.gz')))
 
             # Select variables for pickling
             pickle_vars = {}
@@ -1006,7 +1192,7 @@ class GloMPOManager:
                 if not (callable(getattr(self, var)) and hasattr(val, '__self__')) and \
                         '__' not in var and \
                         not any([var == no_pickle for no_pickle in ('logger', '_process', '_mp_manager',
-                                                                    'optimizer_packs', 'scope', 'task',
+                                                                    '_optimizer_packs', 'scope', 'task',
                                                                     'optimizer_queue', 'is_initialised',
                                                                     'queue_monitor_arrest', 'queue_monitor_end',
                                                                     'queue_monitor_thread')]):
@@ -1100,7 +1286,7 @@ class GloMPOManager:
                 ovw_path.unlink()
 
         if self.converged:
-            [pack.signal_pipe.send(1) for _, pack in self.optimizer_packs.items() if pack.process.is_alive()]
+            [pack.signal_pipe.send(1) for _, pack in self._optimizer_packs.items() if pack.process.is_alive()]
         self._toggle_optimizers(1)
         self.logger.info(f"Checkpoint '{path.name}' successfully built")
 
@@ -1117,6 +1303,7 @@ class GloMPOManager:
                 If provided, this will overwrite the manager working_dir allowing the output to be redirected to a
                 different folder so as to not interfere with files in the working directory.
         """
+
         self.logger.info("Dumping manager state")
         if dump_dir:
             dump_dir = Path(dump_dir).resolve()
@@ -1127,7 +1314,8 @@ class GloMPOManager:
 
     def _fill_optimizer_slots(self):
         """ Starts new optimizers if there are slots available. """
-        processes = [pack.slots for pack in self.optimizer_packs.values() if pack.process.is_alive()]
+
+        processes = [pack.slots for pack in self._optimizer_packs.values() if pack.process.is_alive()]
         count = sum(processes)
 
         if self.last_opt_spawn[0] == self.f_counter and \
@@ -1146,7 +1334,7 @@ class GloMPOManager:
             else:
                 is_possible = False
 
-        processes = [pack.slots for pack in self.optimizer_packs.values() if pack.process.is_alive()]
+        processes = [pack.slots for pack in self._optimizer_packs.values() if pack.process.is_alive()]
         if started_new:
             self.last_opt_spawn = (self.f_counter, self.o_counter) \
                 if self.last_opt_spawn[0] != self.f_counter else self.last_opt_spawn
@@ -1170,7 +1358,7 @@ class GloMPOManager:
         # noinspection PyProtectedMember
         target = optimizer._minimize
 
-        if self.split_printstreams and self._proc_backend:
+        if self.split_printstreams and self.proc_backend:
             # noinspection PyProtectedMember
             target = process_print_redirect(opt_id, self.working_dir, optimizer._minimize)
 
@@ -1179,14 +1367,14 @@ class GloMPOManager:
                   'kwargs': call_kwargs,
                   'name': f"Opt{opt_id}",
                   'daemon': self.opts_daemonic}
-        if self._proc_backend:
+        if self.proc_backend:
             process = mp.Process(**kwargs)
         else:
             process = CustomThread(working_directory=self.working_dir, redirect_print=self.split_printstreams, **kwargs)
 
-        self.optimizer_packs[opt_id] = ProcessPackage(process, pipe, event, workers)
-        self.optimizer_packs[opt_id].process.start()
-        self.last_feedback[opt_id] = time()
+        self._optimizer_packs[opt_id] = ProcessPackage(process, pipe, event, workers)
+        self._optimizer_packs[opt_id].process.start()
+        self._last_feedback[opt_id] = time()
 
         if self.visualisation and opt_id not in self.scope.opt_streams:
             self.scope.add_stream(opt_id, type(optimizer).__name__)
@@ -1206,7 +1394,7 @@ class GloMPOManager:
             return None
 
         selected, init_kwargs, call_kwargs = selector_return
-        if not self._proc_backend:
+        if not self.proc_backend:
             # Callbacks need to be copied in the case of threaded backends because otherwise they will behave
             # globally rather than on individual optimizers as expected. All kwargs are copied in this way to prevent
             # any strange race conditions and multithreading artifacts.
@@ -1234,7 +1422,7 @@ class GloMPOManager:
                              **init_kwargs)
 
         self.opt_log.add_optimizer(self.o_counter, type(optimizer).__name__, str(datetime.now()))
-        self.opt_checkpoints[self.o_counter] = OptimizerCheckpoint(selected, init_kwargs['workers'])
+        self._opt_checkpoints[self.o_counter] = OptimizerCheckpoint(selected, init_kwargs['workers'])
 
         if call_kwargs:
             return OptimizerPackage(self.o_counter, optimizer, call_kwargs, parent_pipe, event, init_kwargs['workers'])
@@ -1244,17 +1432,18 @@ class GloMPOManager:
         """ Checks for signals from optimizer opt_id and processes it.
             Returns a bool indicating whether a signal was found.
         """
-        pipe = self.optimizer_packs[opt_id].signal_pipe
+
+        pipe = self._optimizer_packs[opt_id].signal_pipe
         found_signal = False
-        if opt_id not in self.graveyard and pipe.poll():
+        if opt_id not in self._graveyard and pipe.poll():
             try:
                 key, message = pipe.recv()
-                self.last_feedback[opt_id] = time()
+                self._last_feedback[opt_id] = time()
                 self.logger.info(f"Signal {key} from {opt_id}.")
                 if key == 0:
                     self.opt_log.put_metadata(opt_id, "Stop Time", str(datetime.now()))
                     self.opt_log.put_metadata(opt_id, "End Condition", message)
-                    self.graveyard.add(opt_id)
+                    self._graveyard.add(opt_id)
                     self.conv_counter += 1
                 elif key == 9:
                     self.opt_log.put_message(opt_id, message)
@@ -1272,15 +1461,15 @@ class GloMPOManager:
             strange behaviour such as crashes or non-responsive behaviour.
         """
 
-        for opt_id, pack in self.optimizer_packs.items():
+        for opt_id, pack in self._optimizer_packs.items():
 
             # Find dead optimizer processes that did not properly signal their termination.
-            if opt_id not in self.graveyard and not pack.process.is_alive():
+            if opt_id not in self._graveyard and not pack.process.is_alive():
                 exitcode = pack.process.exitcode
                 if exitcode == 0:
                     if not self._check_signals(opt_id):
                         self.conv_counter += 1
-                        self.graveyard.add(opt_id)
+                        self._graveyard.add(opt_id)
                         self.opt_log.put_message(opt_id, "Terminated normally without sending a minimization "
                                                          "complete signal to the manager.")
                         warnings.warn(f"Optimizer {opt_id} terminated normally without sending a "
@@ -1290,7 +1479,7 @@ class GloMPOManager:
                         self.opt_log.put_metadata(opt_id, "Approximate Stop Time", str(datetime.now()))
                         self.opt_log.put_metadata(opt_id, "End Condition", "Normal termination (Reason unknown)")
                 else:
-                    self.graveyard.add(opt_id)
+                    self._graveyard.add(opt_id)
                     self.opt_log.put_message(opt_id, f"Terminated in error with code {-exitcode}")
                     warnings.warn(f"Optimizer {opt_id} terminated in error with code {-exitcode}",
                                   RuntimeWarning)
@@ -1300,13 +1489,13 @@ class GloMPOManager:
 
             # Find hanging processes
             if pack.process.is_alive() and \
-                    time() - self.last_feedback[opt_id] > self._too_long and \
+                    time() - self._last_feedback[opt_id] > self._too_long and \
                     self.allow_forced_terminations and \
                     opt_id not in self.hunt_victims and \
-                    self._proc_backend:
+                    self.proc_backend:
                 warnings.warn(f"Optimizer {opt_id} seems to be hanging. Forcing termination.", RuntimeWarning)
                 self.logger.error(f"Optimizer {opt_id} seems to be hanging. Forcing termination.")
-                self.graveyard.add(opt_id)
+                self._graveyard.add(opt_id)
                 self.opt_log.put_message(opt_id, "Force terminated due to no feedback timeout.")
                 self.opt_log.put_metadata(opt_id, "Approximate Stop Time", str(datetime.now()))
                 self.opt_log.put_metadata(opt_id, "End Condition", "Forced GloMPO Termination")
@@ -1317,7 +1506,7 @@ class GloMPOManager:
                     self.allow_forced_terminations and \
                     pack.process.is_alive() and \
                     time() - self.hunt_victims[opt_id] > self._too_long and \
-                    self._proc_backend:
+                    self.proc_backend:
                 pack.process.terminate()
                 pack.process.join(3)
                 self.opt_log.put_message(opt_id, "Force terminated due to no feedback after kill signal "
@@ -1332,6 +1521,7 @@ class GloMPOManager:
             If max_results is provided, accept at most this number of results.
             Otherwise will loop until the queue is empty.
         """
+
         results_accepted = 0
         if max_results:
             def condition():
@@ -1348,7 +1538,7 @@ class GloMPOManager:
                 self.logger.debug("Timeout on result queue.")
                 break
 
-            self.last_feedback[res.opt_id] = time()
+            self._last_feedback[res.opt_id] = time()
             self.f_counter += res.i_fcalls
 
             history = self.opt_log.get_history(res.opt_id, "f_call_opt")
@@ -1385,8 +1575,8 @@ class GloMPOManager:
         victims = set()  # IDs of hunt victims
 
         self.logger.debug("Starting hunt")
-        for victim_id in self.optimizer_packs:
-            in_graveyard = victim_id in self.graveyard
+        for victim_id in self._optimizer_packs:
+            in_graveyard = victim_id in self._graveyard
             has_points = len(self.opt_log.get_history(victim_id, "fx")) > 0
             if not in_graveyard and has_points and victim_id != hunter_id:
                 self.logger.debug(f"Optimizer {hunter_id} -> Optimizer {victim_id} hunt started.")
@@ -1398,7 +1588,7 @@ class GloMPOManager:
                                      f"Reason:\n"
                                      f"{reason}")
 
-                    if victim_id not in self.graveyard:
+                    if victim_id not in self._graveyard:
                         self._shutdown_job(victim_id, hunter_id, reason)
                         victims.add(victim_id)
 
@@ -1406,12 +1596,14 @@ class GloMPOManager:
         return victims
 
     def _is_manual_shutdowns(self):
+        """ If a file titled STOP_x is found in the working directory then the manager will shutdown optimizer x. """
+
         stop_files = (x for x in self.working_dir.iterdir() if "STOP_" in x.name)
         for file in stop_files:
             try:
                 _, opt_id = file.name.split('_')
                 opt_id = int(opt_id)
-                if opt_id not in self.graveyard:
+                if opt_id not in self._graveyard:
                     self._shutdown_job(opt_id, None, "User STOP file intervention.")
                     self.logger.info(f"STOP file found for Optimizer {opt_id}")
                     file.unlink()
@@ -1420,6 +1612,10 @@ class GloMPOManager:
                 continue
 
     def _is_manual_checkpoints(self):
+        """ If a file titled CHKPT is found in the working directory then the manager will perform an immediate 
+            unscheduled checkpoint. 
+        """
+
         chkpt_path = self.working_dir / "CHKPT"
         if chkpt_path.exists():
             chkpt_path.unlink()
@@ -1438,10 +1634,11 @@ class GloMPOManager:
 
     def _shutdown_job(self, opt_id: int, hunter_id: Optional[int], reason: str):
         """ Sends a stop signal to optimizer opt_id and updates variables around its termination. """
-        self.hunt_victims[opt_id] = time()
-        self.graveyard.add(opt_id)
 
-        self.optimizer_packs[opt_id].signal_pipe.send(1)
+        self.hunt_victims[opt_id] = time()
+        self._graveyard.add(opt_id)
+
+        self._optimizer_packs[opt_id].signal_pipe.send(1)
         self.logger.debug(f"Termination signal sent to {opt_id}")
 
         self.opt_log.put_metadata(opt_id, "Stop Time", str(datetime.now()))
@@ -1454,6 +1651,8 @@ class GloMPOManager:
             self.scope.update_kill(opt_id)
 
     def _find_best_result(self) -> Result:
+        """ Returns the best results found in the log of results. """
+
         best_fx = np.inf
         best_x = []
         best_origin = None
@@ -1479,10 +1678,12 @@ class GloMPOManager:
         return Result(best_x, best_fx, best_stats, best_origin)
 
     def _stop_all_children(self, crash_reason: Optional[str] = None):
+        """ Shuts down and cleansup all active children """
+
         # Attempt to send shutdown signals
         try:
             message = (1, "GloMPO Crash") if crash_reason else 1
-            [pack.signal_pipe.send(message) for _, pack in self.optimizer_packs.items() if pack.process.is_alive()]
+            [pack.signal_pipe.send(message) for _, pack in self._optimizer_packs.items() if pack.process.is_alive()]
         except Exception as e:
             self.logger.debug("Pipe messaging failed during cleanup.", exc_info=e)
 
@@ -1494,13 +1695,13 @@ class GloMPOManager:
             # Queue may not be accessible in a crash
             self.logger.debug("Queue purge failed.", exc_info=e)
 
-        for opt_id, pack in self.optimizer_packs.items():
+        for opt_id, pack in self._optimizer_packs.items():
             # Add stop condition to logs without overwriting existing ones
             try:
                 self.opt_log.get_metadata(opt_id, "End Condition")
                 self.opt_log.get_metadata(opt_id, "Stop Time")
             except KeyError:
-                self.graveyard.add(opt_id)
+                self._graveyard.add(opt_id)
                 self.opt_log.put_metadata(opt_id, "Stop Time", str(datetime.now()))
                 self.opt_log.put_metadata(opt_id, "End Condition",
                                           crash_reason if crash_reason else "GloMPO Convergence")
@@ -1508,7 +1709,7 @@ class GloMPOManager:
             if pack.process.is_alive():
                 pack.process.join(timeout=self.end_timeout if not crash_reason else 0.1)
                 if pack.process.is_alive():
-                    if self._proc_backend:
+                    if self.proc_backend:
                         self.logger.info(f"Termination signal sent to optimizer {opt_id}")
                         pack.process.terminate()
                     else:
@@ -1517,6 +1718,8 @@ class GloMPOManager:
 
     def _save_log(self, result: Result, reason: str, caught_exception: Optional[str], dump_dir: Path,
                   summary_files: int):
+        """ Saves the manager's state and history into the collection of files requested by summary_files. """
+
         if summary_files > 0:
             if caught_exception:
                 reason = f"Process Crash: {caught_exception}"
@@ -1585,7 +1788,7 @@ class GloMPOManager:
 
             t_total = str(
                 timedelta(seconds=sum([(t - t0).total_seconds() for t0, t in zip(self.dt_starts, self.dt_ends)])))
-            t_session = str(timedelta(seconds=time() - self.t_start)) if self.t_start else None
+            t_session = str(timedelta(seconds=self.t_end - self.t_start)) if self.t_start else None
             t_periods = [{"Start": str(t0), "End": str(t)} for t0, t in zip(self.dt_starts, self.dt_ends)]
             data = {
                 "Assignment": {
@@ -1616,7 +1819,7 @@ class GloMPOManager:
 
             if self.checkpoint_control:
                 data["Checkpointing"] = {"Directory": str(self.checkpoint_control.checkpointing_dir.resolve()),
-                                         "Checkpoints": self.chkpt_history}
+                                         "Checkpoints": list(self.checkpoint_history)}
 
             data["Solution"] = {"fx": result.fx,
                                 "origin": result.origin,
@@ -1664,7 +1867,8 @@ class GloMPOManager:
             0 -> Optimizers off
             1 -> Optimizers on
         """
-        for pack in self.optimizer_packs.values():
+
+        for pack in self._optimizer_packs.values():
             if pack.process.is_alive():
                 if on_off == 1:
                     pack.allow_run_event.set()
