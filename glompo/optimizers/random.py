@@ -48,7 +48,7 @@ class RandomOptimizer(BaseOptimizer):
             fx = function(vector)
             self.logger.debug(f"Function returned fx = {fx}")
 
-            if callbacks():
+            if callbacks and callbacks():
                 self.stop_called = True
 
             if self._results_queue:
