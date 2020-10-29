@@ -492,7 +492,8 @@ class TestCMA:
                                    "Stop command received during function evaluations.",
                                    "Aborted 7 calls."]
 
-    def test_save(self, work_in_tmp, optimizer):
+    def test_save(self, monkeypatch, tmp_path, optimizer):
+        monkeypatch.chdir(tmp_path)
         optimizer.keep_files = True
         optimizer.minimize(function=lambda x: x[0] ** 2 + x[1] ** 2,
                            x0=[1, 1],

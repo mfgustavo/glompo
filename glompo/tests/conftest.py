@@ -1,8 +1,10 @@
-import os
+import inspect
 import shutil
 from pathlib import Path
 
 import pytest
+
+import glompo
 
 
 def pytest_addoption(parser):
@@ -19,17 +21,6 @@ def pytest_runtest_setup(item):
 
 
 @pytest.fixture(scope='function')
-def work_in_tmp(tmp_path):
-    """ Some test require moving into a temporary directory. This creates and moves to a temporary path and returns
-        at the end of the test.
-    """
-    home_dir = Path.cwd()
-    os.chdir(tmp_path)
-    yield tmp_path
-    os.chdir(home_dir)
-
-
-@pytest.fixture(scope='function')
 def save_outputs(request, pytestconfig):
     """ Fixture which will save contents of a test's tmp_path to tests/_saved_outputs"""
     yield
@@ -38,3 +29,9 @@ def save_outputs(request, pytestconfig):
         src_path = request.getfixturevalue('tmp_path')
         shutil.rmtree(dest_path, ignore_errors=True)
         shutil.copytree(src_path, dest_path)
+
+
+@pytest.fixture(scope='session')
+def input_files():
+    inputs_path = Path(inspect.getabsfile(glompo.tests)).parent / '_test_inputs'
+    yield inputs_path

@@ -1,7 +1,6 @@
 import inspect
 import pickle
 import shutil
-import tempfile
 from pathlib import Path
 from typing import Dict
 
@@ -23,10 +22,7 @@ try:
 except (ModuleNotFoundError, ImportError):
     HAS_PARAMS = False
 
-import glompo.tests
 from glompo.interfaces.params import _FunctionWrapper, ReaxFFError
-
-INPUT_FILE_PATH = Path(inspect.getabsfile(glompo.tests)).parent / '_test_inputs'
 
 
 class FakeLossEvaluator(_LossEvaluator):
@@ -91,27 +87,26 @@ class TestReaxFFError:
     built_tasks: Dict[str, ReaxFFError] = {}
 
     @pytest.fixture(scope='class')
-    def check_result(self):
-        with (INPUT_FILE_PATH / 'check_result.pkl').open('rb') as file:
+    def check_result(self, input_files):
+        with (input_files / 'check_result.pkl').open('rb') as file:
             result = pickle.load(file)
         return result
 
     @pytest.mark.parametrize("name, factory", [('classic', ReaxFFError.from_classic_files),
                                                ('params_pkl', ReaxFFError.from_params_files),
                                                ('params_yml', ReaxFFError.from_params_files)])
-    def test_load(self, name, factory):
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            if 'params' in name:
-                suffix = name.split('_')[1]
-                for file in ('data_set.' + suffix, 'job_collection.' + suffix, 'reax_params.pkl'):
-                    shutil.copy(INPUT_FILE_PATH / file, Path(tmp_dir, file))
-                    if file != 'reax_params.pkl':
-                        with pytest.raises(FileNotFoundError):
-                            factory(tmp_dir)
-            else:
-                for file in ('control', 'ffield_bool', 'ffield_max', 'ffield_min', 'ffield_init', 'geo', 'trainset.in'):
-                    shutil.copy(INPUT_FILE_PATH / file, Path(tmp_dir, file))
-            task = factory(tmp_dir)
+    def test_load(self, name, factory, input_files, tmp_path):
+        if 'params' in name:
+            suffix = name.split('_')[1]
+            for file in ('data_set.' + suffix, 'job_collection.' + suffix, 'reax_params.pkl'):
+                shutil.copy(input_files / file, tmp_path / file)
+                if file != 'reax_params.pkl':
+                    with pytest.raises(FileNotFoundError):
+                        factory(tmp_path)
+        else:
+            for file in ('control', 'ffield_bool', 'ffield_max', 'ffield_min', 'ffield_init', 'geo', 'trainset.in'):
+                shutil.copy(input_files / file, tmp_path / file)
+        task = factory(tmp_path)
 
         assert isinstance(task.dat_set, DataSet)
         assert isinstance(task.job_col, JobCollection)
@@ -123,17 +118,16 @@ class TestReaxFFError:
         self.built_tasks[name] = task
 
     @pytest.mark.parametrize("method, suffix", [('save', 'yml'), ('checkpoint_save', 'pkl')])
-    def test_save(self, method, suffix):
+    def test_save(self, method, suffix, tmp_path):
         if len(self.built_tasks) == 0:
             pytest.xfail("No tasks constructed successfully")
 
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            task = self.built_tasks[[*self.built_tasks.keys()][0]]
-            getattr(task, method)(tmp_dir)
+        task = self.built_tasks[[*self.built_tasks.keys()][0]]
+        getattr(task, method)(tmp_path)
 
-            for file in ('data_set.' + suffix, 'job_collection.' + suffix,
-                         'reax_params.pkl' if suffix == 'pkl' else 'ffield'):
-                assert Path(tmp_dir, file).exists()
+        for file in ('data_set.' + suffix, 'job_collection.' + suffix,
+                     'reax_params.pkl' if suffix == 'pkl' else 'ffield'):
+            assert Path(tmp_path, file).exists()
 
     @pytest.mark.parametrize("name", ['classic', 'params_pkl', 'params_yml'])
     def test_calculate(self, name, check_result):
@@ -142,7 +136,7 @@ class TestReaxFFError:
 
         # TODO Remove when AMS bug is fixed
         if name == 'params_yml':
-            pytest.xfail("Know AMS bug causes this to fail.")
+            pytest.xfail("Known AMS bug causes this to fail.")
 
         task = self.built_tasks[name]
         fx, resids, cont = check_result

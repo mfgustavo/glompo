@@ -1,5 +1,6 @@
 import logging
 import multiprocessing as mp
+import tarfile
 from pathlib import Path
 from time import sleep, time
 from typing import Any, Callable, Dict, Sequence, Tuple, Type, Union
@@ -7,6 +8,8 @@ from typing import Any, Callable, Dict, Sequence, Tuple, Type, Union
 import numpy as np
 import pytest
 import yaml
+
+from glompo.common.helpers import CheckpointingError
 from glompo.common.namedtuples import IterationResult, ProcessPackage, Result
 from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxFuncCalls, MaxOptsStarted, MaxSeconds
 from glompo.core._backends import CustomThread
@@ -18,6 +21,8 @@ from glompo.hunters import BaseHunter, MinIterations
 from glompo.opt_selectors import BaseSelector, CycleSelector, IterSpawnStop
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from glompo.optimizers.random import RandomOptimizer
+
+""" Helper Classes """
 
 
 class DummySelector(BaseSelector):
@@ -170,42 +175,85 @@ class TrueChecker(BaseChecker):
         return True
 
 
+class LogBlocker:
+    """ Pytest automatically captures logs. This makes GloMPO checkpointing since the loggers cannot be pickled within
+        a pytest run. LogBlocker replaces traditional Python Loggers with a blank object allowing checkoints.
+    """
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def __call__(self, *args, **kwargs):
+        pass
+
+    def debug(self, *args, **kwargs):
+        pass
+
+    def info(self, *args, **kwargs):
+        pass
+
+    def warning(self, *args, **kwargs):
+        pass
+
+    def error(self, *args, **kwargs):
+        pass
+
+    def critical(self, *args, **kwargs):
+        pass
+
+    def addHandler(self, *args, **kwrags):
+        pass
+
+    def removeHandler(self, *args, **kwargs):
+        pass
+
+
+""" Module Fixtures """
+
+
+@pytest.fixture()
+def manager():
+    return GloMPOManager()
+
+
+@pytest.fixture(scope='function')
+def mask_psutil():
+    import glompo.core.manager
+    original = glompo.core.manager.HAS_PSUTIL
+    glompo.core.manager.HAS_PSUTIL = False
+    yield
+    glompo.core.manager.HAS_PSUTIL = original
+
+
+@pytest.fixture(scope='function')
+def mask_dill():
+    import glompo.core.manager
+    original = glompo.core.manager.HAS_DILL
+    glompo.core.manager.HAS_DILL = False
+    yield
+    glompo.core.manager.HAS_DILL = original
+
+
+@pytest.fixture(scope='function')
+def hanging_process():
+    def child_process(*args, **kwargs):
+        while True:
+            pass
+
+    process = mp.Process(target=child_process)
+    process.start()
+
+    yield process
+
+    if process.is_alive():
+        process.terminate()
+    process.join()
+
+
+""" Module Tests"""
+
+
 class TestManager:
-
-    @pytest.fixture()
-    def manager(self):
-        return GloMPOManager()
-
-    @pytest.fixture(scope='function')
-    def mask_psutil(self):
-        import glompo.core.manager
-        original = glompo.core.manager.HAS_PSUTIL
-        glompo.core.manager.HAS_PSUTIL = False
-        yield
-        glompo.core.manager.HAS_PSUTIL = original
-
-    @pytest.fixture(scope='function')
-    def mask_dill(self):
-        import glompo.core.manager
-        original = glompo.core.manager.HAS_DILL
-        glompo.core.manager.HAS_DILL = False
-        yield
-        glompo.core.manager.HAS_DILL = original
-
-    @pytest.fixture(scope='function')
-    def hanging_process(self):
-        def child_process(*args, **kwargs):
-            while True:
-                pass
-
-        process = mp.Process(target=child_process)
-        process.start()
-
-        yield process
-
-        if process.is_alive():
-            process.terminate()
-        process.join()
 
     @pytest.mark.parametrize("kwargs", [{'task': None},
                                         {'opt_selector': {'default': OptimizerTest2}},
@@ -259,13 +307,13 @@ class TestManager:
                                         {'convergence_checker': KillsAfterConvergence()},
                                         {'max_jobs': 3},
                                         {'killing_conditions': MinIterations(10)}])
-    def test_init(self, kwargs, manager):
+    def test_init(self, kwargs):
         kwargs = {**{'task': lambda x, y: x + y,
                      'opt_selector': DummySelector([OptimizerTest1]),
                      'bounds': ((0, 1), (0, 1)),
                      'overwrite_existing': True},
                   **kwargs}
-        manager.setup(**kwargs)
+        manager = GloMPOManager.new_manager(**kwargs)
         assert manager.is_initialised
 
     @pytest.mark.parametrize("summary_files", [0, -5, 10, 23.56, 2.3])
@@ -295,6 +343,10 @@ class TestManager:
         with pytest.warns(UserWarning, match="Manager already initialised, cannot reinitialise. Aborting"):
             init(manager, **kwargs)
 
+    def test_not_init(self, manager):
+        with pytest.warns(UserWarning, match="Cannot start manager, initialise manager first with setup or"):
+            manager.start_manager()
+
     def test_overwrite(self, tmp_path, manager, mask_psutil):
         for folder in ("cmadata", "glompo_optimizer_logs", "glompo_optimizer_printstreams"):
             (tmp_path / folder).mkdir(parents=True, exist_ok=True)
@@ -306,8 +358,7 @@ class TestManager:
                       convergence_checker=TrueChecker(), overwrite_existing=True, summary_files=0,
                       split_printstreams=False, visualisation=False)
 
-        manager.result = Result(None, None, {}, {})
-        manager.start_manager()
+        manager._purge_old_results()
 
         assert [*tmp_path.iterdir()] == [tmp_path / "cmadata"]
 
@@ -320,7 +371,7 @@ class TestManager:
                 return True
 
         def mock_start_job(opt_id, optimizer, call_kwargs, pipe, event, workers):
-            manager.optimizer_packs[opt_id] = ProcessPackage(FakeProcess(), pipe, event, workers)
+            manager._optimizer_packs[opt_id] = ProcessPackage(FakeProcess(), pipe, event, workers)
 
         manager.setup(task=lambda x, y: x + y, bounds=((0, 1), (0, 1)),
                       opt_selector=CycleSelector([(OptimizerTest1, {'workers': workers}, None)]),
@@ -330,7 +381,7 @@ class TestManager:
 
         manager._fill_optimizer_slots()
 
-        assert len(manager.optimizer_packs) == int(10 / workers)
+        assert len(manager._optimizer_packs) == int(10 / workers)
 
     @pytest.mark.parametrize("fcalls", [0, 3, 6, 10])
     def test_spawning_stop(self, fcalls, manager, tmp_path):
@@ -412,21 +463,17 @@ class TestManager:
                 assert data['DETAILS']['End Condition'] == "Forced GloMPO Termination"
                 assert "Force terminated due to no feedback timeout." in data['MESSAGES']
 
-    @pytest.mark.parametrize('backend', ['processes', 'threads'])
-    def test_too_long_hangingterm(self, backend, manager, tmp_path, hanging_process, mask_psutil):
-        if backend == 'threads':
-            pytest.xfail("Cannot use force terminations with threading.")
-
+    def test_too_long_hangingterm(self, manager, tmp_path, hanging_process, mask_psutil):
         manager.setup(task=lambda x, y, z: x ** 2 + 3 * y ** 4 - z ** 0.5,
                       bounds=((0, 1), (0, 1), (0, 1)),
                       opt_selector=CycleSelector([HangOnEndOptimizer]), working_dir=tmp_path,
-                      overwrite_existing=True, max_jobs=2, backend=backend,
+                      overwrite_existing=True, max_jobs=2, backend='processes',
                       convergence_checker=MaxOptsStarted(3), killing_conditions=TrueHunter(2),
                       summary_files=3, force_terminations_after=30, split_printstreams=False)
 
-        manager.optimizer_packs[1] = ProcessPackage(hanging_process, None, None, 1)
+        manager._optimizer_packs[1] = ProcessPackage(hanging_process, None, None, 1)
         manager.hunt_victims[1] = time() - 30
-        manager.last_feedback[1] = time() - 30
+        manager._last_feedback[1] = time() - 30
         manager.opt_log.add_optimizer(1, None, time() - 60)
 
         with pytest.warns(RuntimeWarning, match="Forced termination signal sent to optimizer 1."):
@@ -497,8 +544,8 @@ class TestManager:
         assert opt_pack.optimizer._backend == opt_backend
 
         manager._start_new_job(*opt_pack)
-        assert manager.optimizer_packs[1].process.daemon == is_daemon
-        assert type(manager.optimizer_packs[1].process) is opt_type
+        assert manager._optimizer_packs[1].process.daemon == is_daemon
+        assert type(manager._optimizer_packs[1].process) is opt_type
 
     @pytest.mark.parametrize("fx, is_log", [(range(1000, 10), False),
                                             (range(10000, 100), False),
@@ -532,52 +579,9 @@ class TestManager:
 
         assert len(set(gathered)) == 1
 
-    def test_init_checkpoint(self, manager, tmp_path, monkeypatch):
-        class FakeLog(logging.Logger):
-            """ Pytest incompatible with dill dumping Logger instances. This intercepts log creations. """
-
-            def __init__(self, *args, **kwargs):
-                pass
-
-            def __call__(self, *args, **kwargs):
-                pass
-
-            def debug(self, *args, **kwargs):
-                pass
-
-            def info(self, *args, **kwargs):
-                pass
-
-            def warning(self, *args, **kwargs):
-                pass
-
-            def error(self, *args, **kwargs):
-                pass
-
-            def critical(self, *args, **kwargs):
-                pass
-
-            def handlers(self):
-                return []
-
-        monkeypatch.setattr(logging, 'getLogger', FakeLog)
-
-        manager.setup(task=lambda x: x[0] ** 2 + 3 * x[1] ** 4 - x[2] ** 0.5,
-                      bounds=[(-100, 100)] * 3,
-                      opt_selector=CycleSelector([(RandomOptimizer, {'iters': 1000}, None)]),
-                      working_dir=tmp_path,
-                      max_jobs=2,
-                      backend='processes',
-                      convergence_checker=None,
-                      x0_generator=None,
-                      killing_conditions=None,
-                      checkpoint_control=CheckpointingControl(checkpoint_at_init=True, naming_format='chkpt_%(count)'),
-                      visualisation=True)
-        assert (tmp_path / 'chkpt_001.tar.gz').exists()
-
     @pytest.mark.mini
     @pytest.mark.parametrize('backend', ['processes', 'threads'])
-    def test_mwe(self, backend, manager):
+    def test_mwe(self, backend, manager, save_outputs, tmp_path):
         class SteepestGradient(BaseOptimizer):
 
             def __init__(self, max_iters, gamma, precision, opt_id: int = None, signal_pipe=None,
@@ -590,6 +594,7 @@ class TestManager:
                 self.terminate = False
                 self.reason = None
                 self.current_x = None
+                self.result = MinimizeResult()
 
             def minimize(self, function: Callable, x0: Sequence[float], bounds: Sequence[Tuple[float, float]],
                          callbacks: Callable = None, **kwargs) -> MinimizeResult:
@@ -623,24 +628,13 @@ class TestManager:
                         self.reason = "imax condition"
                         break
                 if self._signal_pipe:
-                    self.message_manager(0)
+                    self.message_manager((0, self.reason))
                 print(f"Stopping due to {self.reason}")
-                return next_x, self.reason
+                return self.result
 
             def callstop(self, *args):
                 self.terminate = True
                 self.reason = "manager termination"
-
-            def checkpoint_save(self, *args):
-                with open("steepgrad_savestate.yml" "w+") as file:
-                    data = {"Settings": {"max_iters": self.max_iters,
-                                         "gamma": self.gamma,
-                                         "precision": self.precision},
-                            "Last_x": self.current_x}
-                    yaml.dump(data, file, default_flow_style=False)
-
-            def push_iter_result(self, iters):
-                self._results_queue.put(iters)
 
         # Task
         def f(pt, delay=0.1):
@@ -681,7 +675,7 @@ class TestManager:
                       opt_selector=CycleSelector([(SteepestGradient, {'max_iters': 10000,
                                                                       'precision': 1e-8,
                                                                       'gamma': [100, 100000]}, None)]),
-                      working_dir='mini_test', overwrite_existing=True, max_jobs=3, backend=backend,
+                      working_dir=tmp_path, overwrite_existing=True, max_jobs=3, backend=backend,
                       convergence_checker=KillsAfterConvergence(2, 1) | MaxFuncCalls(10000) | MaxSeconds(
                           session_max=60),
                       x0_generator=IntervalGenerator(), killing_conditions=MinIterations(1000),
@@ -691,3 +685,234 @@ class TestManager:
         assert np.isclose(result.fx, -0.00797884560802864)
         assert result.origin['opt_id'] == 1
         assert result.origin['type'] == 'SteepestGradient'
+
+
+class TestCheckpointing:
+    """ Tests related to checkpointing and resuming GloMPO optimizations. These tests rely on a single shared directory.
+        The first tests produce checkpoints (at init, midway and convergence) and subsequent tests attempt to resume
+        from these.
+    """
+
+    @pytest.fixture(scope='function')
+    def mnkyptch_loggers(self, monkeypatch):
+        monkeypatch.setattr(logging, 'getLogger', LogBlocker)
+
+    def test_init_save(self, manager, tmp_path, mnkyptch_loggers, save_outputs, request):
+        request.config.cache.set('init_checkpoint', None)
+        manager.setup(task=lambda x: x[0] ** 2 + 3 * x[1] ** 4 - x[2] ** 0.5,
+                      bounds=[(0, 100)] * 3,
+                      opt_selector=CycleSelector([(RandomOptimizer, {'iters': 1000}, None)]),
+                      working_dir=tmp_path,
+                      max_jobs=2,
+                      backend='processes',
+                      convergence_checker=None,
+                      x0_generator=None,
+                      killing_conditions=None,
+                      checkpoint_control=CheckpointingControl(checkpoint_at_init=True, naming_format='chkpt_%(count)',
+                                                              checkpointing_dir=tmp_path),
+                      visualisation=True,
+                      visualisation_args={'x_range': 2000})
+        assert (tmp_path / 'chkpt_000.tar.gz').exists()
+        assert not (tmp_path / 'chkpt_000').exists()
+        with tarfile.open(tmp_path / 'chkpt_000.tar.gz', 'r:gz') as tfile:
+            members = tfile.getnames()
+            assert 'task' in members
+            assert 'scope' in members
+            assert 'manager' in members
+            assert 'optimizers' in members
+            assert all(['optimizers/' not in member for member in members])
+        request.config.cache.set('init_checkpoint', str(tmp_path / 'chkpt_000.tar.gz'))
+
+    def test_init_load(self, tmp_path, mnkyptch_loggers, save_outputs, request):
+        checkpoint_path = request.config.cache.get('init_checkpoint', None)
+        if not checkpoint_path or not Path(checkpoint_path).exists():
+            pytest.xfail(reason="Checkpoint not found")
+
+        manager = GloMPOManager()
+        manager.load_checkpoint(path=checkpoint_path,
+                                working_dir=tmp_path,
+                                summary_files=1,
+                                convergence_checker=MaxSeconds(session_max=3),
+                                backend='threads',
+                                force_terminations_after=60,
+                                visualisation_args={'x_range': (0, 4000)})
+
+        assert manager.task([0.2, 4, 6.1]) == 0.2 ** 2 + 3 * 4 ** 4 - 6.1 ** 0.5
+        assert manager.working_dir == tmp_path
+        assert manager.max_jobs == 2
+        assert manager.f_counter == 0
+        assert manager.o_counter == 0
+        assert manager.visualisation
+        assert manager._optimizer_packs == {}
+        assert manager.t_used == 0
+        assert manager.summary_files == 1
+        assert manager.t_start is None
+        assert manager.opt_crashed is False
+        assert manager.last_opt_spawn == (0, 0)
+        assert manager._too_long == 60
+        assert manager.allow_forced_terminations
+        assert manager.visualisation_args == {'x_range': 2000}
+        assert not manager.proc_backend
+
+        with pytest.warns(UserWarning, match="Cannot use force terminations with threading."):
+            manager.start_manager()
+        assert (tmp_path / 'glompo_manager_log.yml').exists()
+
+    @pytest.mark.parametrize('backend', ['processes', 'threads'])
+    def test_mdpt_save(self, manager, tmp_path, mnkyptch_loggers, save_outputs, request, backend):
+        request.config.cache.set('mdpt_checkpoint', None)
+        manager.setup(task=lambda x: x[0] ** 2 + 3 * x[1] ** 4 - x[2] ** 0.5,
+                      bounds=[(0, 100)] * 3,
+                      opt_selector=CycleSelector([(RandomOptimizer, {'iters': 1000}, None)]),
+                      working_dir=tmp_path,
+                      max_jobs=2,
+                      backend=backend,
+                      convergence_checker=MaxSeconds(session_max=3),
+                      x0_generator=None,
+                      killing_conditions=None,
+                      checkpoint_control=CheckpointingControl(checkpoint_time_frequency=2,
+                                                              naming_format='chkpt_%(count)',
+                                                              checkpointing_dir=tmp_path),
+                      visualisation=True,
+                      visualisation_args={'record_movie': True, 'movie_kwargs': {'outfile': tmp_path / 'mv.mp4'}})
+        with pytest.warns(RuntimeWarning, match="Movie saving is not supported"):
+            manager.start_manager()
+
+        assert manager.f_counter > 0
+        assert manager.o_counter > 0
+        assert manager.t_end - manager.t_start - 3 < 1
+        assert manager.result.fx
+
+        assert (tmp_path / 'chkpt_000.tar.gz').exists()
+        assert not (tmp_path / 'chkpt_000').exists()
+        with tarfile.open(tmp_path / 'chkpt_000.tar.gz', 'r:gz') as tfile:
+            members = tfile.getnames()
+            assert 'task' in members
+            assert 'scope' in members
+            assert 'manager' in members
+            assert 'optimizers' in members
+            assert any(['optimizers/' in member for member in members])
+        request.config.cache.set('mdpt_checkpoint', str(tmp_path / 'chkpt_000.tar.gz'))
+
+    @pytest.mark.parametrize('backend', ['processes', 'threads'])
+    def test_mdpt_load(self, tmp_path, mnkyptch_loggers, save_outputs, request, backend):
+        checkpoint_path = request.config.cache.get('mdpt_checkpoint', None)
+        if not checkpoint_path or not Path(checkpoint_path).exists():
+            pytest.xfail(reason="Checkpoint not found")
+
+        manager = GloMPOManager.load_manager(path=checkpoint_path,
+                                             working_dir=tmp_path,
+                                             backend=backend,
+                                             convergence_checker=MaxSeconds(overall_max=5),
+                                             checkpointing_control=None,
+                                             summary_files=1)
+
+        init_f_count = manager.f_counter
+        assert manager.task([0.2, 4, 6.1]) == 0.2 ** 2 + 3 * 4 ** 4 - 6.1 ** 0.5
+        assert manager.working_dir == tmp_path
+        assert manager.max_jobs == 2
+        assert init_f_count > 0
+        assert manager.o_counter == 2
+        assert manager.visualisation
+        assert 2 < manager.t_used < 2.6
+        assert manager.summary_files == 1
+        assert manager.t_start is None
+        assert manager.opt_crashed is False
+        assert manager.last_opt_spawn == (0, 0)
+
+        with pytest.warns(RuntimeWarning, match="Movie saving is not supported"):
+            manager.start_manager()
+        assert (tmp_path / 'glompo_manager_log.yml').exists()
+        assert manager.f_counter > init_f_count
+        assert manager.t_end - manager.t_start - 3 < 1
+
+    def test_conv_save(self, manager, tmp_path, mnkyptch_loggers, save_outputs, request):
+        manager: GloMPOManager
+        request.config.cache.set('conv_checkpoint', None)
+        manager.setup(task=lambda x: x[0] ** 2 + 3 * x[1] ** 4 - x[2] ** 0.5,
+                      bounds=[(0, 100)] * 3,
+                      opt_selector=CycleSelector([(RandomOptimizer, {'iters': 100000}, None)]),
+                      working_dir=tmp_path,
+                      max_jobs=2,
+                      backend='processes',
+                      convergence_checker=MaxSeconds(overall_max=3),
+                      x0_generator=None,
+                      killing_conditions=None,
+                      checkpoint_control=CheckpointingControl(checkpoint_at_conv=True,
+                                                              naming_format='chkpt_%(count)',
+                                                              checkpointing_dir=tmp_path),
+                      visualisation=False,
+                      summary_files=4)
+        manager.start_manager()
+
+        assert manager.f_counter > 0
+        assert manager.o_counter > 0
+        assert manager.t_end - manager.t_start - 3 < 1.1
+        assert manager.result.fx
+
+        assert (tmp_path / 'chkpt_000.tar.gz').exists()
+        assert not (tmp_path / 'chkpt_000').exists()
+        with tarfile.open(tmp_path / 'chkpt_000.tar.gz', 'r:gz') as tfile:
+            members = tfile.getnames()
+            assert 'task' in members
+            assert 'manager' in members
+            assert 'optimizers' in members
+            assert any(['optimizers/' in member for member in members])
+        request.config.cache.set('conv_checkpoint', str(tmp_path / 'chkpt_000.tar.gz'))
+
+    def test_conv_load(self, tmp_path, mnkyptch_loggers, request):
+        checkpoint_path = request.config.cache.get('conv_checkpoint', None)
+        if not checkpoint_path or not Path(checkpoint_path).exists():
+            pytest.xfail(reason="Checkpoint not found")
+
+        with pytest.warns(RuntimeWarning, match="The convergence criteria already evaluates to True. The manager will "
+                                                "be unable to resume"):
+            manager = GloMPOManager.load_manager(path=checkpoint_path,
+                                                 working_dir=tmp_path,
+                                                 summary_files=1)
+
+        init_f_count = manager.f_counter
+        init_result = manager.result
+        init_dt_starts = manager.dt_starts
+        init_dt_ends = manager.dt_ends
+
+        assert manager.task([0.2, 4, 6.1]) == 0.2 ** 2 + 3 * 4 ** 4 - 6.1 ** 0.5
+        assert manager.working_dir == tmp_path
+        assert manager.max_jobs == 2
+        assert init_f_count > 0
+        assert manager.o_counter == 2
+        assert not manager.visualisation
+        assert 3 < manager.t_used < 3.5
+        assert manager.summary_files == 1
+        assert manager.t_start is None
+        assert manager.opt_crashed is False
+        assert manager.last_opt_spawn == (0, 0)
+
+        with pytest.warns(RuntimeWarning, match="Convergence conditions met before optimizer start"):
+            manager.start_manager()
+        assert manager.f_counter == init_f_count
+        assert manager.result == init_result
+        assert manager.dt_starts == init_dt_starts
+        assert manager.dt_ends == init_dt_ends
+
+    def test_load_taskloader(self, manager, input_files, caplog):
+        caplog.set_level(logging.INFO, logger='glompo.manager')
+
+        def mock_taskloader(path):
+            assert isinstance(path, str) or isinstance(path, Path)
+            return lambda x: x[0] + x[1] + x[2]
+
+        manager.load_checkpoint(input_files / 'no_task_chkpt.tar.gz', task_loader=mock_taskloader)
+        assert manager.task([4, 8, 8]) == 20
+        assert "No task detected in checkpoint, task or task_loader required." in caplog.messages
+        assert "Task successfully loaded." in caplog.messages
+
+    def test_load_newtask(self, input_files, manager, caplog):
+        manager.load_checkpoint(input_files / 'no_task_chkpt.tar.gz', task=lambda x: x[0] + x[1] + x[2])
+        assert manager.task([4, 8, 8]) == 20
+        assert "No task detected in checkpoint, task or task_loader required." in caplog.messages
+
+    def test_new_maxjobs(self, input_files, manager):
+        with pytest.raises(CheckpointingError, match="Insufficient max_jobs allowed to restart all optimizers in"):
+            with pytest.warns(UserWarning, match="The maximum number of jobs allowed is less than that demanded by "):
+                manager.load_checkpoint(input_files / 'mock_chkpt.tar.gz', max_jobs=1)
