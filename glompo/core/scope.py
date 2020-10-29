@@ -371,7 +371,8 @@ class GloMPOScope:
         """ Saves the state of the scope, suitable for resumption, during a checkpoint. Path is a directory in which to
             dump the generated files.
         """
-        self._redraw_graph(True)
+        if self.is_setup:
+            self._redraw_graph(True)
 
         dump_variables = {}
         for var in dir(self):
