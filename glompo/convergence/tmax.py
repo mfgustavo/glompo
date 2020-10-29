@@ -32,7 +32,7 @@ class MaxSeconds(BaseChecker):
         self.overall_max = overall_max
 
     def __call__(self, manager: 'GloMPOManager') -> bool:
-        t_total = time() - manager.t_start
+        t_total = time() - manager.t_start if manager.t_start else 0
         cond = self.session_max
 
         if self.overall_max:
