@@ -1,6 +1,7 @@
 import logging
 import multiprocessing as mp
 import tarfile
+from contextlib import contextmanager
 from pathlib import Path
 from time import sleep, time
 from typing import Any, Callable, Dict, Sequence, Tuple, Type, Union
@@ -8,7 +9,6 @@ from typing import Any, Callable, Dict, Sequence, Tuple, Type, Union
 import numpy as np
 import pytest
 import yaml
-
 from glompo.common.helpers import CheckpointingError
 from glompo.common.namedtuples import IterationResult, ProcessPackage, Result
 from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxFuncCalls, MaxOptsStarted, MaxSeconds
@@ -209,6 +209,11 @@ class LogBlocker:
 
 
 """ Module Fixtures """
+
+
+@contextmanager
+def does_not_raise():
+    yield
 
 
 @pytest.fixture()
@@ -579,6 +584,22 @@ class TestManager:
 
         assert len(set(gathered)) == 1
 
+    def test_status_message(self, manager):
+        from glompo.core.manager import HAS_PSUTIL
+        manager.t_start = time()
+        manager.max_job = 10
+        if HAS_PSUTIL:
+            import psutil
+            manager._process = psutil.Process()
+
+        status = manager._build_status_message()
+
+        assert all([header in status for header in ['Time Elapsed', 'Optimizers Alive', 'Slots Filled',
+                                                    'Function Evaluations', 'Current Optimizer f_vals',
+                                                    'Overall f_best:']])
+        if HAS_PSUTIL:
+            assert all([header in status for header in ['CPU Usage', 'Virtual Memory', 'System Load']])
+
     @pytest.mark.mini
     @pytest.mark.parametrize('backend', ['processes', 'threads'])
     def test_mwe(self, backend, manager, save_outputs, tmp_path):
@@ -912,7 +933,90 @@ class TestCheckpointing:
         assert manager.task([4, 8, 8]) == 20
         assert "No task detected in checkpoint, task or task_loader required." in caplog.messages
 
-    def test_new_maxjobs(self, input_files, manager):
-        with pytest.raises(CheckpointingError, match="Insufficient max_jobs allowed to restart all optimizers in"):
-            with pytest.warns(UserWarning, match="The maximum number of jobs allowed is less than that demanded by "):
-                manager.load_checkpoint(input_files / 'mock_chkpt.tar.gz', max_jobs=1)
+    @pytest.mark.parametrize('new_max_jobs, raises', [(1, pytest.raises(CheckpointingError, match="Insufficient max")),
+                                                      (2, does_not_raise())])
+    def test_new_maxjobs(self, input_files, manager, new_max_jobs, raises):
+        with raises:
+            with pytest.warns(UserWarning, match="The maximum number of jobs allowed is less than that demanded"):
+                manager.load_checkpoint(input_files / 'mock_chkpt.tar.gz', max_jobs=new_max_jobs)
+            assert manager._optimizer_packs[1].slots == 1
+            assert manager._optimizer_packs[2].slots == 1
+
+    def test_sync(self):
+        """ Ensure checkpointing syncs optimizers correctly. The five optimizers used in this test represent the five
+            conditions below:
+                Optimizer 1 - Optimizing Normally
+                Optimizer 2 - Dead before checkpoint starts but in optimizer packs
+                Optimizer 3 - Pushed final iteration and messaged it at point is is captured for checkpoint
+                Optimizer 4 - Pushed final iteration and not messaged it at point it is captured for checkpoint
+                Optimizer 5 - Kill during results processing during checkpoint
+        """
+
+        class Optimizer1(BaseOptimizer):
+            """ Designed to be caught at a random point during an optimization run. """
+
+            def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],
+                         bounds: Sequence[Tuple[float, float]], callbacks: Callable = None, **kwargs) -> MinimizeResult:
+                pass
+
+            def callstop(self, *args):
+                pass
+
+        class Optimizer2(BaseOptimizer):
+            """ Process/thread already terminated when manager starts checkpoint but still in its optimizer_packs
+                attribute.
+            """
+
+            def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],
+                         bounds: Sequence[Tuple[float, float]], callbacks: Callable = None, **kwargs) -> MinimizeResult:
+                pass
+
+            def callstop(self, *args):
+                pass
+
+        class Optimizer3(BaseOptimizer):
+            """ Pushed and messaged it final iteration but captured for a checkpoint before it was able to close. """
+
+            def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],
+                         bounds: Sequence[Tuple[float, float]], callbacks: Callable = None, **kwargs) -> MinimizeResult:
+                pass
+
+            def callstop(self, *args):
+                pass
+
+        class Optimizer4(BaseOptimizer):
+            """ Pushed final iteration but not messaged it before capture for checkpoint. """
+
+            def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],
+                         bounds: Sequence[Tuple[float, float]], callbacks: Callable = None, **kwargs) -> MinimizeResult:
+                pass
+
+            def callstop(self, *args):
+                pass
+
+        class Optimizer5(BaseOptimizer):
+            """ Killed by hunt during results processing within checkpoint. """
+
+            def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],
+                         bounds: Sequence[Tuple[float, float]], callbacks: Callable = None, **kwargs) -> MinimizeResult:
+                pass
+
+            def callstop(self, *args):
+                pass
+
+    # def test_make_mock(self, manager, mnkyptch_loggers, input_files):
+    #     manager.setup(task=lambda x: x[0] ** 2 + 3 * x[1] ** 4 - x[2] ** 0.5,
+    #                   bounds=[(0, 100)] * 3,
+    #                   opt_selector=CycleSelector([(RandomOptimizer, {'iters': 1000, 'workers': 2}, None)]),
+    #                   working_dir=input_files,
+    #                   max_jobs=4,
+    #                   backend='processes',
+    #                   convergence_checker=MaxSeconds(session_max=3),
+    #                   x0_generator=None,
+    #                   killing_conditions=None,
+    #                   summary_files=0,
+    #                   checkpoint_control=CheckpointingControl(checkpoint_time_frequency=2,
+    #                                                           naming_format='mock_chkpt.tar.gz',
+    #                                                           checkpointing_dir=input_files),
+    #                   visualisation=False)
+    #     manager.start_manager()
