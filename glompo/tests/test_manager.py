@@ -9,7 +9,6 @@ from typing import Any, Callable, Dict, Sequence, Tuple, Type, Union
 import numpy as np
 import pytest
 import yaml
-
 from glompo.common.helpers import CheckpointingError
 from glompo.common.namedtuples import IterationResult, ProcessPackage, Result
 from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxFuncCalls, MaxOptsStarted, MaxSeconds
@@ -954,12 +953,13 @@ class TestCheckpointing:
                 Optimizer 5 - Kill during results processing during checkpoint
                 Optimizer 6 - Checkpointed with result in cache
         """
-        if backend == 'processes':
-            pytest.xfail()
+
         caplog.set_level(logging.DEBUG, logger='glompo')
 
         class Optimizer1(BaseOptimizer):
-            """ Designed to be caught at a random point during an optimization run. """
+            """ Designed to be caught at a random point during an optimization run.
+                (Must be accepted into checkpoint)
+            """
 
             def __init__(self, **kwargs):
                 super().__init__(**kwargs)
@@ -992,6 +992,7 @@ class TestCheckpointing:
         class Optimizer2(BaseOptimizer):
             """ Process/thread already terminated when manager starts checkpoint but still in its optimizer_packs
                 attribute.
+                (Must NOT be accepted into checkpoint)
             """
 
             def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],
@@ -1004,7 +1005,9 @@ class TestCheckpointing:
                 pass
 
         class Optimizer3(BaseOptimizer):
-            """ Pushed and messaged it final iteration but captured for a checkpoint before it was able to close. """
+            """ Pushed and messaged it final iteration but captured for a checkpoint before it was able to close.
+                (Must NOT be accepted into checkpoint)
+            """
 
             def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],
                          bounds: Sequence[Tuple[float, float]], callbacks: Callable = None, **kwargs) -> MinimizeResult:
@@ -1023,7 +1026,9 @@ class TestCheckpointing:
                 pass
 
         class Optimizer4(BaseOptimizer):
-            """ Pushed final iteration but not messaged it before capture for checkpoint. """
+            """ Pushed final iteration but not messaged it before capture for checkpoint.
+                (Must NOT be accepted into checkpoint)
+            """
 
             def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],
                          bounds: Sequence[Tuple[float, float]], callbacks: Callable = None, **kwargs) -> MinimizeResult:
@@ -1042,22 +1047,27 @@ class TestCheckpointing:
                 pass
 
         class Optimizer5(Optimizer1):
-            """ Killed by hunt during results processing within checkpoint. """
+            """ Killed by hunt during results processing within checkpoint.
+                (Must NOT be accepted into checkpoint)
+            """
 
         class Optimizer6(BaseOptimizer):
-            """ Result in cache (timeout on put) at moment of checkpoint call. """
+            """ Result in cache (timeout on put) at moment of checkpoint call.
+                (Must be accepted into checkpoint)
+            """
 
             def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],
                          bounds: Sequence[Tuple[float, float]], callbacks: Callable = None, **kwargs) -> MinimizeResult:
-                self._result_cache = IterationResult(self._opt_id, 1, 1, np.random.random(10), np.random.random(), True)
+                self._result_cache = IterationResult(self._opt_id, 1, 1, np.random.random(10), np.random.random(),
+                                                     False)
                 self.logger.debug("Cache loaded. Waiting on manager signal")
                 self._signal_pipe.poll(timeout=None)
                 self.check_messages()
+                self.logger.debug("Optimizer exiting.")
 
             def callstop(self, *args):
                 pass
 
-        manager: GloMPOManager
         manager.setup(task=lambda x: sum(x),
                       bounds=[(0, 1)] * 10,
                       opt_selector=CycleSelector(
@@ -1072,12 +1082,35 @@ class TestCheckpointing:
                                                               naming_format='chkpt'),
                       split_printstreams=False)
         manager._fill_optimizer_slots()
-        manager.checkpoint()
+        manager._checkpoint_optimizers(tmp_path)
+        manager._toggle_optimizers(1)
         manager._stop_all_children()
 
-        with tarfile.open(tmp_path / 'chkpt.tar.gz') as tfile:
-            all_members = tfile.getmembers()
-            assert all([f'optimizers/000{i}' in all_members for i in range(1, 7) if i not in (2, 5)])
+        if backend == 'threads':  # pytest cannot capture logs from child processes
+            for opt_id in range(1, 7):
+                if opt_id == 2:
+                    continue
+
+                assert (f'glompo.optimizers.opt{opt_id}', 10, "Preparing for Checkpoint") \
+                       in caplog.record_tuples
+
+                assert (f'glompo.optimizers.opt{opt_id}', 10, "Wait signal messaged to manager, "
+                                                              "waiting for reply...") in caplog.record_tuples
+
+                assert (f'glompo.optimizers.opt{opt_id}', 10, "Instructions processed. "
+                                                              "Pausing until release...") in caplog.record_tuples
+
+                assert (f'glompo.optimizers.opt{opt_id}', 10, "Pause released by manager. "
+                                                              "Checkpointing completed.") in caplog.record_tuples
+
+                if opt_id in {1, 6}:
+                    assert (f'glompo.optimizers.opt{opt_id}', 10, "Executing: checkpoint_save") \
+                           in caplog.record_tuples
+                elif opt_id in {3, 4, 5}:
+                    assert (f'glompo.optimizers.opt{opt_id}', 10, "Executing: _checkpoint_pass") \
+                           in caplog.record_tuples
+
+        assert [(tmp_path / f'optimizers/000{i}').exists() for i in range(1, 7)] == [True, *[False] * 4, True]
 
     # def test_make_mock_chkpt(self, manager, mnkyptch_loggers, input_files):
     #     manager.setup(task=lambda x: x[0] ** 2 + 3 * x[1] ** 4 - x[2] ** 0.5,

@@ -121,7 +121,8 @@ class BaseOptimizer(ABC):
 
         self._FROM_MANAGER_SIGNAL_DICT = {0: self.checkpoint_save,
                                           1: self.callstop,
-                                          2: self._prepare_checkpoint}
+                                          2: self._prepare_checkpoint,
+                                          3: self._checkpoint_pass}
         self._TO_MANAGER_SIGNAL_DICT = {0: "Normal Termination",
                                         1: "Confirm Pause",
                                         9: "Other Message (Saved to Log)"}
@@ -256,6 +257,11 @@ class BaseOptimizer(ABC):
 
         self.logger.info("Restart file created successfully.")
 
+    def _checkpoint_pass(self):
+        """ Empty method. Allows optimizers captured by checkpoint to pass out without saving.
+            Should not be overwritten.
+        """
+
     def _prepare_checkpoint(self):
         """ Process to pause, synchronize and save optimizers. Should not be overwritten. """
         self.logger.debug("Preparing for Checkpoint")
@@ -270,16 +276,8 @@ class BaseOptimizer(ABC):
 
         self._signal_pipe.poll(timeout=None)  # Wait on instruction to save or end
         self.logger.debug("Instruction received. Executing...")
-        signal = tuple(self._signal_pipe.recv())
-        key = signal[0]
-        message = signal[1:] if len(signal) > 1 else ()
-        execute = self._FROM_MANAGER_SIGNAL_DICT[key]
-
-        if execute is self.checkpoint_save:
-            self.checkpoint_save(*message)
-            self.logger.debug("Instructions processed. Pausing until release...")
-            self._pause_signal.clear()  # Wait on pause event, to be released by manager
-            self._pause_signal.wait()
-            self.logger.debug("Pause released by manager. Checkpointing completed.")
-        elif execute is self.callstop:
-            self.logger.debug("Callstop called. Abandoning checkpoint.")
+        self.check_messages()
+        self.logger.debug("Instructions processed. Pausing until release...")
+        self._pause_signal.clear()  # Wait on pause event, to be released by manager
+        self._pause_signal.wait()
+        self.logger.debug("Pause released by manager. Checkpointing completed.")

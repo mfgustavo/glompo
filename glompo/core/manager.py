@@ -45,7 +45,7 @@ from .optimizerlogger import OptimizerLogger
 from ..common.helpers import LiteralWrapper, literal_presenter, nested_string_formatting, \
     unknown_object_presenter, generator_presenter, optimizer_selector_presenter, present_memory, FlowList, \
     flow_presenter, BoundGroup, bound_group_presenter, CheckpointingError, is_bounds_valid
-from ..common.namedtuples import Bound, OptimizerPackage, ProcessPackage, Result, OptimizerCheckpoint
+from ..common.namedtuples import Bound, IterationResult, OptimizerPackage, ProcessPackage, Result, OptimizerCheckpoint
 from ..common.wrappers import process_print_redirect
 from ..convergence import BaseChecker, KillsAfterConvergence
 from ..generators import BaseGenerator, RandomGenerator
@@ -1055,73 +1055,6 @@ class GloMPOManager:
         ovw_path = path.parent / '_overwriting_chkpt.tar.gz'
 
         try:
-            # Pause optimizers
-            wait_reply = set()
-            for opt_id, pack in self._optimizer_packs.items():
-                if pack.process.is_alive():
-                    pack.signal_pipe.send(2)
-                    wait_reply.add(opt_id)
-
-            # Synchronise and wait for replies (end or paused)
-            living = wait_reply.copy()
-            while wait_reply:
-                n_alive = len(living)
-                if self.optimizer_queue.full():
-                    self._process_results(n_alive)  # Free space on queue to make sure none are blocking
-                self.logger.debug(f"Blocking, {n_alive - len(wait_reply)}/{n_alive} optimizers synced. "
-                                  f"Waiting on {wait_reply}.")
-                for opt_id in wait_reply.copy():
-                    pack = self._optimizer_packs[opt_id]
-                    if pack.process.is_alive():
-                        if pack.signal_pipe.poll(0.1):
-                            key, message = pack.signal_pipe.recv()
-                            self.logger.debug(f"Received {key, message} from {opt_id}")
-                            if key == 0:
-                                self.opt_log.put_metadata(opt_id, "Stop Time", str(datetime.now()))
-                                self.opt_log.put_metadata(opt_id, "End Condition", message)
-                                self._graveyard.add(opt_id)
-                                self.conv_counter += 1
-                            elif key == 1:
-                                if self.visualisation:
-                                    self.scope.update_pause(opt_id)
-                                wait_reply.remove(opt_id)
-                            else:
-                                raise RuntimeError(f"Unhandled message: {message}")
-                    else:
-                        self.logger.debug(f"Opt {opt_id} dead, removing from wait list")
-                        wait_reply.remove(opt_id)
-                        living.remove(opt_id)
-            self.logger.info("Optimizers paused and synced.")
-
-            # Process outstanding results and hunts
-            self._process_results()
-            self.logger.info(f"Outstanding results processed")
-
-            assert self.optimizer_queue.empty()
-
-            # Send checkpoint_save signals
-            (path / 'optimizers').mkdir()
-            for opt_id in living:
-                if self.visualisation:
-                    self.scope.update_checkpoint(opt_id)
-                pack = self._optimizer_packs[opt_id]
-                if pack.process.is_alive():
-                    pack.signal_pipe.send((0, (path / 'optimizers' / f'{opt_id:04}').absolute()))
-
-            # Wait for all checkpoint_save to complete
-            wait_reply = living.copy()
-            while wait_reply:
-                for opt_id in wait_reply.copy():
-                    if not self._optimizer_packs[opt_id].allow_run_event.is_set():
-                        wait_reply.remove(opt_id)
-
-            # Confirm all restart files are found
-            living_names = {f'{opt_id:04}' for opt_id in living}
-            for lv in living_names:
-                if not (path / 'optimizers' / lv).exists():
-                    raise CheckpointingError(f"Unable to identify restart file/folder for optimizer {lv}")
-            self.logger.info("All optimizer restart files detected.")
-
             # Save timestamp and checkpoint name
             if len(self.dt_starts) > 0:
                 if len(self.dt_starts) == len(self.dt_ends):
@@ -1130,53 +1063,9 @@ class GloMPOManager:
                     self.dt_ends.append(datetime.now())
             self.checkpoint_history.add(str(path.resolve().with_suffix('.tar.gz')))
 
-            # Select variables for pickling
-            pickle_vars = {}
-            for var in dir(self):
-                val = getattr(self, var)
-                if not (callable(getattr(self, var)) and hasattr(val, '__self__')) and \
-                        '__' not in var and \
-                        not any([var == no_pickle for no_pickle in ('logger', '_process', '_mp_manager',
-                                                                    '_optimizer_packs', 'scope', 'task',
-                                                                    'optimizer_queue', 'is_initialised',
-                                                                    'queue_monitor_arrest', 'queue_monitor_end',
-                                                                    'queue_monitor_thread')]):
-                    if dill.pickles(val):
-                        pickle_vars[var] = val
-                    else:
-                        raise CheckpointingError(f"Cannot pickle {var}.")
-
-            with (path / 'manager').open('wb') as file:
-                try:
-                    dill.dump(pickle_vars, file)
-                except PickleError:
-                    raise CheckpointingError(f"Could not pickle manager.")
-            self.logger.debug("Manager successfully pickled")
-
-            # Save task
-            task_persisted = False
-
-            if not self.checkpoint_control.force_task_save:
-                try:
-                    with (path / 'task').open('wb') as file:
-                        dill.dump(self.task, file)
-                    self.logger.info("Task successfully pickled")
-                    task_persisted = True
-                except PickleError as pckl_err:
-                    self.logger.info(f"Pickle task failed: {pckl_err}. Attempting task.checkpoint_save()")
-                    (path / 'task').unlink()
-
-            if not task_persisted:
-                try:
-                    # noinspection PyUnresolvedReferences
-                    self.task.checkpoint_save('')
-                    self.logger.info("Task successfully saved")
-                except AttributeError:
-                    self.logger.info(f"task.checkpoint_save not found.")
-                    self.logger.warning("Checkpointing without task.")
-                except Exception as e:
-                    self.logger.warning("Task saving failed", exc_info=e)
-                    self.logger.warning("Checkpointing without task.")
+            self._checkpoint_optimizers(path)
+            self._checkpoint_manager(path)
+            self._checkpoint_task(path)
 
             # Save scope
             if self.visualisation and self.scope:
@@ -1218,6 +1107,7 @@ class GloMPOManager:
 
         except CheckpointingError as e:
             caught_exception = "".join(traceback.TracebackException.from_exception(e).format())
+            self.checkpoint_history.remove(str(path.resolve().with_suffix('.tar.gz')))
 
             if self.checkpoint_control.raise_checkpoint_fail:
                 self.logger.error(f"Checkpointing failed: {caught_exception}")
@@ -1256,6 +1146,8 @@ class GloMPOManager:
         else:
             dump_dir = self.working_dir
         self._save_log(self.result, "Manual Save State", None, dump_dir, summary_files)
+
+    """ Management Sub-Tasks """
 
     def _fill_optimizer_slots(self):
         """ Starts new optimizers if there are slots available. """
@@ -1461,16 +1353,21 @@ class GloMPOManager:
                 warnings.warn(f"Forced termination signal sent to optimizer {opt_id}.", RuntimeWarning)
                 self.logger.error(f"Forced termination signal sent to optimizer {opt_id}.")
 
-    def _process_results(self, max_results: Optional[int] = None):
+    def _process_results(self, max_results: Optional[int] = None) -> Tuple[List[IterationResult], Set[int]]:
         """ Retrieve results from the queue and process them into the opt_log.
             If max_results is provided, accept at most this number of results.
             Otherwise will loop until the queue is empty.
+
+            Returns a tuple of:
+                - a list of accepted results
+                - a list of hunt victims.
         """
 
-        results_accepted = 0
+        results_accepted = []
+        victims = set()
         if max_results:
             def condition():
-                return results_accepted < max_results
+                return len(results_accepted) < max_results
         else:
             def condition():
                 return not self.optimizer_queue.empty()
@@ -1478,7 +1375,7 @@ class GloMPOManager:
         while condition():
             try:
                 res = self.optimizer_queue.get(block=True, timeout=1)
-                results_accepted += 1
+                results_accepted.append(res)
             except queue.Empty:
                 self.logger.debug("Timeout on result queue.")
                 break
@@ -1508,7 +1405,9 @@ class GloMPOManager:
                     best_id = self.result.origin['opt_id']
 
                 if best_id > 0 and self.killing_conditions and self.f_counter - self.last_hunt >= self.hunt_frequency:
-                    self._start_hunt(best_id)
+                    [victims.add(vic) for vic in self._start_hunt(best_id)]
+
+        return results_accepted, victims
 
     def _start_hunt(self, hunter_id: int) -> Set[int]:
         """ Creates a new hunt with the provided hunter_id as the 'best' optimizer looking to terminate
@@ -1806,6 +1705,147 @@ class GloMPOManager:
             if summary_files == 5:
                 self.logger.debug("Saving optimizer parameter trials.")
                 self.opt_log.plot_optimizer_trials(dump_dir)
+
+    """ Checkpointing Sub-Tasks """
+
+    def _checkpoint_optimizers(self, path: Union[str, Path]):
+        """ Checkpointing sub-task. Gathers, synchronises and saves child optimizers. """
+
+        # Pause optimizers
+        messaged = set()
+        for opt_id, pack in self._optimizer_packs.items():
+            if pack.process.is_alive():
+                pack.signal_pipe.send(2)
+                messaged.add(opt_id)
+
+        # Synchronise and wait for replies (end or paused)
+        not_chkpt = set()  # Set of messaged opts that should not be checkpointed
+        wait_reply = messaged.copy()
+        living = messaged.copy()
+        n_alive = len(messaged)
+        while wait_reply:
+            self.logger.debug(f"Blocking, {n_alive - len(wait_reply)}/{n_alive} optimizers synced. "
+                              f"Waiting on {wait_reply}.")
+
+            if self.optimizer_queue.full():
+                accepted, victims = self._process_results(n_alive)  # Free space on queue to avoid blocking
+                [not_chkpt.add(res.opt_id) for res in accepted if res.final]
+                [not_chkpt.add(vic) for vic in victims]
+
+            for opt_id in wait_reply.copy():
+                pack = self._optimizer_packs[opt_id]
+                if pack.process.is_alive():
+                    if pack.signal_pipe.poll(0.1):
+                        key, message = pack.signal_pipe.recv()
+                        self.logger.debug(f"Received {key, message} from {opt_id}")
+                        if key == 0:
+                            self.opt_log.put_metadata(opt_id, "Stop Time", str(datetime.now()))
+                            self.opt_log.put_metadata(opt_id, "End Condition", message)
+                            self._graveyard.add(opt_id)
+                            self.conv_counter += 1
+                            not_chkpt.add(opt_id)
+                        elif key == 1:
+                            if self.visualisation:
+                                self.scope.update_pause(opt_id)
+                            wait_reply.remove(opt_id)
+                        else:
+                            raise RuntimeError(f"Unhandled message: {message}")
+                else:
+                    self.logger.debug(f"Opt {opt_id} dead, removing from wait list")
+                    not_chkpt.add(opt_id)
+                    wait_reply.remove(opt_id)
+                    living.remove(opt_id)
+        self.logger.info("Optimizers paused and synced.")
+
+        # Process outstanding results and hunts
+        accepted, victims = self._process_results()
+        [not_chkpt.add(res.opt_id) for res in accepted if res.final]
+        [not_chkpt.add(vic) for vic in victims]
+        self.logger.info(f"Outstanding results processed")
+
+        assert self.optimizer_queue.empty()
+
+        # Send checkpoint_save signals
+        (path / 'optimizers').mkdir()
+        for opt_id in messaged:
+            pack = self._optimizer_packs[opt_id]
+            if pack.process.is_alive():
+                if opt_id not in not_chkpt:
+                    if self.visualisation:
+                        self.scope.update_checkpoint(opt_id)
+                    pack.signal_pipe.send((0, (path / 'optimizers' / f'{opt_id:04}').absolute()))
+                else:
+                    pack.signal_pipe.send(3)  # Causes waiting optimizers will pass and not checkpoint
+
+        # Wait for all checkpoint_save to complete
+        wait_reply = living.copy()
+        while wait_reply:
+            for opt_id in wait_reply.copy():
+                if not self._optimizer_packs[opt_id].allow_run_event.is_set():
+                    wait_reply.remove(opt_id)
+
+        # Confirm all restart files are found
+        living_names = {f'{opt_id:04}' for opt_id in messaged - not_chkpt}
+        for lv in living_names:
+            if not (path / 'optimizers' / lv).exists():
+                raise CheckpointingError(f"Unable to identify restart file/folder for optimizer {lv}")
+        self.logger.info("All optimizer restart files detected.")
+
+    def _checkpoint_manager(self, path: Union[str, Path]):
+        """ Checkpointing sub-task. Pickles essential elements of the manager state. """
+
+        # Select variables for pickling
+        pickle_vars = {}
+        for var in dir(self):
+            val = getattr(self, var)
+            if not (callable(getattr(self, var)) and hasattr(val, '__self__')) and \
+                    '__' not in var and \
+                    not any([var == no_pickle for no_pickle in ('logger', '_process', '_mp_manager',
+                                                                '_optimizer_packs', 'scope', 'task',
+                                                                'optimizer_queue', 'is_initialised',
+                                                                'queue_monitor_arrest', 'queue_monitor_end',
+                                                                'queue_monitor_thread')]):
+                if dill.pickles(val):
+                    pickle_vars[var] = val
+                else:
+                    raise CheckpointingError(f"Cannot pickle {var}.")
+
+        with (path / 'manager').open('wb') as file:
+            try:
+                dill.dump(pickle_vars, file)
+            except PickleError:
+                raise CheckpointingError(f"Could not pickle manager.")
+        self.logger.debug("Manager successfully pickled")
+
+    def _checkpoint_task(self, path: Union[str, Path]):
+        """ Checkpointing sub-task. Identifies procedure to persist minimization task. """
+
+        # Save task
+        task_persisted = False
+
+        if not self.checkpoint_control.force_task_save:
+            try:
+                with (path / 'task').open('wb') as file:
+                    dill.dump(self.task, file)
+                self.logger.info("Task successfully pickled")
+                task_persisted = True
+            except PickleError as pckl_err:
+                self.logger.info(f"Pickle task failed: {pckl_err}. Attempting task.checkpoint_save()")
+                (path / 'task').unlink()
+
+        if not task_persisted:
+            try:
+                # noinspection PyUnresolvedReferences
+                self.task.checkpoint_save('')
+                self.logger.info("Task successfully saved")
+            except AttributeError:
+                self.logger.info(f"task.checkpoint_save not found.")
+                self.logger.warning("Checkpointing without task.")
+            except Exception as e:
+                self.logger.warning("Task saving failed", exc_info=e)
+                self.logger.warning("Checkpointing without task.")
+
+    """ Sundry Auxiliary Methods """
 
     def _toggle_optimizers(self, on_off: int):
         """ Sends pause or resume signals to all optimizers based on the on_off parameter:
