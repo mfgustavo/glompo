@@ -1,9 +1,13 @@
 import inspect
+import os
 import pickle
 import shutil
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Dict
 
+import numpy as np
 import pytest
 
 try:
@@ -147,3 +151,33 @@ class TestReaxFFError:
         assert result[0] == fx
         assert result[1] == resids
         assert all([r == c for r, c in zip(result[2], cont)])
+
+    def test_race(self, monkeypatch, input_files):
+        """ Tests calculate method with multiple calls from multiple threads to ensure there are no race conditions.
+            The actual job collection evaluation is monkeypatched to return back the parameter set.
+        """
+
+        self.built_tasks['classic'] = ReaxFFError.from_classic_files(input_files)
+        lock = threading.Lock()
+
+        def mock_run(engine, *args, **kwargs):
+            with lock:
+                ff_file = engine.input.ReaxFF.ForceField
+                loaded_eng = ReaxParams(ff_file)
+                return loaded_eng.x
+
+        def mock_evaluate(ff_results, *args, **kwargs):
+            return ff_results
+
+        monkeypatch.setattr(self.built_tasks['classic'].job_col, 'run', mock_run)
+        monkeypatch.setattr(self.built_tasks['classic'].dat_set, 'evaluate', mock_evaluate)
+
+        params_orig = np.random.uniform(size=(100, self.built_tasks['classic'].n_parms))
+        with ThreadPoolExecutor(max_workers=np.clip(os.cpu_count(), 2, None)) as executor:
+            params_rtrn = np.array([*executor.map(self.built_tasks['classic']._calculate, params_orig)])
+
+        params_rtrn = np.array([vector[self.built_tasks['classic'].rxf_eng.is_active] for vector in params_rtrn])
+
+        params_orig = np.array([self.built_tasks['classic'].scaler.scaled2real(vector) for vector in params_orig])
+        params_orig = np.round(params_orig, 4)
+        assert np.all(params_orig == params_rtrn)

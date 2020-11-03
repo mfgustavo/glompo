@@ -261,8 +261,7 @@ class ReaxFFError:
     def _calculate(self, x: Sequence[float]) -> Tuple[float, List[float], List[float]]:
         """ Core calculation function, returns both the error function value and the residuals. """
         try:
-            self.rxf_eng.active.x = self.scaler.scaled2real(x)
-            engine = self.rxf_eng.get_engine()
+            engine = self.rxf_eng.get_engine(self.scaler.scaled2real(x))
             ff_results = self.job_col.run(engine.settings, parallel=self.par_levels)
             err_result = self.dat_set.evaluate(ff_results, self.loss, True)
             return err_result
