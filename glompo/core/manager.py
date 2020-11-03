@@ -1068,12 +1068,14 @@ class GloMPOManager:
                 n_alive = len(living)
                 if self.optimizer_queue.full():
                     self._process_results(n_alive)  # Free space on queue to make sure none are blocking
-                self.logger.debug(f"Blocking, {n_alive - len(wait_reply)}/{n_alive} optimizers synced")
+                self.logger.debug(f"Blocking, {n_alive - len(wait_reply)}/{n_alive} optimizers synced. "
+                                  f"Waiting on {wait_reply}.")
                 for opt_id in wait_reply.copy():
                     pack = self._optimizer_packs[opt_id]
                     if pack.process.is_alive():
                         if pack.signal_pipe.poll(0.1):
                             key, message = pack.signal_pipe.recv()
+                            self.logger.debug(f"Received {key, message} from {opt_id}")
                             if key == 0:
                                 self.opt_log.put_metadata(opt_id, "Stop Time", str(datetime.now()))
                                 self.opt_log.put_metadata(opt_id, "End Condition", message)
@@ -1086,6 +1088,7 @@ class GloMPOManager:
                             else:
                                 raise RuntimeError(f"Unhandled message: {message}")
                     else:
+                        self.logger.debug(f"Opt {opt_id} dead, removing from wait list")
                         wait_reply.remove(opt_id)
                         living.remove(opt_id)
             self.logger.info("Optimizers paused and synced.")
@@ -1504,7 +1507,7 @@ class GloMPOManager:
                 if self.result.origin and 'opt_id' in self.result.origin:
                     best_id = self.result.origin['opt_id']
 
-                if best_id > 0 and self.killing_conditions and self.f_counter - self.last_hunt > self.hunt_frequency:
+                if best_id > 0 and self.killing_conditions and self.f_counter - self.last_hunt >= self.hunt_frequency:
                     self._start_hunt(best_id)
 
     def _start_hunt(self, hunter_id: int) -> Set[int]:

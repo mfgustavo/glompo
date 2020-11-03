@@ -210,9 +210,11 @@ class BaseOptimizer(ABC):
         self._result_cache = result
         while self._result_cache:
             try:
+                self.logger.debug("Adding result to queue.")
                 self._results_queue.put(result, block=True, timeout=1)
                 self._result_cache = None
             except Full:
+                self.logger.debug("Queue full. Checking messages.")
                 self.check_messages()
 
     def message_manager(self, key: int, message: Optional[Any] = None):
@@ -262,12 +264,22 @@ class BaseOptimizer(ABC):
             self._results_queue.put(self._result_cache, block=True)
             self.logger.debug(f"Oustanding result (iter={self._result_cache.n_iter}) pushed")
             self._result_cache = None
+
         self.message_manager(1)  # Certify waiting for next instruction
         self.logger.debug("Wait signal messaged to manager, waiting for reply...")
+
         self._signal_pipe.poll(timeout=None)  # Wait on instruction to save or end
         self.logger.debug("Instruction received. Executing...")
-        self.check_messages()
-        self.logger.debug("Instructions processed. Pausing until release...")
-        self._pause_signal.clear()  # Wait on pause event, to be released by manager
-        self._pause_signal.wait()
-        self.logger.debug("Pause released by manager. Checkpointing completed.")
+        signal = tuple(self._signal_pipe.recv())
+        key = signal[0]
+        message = signal[1:] if len(signal) > 1 else ()
+        execute = self._FROM_MANAGER_SIGNAL_DICT[key]
+
+        if execute is self.checkpoint_save:
+            self.checkpoint_save(*message)
+            self.logger.debug("Instructions processed. Pausing until release...")
+            self._pause_signal.clear()  # Wait on pause event, to be released by manager
+            self._pause_signal.wait()
+            self.logger.debug("Pause released by manager. Checkpointing completed.")
+        elif execute is self.callstop:
+            self.logger.debug("Callstop called. Abandoning checkpoint.")

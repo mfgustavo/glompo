@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict, Sequence, Tuple, Type, Union
 import numpy as np
 import pytest
 import yaml
+
 from glompo.common.helpers import CheckpointingError
 from glompo.common.namedtuples import IterationResult, ProcessPackage, Result
 from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxFuncCalls, MaxOptsStarted, MaxSeconds
@@ -17,7 +18,7 @@ from glompo.core.checkpointing import CheckpointingControl
 from glompo.core.manager import GloMPOManager
 from glompo.core.optimizerlogger import OptimizerLogger
 from glompo.generators import BaseGenerator, RandomGenerator
-from glompo.hunters import BaseHunter, MinIterations
+from glompo.hunters import BaseHunter, MinIterations, TypeHunter
 from glompo.opt_selectors import BaseSelector, CycleSelector, IterSpawnStop
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from glompo.optimizers.random import RandomOptimizer
@@ -942,7 +943,8 @@ class TestCheckpointing:
             assert manager._optimizer_packs[1].slots == 1
             assert manager._optimizer_packs[2].slots == 1
 
-    def test_sync(self):
+    @pytest.mark.parametrize('backend', ['threads', 'processes'])
+    def test_sync(self, backend, manager, tmp_path, caplog):
         """ Ensure checkpointing syncs optimizers correctly. The five optimizers used in this test represent the five
             conditions below:
                 Optimizer 1 - Optimizing Normally
@@ -950,17 +952,42 @@ class TestCheckpointing:
                 Optimizer 3 - Pushed final iteration and messaged it at point is is captured for checkpoint
                 Optimizer 4 - Pushed final iteration and not messaged it at point it is captured for checkpoint
                 Optimizer 5 - Kill during results processing during checkpoint
+                Optimizer 6 - Checkpointed with result in cache
         """
+        if backend == 'processes':
+            pytest.xfail()
+        caplog.set_level(logging.DEBUG, logger='glompo')
 
         class Optimizer1(BaseOptimizer):
             """ Designed to be caught at a random point during an optimization run. """
 
+            def __init__(self, **kwargs):
+                super().__init__(**kwargs)
+                self.stop = False
+
             def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],
                          bounds: Sequence[Tuple[float, float]], callbacks: Callable = None, **kwargs) -> MinimizeResult:
-                pass
+                i = 0
+                while not self.stop:
+                    i += 1
+                    if i > 10:
+                        sleep(0.1)
+                    fx = np.random.random() if self._opt_id == 1 else 2
+                    self.push_iter_result(
+                        IterationResult(self._opt_id, i, 1, np.random.random(10), fx, False))
+                    self.logger.debug(f"Pushed Iter {i}")
+                    self.check_messages()
+                    self.logger.debug("Checked messages")
+                self.logger.debug("Exited manager loop")
+                self.message_manager(0)
+                self.logger.debug("Messaged termination")
+                self.push_iter_result(
+                    IterationResult(self._opt_id, i + 1, 1, np.random.random(10), self._opt_id, True))
+                self.logger.debug("Pushed final result. Exiting.")
 
             def callstop(self, *args):
-                pass
+                self.logger.debug("Callstop called.")
+                self.stop = True
 
         class Optimizer2(BaseOptimizer):
             """ Process/thread already terminated when manager starts checkpoint but still in its optimizer_packs
@@ -969,7 +996,9 @@ class TestCheckpointing:
 
             def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],
                          bounds: Sequence[Tuple[float, float]], callbacks: Callable = None, **kwargs) -> MinimizeResult:
-                pass
+                self.logger.debug("Waiting to detect signal.")
+                self._signal_pipe.poll(timeout=None)
+                self.logger.debug("Signal detected, exiting.")
 
             def callstop(self, *args):
                 pass
@@ -979,7 +1008,16 @@ class TestCheckpointing:
 
             def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],
                          bounds: Sequence[Tuple[float, float]], callbacks: Callable = None, **kwargs) -> MinimizeResult:
-                pass
+                self.push_iter_result(
+                    IterationResult(self._opt_id, 1, 1, np.random.random(10), np.random.random(), True))
+                self.logger.debug("Pushed final result")
+                self.message_manager(0)
+                self.logger.debug("Messaged termination")
+                self.logger.debug("Waiting on manager signal")
+                self._signal_pipe.poll(timeout=None)
+                self.logger.debug("Signal detected")
+                self.check_messages()
+                self.logger.debug("Exiting")
 
             def callstop(self, *args):
                 pass
@@ -989,22 +1027,59 @@ class TestCheckpointing:
 
             def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],
                          bounds: Sequence[Tuple[float, float]], callbacks: Callable = None, **kwargs) -> MinimizeResult:
-                pass
+                self.push_iter_result(
+                    IterationResult(self._opt_id, 1, 1, np.random.random(10), np.random.random(), True))
+                self.logger.debug("Pushed final result")
+                self.logger.debug("Waiting on manager signal")
+                self._signal_pipe.poll(timeout=None)
+                self.logger.debug("Signal detected")
+                self.check_messages()
+                self.message_manager(0)
+                self.logger.debug("Messaged termination")
+                self.logger.debug("Exiting")
 
             def callstop(self, *args):
                 pass
 
-        class Optimizer5(BaseOptimizer):
+        class Optimizer5(Optimizer1):
             """ Killed by hunt during results processing within checkpoint. """
+
+        class Optimizer6(BaseOptimizer):
+            """ Result in cache (timeout on put) at moment of checkpoint call. """
 
             def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],
                          bounds: Sequence[Tuple[float, float]], callbacks: Callable = None, **kwargs) -> MinimizeResult:
-                pass
+                self._result_cache = IterationResult(self._opt_id, 1, 1, np.random.random(10), np.random.random(), True)
+                self.logger.debug("Cache loaded. Waiting on manager signal")
+                self._signal_pipe.poll(timeout=None)
+                self.check_messages()
 
             def callstop(self, *args):
                 pass
 
-    # def test_make_mock(self, manager, mnkyptch_loggers, input_files):
+        manager: GloMPOManager
+        manager.setup(task=lambda x: sum(x),
+                      bounds=[(0, 1)] * 10,
+                      opt_selector=CycleSelector(
+                          [Optimizer1, Optimizer2, Optimizer3, Optimizer4, Optimizer5, Optimizer6]),
+                      working_dir=tmp_path,
+                      max_jobs=6,
+                      backend=backend,
+                      killing_conditions=TypeHunter(Optimizer5),
+                      hunt_frequency=1,
+                      checkpoint_control=CheckpointingControl(checkpointing_dir=tmp_path,
+                                                              raise_checkpoint_fail=True,
+                                                              naming_format='chkpt'),
+                      split_printstreams=False)
+        manager._fill_optimizer_slots()
+        manager.checkpoint()
+        manager._stop_all_children()
+
+        with tarfile.open(tmp_path / 'chkpt.tar.gz') as tfile:
+            all_members = tfile.getmembers()
+            assert all([f'optimizers/000{i}' in all_members for i in range(1, 7) if i not in (2, 5)])
+
+    # def test_make_mock_chkpt(self, manager, mnkyptch_loggers, input_files):
     #     manager.setup(task=lambda x: x[0] ** 2 + 3 * x[1] ** 4 - x[2] ** 0.5,
     #                   bounds=[(0, 100)] * 3,
     #                   opt_selector=CycleSelector([(RandomOptimizer, {'iters': 1000, 'workers': 2}, None)]),
