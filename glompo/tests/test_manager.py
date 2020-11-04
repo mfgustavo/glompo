@@ -1,5 +1,6 @@
 import logging
 import multiprocessing as mp
+import shutil
 import tarfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -9,6 +10,7 @@ from typing import Any, Callable, Dict, Sequence, Tuple, Type, Union
 import numpy as np
 import pytest
 import yaml
+
 from glompo.common.helpers import CheckpointingError
 from glompo.common.namedtuples import IterationResult, ProcessPackage, Result
 from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxFuncCalls, MaxOptsStarted, MaxSeconds
@@ -600,6 +602,31 @@ class TestManager:
         if HAS_PSUTIL:
             assert all([header in status for header in ['CPU Usage', 'Virtual Memory', 'System Load']])
 
+    @pytest.mark.parametrize('backend', ['processes', 'threads'])
+    def test_inf_spawn(self, manager, tmp_path, backend, caplog):
+        class CrashingOptimizer(BaseOptimizer):
+            def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],
+                         bounds: Sequence[Tuple[float, float]], callbacks: Callable = None, **kwargs) -> MinimizeResult:
+                raise Exception
+
+            def callstop(self, *args):
+                pass
+
+        manager.setup(task=lambda x: x[0] ** 2 + 3 * x[1] ** 4 - x[2] ** 0.5,
+                      bounds=[(0, 100)] * 3,
+                      opt_selector=CycleSelector([CrashingOptimizer]),
+                      working_dir=tmp_path,
+                      convergence_checker=MaxOptsStarted(10),
+                      max_jobs=3,
+                      backend=backend,
+                      split_printstreams=False)
+        with pytest.raises(RuntimeError, match="Optimizers spawning and crashing immediately."):
+            while True:
+                manager._fill_optimizer_slots()
+                for i, pack in manager._optimizer_packs.items():
+                    if pack.process.is_alive():
+                        manager._check_signals(i)
+
     @pytest.mark.mini
     @pytest.mark.parametrize('backend', ['processes', 'threads'])
     def test_mwe(self, backend, manager, save_outputs, tmp_path):
@@ -720,29 +747,32 @@ class TestCheckpointing:
 
     def test_init_save(self, manager, tmp_path, mnkyptch_loggers, save_outputs, request):
         request.config.cache.set('init_checkpoint', None)
-        manager.setup(task=lambda x: x[0] ** 2 + 3 * x[1] ** 4 - x[2] ** 0.5,
-                      bounds=[(0, 100)] * 3,
-                      opt_selector=CycleSelector([(RandomOptimizer, {'iters': 1000}, None)]),
-                      working_dir=tmp_path,
-                      max_jobs=2,
-                      backend='processes',
-                      convergence_checker=None,
-                      x0_generator=None,
-                      killing_conditions=None,
-                      checkpoint_control=CheckpointingControl(checkpoint_at_init=True, naming_format='chkpt_%(count)',
-                                                              checkpointing_dir=tmp_path),
-                      visualisation=True,
-                      visualisation_args={'x_range': 2000})
-        assert (tmp_path / 'chkpt_000.tar.gz').exists()
-        assert not (tmp_path / 'chkpt_000').exists()
-        with tarfile.open(tmp_path / 'chkpt_000.tar.gz', 'r:gz') as tfile:
+        (tmp_path / 'chkpt.tar.gz').touch()
+        with pytest.warns(UserWarning, match="Overwriting existing checkpoint. To avoid this change the checkpoint"):
+            manager.setup(task=lambda x: x[0] ** 2 + 3 * x[1] ** 4 - x[2] ** 0.5,
+                          bounds=[(0, 100)] * 3,
+                          opt_selector=CycleSelector([(RandomOptimizer, {'iters': 1000}, None)]),
+                          working_dir=tmp_path,
+                          max_jobs=2,
+                          backend='processes',
+                          convergence_checker=None,
+                          x0_generator=None,
+                          killing_conditions=None,
+                          checkpoint_control=CheckpointingControl(checkpoint_at_init=True,
+                                                                  naming_format='chkpt',
+                                                                  checkpointing_dir=tmp_path),
+                          visualisation=True,
+                          visualisation_args={'x_range': 2000})
+        assert (tmp_path / 'chkpt.tar.gz').exists()
+        assert not (tmp_path / 'chkpt').exists()
+        with tarfile.open(tmp_path / 'chkpt.tar.gz', 'r:gz') as tfile:
             members = tfile.getnames()
             assert 'task' in members
             assert 'scope' in members
             assert 'manager' in members
             assert 'optimizers' in members
             assert all(['optimizers/' not in member for member in members])
-        request.config.cache.set('init_checkpoint', str(tmp_path / 'chkpt_000.tar.gz'))
+        request.config.cache.set('init_checkpoint', str(tmp_path / 'chkpt.tar.gz'))
 
     def test_init_load(self, tmp_path, mnkyptch_loggers, save_outputs, request):
         checkpoint_path = request.config.cache.get('init_checkpoint', None)
@@ -847,6 +877,42 @@ class TestCheckpointing:
         assert manager.f_counter > init_f_count
         assert manager.t_end - manager.t_start - 3 < 1
 
+    @pytest.mark.parametrize("delete, raises, warns",
+                             [(['scope'], does_not_raise(), pytest.warns(RuntimeWarning, match="Could not load scope")),
+                              (['manager'], does_not_raise(), pytest.raises(CheckpointingError,
+                                                                            match="Error loading manager. Aborting.")),
+                              (['optimizers/0001'], pytest.warns(RuntimeWarning,
+                                                                 match="Failed to initialise opt"), does_not_raise()),
+                              (['task'], does_not_raise(), pytest.raises(CheckpointingError,
+                                                                         match="Failed to build task")),
+                              (['optimizers/0001', 'optimizers/0002'], pytest.warns(RuntimeWarning,
+                                                                                    match="Failed to initialise opt"),
+                               pytest.raises(CheckpointingError, match="Unable to successfully built"))])
+    def test_err_load(self, manager, tmp_path, delete, request, raises, warns):
+        checkpoint_path = request.config.cache.get('mdpt_checkpoint', None)
+        if not checkpoint_path or not Path(checkpoint_path).exists():
+            pytest.xfail(reason="Checkpoint not found")
+
+        shutil.copy(checkpoint_path, tmp_path)
+        with tarfile.open(tmp_path / 'chkpt_000.tar.gz', 'r:gz') as tfile:
+            tfile.extractall(tmp_path)
+        for file in delete:
+            (tmp_path / file).unlink()
+            (tmp_path / file).touch()
+        (tmp_path / 'chkpt_000.tar.gz').unlink()
+        with tarfile.open(tmp_path / 'chkpt_000.tar.gz', 'x:gz') as tfile:
+            tfile.add(tmp_path, recursive=True, arcname='')
+        for file in tmp_path.iterdir():
+            if file.name == 'chkpt_000.tar.gz':
+                continue
+            elif file.name == 'optimizers':
+                shutil.rmtree(file, ignore_errors=True)
+            else:
+                file.unlink()
+
+        with raises, warns:
+            manager.load_checkpoint(tmp_path / 'chkpt_000.tar.gz')
+
     def test_conv_save(self, manager, tmp_path, mnkyptch_loggers, save_outputs, request):
         manager: GloMPOManager
         request.config.cache.set('conv_checkpoint', None)
@@ -941,6 +1007,40 @@ class TestCheckpointing:
                 manager.load_checkpoint(input_files / 'mock_chkpt.tar.gz', max_jobs=new_max_jobs)
             assert manager._optimizer_packs[1].slots == 1
             assert manager._optimizer_packs[2].slots == 1
+
+    @pytest.mark.parametrize('keep', [-1, 0, 1, 2, 3])
+    def test_delete_other(self, tmp_path, manager, mnkyptch_loggers, keep):
+        for i in range(4):
+            (tmp_path / f'chkpt_00{i}.tar.gz').touch()
+
+        manager.setup(task=lambda x: x[0] ** 2 + 3 * x[1] ** 4 - x[2] ** 0.5,
+                      bounds=[(0, 100)] * 3,
+                      opt_selector=CycleSelector([(RandomOptimizer, {'iters': 1000}, None)]),
+                      working_dir=tmp_path,
+                      checkpoint_control=CheckpointingControl(checkpoint_at_init=True,
+                                                              naming_format='chkpt_%(count)',
+                                                              checkpointing_dir=tmp_path,
+                                                              keep_past=keep))
+
+        if keep == -1:
+            assert all([(tmp_path / f'chkpt_00{i}.tar.gz').exists() for i in range(5)])
+        else:
+            survivors = lambda k: [*[False] * (4 - k), *[True] * (k + 1)]
+            assert [(tmp_path / f'chkpt_00{i}.tar.gz').exists() for i in range(5)] == survivors(keep)
+
+    @pytest.mark.parametrize('raises_bool, raises', [(True, pytest.raises(CheckpointingError,
+                                                                          match="Cannot pickle convergence_checker")),
+                                                     (False, pytest.warns(UserWarning, match="Checkpointing failed"))])
+    def test_chkpt_err(self, manager, tmp_path, raises_bool, raises):
+        with raises:
+            manager.setup(task=lambda x: x[0] ** 2 + 3 * x[1] ** 4 - x[2] ** 0.5,
+                          bounds=[(0, 100)] * 3,
+                          opt_selector=CycleSelector([(RandomOptimizer, {'iters': 1000}, None)]),
+                          working_dir=tmp_path,
+                          checkpoint_control=CheckpointingControl(checkpoint_at_init=True,
+                                                                  naming_format='chkpt_%(count)',
+                                                                  checkpointing_dir=tmp_path,
+                                                                  raise_checkpoint_fail=raises_bool))
 
     @pytest.mark.parametrize('backend', ['threads', 'processes'])
     def test_sync(self, backend, manager, tmp_path, caplog):

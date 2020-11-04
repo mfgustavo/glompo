@@ -689,13 +689,16 @@ class GloMPOManager:
             tfile.extractall(tmp_dir)
 
         # Load manager variables
-        with (tmp_dir / 'manager').open('rb') as file:
-            data = dill.load(file)
-            for var, val in data.items():
-                try:
-                    setattr(self, var, val)
-                except Exception as e:
-                    raise CheckpointingError(f"Could not set {var} attribute correctly", e)
+        try:
+            with (tmp_dir / 'manager').open('rb') as file:
+                data = dill.load(file)
+                for var, val in data.items():
+                    try:
+                        setattr(self, var, val)
+                    except Exception as e:
+                        raise CheckpointingError(f"Could not set {var} attribute correctly", e)
+        except Exception as e:
+            raise CheckpointingError("Error loading manager. Aborting.", e)
 
         # Setup Task
         try:
@@ -760,7 +763,11 @@ class GloMPOManager:
             if (tmp_dir / 'scope').exists():
                 self.logger.info('Scope checkpoint found, extracting')
                 self.scope = GloMPOScope()
-                self.scope.load_state(tmp_dir)
+                try:
+                    self.scope.load_state(tmp_dir)
+                except Exception as e:
+                    warnings.warn("Could not load scope, building fresh.", RuntimeWarning)
+                    self.scope = GloMPOScope(**self.visualisation_args)
             else:
                 self.scope = GloMPOScope(**self.visualisation_args)
 
@@ -851,7 +858,7 @@ class GloMPOManager:
 
             except Exception as e:
                 self.logger.error(f"Failed to initialise optimizer {opt_id}", exc_info=e)
-                warnings.warn(f"Failed to initialise optimizer {opt_id}: {e}")
+                warnings.warn(f"Failed to initialise optimizer {opt_id}: {e}", RuntimeWarning)
 
         if len(self._optimizer_packs) == 0 and len(restarts) > 0:
             raise CheckpointingError("Unable to successfully built any optimizers from the checkpoint.")
@@ -1099,8 +1106,8 @@ class GloMPOManager:
                 self.logger.debug("Finding old checkpoints to delete")
                 files = (file.name for file in self.checkpoint_control.checkpointing_dir.iterdir())
                 to_delete = sorted(filter(self.checkpoint_control.matches_naming_format, files), reverse=True)
-                self.logger.debug(f"Identified to delete: {to_delete[self.checkpoint_control.keep_past + 1:]}")
-                for old in to_delete[self.checkpoint_control.keep_past + 1:]:
+                self.logger.debug(f"Identified to delete: {to_delete[self.checkpoint_control.keep_past + 2:]}")
+                for old in to_delete[self.checkpoint_control.keep_past + 2:]:
                     del_path = self.checkpoint_control.checkpointing_dir / old
                     if del_path.is_file():
                         del_path.unlink()
