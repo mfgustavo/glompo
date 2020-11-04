@@ -19,7 +19,8 @@ class BaseSelector(ABC):
 
     def __init__(self,
                  avail_opts: List[Union[Type[BaseOptimizer],
-                                        Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]]]],
+                                        Tuple[Type[BaseOptimizer],
+                                              Optional[Dict[str, Any]], Optional[Dict[str, Any]]]]],
                  allow_spawn: Optional[Callable[['GloMPOManager'], bool]] = None):
         """ Parameters
             ----------
@@ -67,14 +68,14 @@ class BaseSelector(ABC):
                     assert issubclass(opt, BaseOptimizer)
                     self.avail_opts.append((opt, {'workers': 1}, {}))
 
-            except AssertionError:
+            except AssertionError as e:
                 raise ValueError(f"Cannot parse {item}. Expected:  Union[Type[BaseOptimizer], Tuple[BaseOptimizer, "
-                                 f"Dict[str, Any], Dict[str, Any]]] expected.")
+                                 f"Dict[str, Any], Dict[str, Any]]] expected.") from e
 
         if callable(allow_spawn):
             self.allow_spawn = allow_spawn
         else:
-            self.allow_spawn = lambda x: True
+            self.allow_spawn = _AlwaysSpawn()
 
     @abstractmethod
     def select_optimizer(self,
@@ -125,4 +126,9 @@ class IterSpawnStop:
     def __call__(self, mng: 'GloMPOManager'):
         if mng.f_counter >= self.max_calls:
             return False
+        return True
+
+
+class _AlwaysSpawn:
+    def __call__(self, *args, **kwargs):
         return True

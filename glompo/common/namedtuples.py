@@ -3,13 +3,16 @@
 from multiprocessing import Event, Process
 from multiprocessing.connection import Connection
 from threading import Thread
-from typing import Any, Callable, Dict, NamedTuple, Sequence, Union
+from typing import Any, Callable, Dict, NamedTuple, Sequence, Type, Union
+
+from ..optimizers.baseoptimizer import BaseOptimizer
 
 __all__ = ("Result",
            "Bound",
            "OptimizerPackage",
            "IterationResult",
-           "ProcessPackage")
+           "ProcessPackage",
+           "OptimizerCheckpoint")
 
 
 class Result(NamedTuple):
@@ -51,4 +54,10 @@ class ProcessPackage(NamedTuple):
     process: Union[Process, Thread]
     signal_pipe: Connection
     allow_run_event: Event
+    slots: int
+
+
+class OptimizerCheckpoint(NamedTuple):
+    """ Information needed in the manager about initialized optimizers for checkpoint loading """
+    opt_type: Type[BaseOptimizer]
     slots: int

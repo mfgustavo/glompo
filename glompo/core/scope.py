@@ -1,9 +1,10 @@
 """ Contains the GloMPOScope class which is a useful extension allowing a user to visualize GloMPO's behaviour. """
-
 import logging
 import warnings
+from pathlib import Path
 from typing import Any, Dict, Optional, Set, Tuple, Union
 
+import dill
 import matplotlib.animation as ani
 import matplotlib.lines as lines
 import matplotlib.pyplot as plt
@@ -74,16 +75,17 @@ class GloMPOScope:
             Optional dictionary of arguments to be sent to matplotlib.animation.FFMpegWriter.setup().
         """
         self.logger = logging.getLogger('glompo.scope')
-        self.streams: Dict[int, Dict[str, plt.Axes.plot]] = {}
         self._dead_streams: Set[int] = set()
         self.n_streams = 0
-        self.t_last = 0
         self.x_max = 0
         self.log_scale = log_scale
         self.events_per_flush = events_per_flush
         self.elitism = bool(elitism)
         self._event_counter = 0
         self.color_map = glompo_colors()
+        self.interactive_mode = interactive_mode
+        self.record_movie = record_movie
+        self.is_setup = False
 
         plt.ion() if interactive_mode else plt.ioff()
 
@@ -100,9 +102,18 @@ class GloMPOScope:
         # Create custom legend
         self.leg_elements = [lines.Line2D([], [], ls='-', c='black', label='Optimizer Evaluations'),
                              lines.Line2D([], [], ls='', marker='x', c='black', label='Optimizer Killed'),
-                             lines.Line2D([], [], ls='', marker='*', c='black', label='Optimizer Converged')]
+                             lines.Line2D([], [], ls='', marker='*', c='black', label='Optimizer Converged'),
+                             lines.Line2D([], [], ls='', marker='4', c='black', label='Optimizer Paused'),
+                             lines.Line2D([], [], ls='', marker='|', c='black', label='Checkpoint')]
 
         self.ax.legend(loc='upper right', handles=self.leg_elements, bbox_to_anchor=(1.35, 1))
+
+        self.opt_streams: Dict[int, plt.Axes.plot] = {}
+        self.gen_streams: Dict[str, plt.Axes.plot] = {
+            'opt_kill': self.ax.plot([], [], ls='', marker='x', color='black', zorder=500)[0],
+            'opt_norm': self.ax.plot([], [], ls='', marker='*', color='black', zorder=500)[0],
+            'pause': self.ax.plot([], [], ls='', marker='4', color='black', zorder=500)[0],
+            'chkpt': self.ax.plot([], [], ls='', marker='|', color='black', zorder=500)[0]}
 
         # Setup and shrink axis position to fit legend
         box = self.ax.get_position()
@@ -142,27 +153,27 @@ class GloMPOScope:
             self.close_fig()
             raise TypeError(f"Cannot parse y_range = {y_range}. Only a tuple can be used.")
 
-        self.record_movie = record_movie
-        self.movie_name = None
         if record_movie:
-            try:
-                self._writer = MyFFMpegWriter(**writer_kwargs) if writer_kwargs else MyFFMpegWriter()
-            except TypeError:
-                warnings.warn("Unidentified key in writer_kwargs. Using default values.", UserWarning)
-                self.logger.warning("Unidentified key in writer_kwargs. Using default values.")
-                self._writer = MyFFMpegWriter()
+            self._writer_kwargs = writer_kwargs
+            self._new_writer()
 
             if not movie_kwargs:
                 movie_kwargs = {}
             if 'outfile' not in movie_kwargs:
-                movie_kwargs['outfile'] = 'glomporecording.mp4'
-                self.movie_name = 'glomporecording.mp4'
+                movie_kwargs['outfile'] = Path('glomporecording.mp4')
                 self.logger.info("Saving scope recording as glomporecording.mp4")
-            else:
-                self.movie_name = movie_kwargs['outfile']
             self._movie_kwargs = movie_kwargs
 
         self.logger.debug("Scope initialised successfully")
+
+    def _new_writer(self):
+        """ Constructs a new FFMpegWriter to record a movie """
+        try:
+            self._writer = MyFFMpegWriter(**self._writer_kwargs) if self._writer_kwargs else MyFFMpegWriter()
+        except TypeError:
+            warnings.warn("Unidentified key in writer_kwargs. Using default values.", UserWarning)
+            self.logger.warning("Unidentified key in writer_kwargs. Using default values.")
+            self._writer = MyFFMpegWriter()
 
     def _redraw_graph(self, force=False):
         """ Redraws the figure after new data has been added. Grabs a frame if a movie is being recorded.
@@ -173,23 +184,22 @@ class GloMPOScope:
 
             # Purge old results
             if self.truncated:
-                for opt_id in self.streams:
+                for opt_id, line in self.opt_streams.items():
                     if opt_id not in self._dead_streams:
                         done = []
-                        for line in self.streams[opt_id].values():
-                            x_vals = np.array(line.get_xdata())
-                            y_vals = np.array(line.get_ydata())
+                        x_vals = np.array(line.get_xdata())
+                        y_vals = np.array(line.get_ydata())
 
-                            if len(x_vals) > 0:
-                                min_val = np.clip(self.x_max - self.truncated, 0, None)
+                        if len(x_vals) > 0:
+                            min_val = np.clip(self.x_max - self.truncated, 0, None)
 
-                                bool_arr = x_vals >= min_val
-                                x_vals = x_vals[bool_arr]
-                                y_vals = y_vals[bool_arr]
+                            bool_arr = x_vals >= min_val
+                            x_vals = x_vals[bool_arr]
+                            y_vals = y_vals[bool_arr]
 
-                                line.set_xdata(x_vals)
-                                line.set_ydata(y_vals)
-                            done.append(len(x_vals) == 0)
+                            line.set_xdata(x_vals)
+                            line.set_ydata(y_vals)
+                        done.append(len(x_vals) == 0)
                         if all(done):
                             self._dead_streams.add(opt_id)
                             self.logger.debug(f"Opt{opt_id} identified as out of scope.")
@@ -199,9 +209,13 @@ class GloMPOScope:
             self.fig.canvas.draw()
             self.fig.canvas.flush_events()
             if self.record_movie:
-                self.logger.debug('Grabbing frame')
-                self._writer.grab_frame()
-                self.logger.debug('Frame grabbed')
+                if self.is_setup:
+                    self.logger.debug('Grabbing frame')
+                    self._writer.grab_frame()
+                    self.logger.debug('Frame grabbed')
+                else:
+                    self.logger.error("Cannot record movie without calling setup_moviemaker first.")
+                    raise RuntimeError("Cannot record movie without calling setup_moviemaker first.")
         else:
             self._event_counter += 1
 
@@ -225,7 +239,10 @@ class GloMPOScope:
 
             self.x_max = x if x > self.x_max else self.x_max
 
-            line = self.streams[opt_id][track]
+            if track == 'all_opt':
+                line = self.opt_streams[opt_id]
+            else:
+                line = self.gen_streams[track]
             x_vals = np.append(line.get_xdata(), x)
             y_vals = np.append(line.get_ydata(), y)
 
@@ -235,24 +252,19 @@ class GloMPOScope:
     def add_stream(self, opt_id: int, opt_type: Optional[str] = None):
         """ Registers and sets up a new optimizer in the scope. """
         self.n_streams += 1
-        self.streams[opt_id] = {'all_opt': self.ax.plot([], [])[0],  # Follows every optimizer iteration
-                                'opt_kill': self.ax.plot([], [], ls='', marker='x', zorder=500)[0],  # Killed opt
-                                'opt_norm': self.ax.plot([], [], ls='', marker='*', zorder=500)[0],  # Converged opt
-                                }
 
-        for line in self.streams[opt_id]:
-            color = self.color_map(self.n_streams)
-            if any([line == _ for _ in ['opt_kill', 'opt_norm']]):
-                color = 'black'
-            self.streams[opt_id][line].set_color(color)
+        line_style = '-'
+        marker = '.'
+        color = self.color_map(self.n_streams)
+
+        self.opt_streams[opt_id] = self.ax.plot([], [], ls=line_style, marker=marker, color=color)[0]
 
         if opt_type:
             label = f"{opt_id}: {opt_type}"
         else:
             label = f"Optimizer {opt_id}"
 
-        self.leg_elements.append(lines.Line2D([], [], ls='-', c=self.color_map(self.n_streams),
-                                              label=label))
+        self.leg_elements.append(lines.Line2D([], [], ls=line_style, marker=marker, c=color, label=label))
         self.ax.legend(loc='upper right', handles=self.leg_elements, bbox_to_anchor=(1.35, 1))
         self.logger.debug(f"Added new plot set for optimizer {opt_id}")
 
@@ -260,7 +272,7 @@ class GloMPOScope:
         """ Given pt tuple is used to update the opt_id optimizer plot."""
         x, y = pt
         if self.elitism:
-            y_vals = self.streams[opt_id]['all_opt'].get_ydata()
+            y_vals = self.opt_streams[opt_id].get_ydata()
             if len(y_vals) > 0:
                 last = 10 ** y_vals[-1] if self.log_scale else y_vals[-1]
                 if last < y:
@@ -279,26 +291,57 @@ class GloMPOScope:
         self._update_point(opt_id, 'opt_norm')
         self._redraw_graph()
 
-    def setup_moviemaker(self):
+    def update_pause(self, opt_id: int):
+        """ The opt_id normal optimizer plot is updated at its final point. """
+        self._update_point(opt_id, 'pause')
+        self._redraw_graph()
+
+    def update_checkpoint(self, opt_id: int):
+        """ The opt_id normal optimizer plot is updated at its final point. """
+        self._update_point(opt_id, 'chkpt')
+        self._redraw_graph()
+
+    def setup_moviemaker(self, path: Union[Path, str, None] = None):
         """ Setups up the movie recording framework. Must be called before the scope begins to be filled in order to
-            begin generating movies correctly. Declared outside the init so that it can be called in the
-            appropriate directory by the manager.
+            begin generating movies correctly.
+
+            Parameters
+            ----------
+            path: Optional[Path, str] = None
+                An optional directory into which the movie file will be directed. Will overwrite any 'outfile' argument
+                sent during scope initialisation.
         """
+        if not self.record_movie:
+            warnings.warn("Cannot initialise movie writer. record_movie must be True at initialisation. Aborting.",
+                          UserWarning)
+            self.logger.warning("Cannot initialise movie writer. record_movie must be True at initialisation. "
+                                "Aborting.")
+            return
+
+        old_outfile = self._movie_kwargs['outfile']
+        if path:
+            path = Path(path).with_suffix('.mp4')
+            self._movie_kwargs['outfile'] = path
+
         try:
             self._writer.setup(fig=self.fig, **self._movie_kwargs)
+            self.is_setup = True
         except TypeError:
             warnings.warn("Unidentified key in writer_kwargs. Using default values.", UserWarning)
             self.logger.warning("Unidentified key in writer_kwargs. Using default values.")
-            self._writer.setup(fig=self.fig, outfile='glomporecording.mp4')
+            self._writer.setup(fig=self.fig, outfile=path)
+            self.is_setup = True
+        finally:
+            self._movie_kwargs['outfile'] = old_outfile
 
     def generate_movie(self):
         """ Final call to write the saved frames into a single movie. """
-        self._redraw_graph(True)
         if self.record_movie:
             try:
+                self._redraw_graph(True)
                 self._writer.finish()
             except Exception as e:
-                self.logger.exception("generate_movie failed")
+                self.logger.exception("generate_movie failed", exc_info=e)
                 warnings.warn(f"Exception caught while trying to save movie: {e}", RuntimeWarning)
         else:
             self.logger.error("generate_movie called without initialisation parameter record_movie = False")
@@ -308,8 +351,8 @@ class GloMPOScope:
     def get_farthest_pt(self, opt_id: int) -> Tuple[float, float]:
         """ Returns the furthest evaluated point of the opt_id optimizer. """
         try:
-            x = float(self.streams[opt_id]['all_opt'].get_xdata()[-1])
-            y = float(self.streams[opt_id]['all_opt'].get_ydata()[-1])
+            x = float(self.opt_streams[opt_id].get_xdata()[-1])
+            y = float(self.opt_streams[opt_id].get_ydata()[-1])
         except IndexError:
             return None
 
@@ -320,4 +363,42 @@ class GloMPOScope:
             many figures being open if GloMPO is looped in some way. The manager will explicitly call this method to
             close the matplotlib figure at the end of the optimization routine to stop figures building up in this way.
         """
+        if self.record_movie and self.is_setup:
+            self._writer.cleanup()
         plt.close(self.fig)
+
+    def checkpoint_save(self, path: Union[Path, str] = ''):
+        """ Saves the state of the scope, suitable for resumption, during a checkpoint. Path is a directory in which to
+            dump the generated files.
+        """
+        if self.is_setup:
+            self._redraw_graph(True)
+
+        dump_variables = {}
+        for var in dir(self):
+            if '__' not in var and not callable(getattr(self, var)) and \
+                    all([var != block for block in ('_writer', 'logger')]):
+                dump_variables[var] = getattr(self, var)
+
+        with Path(path, 'scope').open('wb') as file:
+            dill.dump(dump_variables, file)
+
+        if self.record_movie:
+            warnings.warn("Movie saving is not supported with checkpointing", RuntimeWarning)
+            self.logger.warning("Movie saving is not supported with checkpointing")
+
+    def load_state(self, path: Union[Path, str]):
+        """ Loads a saved scope state. Path is a directory containing the checkpoint files. """
+
+        with Path(path, 'scope').open('rb') as file:
+            data = dill.load(file)
+
+        for var, val in data.items():
+            setattr(self, var, val)
+
+        if self.record_movie:
+            self._new_writer()
+            self.setup_moviemaker()
+
+        if self.interactive_mode:
+            self.fig.show()

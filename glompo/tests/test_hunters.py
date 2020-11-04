@@ -1,8 +1,9 @@
-from typing import Callable, Sequence, Tuple
+# noinspection PyTypeChecker
+from pathlib import Path
+from typing import Callable, Sequence, Tuple, Union
 
 import numpy as np
 import pytest
-
 from glompo.common.corebase import _CombiCore
 from glompo.core.optimizerlogger import OptimizerLogger
 from glompo.hunters.basehunter import BaseHunter, _AndHunter, _OrHunter
@@ -71,6 +72,9 @@ class FakeLog:
 
 class FakeOpt(BaseOptimizer):
 
+    def checkpoint_load(self, path: Union[Path, str]):
+        pass
+
     def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],
                  bounds: Sequence[Tuple[float, float]], callbacks: Callable = None, **kwargs) -> MinimizeResult:
         pass
@@ -81,7 +85,7 @@ class FakeOpt(BaseOptimizer):
     def callstop(self, *args):
         pass
 
-    def save_state(self, *args):
+    def checkpoint_save(self, *args):
         pass
 
 

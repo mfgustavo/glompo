@@ -1,9 +1,9 @@
 """ Contains classes which save log information for GloMPO and its optimizers. """
 
-import os
 import warnings
 from math import inf
-from typing import Any, Dict, List, Optional, Sequence, Union
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Sequence, Union, overload
 
 import numpy as np
 import yaml
@@ -11,7 +11,7 @@ import yaml
 try:
     from yaml import CDumper as Dumper
 except ImportError:
-    from yaml import Dumper as Dumper
+    from yaml import Dumper
 try:
     import matplotlib.pyplot as plt
     import matplotlib.lines as lines
@@ -20,7 +20,8 @@ try:
 except (ModuleNotFoundError, ImportError):
     HAS_MATPLOTLIB = False
 
-from glompo.common.helpers import FileNameHandler, LiteralWrapper, literal_presenter, glompo_colors
+from glompo.common.helpers import LiteralWrapper, FlowList, literal_presenter, glompo_colors, \
+    flow_presenter
 
 __all__ = ("OptimizerLogger",)
 
@@ -30,6 +31,7 @@ class OptimizerLogger:
 
     def __init__(self):
         self._storage: Dict[int, _OptimizerLogger] = {}
+        yaml.add_representer(FlowList, flow_presenter, Dumper=Dumper)
 
     def __len__(self):
         return len(self._storage)
@@ -51,6 +53,14 @@ class OptimizerLogger:
             the log.
         """
         self._storage[opt_id].append_message(message)
+
+    @overload
+    def get_history(self, opt_id: int) -> Dict[int, Dict[str, float]]:
+        ...
+
+    @overload
+    def get_history(self, opt_id: int, track: str) -> List:
+        ...
 
     def get_history(self, opt_id: int, track: Optional[str] = None) -> Union[List, Dict[int, Dict[str, float]]]:
         """ Returns a list of values for a given optimizer and track or returns the entire dictionary of all tracks
@@ -82,56 +92,61 @@ class OptimizerLogger:
         """ Returns metadata of a given optimizer and key. """
         return self._storage[opt_id].metadata[key]
 
-    def save_optimizer(self, name: str, opt_id: Optional[int] = None):
+    def save_optimizer(self, path: Union[Path, str], opt_id: Optional[int] = None):
         """ Saves the contents of the logger into yaml files. If an opt_id is provided only that optimizer will be
             saved using the provided name. Else all optimizers are saved by their opt_id numbers and type in a directory
             called name.
         """
-        with FileNameHandler(name) as filename:
-            if opt_id:
-                self._write_file(opt_id, filename)
-            else:
-                os.makedirs(filename, exist_ok=True)
-                os.chdir(filename)
+        path = Path(path)
+        if opt_id:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            self._write_file(opt_id, path)
+        else:
+            path.mkdir(parents=True, exist_ok=True)
 
-                digits = len(str(max(self._storage)))
-                for optimizer in self._storage:
-                    opt_id = int(self._storage[optimizer].metadata["Optimizer ID"])
-                    opt_type = self._storage[optimizer].metadata["Optimizer Type"]
-                    title = f"{opt_id:0{digits}}_{opt_type}"
-                    self._write_file(optimizer, title)
-
-    def save_summary(self, name: str):
-        """ Generates a summary file containing the best found point of each optimizer and the reason for their
-            termination. name is the path and filename of the summary file.
-        """
-        with FileNameHandler(name) as filename:
-            sum_data = {}
+            digits = len(str(max(self._storage))) if self._storage else 1
             for optimizer in self._storage:
-                opt_history = self.get_history(optimizer)
+                opt_id = int(self._storage[optimizer].metadata["Optimizer ID"])
+                opt_type = self._storage[optimizer].metadata["Optimizer Type"]
+                title = f"{opt_id:0{digits}}_{opt_type}"
+                self._write_file(optimizer, path / title)
 
-                i_tot = len(opt_history)
-                x_best = None
-                f_best = float('nan')
-                f_calls = None
-                if i_tot > 0 and opt_history[i_tot]['i_best'] > -1:
-                    last = opt_history[i_tot]
-                    i_best = last['i_best']
-                    f_calls = last['f_call_opt']
+    def save_summary(self, path: Union[Path, str]):
+        """ Generates a summary file containing the best found point of each optimizer and the reason for their
+            termination.
+        """
+        sum_data = {}
+        for optimizer in self._storage:
+            opt_history = self.get_history(optimizer)
 
-                    best = opt_history[i_best]
+            i_tot = len(opt_history)
+            x_best = None
+            f_best = float('nan')
+            f_calls = None
+            if i_tot > 0 and opt_history[i_tot]['i_best'] > -1:
+                last = opt_history[i_tot]
+                i_best = last['i_best']
+                f_calls = last['f_call_opt']
 
-                    x_best = best['x']
-                    f_best = best['fx_best']
-                sum_data[optimizer] = {'end_cond': self._storage[optimizer].metadata["End Condition"],
-                                       'f_calls': f_calls,
-                                       'f_best': f_best,
-                                       'x_best': x_best}
+                best = opt_history[i_best]
 
-            with open(filename, "w+") as file:
-                yaml.dump(sum_data, file, Dumper=Dumper, default_flow_style=False, sort_keys=False)
+                x_best = FlowList(best['x'])
+                f_best = best['fx_best']
+            end_cond = self._storage[optimizer].metadata["End Condition"] \
+                if "End Condition" in self._storage[optimizer].metadata else None
+            sum_data[optimizer] = {'end_cond': end_cond,
+                                   'f_calls': f_calls,
+                                   'f_best': f_best,
+                                   'x_best': x_best}
 
-    def plot_optimizer_trials(self, opt_id: Optional[int] = None):
+        with Path(path).open("w+") as file:
+            yaml.dump(sum_data, file, Dumper=Dumper, default_flow_style=False, sort_keys=False)
+
+    def plot_optimizer_trials(self, path: Optional[Path] = None, opt_id: Optional[int] = None):
+        """ Generates plots for each optimizer in the log of each trialed parameter value as a function of optimizer
+            iterations.
+        """
+
         if not HAS_MATPLOTLIB:
             warnings.warn("Matplotlib not present cannot create plots.", ImportWarning)
             return
@@ -153,13 +168,27 @@ class OptimizerLogger:
             ax.set_ylabel('Parameter Value')
             ax.set_title('Parameter values as a function of optimizer iteration number')
 
-            fig.savefig(f'opt{opt}_parms.png')
+            name = f'opt{opt}_parms.png' if path is None else Path(path, f'opt{opt}_parms.png')
+            fig.savefig(name)
             plt.close(fig)
 
         if is_interactive:
             plt.ion()
 
-    def plot_trajectory(self, title: str, log_scale: bool = False, best_fx: bool = False):
+    def plot_trajectory(self, title: Union[Path, str], log_scale: bool = False, best_fx: bool = False):
+        """ Generates a plot of each optimizer function values versus the overall function evaluation number.
+
+            Parameters
+            ----------
+            title: Union[Path, str]
+                Path to file to which the plot should be saved.
+            log_scale: bool = False
+                If True the function evaluations will be converted to base 10 log values.
+            best_fx: bool = False
+                If True the best function evaluation see thus far of each optimizer will be plotted rather than the
+                function evaluation at the matching evaluation number.
+        """
+
         if not HAS_MATPLOTLIB:
             warnings.warn("Matplotlib not present cannot create plots.", ImportWarning)
             return
@@ -179,7 +208,7 @@ class OptimizerLogger:
         colors = glompo_colors()
         track = 'fx_best' if best_fx else 'fx'
         y_lab = "Best Function Evaluation" if best_fx else "Function Evaluation"
-        for opt_id in self._storage.keys():
+        for opt_id in self._storage:
             f_calls = self.get_history(opt_id, 'f_call_overall')
             traj = self.get_history(opt_id, track)
 
@@ -188,7 +217,7 @@ class OptimizerLogger:
                 stub = "fx_best" if best_fx else "fx"
                 y_lab = f"sign({stub}) * log10(|{stub}|)"
 
-            ax.plot(f_calls, traj, c=colors(opt_id))
+            ax.plot(f_calls, traj, ls='-', marker='.', c=colors(opt_id))
             leg_elements.append(lines.Line2D([], [], ls='-', c=colors(opt_id),
                                              label=f"{opt_id}: {self.get_metadata(opt_id, 'Optimizer Type')}"))
 
@@ -219,9 +248,11 @@ class OptimizerLogger:
         if is_interactive:
             plt.ion()
 
-    def _write_file(self, opt_id, filename):
+    def _write_file(self, opt_id, filename: Path):
         yaml.add_representer(LiteralWrapper, literal_presenter, Dumper=Dumper)
-        with open(f"{filename}.yml", 'w') as file:
+        if filename.suffix != '.yml':
+            filename = filename.with_suffix('.yml')
+        with filename.open('w') as file:
             data = {"DETAILS": self._storage[opt_id].metadata,
                     "MESSAGES": self._storage[opt_id].messages,
                     "ITERATION_HISTORY": self._storage[opt_id].history}
@@ -259,12 +290,15 @@ class _OptimizerLogger:
         except TypeError:
             ls = [float(num) for num in [x]]
         finally:
+            if i > 1:
+                assert i == max(
+                    self.history) + 1, f"Opt {self.metadata['Optimizer ID']}: {i} != {max(self.history) + 1}"
             self.history[i] = {'f_call_overall': int(f_call_overall),
                                'f_call_opt': int(f_call_opt),
                                'fx': float(fx),
                                'i_best': int(self.i_best),
                                'fx_best': float(self.fx_best),
-                               'x': ls}
+                               'x': FlowList(ls)}
 
     def append_message(self, message):
         """ Adds message to the optimizer history. """

@@ -3,17 +3,19 @@
 import inspect
 import sys
 from functools import wraps
-from os.path import join as pjoin
+from pathlib import Path
 
 
-def process_print_redirect(opt_id, func):
+def process_print_redirect(opt_id, working_dir, func):
     """ Wrapper to redirect a process' output to a designated text file. """
 
     @wraps(func)
     def wrapper(*args, **kwargs):
-        sys.stdout = open(pjoin("glompo_optimizer_printstreams", f"{opt_id}_printstream.out"), "w")
-        sys.stderr = open(pjoin("glompo_optimizer_printstreams", f"{opt_id}_printstream.err"), "w")
+        sys.stdout = Path(working_dir, "glompo_optimizer_printstreams", f"printstream_{opt_id:04}.out").open("w")
+        sys.stderr = Path(working_dir, "glompo_optimizer_printstreams", f"printstream_{opt_id:04}.err").open("w")
         func(*args, **kwargs)
+        sys.stdout.close()
+        sys.stderr.close()
 
     return wrapper
 

@@ -1,10 +1,10 @@
 """ Contains code to support using both multiprocessing and threading within the GloMPO manager. """
 
-import _io
 import sys
 import threading
 import warnings
-from os.path import join as pjoin
+from pathlib import Path
+from typing import TextIO
 
 
 class CustomThread(threading.Thread):
@@ -12,18 +12,19 @@ class CustomThread(threading.Thread):
         file if this has been setup before hand.
     """
 
-    def __init__(self, *args, redirect_print: bool = False, **kwargs):
+    def __init__(self, working_directory: Path, *args, redirect_print: bool = False, **kwargs):
         super().__init__(*args, **kwargs)
         self.exitcode = 0
         self.redirect = redirect_print
+        self.working_directory = working_directory
 
     def run(self):
         try:
             if self.redirect:
                 try:
-                    opt_id = self.name.replace("Opt", "")
-                    sys.stdout.register(opt_id, 'out')
-                    sys.stderr.register(opt_id, 'err')
+                    opt_id = int(self.name.replace("Opt", ""))
+                    sys.stdout.register(opt_id, self.working_directory, 'out')
+                    sys.stderr.register(opt_id, self.working_directory, 'err')
                 except AttributeError:
                     warnings.warn("Prinstream redirect failed. Print stream will only redirect if ThreadPrintRedirect "
                                   "is setup beforehand.", RuntimeWarning)
@@ -56,14 +57,15 @@ class ThreadPrintRedirect:
         if CustomThread is used.
     """
 
-    def __init__(self, intercept: _io.TextIOWrapper):
+    def __init__(self, intercept: TextIO):
         self.stdout = intercept
         self.threads = {}  # Dict[thread_id: int, file: _io.TextIOWrapper]
 
-    def register(self, opt_id: int, ext: str):
+    def register(self, opt_id: int, working_directory: Path, ext: str):
         """ Adds a thread to the set of files. """
         thread_id = threading.currentThread().ident
-        self.threads[thread_id] = open(pjoin("glompo_optimizer_printstreams", f"{opt_id}_printstream.{ext}"), "w+")
+        path = working_directory / "glompo_optimizer_printstreams" / f"printstream_{opt_id:04}.{ext}"
+        self.threads[thread_id] = path.open("w+")
 
     def write(self, message):
         """ Sends message to the appropriate handler. """

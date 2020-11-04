@@ -19,7 +19,8 @@ class RandomOptimizer(BaseOptimizer):
                  pause_flag: Event = None, workers: int = 1, backend: str = 'processes', iters: int = 100):
         """ Initialize with the above parameters. """
         super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
-        self.iters = iters
+        self.max_iters = iters
+        self.used_iters = 0
         self.result = MinimizeResult()
         self.stop_called = False
         self.logger.debug("Setup optimizer")
@@ -30,15 +31,13 @@ class RandomOptimizer(BaseOptimizer):
                  bounds: Sequence[Tuple[float, float]],
                  callbacks: Callable = None, **kwargs) -> MinimizeResult:
 
-        vector = []
-        fx = np.inf
-        best_f = np.inf
-        i = 0
-        while i < self.iters:
+        best_f = self.result.fx if self.is_restart else np.inf
+
+        while self.used_iters < self.max_iters:
             if self.stop_called:
                 break
 
-            i += 1
+            self.used_iters += 1
             vector = []
             for bnd in bounds:
                 vector.append(np.random.uniform(bnd[0], bnd[1]))
@@ -49,9 +48,14 @@ class RandomOptimizer(BaseOptimizer):
             fx = function(vector)
             self.logger.debug(f"Function returned fx = {fx}")
 
+            if callbacks and callbacks():
+                self.stop_called = True
+
             if self._results_queue:
                 self.logger.debug("Pushing result")
-                self.push_iter_result(i, 1, vector, fx, False)
+                result = IterationResult(self._opt_id, self.used_iters, 1, vector, fx,
+                                         self.used_iters >= self.max_iters or self.stop_called)
+                self.push_iter_result(result)
                 self.logger.debug("Checking messages")
                 self.check_messages()
                 self._pause_signal.wait()
@@ -62,13 +66,9 @@ class RandomOptimizer(BaseOptimizer):
                 self.logger.debug("Updating best")
                 self.result.x, self.result.fx = best_x, best_f
 
-            if callbacks():
-                break
-
         self.result.success = True
         self.logger.debug("Termination successful")
         if self._results_queue:
-            self.push_iter_result(i, 1, vector, fx, True)
             self.logger.debug("Messaging manager")
             self.message_manager(0, "Optimizer convergence")
             self.check_messages()
@@ -76,11 +76,5 @@ class RandomOptimizer(BaseOptimizer):
         self.logger.debug("Returning result")
         return self.result
 
-    def push_iter_result(self, i, f_calls, x, fx, last):
-        self._results_queue.put(IterationResult(self._opt_id, i, f_calls, x, fx, last))
-
-    def callstop(self, reason=None):
+    def callstop(self, reason: str = ""):
         self.stop_called = True
-
-    def save_state(self, *args):
-        pass

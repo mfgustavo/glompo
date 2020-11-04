@@ -4,3 +4,4 @@ _tmp
 *egg-info
 .coverage*
 saved_test_outputs
+.idea

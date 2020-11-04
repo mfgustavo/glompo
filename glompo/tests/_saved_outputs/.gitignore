@@ -1,0 +1,4 @@
+# Git tracks this file but ignores everything in it
+*
+*/
+!.gitignore

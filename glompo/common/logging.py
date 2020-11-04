@@ -1,8 +1,8 @@
 """ Contains class to split the logs of individual optimizers for easy processing. """
 
 import logging
-import os
-from typing import Optional
+from pathlib import Path
+from typing import Optional, Union
 
 
 class SplitOptimizerLogs(logging.Filter):
@@ -10,11 +10,12 @@ class SplitOptimizerLogs(logging.Filter):
         single 'glompo.optimizers' logging stream into one for each individual optimizer.
     """
 
-    def __init__(self, filepath: str = "", propagate: bool = False, formatter: Optional[logging.Formatter] = None):
+    def __init__(self, filepath: Union[Path, str] = "", propagate: bool = False,
+                 formatter: Optional[logging.Formatter] = None):
         """
         Parameters
         ----------
-        filepath: str = ""
+        filepath: Union[Path, str] = ""
             Directory in which new log files will be located.
         propagate: bool = False
             If propagate is True then the filter will allow the message to pass through the filter allowing all
@@ -45,7 +46,8 @@ class SplitOptimizerLogs(logging.Filter):
         """
         super().__init__('')
         self.opened = set()
-        self.filepath = filepath + os.sep if filepath else ""
+        self.filepath = Path(filepath) if filepath else Path.cwd()
+        self.filepath.mkdir(parents=True, exist_ok=True)
         self.propagate = int(propagate)
         self.fomatter = formatter
 
@@ -56,21 +58,15 @@ class SplitOptimizerLogs(logging.Filter):
         if opt_id not in self.opened:
             self.opened.add(opt_id)
 
-            if self.filepath:
-                try:
-                    os.makedirs(f"{self.filepath}")
-                except FileExistsError:
-                    pass
-
             if self.fomatter:
                 message = self.fomatter.format(record)
             else:
                 message = record.getMessage()
 
-            with open(f"{self.filepath}optimizer_{opt_id}.log", 'w+') as file:
+            with (self.filepath / f"optimizer_{opt_id}.log").open('w+') as file:
                 file.write(f"{message}\n")
 
-            handler = logging.FileHandler(f"{self.filepath}optimizer_{opt_id}.log", 'a')
+            handler = logging.FileHandler(self.filepath / f"optimizer_{opt_id}.log", 'a')
 
             if self.fomatter:
                 handler.setFormatter(self.fomatter)

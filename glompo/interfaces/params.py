@@ -5,16 +5,15 @@
     2) GloMPI is primary, setup a GloMPOManager instance as normal.
        The ReaxFFError class below will create the error function to be used as the manager 'task' parameter.
 """
-
 import warnings
-from typing import Callable, Sequence, Tuple, Union
+from pathlib import Path
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from scm.params.common.parallellevels import ParallelLevels
 from scm.params.common.reaxff_converter import geo_to_params, trainset_to_params
-from scm.params.core.dataset import DataSet, Loss
+from scm.params.core.dataset import DataSet, SSE
 from scm.params.core.jobcollection import JobCollection
-from scm.params.core.lossfunctions import SSE
 from scm.params.core.opt_components import LinearParameterScaler, _Step
 from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
 from scm.params.parameterinterfaces.reaxff import ReaxParams
@@ -51,7 +50,7 @@ class _FunctionWrapper:
     def __call__(self, pars) -> float:
         return self.func(pars)
 
-    def resids(self, pars):
+    def resids(self, pars) -> Sequence[float]:
         """ Method added to conform the function to optsam API and allow the GFLS algorithm to be used. """
 
         result = self.func(pars, full=True)[0]
@@ -97,7 +96,7 @@ class GlompoParamsWrapper(BaseOptimizer):
             self._loss = SSE()
 
     def minimize(self,
-                 function: Callable,
+                 function: _Step,
                  x0: Sequence[float],
                  bounds: Sequence[Tuple[float, float]],
                  workers: int = 1) -> MinimizeResult:
@@ -141,10 +140,9 @@ class GlompoParamsWrapper(BaseOptimizer):
         # Silence function printing
         function.v = False
 
-        manager = GloMPOManager(task=_FunctionWrapper(function),
-                                optimizer_selector=self.selector,
-                                bounds=bounds,
-                                **self.manager_kwargs)
+        manager = GloMPOManager()
+        manager.setup(task=_FunctionWrapper(function), bounds=bounds, opt_selector=self.selector,
+                      **self.manager_kwargs)
 
         result = manager.start_manager()
 
@@ -162,98 +160,153 @@ class ReaxFFError:
         a provided trainign set of data.
     """
 
-    def __init__(self, path: str, loss: Union[Loss, str, None] = None):
-        """ Initialisation of the error function from configuration files.
+    @classmethod
+    def from_classic_files(cls, path: Union[Path, str]) -> 'ReaxFFError':
+        """ Initializes the error function from classic ReaxFF files.
 
             Parameters
             ----------
-            path: str
-                Passed to the setup_reax method as its path parameter.
-            loss: Union[Loss, str]
-                A subclass of scm.params.core.dataset.Loss, holding the mathematical definition of the
-                loss function to be applied to every entry, or a registered string shortcut.
+            path: Union[Path, str]
+                Path to classic ReaxFF files, passed to setup_reax_from_classic (see its docs for what files are
+                expected).
         """
-        self.dat_set, self.job_col, self.rxf_eng = setup_reax(path)
-        if loss:
-            self.loss = loss
-        else:
-            self.loss = 'sse'
+        dat_set, job_col, rxf_eng = setup_reax_from_classic(path)
+        return cls(dat_set, job_col, rxf_eng)
+
+    @classmethod
+    def from_params_files(cls, path: Union[Path, str]) -> 'ReaxFFError':
+        """ Initializes the error function from ParAMS data files.
+
+            Parameters
+            ----------
+            path: Union[Path, str]
+                Path to directory containing ParAMS data set, job collection and ReaxFF engine files.
+                (see setup_reax_from_params for what files are expected).
+        """
+        dat_set, job_col, rxf_eng = setup_reax_from_params(path)
+        return cls(dat_set, job_col, rxf_eng)
+
+    def __init__(self, data_set: DataSet, job_collection: JobCollection, reax_params: ReaxParams):
+        """ Initialisation of the ReaxFF error function. To initialise the object from files use the class factory
+            methods: ReaxFFError.from_classic_files or ReaxFFError.from_params_files
+
+            Parameters
+            ----------
+            data_set: DataSet
+                Reference data used to compare against force field results.
+            job_collection: JobCollection
+                AMS jobs from which the data can be extracted for comparison to the DataSet
+            reax_params: ReaxParams
+                ReaxParams object which holds the force field values, ranges, engine and which parameters are active or
+                not.
+        """
+        self.dat_set = data_set
+        self.job_col = job_collection
+        self.rxf_eng = reax_params
+
+        self.loss = SSE()
         self.scaler = LinearParameterScaler(self.rxf_eng.active.range)
         self.par_levels = ParallelLevels(jobs=1)
 
     @property
-    def n_parms(self):
+    def n_parms(self) -> int:
         """ Returns the number of active parameters. """
         return len(self.rxf_eng.active.x)
 
-    def __call__(self, x: Sequence[float]):
+    def __call__(self, x: Sequence[float]) -> float:
         """ Returns the error value between the the force field with the given parameters and the training values. """
         return self._calculate(x)[0]
 
-    def resids(self, x: Sequence[float]):
+    def resids(self, x: Sequence[float]) -> Sequence[float]:
         """ Method for compatibility with GFLS optimizer. Returns the signed differences between the force field and
             training set.
         """
         return self._calculate(x)[1]
 
-    def _calculate(self, x: Sequence[float]):
+    def checkpoint_save(self, path: Union[Path, str]):
+        """ Used to store files into a GloMPO checkpoint (at path) suitable to reconstruct the task when the checkpoint
+            is loaded.
+        """
+        self.dat_set.pickle_dump(Path(path, 'data_set.pkl'))
+        self.job_col.pickle_dump(Path(path, 'job_collection.pkl'))
+        self.rxf_eng.pickle_dump(str(Path(path, 'reax_params.pkl')))  # Method does not support Path
+
+    def save(self, path: Union[Path, str], filenames: Optional[Dict[str, str]] = None,
+             parameters: Optional[Sequence[float]] = None):
+        """ Writes the data set and job collection to YAML files. Writes the ReaxFF engine object to a force field file.
+
+            Parameters
+            ----------
+            path: Union[Path, str]
+                Path to directory in which files will be saved.
+            filenames: Optional[Dict[str, str]] = None
+                Custom filenames for the written files. The dictionary may include any/all of the keys in the example
+                below. This example contains the default names used if not given:
+                    {'ds': 'data_set.yml', 'jc': 'job_collection.yml', 'ff': 'ffield'}
+            parameters: Optional[Sequence[float]] = None
+                Optional parameters to be written into the force field file. If not given, the parameters currently
+                therein will be used.
+        """
+        if not filenames:
+            filenames = {}
+
+        names = {'ds': filenames['ds'] if 'ds' in filenames else 'data_set.yml',
+                 'jc': filenames['jc'] if 'jc' in filenames else 'job_collection.yml',
+                 'ff': filenames['ff'] if 'ff' in filenames else 'ffield'}
+
+        self.dat_set.store(Path(path, names['ds']))
+        self.job_col.store(Path(path, names['jc']))
+        self.rxf_eng.write(Path(path, names['ff']), parameters)
+
+    def _calculate(self, x: Sequence[float]) -> Tuple[float, List[float], List[float]]:
         """ Core calculation function, returns both the error function value and the residuals. """
         try:
-            self.rxf_eng.active.x = self.scaler.scaled2real(x)
-            engine = self.rxf_eng.get_engine()
+            engine = self.rxf_eng.get_engine(self.scaler.scaled2real(x))
             ff_results = self.job_col.run(engine.settings, parallel=self.par_levels)
             err_result = self.dat_set.evaluate(ff_results, self.loss, True)
             return err_result
         except ResultsError:
-            return np.inf, np.array([np.inf])
+            return float('inf'), [float('inf')], [float('inf')]
 
 
-def setup_reax(path: str) -> Tuple[DataSet, JobCollection, ReaxParams]:
+def setup_reax_from_classic(path: Union[Path, str]) -> Tuple[DataSet, JobCollection, ReaxParams]:
     """
     Parses classic ReaxFF force field and configuration files into instances which can be evaluated by AMS.
 
     Parameters
     ----------
-    path: str
+    path: Union[Path, str]
         Path to folder containing:
-        - ts_trainset.in: Contains the description of the items in the training set
-        - control:        Contains ReaxFF settings
-        - ts_ffield_init: A force field file which contains values for all the parameters
-        - ts_ffield_bool: A force field file with all parameters set to 0 or 1.
-                          1 indicates it will be adjusted during optimisation.
-                          0 indicates it will not be changed during optimisation.
-        - ts_ffield_max:  A force field file where the active parameters are set to their maximum value (value of other
-                          parameters is ignored).
-        - ts_ffield_min:  A force field file where the active parameters are set to their maximum value (value of other
-                          parameters is ignored).
-        - ts_geo:         Contains the geometries of the items used in the training set.
-
-    Returns
-    -------
-    DataSet, JobCollection, ReaxParams
-        DataSet contains the training data
-        JobCollection contains details of the PLAMS jobs which must be run to extract the force field results with which
-            to compare to the the DataSet.
-        ReaxParams is the interface to the actual engine used to calculate the force field results.
+        - trainset.in: Contains the description of the items in the training set
+        - control:     Contains ReaxFF settings
+        - ffield_init: A force field file which contains values for all the parameters
+        - ffield_bool: A force field file with all parameters set to 0 or 1.
+                       1 indicates it will be adjusted during optimisation.
+                       0 indicates it will not be changed during optimisation.
+        - ffield_max:  A force field file where the active parameters are set to their maximum value (value of other
+                       parameters is ignored).
+        - ffield_min:  A force field file where the active parameters are set to their maximum value (value of other
+                       parameters is ignored).
+        - geo:         Contains the geometries of the items used in the training set.
     """
 
-    dat_set = trainset_to_params(f"{path}/ts_trainset.in")
-    rxf_eng = ReaxParams(f"{path}/ts_ffield_bool")
-    vars_max = ReaxParams(f"{path}/ts_ffield_max")
-    vars_min = ReaxParams(f"{path}/ts_ffield_min")
+    dat_set = trainset_to_params(Path(path, 'trainset.in'))
+    rxf_eng = ReaxParams(Path(path, 'ffield_bool'))
+    vars_max = ReaxParams(Path(path, 'ffield_max'))
+    vars_min = ReaxParams(Path(path, 'ffield_min'))
 
     # Update the job collection depending on the types of data in the training set
-    settings = reaxff_control_to_settings(f"{path}/control")
+    settings = reaxff_control_to_settings(Path(path, 'control'))
     if dat_set.forces():
         settings.input.ams.properties.gradients = True
-    job_col = geo_to_params(f"{path}/ts_geo", settings)
+    job_col = geo_to_params(Path(path, 'geo'), settings)
 
     # Remove training set entries not in job collection
     remove_ids = dat_set.check_consistency(job_col)
     if remove_ids:
         print(
             'The following jobIDs are not in the JobCollection, their respective training set entries will be removed:')
-        print('\n'.join(set([s for e in [dat_set[i] for i in remove_ids] for s in e.jobids])))
+        print('\n'.join({s for e in [dat_set[i] for i in remove_ids] for s in e.jobids}))
         del dat_set[remove_ids]
 
     rxf_eng.is_active = [bool(val) for val in rxf_eng.x]
@@ -267,11 +320,49 @@ def setup_reax(path: str) -> Tuple[DataSet, JobCollection, ReaxParams]:
                 parm.is_active = False
                 print(f"WARNING: {parm.name} deactivated due to bounds.")
 
-    vars_values = ReaxParams(f"{path}/ts_ffield_init")
+    vars_values = ReaxParams(Path(path, 'ffield_init'))
     rxf_eng.x = vars_values.x
     for parm in rxf_eng.active:
         if not parm.range[0] < parm.value < parm.range[1]:
             parm.value = (parm.range[0] + parm.range[1]) / 2
             warnings.warn("Starting value out of bounds moving to midpoint.")
+
+    return dat_set, job_col, rxf_eng
+
+
+def setup_reax_from_params(path: Union[Path, str]) -> Tuple[DataSet, JobCollection, ReaxParams]:
+    """ Loads ParAMS produced ReaxFF files into ParAMS objects.
+
+        Parameters
+        ----------
+        path: Union[Path, str]
+            Path to folder containing:
+            - data_set.yml OR data_set.pkl
+                Contains the description of the items in the training set. A YAML file must be of the form produced by
+                scm.params.core.dataset.DataSet.store, a pickle file must be of the form produced by
+                scm.params.core.dataset.DataSet.pickle_dump. If both files are present, the pickle is given priority.
+            - job_collection.yml OR job_collection.pkl
+                Contains descriptions of the AMS jobs to evaluate. A YAML file must be of the form produced by
+                scm.params.core.jobcollection.JobCollection.store, a pickle file must be of the form produced by
+                scm.params.core.jobcollection.JobCollection.pickle_dump.  If both files are present, the pickle is given
+                priority.
+            - reax_params.pkl:
+                Pickle produced by scm.params.parameterinterfaces.reaxff.ReaxParams.pickle_dump, representing the force
+                field, active parameters and their ranges.
+    """
+    dat_set = DataSet()
+    job_col = JobCollection()
+
+    for name, params_obj in {'data_set': dat_set, 'job_collection': job_col}.items():
+        built = False
+        for suffix, loader in {'.pkl': 'pickle_load', '.yml': 'load'}.items():
+            file = Path(path, name + suffix)
+            if file.exists():
+                getattr(params_obj, loader)(file)
+                built = True
+        if not built:
+            raise FileNotFoundError(f"No {name.replace('_', ' ')} data found")
+
+    rxf_eng = ReaxParams.pickle_load(Path(path, 'reax_params.pkl'))
 
     return dat_set, job_col, rxf_eng

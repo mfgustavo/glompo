@@ -13,7 +13,8 @@ class ChainSelector(BaseSelector):
 
     def __init__(self,
                  avail_opts: List[Union[Type[BaseOptimizer],
-                                        Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]]]],
+                                        Tuple[Type[BaseOptimizer],
+                                              Optional[Dict[str, Any]], Optional[Dict[str, Any]]]]],
                  fcall_thresholds: List[float],
                  allow_spawn: Optional[Callable[['GloMPOManager'], bool]] = None):
         """
@@ -56,11 +57,8 @@ class ChainSelector(BaseSelector):
         if self.toggle < len(self.fcall_thresholds) and manager.f_counter >= self.fcall_thresholds[self.toggle]:
             self.toggle += 1
 
-        try:
-            selected = self.avail_opts[self.toggle]
-            if selected[1]['workers'] > slots_available:
-                return None
-        except IndexError:
-            return False
+        selected = self.avail_opts[self.toggle]
+        if selected[1]['workers'] > slots_available:
+            return None
 
         return selected

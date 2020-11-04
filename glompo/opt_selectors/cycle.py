@@ -12,7 +12,8 @@ class CycleSelector(BaseSelector):
 
     def __init__(self,
                  avail_opts: List[Union[Type[BaseOptimizer],
-                                        Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]]]],
+                                        Tuple[Type[BaseOptimizer],
+                                              Optional[Dict[str, Any]], Optional[Dict[str, Any]]]]],
                  allow_spawn: Optional[Callable] = None):
         super().__init__(avail_opts, allow_spawn)
         self.i = -1
