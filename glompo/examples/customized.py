@@ -4,9 +4,10 @@ import sys
 from glompo import GloMPOManager
 from glompo.benchmark_fncs import Michalewicz
 from glompo.convergence import MaxFuncCalls, TargetCost
-from glompo.generators import ExploitExploreGenerator
-from glompo.hunters import BestUnmoving, ParameterDistance, TypeHunter, ValueAnnealing
-from glompo.opt_selectors import ChainSelector
+from glompo.core.checkpointing import CheckpointingControl
+from glompo.generators import RandomGenerator
+from glompo.hunters import BestUnmoving, EvaluationsUnmoving, ParameterDistance, ValueAnnealing
+from glompo.opt_selectors import CycleSelector
 
 try:
     from glompo.optimizers.cmawrapper import CMAOptimizer
@@ -37,47 +38,36 @@ if __name__ == '__main__':
     max_calls = 100000  # Imposed iteration budget
     checker = MaxFuncCalls(max_calls) | TargetCost(task.min_fx)  # Combined two conditions into a single stop criteria.
 
-    # For this task we will use two classes of optimizers. CMA-ES is good for global exploration and identifying areas
-    # of interest but performs poorly when serialised i.e. one iteration per evaluation. Differential Evolution also
-    # uses some form of covariance adaptation and is very quick in high dimension. We will run CMA-ES for the first half
-    # of our iteration budget and then replace dead CMA optimizers with several DE optimizers in the latter half of the
-    # optimization. The intention is to use CMA to identify areas of interest and then multiple copies of DE to
-    # thoroughly explore them.
+    # For this task we will use a CMA-ES optimizer.
     #
     # Optimizers are sent to GloMPO via BaseSelector objects. These are code stubs which propose an optimizer type and
     # configuration to start when asked by the manager.
     #
-    # For this case we need the ChainSelector which bases its return on the number of function evaluations already
-    # carried out.
+    # A very basic selector is CycleSelector which returns a rotating list of optimizers when asked but can be used for
+    # just a single optimizer type.
     #
     # Setting up any selector requires that a list of available optimizers be given to it during initialisation.
     # The elements in this list can take two forms:
     #    1. Uninitiated optimizer class
-    #       OR
     #    2. Tuple of:
     #       a. Uninitiated optimizer class
     #       b. Dictionary of optional initialisation arguments
     #       c. Dictionary of optional arguments passed to the optimizer.minimize argument
     #
-    # For CMA we need to setup:
+    # In this case we need to setup:
     #   1. The initial sigma value. We choose this to be half the range of the bounds in each direction (in this case
-    #      the bounds are equal in all directions):
+    #      the bounds are equal in all directions). This value must be sent to optimizer.minimize
     sigma = (task.bounds[0][1] - task.bounds[0][0]) / 2
+    call_args = {'sigma0': sigma}
     #   2. The number of parallel workers. CMA is a population based solver and uses multiple function evaluations per
     #      iteration; this is the population size. It can also use internal parallelization to evaluate each population
     #      member simultaneously; this is the number of workers or threads it can start. It is important that the user
     #      takes care of the load balancing at this point to ensure the most efficient performance. In this case we will
     #      use 6 workers and population of 6. These are arguments required at CMA initialisation.
-    cma_init_args = {'workers': 6, 'popsize': 6}
-    # For Nevergrad we need only select the DE algorithm:
-    ng_init_args = {'optimizer': 'DE'}
+    init_args = {'workers': 6, 'popsize': 6}
 
-    # We can now setup the selector. Since we do not need to send any special arguments to optimizer.minimize we will
-    # just setup the call arguments with None. As mentioned above we will use CMA in the first half of the optimization
-    # and DE for the other.
-    selector = ChainSelector(avail_opts=[(CMAOptimizer, cma_init_args, None),
-                                         (Nevergrad, ng_init_args, None)],
-                             fcall_thresholds=[max_calls/2])
+    # We can now setup the selector.
+    selector = CycleSelector(avail_opts=[(CMAOptimizer, init_args, call_args)])
 
     # Note the load balancing here. GloMPO will allow a fixed number of threads to be run. By default this is one less
     # than the number of CPUs available. If your machine has 32 cores, for example, than the manager will use 1 and
@@ -92,28 +82,19 @@ if __name__ == '__main__':
     # BaseHunter objects are setup in a similar way to BaseChecker objects and control the conditions in which
     # optimizers are shutdown by the manager. Each hunter is individually documented in ..hunters.
     #
-    # In this example we want two different sets of conditions:
-    #   1. We want to kill CMA optimizers early and not let them spend many iterations converging. We also want to
-    #      kill optimizers that come too close together so that we are not wasting iterations exploring the same region
-    #      repeatedly:
-    cma_killers = TypeHunter(CMAOptimizer) & (BestUnmoving(calls=1000, tol=0.05) |
-                                              ParameterDistance(bounds=task.bounds, relative_distance=0.05,
-                                                                test_all=True))
-    #   2. We want to give DE optimizers more time to find the answer, we also want to avoid killing optimizers with
-    #      function values that are very close together even though they are far apart.
-    de_killers = TypeHunter(Nevergrad) & (BestUnmoving(calls=2000, tol=0.01) & ValueAnnealing() |
-                                          ParameterDistance(bounds=task.bounds, relative_distance=0.01, test_all=True))
-
-    all_killers = cma_killers | de_killers
+    # In this example we will use a hunting set which has proven effective on several problems:
+    hunters = (EvaluationsUnmoving(500, 0.01) &  # Kill optimizers which are incorrectly focussing
+               ValueAnnealing(0.25) |  # Keep competitive optimizers alive
+               BestUnmoving(int(max_calls / 15), 0.2) |  # Kill optimizers that go nowhere for a long time
+               ParameterDistance(task.bounds, 0.05))  # Kill optimizers that go to the same minimum
     # Note: Hunters and checkers are evaluated lazily this means that in x | y, y will not be evaluated if x is True and
     # in x & y, y will not be evaluated if x is False.
 
     # BaseSelector objects select which optimizers to start but BaseGenerator objects select a point in parameter space
     # where to start them.
     #
-    # In this example we will use the ExploreExploitGenerator which starts optimizers at random locations early in the
-    # optimization but then starts them near known minima towards the end of the optimization budget.
-    generator = ExploitExploreGenerator(bounds=task.bounds, max_func_calls=max_calls, focus=0.3)
+    # In this example we will use the RandomGenerator which starts optimizers at random locations.
+    generator = RandomGenerator(task.bounds)
 
     # GloMPO supports running the optimizers both as threads and processes. Processes are preferred and the default
     # since they circumvent the python Global Interpreter Lock but threads can also be used for tasks that are not
@@ -130,7 +111,7 @@ if __name__ == '__main__':
                           'x_range': (0, max_calls),
                           'y_range': None,
                           'log_scale': False,
-                          'events_per_flush': 300,
+                          'events_per_flush': 30,
                           'interactive_mode': True,
                           'writer_kwargs': {'fps': 4},
                           'movie_kwargs': {'outfile': 'distance_demo.mp4',
@@ -142,14 +123,33 @@ if __name__ == '__main__':
     # the default as -1.
     force_terminations = -1
 
+    # GloMPO supports checkpointing. This means that its state can be persisted to file during an optimization and this
+    # checkpoint file can be loaded by another GloMPO instance to resume the optimization from that point. Checkpointing
+    # options are configured through a CheckpointingControl instance. In this case we will produce a checkpoint called
+    # 'customized_completed_<DATE>_<TIME>.tar.gz' once the task has converged.
+    checkpointing = CheckpointingControl(checkpoint_at_conv=True,
+                                         naming_format='customized_completed_%(date)_%(time).tar.gz',
+                                         checkpointing_dir="customized_example_outputs")
+
     # All arguments are now fed to the manager initialisation
-    manager = GloMPOManager(task=task, bounds=task.bounds, optimizer_selector=selector,
-                            working_dir="customized_example_outputs", overwrite_existing=True, max_jobs=max_jobs,
-                            backend=backend, convergence_checker=checker, x0_generator=generator,
-                            killing_conditions=all_killers, hunt_frequency=500, summary_files=3,
-                            visualisation=visualisation, visualisation_args=visualisation_args,
-                            force_terminations_after=-1,
-                            split_printstreams=True)  # Automatically send print statements from opts to different files
+    manager = GloMPOManager.new_manager(task=task,
+                                        bounds=task.bounds,
+                                        opt_selector=selector,
+                                        working_dir="customized_example_outputs",
+                                        overwrite_existing=True,  # Replaces existing files in working directory
+                                        max_jobs=max_jobs,
+                                        backend=backend,
+                                        convergence_checker=checker,
+                                        x0_generator=generator,
+                                        killing_conditions=hunters,
+                                        hunt_frequency=500,  # Function evaluations between hunts
+                                        status_frequency=60,  # Interval in seconds in which a status message is logged
+                                        checkpoint_control=checkpointing,
+                                        summary_files=5,  # Controls the level of output produced
+                                        visualisation=visualisation,
+                                        visualisation_args=visualisation_args,
+                                        force_terminations_after=-1,
+                                        split_printstreams=True)  # Autosend print statements from opts to files
 
     # GloMPO contains built-in logging statements throughout the library. These will not show up by default but can be
     # accessed if desired. In fact intercepting the INFO level statements from the manager creates a nice progress
