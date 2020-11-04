@@ -306,7 +306,7 @@ def setup_reax_from_classic(path: Union[Path, str]) -> Tuple[DataSet, JobCollect
     if remove_ids:
         print(
             'The following jobIDs are not in the JobCollection, their respective training set entries will be removed:')
-        print('\n'.join(set([s for e in [dat_set[i] for i in remove_ids] for s in e.jobids])))
+        print('\n'.join({s for e in [dat_set[i] for i in remove_ids] for s in e.jobids}))
         del dat_set[remove_ids]
 
     rxf_eng.is_active = [bool(val) for val in rxf_eng.x]

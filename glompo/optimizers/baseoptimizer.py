@@ -225,7 +225,7 @@ class BaseOptimizer(ABC):
         self._signal_pipe.send((key, message))
 
     @abstractmethod
-    def callstop(self, *args):
+    def callstop(self, reason: str):
         """ Signal to terminate the minimize loop while still returning a result. """
 
     def checkpoint_save(self, path: Union[Path, str], force: Optional[Set[str]] = None):

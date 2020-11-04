@@ -258,7 +258,7 @@ class CMAOptimizer(BaseOptimizer):
             fx = [function(i) for i in x]
         return fx
 
-    def callstop(self, reason="Manager termination signal"):
+    def callstop(self, reason: str = "Manager termination signal"):
         if reason and self.verbose:
             print(reason)
         self.logger.debug(f"Calling stop. Reason = {reason}")

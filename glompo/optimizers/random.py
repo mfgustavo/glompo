@@ -76,5 +76,5 @@ class RandomOptimizer(BaseOptimizer):
         self.logger.debug("Returning result")
         return self.result
 
-    def callstop(self, reason=None):
+    def callstop(self, reason: str = ""):
         self.stop_called = True

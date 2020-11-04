@@ -106,7 +106,9 @@ class CheckpointingControl:
 
         self.naming_format_re = format_re
 
-    def get_name(self):
+    def get_name(self) -> str:
+        """ Returns a new name for a checkpoint matching the naming format. """
+
         time = datetime.now()
         name = copy(self.naming_format)
         codes = {'%(date)': '%Y%m%d',

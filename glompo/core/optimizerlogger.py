@@ -11,7 +11,7 @@ import yaml
 try:
     from yaml import CDumper as Dumper
 except ImportError:
-    from yaml import Dumper as Dumper
+    from yaml import Dumper
 try:
     import matplotlib.pyplot as plt
     import matplotlib.lines as lines
@@ -143,6 +143,10 @@ class OptimizerLogger:
             yaml.dump(sum_data, file, Dumper=Dumper, default_flow_style=False, sort_keys=False)
 
     def plot_optimizer_trials(self, path: Optional[Path] = None, opt_id: Optional[int] = None):
+        """ Generates plots for each optimizer in the log of each trialed parameter value as a function of optimizer
+            iterations.
+        """
+
         if not HAS_MATPLOTLIB:
             warnings.warn("Matplotlib not present cannot create plots.", ImportWarning)
             return
@@ -172,6 +176,19 @@ class OptimizerLogger:
             plt.ion()
 
     def plot_trajectory(self, title: Union[Path, str], log_scale: bool = False, best_fx: bool = False):
+        """ Generates a plot of each optimizer function values versus the overall function evaluation number.
+
+            Parameters
+            ----------
+            title: Union[Path, str]
+                Path to file to which the plot should be saved.
+            log_scale: bool = False
+                If True the function evaluations will be converted to base 10 log values.
+            best_fx: bool = False
+                If True the best function evaluation see thus far of each optimizer will be plotted rather than the
+                function evaluation at the matching evaluation number.
+        """
+
         if not HAS_MATPLOTLIB:
             warnings.warn("Matplotlib not present cannot create plots.", ImportWarning)
             return
@@ -191,7 +208,7 @@ class OptimizerLogger:
         colors = glompo_colors()
         track = 'fx_best' if best_fx else 'fx'
         y_lab = "Best Function Evaluation" if best_fx else "Function Evaluation"
-        for opt_id in self._storage.keys():
+        for opt_id in self._storage:
             f_calls = self.get_history(opt_id, 'f_call_overall')
             traj = self.get_history(opt_id, track)
 

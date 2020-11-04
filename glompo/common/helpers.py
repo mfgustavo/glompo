@@ -206,8 +206,7 @@ def unknown_object_presenter(dumper, unknown_class: object):
 
     if inst_vars:
         return dumper.represent_mapping('tag:yaml.org,2002:map', {type(unknown_class).__name__: inst_vars})
-    else:
-        return dumper.represent_mapping('tag:yaml.org,2002:map', {type(unknown_class).__name__: None})
+    return dumper.represent_mapping('tag:yaml.org,2002:map', {type(unknown_class).__name__: None})
 
 
 """ Context Managers """

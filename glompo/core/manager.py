@@ -32,7 +32,7 @@ except ModuleNotFoundError:
 try:
     from yaml import CDumper as Dumper
 except ImportError:
-    from yaml import Dumper as Dumper
+    from yaml import Dumper
 
 try:
     import psutil
@@ -496,7 +496,7 @@ class GloMPOManager:
         self.logger.info("Initializing Manager ... ")
 
         # Setup working directory
-        if not (isinstance(working_dir, str) or isinstance(working_dir, Path)):
+        if not isinstance(working_dir, (Path, str)):
             warnings.warn(f"Cannot parse working_dir = {working_dir}. str or bytes expected. Using current "
                           f"work directory.", UserWarning)
             working_dir = "."
@@ -697,9 +697,9 @@ class GloMPOManager:
                     try:
                         setattr(self, var, val)
                     except Exception as e:
-                        raise CheckpointingError(f"Could not set {var} attribute correctly", e)
+                        raise CheckpointingError(f"Could not set {var} attribute correctly") from e
         except Exception as e:
-            raise CheckpointingError("Error loading manager. Aborting.", e)
+            raise CheckpointingError("Error loading manager. Aborting.") from e
 
         # Setup Task
         try:
@@ -728,14 +728,14 @@ class GloMPOManager:
                 try:
                     self.task = task
                     assert callable(self.task)
-                except AssertionError:
+                except AssertionError as e:
                     self.logger.error("Could not set task, not callable")
                     raise e
 
             assert self.task is not None
 
         except Exception as e:
-            raise CheckpointingError(f"Failed to build task due to error", e)
+            raise CheckpointingError("Failed to build task due to error") from e
 
         # Allow manual overrides
         permit_keys = dir(self)
@@ -1467,8 +1467,8 @@ class GloMPOManager:
                 continue
 
     def _is_manual_checkpoints(self):
-        """ If a file titled CHKPT is found in the working directory then the manager will perform an immediate 
-            unscheduled checkpoint. 
+        """ If a file titled CHKPT is found in the working directory then the manager will perform an immediate
+            unscheduled checkpoint.
         """
 
         chkpt_path = self.working_dir / "CHKPT"
@@ -1735,7 +1735,7 @@ class GloMPOManager:
         accepted, victims = self._process_results()
         [not_chkpt.add(res.opt_id) for res in accepted if res.final]
         [not_chkpt.add(vic) for vic in victims]
-        self.logger.info(f"Outstanding results processed")
+        self.logger.info("Outstanding results processed")
 
         assert self.optimizer_queue.empty()
 
@@ -1787,8 +1787,8 @@ class GloMPOManager:
         with (path / 'manager').open('wb') as file:
             try:
                 dill.dump(pickle_vars, file)
-            except PickleError:
-                raise CheckpointingError(f"Could not pickle manager.")
+            except PickleError as e:
+                raise CheckpointingError("Could not pickle manager.") from e
         self.logger.debug("Manager successfully pickled")
 
     def _checkpoint_task(self, path: Union[str, Path]):
@@ -1813,7 +1813,7 @@ class GloMPOManager:
                 self.task.checkpoint_save('')
                 self.logger.info("Task successfully saved")
             except AttributeError:
-                self.logger.info(f"task.checkpoint_save not found.")
+                self.logger.info("task.checkpoint_save not found.")
                 self.logger.warning("Checkpointing without task.")
             except Exception as e:
                 self.logger.warning("Task saving failed", exc_info=e)

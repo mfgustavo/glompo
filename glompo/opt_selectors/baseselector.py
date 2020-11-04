@@ -68,9 +68,9 @@ class BaseSelector(ABC):
                     assert issubclass(opt, BaseOptimizer)
                     self.avail_opts.append((opt, {'workers': 1}, {}))
 
-            except AssertionError:
+            except AssertionError as e:
                 raise ValueError(f"Cannot parse {item}. Expected:  Union[Type[BaseOptimizer], Tuple[BaseOptimizer, "
-                                 f"Dict[str, Any], Dict[str, Any]]] expected.")
+                                 f"Dict[str, Any], Dict[str, Any]]] expected.") from e
 
         if callable(allow_spawn):
             self.allow_spawn = allow_spawn
