@@ -11,6 +11,11 @@ import numpy as np
 import pytest
 import yaml
 
+try:
+    from yaml import CLoader as Loader
+except ImportError:
+    from yaml import Loader as Loader
+
 from glompo.common.helpers import CheckpointingError
 from glompo.common.namedtuples import IterationResult, ProcessPackage, Result
 from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxFuncCalls, MaxOptsStarted, MaxSeconds
@@ -260,7 +265,7 @@ def hanging_process():
 """ Module Tests"""
 
 
-class TestManager:
+class TestManagement:
 
     @pytest.mark.parametrize("kwargs", [{'task': None},
                                         {'opt_selector': {'default': OptimizerTest2}},
@@ -588,22 +593,58 @@ class TestManager:
 
     def test_status_message(self, manager):
         from glompo.core.manager import HAS_PSUTIL
+
+        class FakeProcess:
+            def is_alive(self):
+                return True
+
+        manager: GloMPOManager
         manager.t_start = time()
         manager.max_job = 10
+        manager.opt_log.add_optimizer(1, 'OptimizerTest1', '2020-10-30 20:30:13')
+        for i in range(1, 10):
+            manager.opt_log.put_iteration(1, i, i, i, [i], i)
+        manager._optimizer_packs = {1: ProcessPackage(FakeProcess(), None, None, 1)}
+
         if HAS_PSUTIL:
             import psutil
             manager._process = psutil.Process()
 
         status = manager._build_status_message()
-
         assert all([header in status for header in ['Time Elapsed', 'Optimizers Alive', 'Slots Filled',
                                                     'Function Evaluations', 'Current Optimizer f_vals',
-                                                    'Overall f_best:']])
+                                                    'Optimizer 1', 'Overall f_best:']])
         if HAS_PSUTIL:
             assert all([header in status for header in ['CPU Usage', 'Virtual Memory', 'System Load']])
 
+    def test_resource_logging(self, manager, tmp_path):
+        try:
+            import psutil
+        except (ImportError, ModuleNotFoundError):
+            pytest.xfail("psutil not detected.")
+
+        manager: GloMPOManager
+        manager._process = psutil.Process()
+        manager.t_start = time()
+        summary = manager._summarise_resource_usage()
+
+        assert summary == {'load_ave': [0], 'load_std': [0], 'mem_ave': '--', 'mem_max': '--',
+                           'cpu_ave': 0, 'cpu_std': 0}
+
+        for i in range(10):
+            manager._build_status_message()
+
+        summary = manager._summarise_resource_usage()
+
+        assert len(summary['load_ave']) == 3
+        assert len(summary['load_std']) == 3
+        assert any([suffix in summary['mem_ave'] for suffix in ('B', 'kB', 'MB', 'GB')])
+        assert any([suffix in summary['mem_max'] for suffix in ('B', 'kB', 'MB', 'GB')])
+        assert summary['cpu_ave'] > 0
+        assert summary['cpu_std'] > 0
+
     @pytest.mark.parametrize('backend', ['processes', 'threads'])
-    def test_inf_spawn(self, manager, tmp_path, backend, caplog):
+    def test_inf_spawn(self, manager, tmp_path, backend, caplog, capfd):
         class CrashingOptimizer(BaseOptimizer):
             def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],
                          bounds: Sequence[Tuple[float, float]], callbacks: Callable = None, **kwargs) -> MinimizeResult:
@@ -626,6 +667,52 @@ class TestManager:
                 for i, pack in manager._optimizer_packs.items():
                     if pack.process.is_alive():
                         manager._check_signals(i)
+
+    def test_stop_file(self, manager, tmp_path, monkeypatch, caplog):
+        class ShutdownLogger:
+            def __init__(self):
+                self.calls = []
+
+            def __call__(self, *args):
+                self.calls.append(args[0])
+
+        caplog.set_level(logging.DEBUG, logger='glompo.manager')
+
+        mock_shutdown_logger = ShutdownLogger()
+        monkeypatch.setattr(manager, '_shutdown_job', mock_shutdown_logger)
+
+        files = ['STOP_1', 'STOP_2', 'STOP_3', 'STOP_X']
+        for file in files:
+            (tmp_path / file).touch()
+        manager.working_dir = tmp_path
+        manager.graveyard = {1}
+        manager._optimizer_packs = {2: ()}
+
+        manager._is_manual_shutdowns()
+
+        assert [(tmp_path / file).exists() for file in files] == [False] * 3 + [True]
+        assert sorted([f"Matching living optimizer not found for '{tmp_path / 'STOP_1'}'",
+                       f"Matching living optimizer not found for '{tmp_path / 'STOP_3'}'",
+                       "STOP file found for Optimizer 2"]) == sorted(caplog.messages)
+        assert mock_shutdown_logger.calls == [2]
+
+    def test_manual_checkpoint(self, manager, monkeypatch, tmp_path):
+        class CheckpointCallLogger:
+            def __init__(self):
+                self.called = False
+
+            def __call__(self):
+                self.called = True
+
+        mock_ck_logger = CheckpointCallLogger()
+        monkeypatch.setattr(manager, 'checkpoint', mock_ck_logger)
+
+        manager.working_dir = tmp_path
+        (tmp_path / 'CHKPT').touch()
+        manager._is_manual_checkpoints()
+        assert not (tmp_path / 'CHKPT').exists()
+        assert mock_ck_logger.called
+        assert manager.checkpoint_control is None
 
     @pytest.mark.mini
     @pytest.mark.parametrize('backend', ['processes', 'threads'])
@@ -1025,7 +1112,7 @@ class TestCheckpointing:
         if keep == -1:
             assert all([(tmp_path / f'chkpt_00{i}.tar.gz').exists() for i in range(5)])
         else:
-            survivors = lambda k: [*[False] * (4 - k), *[True] * (k + 1)]
+            survivors = lambda k: [False] * (4 - k) + [True] * (k + 1)
             assert [(tmp_path / f'chkpt_00{i}.tar.gz').exists() for i in range(5)] == survivors(keep)
 
     @pytest.mark.parametrize('raises_bool, raises', [(True, pytest.raises(CheckpointingError,
@@ -1210,7 +1297,7 @@ class TestCheckpointing:
                     assert (f'glompo.optimizers.opt{opt_id}', 10, "Executing: _checkpoint_pass") \
                            in caplog.record_tuples
 
-        assert [(tmp_path / f'optimizers/000{i}').exists() for i in range(1, 7)] == [True, *[False] * 4, True]
+        assert [(tmp_path / f'optimizers/000{i}').exists() for i in range(1, 7)] == [True] + [False] * 4 + [True]
 
     # def test_make_mock_chkpt(self, manager, mnkyptch_loggers, input_files):
     #     manager.setup(task=lambda x: x[0] ** 2 + 3 * x[1] ** 4 - x[2] ** 0.5,

@@ -5,6 +5,7 @@ import getpass
 import logging
 import multiprocessing as mp
 import queue
+import re
 import shutil
 import socket
 import sys
@@ -1449,17 +1450,20 @@ class GloMPOManager:
     def _is_manual_shutdowns(self):
         """ If a file titled STOP_x is found in the working directory then the manager will shutdown optimizer x. """
 
-        stop_files = (x for x in self.working_dir.iterdir() if "STOP_" in x.name)
+        stop_files = (x for x in self.working_dir.iterdir() if re.match("STOP_[0-9]+", x.name))
         for file in stop_files:
+            file.unlink()
             try:
                 _, opt_id = file.name.split('_')
                 opt_id = int(opt_id)
-                if opt_id not in self._graveyard:
-                    self._shutdown_job(opt_id, None, "User STOP file intervention.")
-                    self.logger.info(f"STOP file found for Optimizer {opt_id}")
-                    file.unlink()
+                if opt_id not in self._optimizer_packs or opt_id in self._graveyard:
+                    self.logger.info(f"Matching living optimizer not found for '{file}'")
+                    continue
+
+                self._shutdown_job(opt_id, None, "User STOP file intervention.")
+                self.logger.info(f"STOP file found for Optimizer {opt_id}")
             except ValueError as e:
-                self.logger.debug("Error encountered trying to process STOP files.", exc_info=e)
+                self.logger.debug(f"Error encountered trying to process STOP file '{file}'.", exc_info=e)
                 continue
 
     def _is_manual_checkpoints(self):
@@ -1577,50 +1581,13 @@ class GloMPOManager:
 
             if HAS_PSUTIL and self._process:
                 cores = self._process.cpu_affinity()
-                # Verbose forcing of float and list below needed to stop recursion errors during python dump
-                if len(self.load_history) > 0 and not np.all(np.isnan(self.load_history)):
-                    load_ave = \
-                        np.round(
-                            np.nanmean(
-                                np.reshape(
-                                    np.array(self.load_history, dtype=float),
-                                    (-1, 3)),
-                                axis=0),
-                            3)
-                    load_std = \
-                        np.round(
-                            np.nanstd(
-                                np.reshape(
-                                    np.array(self.load_history, dtype=float),
-                                    (-1, 3)),
-                                axis=0),
-                            3)
-
-                    load_ave = [float(i) for i in load_ave]
-                    load_std = [float(i) for i in load_std]
-                else:
-                    load_ave = [0]
-                    load_std = [0]
-
-                if len(self.mem_history) > 0 and not np.all(np.isnan(self.mem_history)):
-                    mem_max = present_memory(float(np.nanmax(self.mem_history)))
-                    mem_ave = present_memory(float(np.nanmean(self.mem_history)))
-                else:
-                    mem_max = '--'
-                    mem_ave = '--'
-
-                if len(self.cpu_history) > 0 and not np.all(np.isnan(self.cpu_history)):
-                    cpu_ave = float(np.round(np.nanmean(self.cpu_history), 2))
-                    cpu_std = float(np.round(np.nanstd(self.cpu_history), 2))
-                else:
-                    cpu_ave = 0
-                    cpu_std = 0
+                resource_summary = self._summarise_resource_usage()
 
                 run_info = {
                     "Memory": {
                         "Used": {
-                            "Max": mem_max,
-                            "Ave": mem_ave},
+                            "Max": resource_summary['mem_max'],
+                            "Ave": resource_summary['mem_ave']},
                         "Available": present_memory(psutil.virtual_memory().total)},
                     "CPU": {
                         "Cores": {
@@ -1629,11 +1596,11 @@ class GloMPOManager:
                         "Frequency":
                             f"{psutil.cpu_freq().max / 1000}GHz",
                         "Load": {
-                            "Average": FlowList(load_ave),
-                            "Std. Dev.": FlowList(load_std)},
+                            "Average": FlowList(resource_summary['load_ave']),
+                            "Std. Dev.": FlowList(resource_summary['load_std'])},
                         "CPU Usage(%)": {
-                            "Average": cpu_ave,
-                            "Std. Dev.": cpu_std}}}
+                            "Average": resource_summary['cpu_ave'],
+                            "Std. Dev.": resource_summary['cpu_std']}}}
             else:
                 run_info = None
 
@@ -1946,3 +1913,51 @@ class GloMPOManager:
             status_mess += f"    {'System Load:':.<26} {self.load_history[-1]}\n"
 
         return status_mess
+
+    def _summarise_resource_usage(self) -> Dict[str, Union[float, Sequence[float]]]:
+        """ Constructs averages and standard deviation of the memory, CPU and system load statistics logged during
+            the optimization.
+        """
+
+        # Verbose forcing of float and list below needed to stop recursion errors during python dump
+        if len(self.load_history) > 0 and not np.all(np.isnan(self.load_history)):
+            load_ave = \
+                np.round(
+                    np.nanmean(
+                        np.reshape(
+                            np.array(self.load_history, dtype=float),
+                            (-1, 3)),
+                        axis=0),
+                    3)
+            load_std = \
+                np.round(
+                    np.nanstd(
+                        np.reshape(
+                            np.array(self.load_history, dtype=float),
+                            (-1, 3)),
+                        axis=0),
+                    3)
+
+            load_ave = [float(i) for i in load_ave]
+            load_std = [float(i) for i in load_std]
+        else:
+            load_ave = [0]
+            load_std = [0]
+
+        if len(self.mem_history) > 0 and not np.all(np.isnan(self.mem_history)):
+            mem_max = present_memory(float(np.nanmax(self.mem_history)))
+            mem_ave = present_memory(float(np.nanmean(self.mem_history)))
+        else:
+            mem_max = '--'
+            mem_ave = '--'
+
+        if len(self.cpu_history) > 0 and not np.all(np.isnan(self.cpu_history)):
+            cpu_ave = float(np.round(np.nanmean(self.cpu_history), 2))
+            cpu_std = float(np.round(np.nanstd(self.cpu_history), 2))
+        else:
+            cpu_ave = 0
+            cpu_std = 0
+
+        return {'load_ave': load_ave, 'load_std': load_std,
+                'mem_ave': mem_ave, 'mem_max': mem_max,
+                'cpu_ave': cpu_ave, 'cpu_std': cpu_std}
