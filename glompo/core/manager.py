@@ -1810,7 +1810,7 @@ class GloMPOManager:
         if not task_persisted:
             try:
                 # noinspection PyUnresolvedReferences
-                self.task.checkpoint_save('')
+                self.task.checkpoint_save(path)
                 self.logger.info("Task successfully saved")
             except AttributeError:
                 self.logger.info("task.checkpoint_save not found.")
