@@ -20,6 +20,7 @@ __all__ = ("nested_string_formatting",
            "optimizer_selector_presenter",
            "generator_presenter",
            "flow_presenter",
+           "numpy_array_presenter",
            "bound_group_presenter",
            "unknown_object_presenter",
            "WorkInDirectory",
@@ -181,6 +182,10 @@ def generator_presenter(dumper, generator: 'BaseGenerator'):
 
 def flow_presenter(dumper, lst):
     return dumper.represent_sequence('tag:yaml.org,2002:seq', lst, flow_style=True)
+
+
+def numpy_array_presenter(dumper, numpy_arr):
+    return dumper.represent_sequence('tag:yaml.org,2002:seq', numpy_arr.tolist(), flow_style=True)
 
 
 def bound_group_presenter(dumper, bound_group):

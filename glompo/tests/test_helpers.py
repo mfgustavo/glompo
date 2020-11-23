@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import numpy as np
 import pytest
 import yaml
 
@@ -20,7 +21,7 @@ except (ModuleNotFoundError, ImportError):
 
 from glompo.common.helpers import WorkInDirectory, LiteralWrapper, literal_presenter, nested_string_formatting, \
     unknown_object_presenter, generator_presenter, optimizer_selector_presenter, present_memory, FlowList, \
-    flow_presenter, BoundGroup, bound_group_presenter, is_bounds_valid, distance, glompo_colors
+    flow_presenter, numpy_array_presenter, BoundGroup, bound_group_presenter, is_bounds_valid, distance, glompo_colors
 from glompo.opt_selectors import BaseSelector, CycleSelector, IterSpawnStop
 from glompo.generators import RandomGenerator, BaseGenerator
 from glompo.common.namedtuples import Bound
@@ -28,6 +29,7 @@ from glompo.optimizers.cmawrapper import CMAOptimizer
 
 yaml.add_representer(LiteralWrapper, literal_presenter, Dumper=Dumper)
 yaml.add_representer(FlowList, flow_presenter, Dumper=Dumper)
+yaml.add_representer(np.ndarray, numpy_array_presenter, Dumper=Dumper)
 yaml.add_representer(BoundGroup, bound_group_presenter, Dumper=Dumper)
 yaml.add_multi_representer(BaseSelector, optimizer_selector_presenter, Dumper=Dumper)
 yaml.add_multi_representer(BaseGenerator, generator_presenter, Dumper=Dumper)
@@ -171,7 +173,9 @@ class MaxCallsCallback:
                            'MaxCallsCallback:\n          calls_per_iter: 1\n          iters_used: 0\n          '
                            'max_iter: 100\n'),
 
-                          (RandomGenerator([(6, 7)] * 30), 'Generator: RandomGenerator\nn_params: 30\n')])
+                          (RandomGenerator([(6, 7)] * 30), 'Generator: RandomGenerator\nn_params: 30\n'),
+
+                          (np.full(5, 3), '[3, 3, 3, 3, 3]\n')])
 def test_yaml_presenters(dump, load, tmp_path):
     with (tmp_path / 'dump.yml').open('w+') as file:
         yaml_dump = yaml.dump(dump, Dumper=Dumper, default_flow_style=False, sort_keys=False)
