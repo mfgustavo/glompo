@@ -45,7 +45,8 @@ from ._backends import CustomThread, ThreadPrintRedirect
 from .optimizerlogger import OptimizerLogger
 from ..common.helpers import LiteralWrapper, literal_presenter, nested_string_formatting, \
     unknown_object_presenter, generator_presenter, optimizer_selector_presenter, present_memory, FlowList, \
-    flow_presenter, numpy_array_presenter, BoundGroup, bound_group_presenter, CheckpointingError, is_bounds_valid
+    flow_presenter, numpy_array_presenter, numpy_dtype_presenter, BoundGroup, bound_group_presenter, \
+    CheckpointingError, is_bounds_valid
 from ..common.namedtuples import Bound, IterationResult, OptimizerPackage, ProcessPackage, Result, OptimizerCheckpoint
 from ..common.wrappers import process_print_redirect
 from ..convergence import BaseChecker, KillsAfterConvergence
@@ -263,6 +264,7 @@ class GloMPOManager:
         yaml.add_representer(FlowList, flow_presenter, Dumper=Dumper)
         yaml.add_representer(np.ndarray, numpy_array_presenter, Dumper=Dumper)
         yaml.add_representer(BoundGroup, bound_group_presenter, Dumper=Dumper)
+        yaml.add_multi_representer(np.generic, numpy_dtype_presenter, Dumper=Dumper)
         yaml.add_multi_representer(BaseSelector, optimizer_selector_presenter, Dumper=Dumper)
         yaml.add_multi_representer(BaseGenerator, generator_presenter, Dumper=Dumper)
         yaml.add_multi_representer(object, unknown_object_presenter, Dumper=Dumper)

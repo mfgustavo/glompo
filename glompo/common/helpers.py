@@ -21,6 +21,7 @@ __all__ = ("nested_string_formatting",
            "generator_presenter",
            "flow_presenter",
            "numpy_array_presenter",
+           "numpy_dtype_presenter",
            "bound_group_presenter",
            "unknown_object_presenter",
            "WorkInDirectory",
@@ -184,8 +185,20 @@ def flow_presenter(dumper, lst):
     return dumper.represent_sequence('tag:yaml.org,2002:seq', lst, flow_style=True)
 
 
+def numpy_dtype_presenter(dumper, numpy_type):
+    value = numpy_type.item()
+    try:
+        return getattr(dumper, f'represent_{type(value).__name__}')(value)
+    except AttributeError:
+        return dumper.represent_scalar('tag:yaml.org,2002:str', str(value))
+
+
 def numpy_array_presenter(dumper, numpy_arr):
-    return dumper.represent_sequence('tag:yaml.org,2002:seq', numpy_arr.tolist(), flow_style=True)
+    value = numpy_arr.tolist()
+    try:
+        return dumper.represent_sequence('tag:yaml.org,2002:seq', value, flow_style=True)
+    except TypeError:
+        return dumper.represent_scalar('tag:yaml.org,2002:str', str(value))
 
 
 def bound_group_presenter(dumper, bound_group):
