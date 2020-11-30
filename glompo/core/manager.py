@@ -1142,7 +1142,9 @@ class GloMPOManager:
             ----------
             summary_files: Optional[int] = None
                 If provided, this will overwrite the manager summary_files setting allowing this method to produce more
-                or less output as desired.
+                or less output as desired. If not provided and the manager summary_files setting is not set then this
+                method will pass and produce no output. This would typically only happen if trying to dump an
+                uninitialised manager.
             dump_dir: Optional[Path] = None
                 If provided, this will overwrite the manager working_dir allowing the output to be redirected to a
                 different folder so as to not interfere with files in the working directory.
@@ -1154,6 +1156,12 @@ class GloMPOManager:
             dump_dir.mkdir(exist_ok=True)
         else:
             dump_dir = self.working_dir
+
+        if summary_files is None:
+            summary_files = self.summary_files
+        if summary_files is None:  # Possible if self.summary_files has not been set
+            summary_files = 0
+
         self._save_log(self.result, "Manual Save State", None, dump_dir, summary_files)
 
     """ Management Sub-Tasks """
