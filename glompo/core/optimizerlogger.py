@@ -31,10 +31,15 @@ class OptimizerLogger:
 
     def __init__(self):
         self._storage: Dict[int, _OptimizerLogger] = {}
+        self._best_iter = {'opt_id': 0, 'x': [], 'fx': float('inf')}
         yaml.add_representer(FlowList, flow_presenter, Dumper=Dumper)
 
     def __len__(self):
         return len(self._storage)
+
+    @property
+    def best_iter(self) -> Dict[str, Any]:
+        return self._best_iter
 
     def add_optimizer(self, opt_id: int, class_name: str, time_start: str):
         """ Adds a new optimizer data stream to the log. """
@@ -42,6 +47,11 @@ class OptimizerLogger:
 
     def put_iteration(self, opt_id: int, i: int, f_call_overall: int, f_call_opt: int, x: Sequence[float], fx: float):
         """ Adds an iteration result to an optimizer data stream. """
+        if fx < self._best_iter['fx']:
+            self._best_iter['opt_id'] = opt_id
+            self._best_iter['x'] = x
+            self._best_iter['fx'] = fx
+
         self._storage[opt_id].append(i, f_call_overall, f_call_opt, x, fx)
 
     def put_metadata(self, opt_id: int, key: str, value: str):

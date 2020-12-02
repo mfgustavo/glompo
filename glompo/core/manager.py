@@ -994,12 +994,14 @@ class GloMPOManager:
 
         except KeyboardInterrupt:
             caught_exception = "User Interrupt"
+            reason = caught_exception
             self.logger.error("Caught User Interrupt, closing GloMPO gracefully.")
             warnings.warn("Optimization failed. Caught User Interrupt", RuntimeWarning)
             self._stop_all_children("User Interrupt")
 
         except Exception as e:
             caught_exception = "".join(traceback.TracebackException.from_exception(e).format())
+            reason = "GloMPO Crash"
             self.logger.critical("Critical error encountered. Attempting to close GloMPO gracefully", exc_info=e)
             warnings.warn(f"Optimization failed. Caught exception: {e}", RuntimeWarning)
             self._stop_all_children("GloMPO Crash")
@@ -1419,7 +1421,7 @@ class GloMPOManager:
 
                 # Start hunt if required
                 best_id = -1
-                self.result = self._find_best_result()
+                self.result = self._update_best_result()
                 if self.result.origin and 'opt_id' in self.result.origin:
                     best_id = self.result.origin['opt_id']
 
@@ -1516,24 +1518,13 @@ class GloMPOManager:
         if self.visualisation:
             self.scope.update_kill(opt_id)
 
-    def _find_best_result(self) -> Result:
+    def _update_best_result(self) -> Result:
         """ Returns the best results found in the log of results. """
 
-        best_fx = np.inf
-        best_x = []
-        best_origin = None
+        best_iter = self.opt_log.best_iter
 
-        for opt_id in range(1, self.o_counter + 1):
-            history = self.opt_log.get_history(opt_id, "fx_best")
-            if len(history) > 0:
-                opt_best = history[-1]
-                if opt_best < best_fx:
-                    best_fx = opt_best
-                    i = self.opt_log.get_history(opt_id, "i_best")[-1]
-                    best_x = self.opt_log.get_history(opt_id, "x")[i - 1]
-                    best_origin = {"opt_id": opt_id,
-                                   "type": self.opt_log.get_metadata(opt_id, "Optimizer Type")}
-                    self.logger.debug("Updated best result")
+        best_origin = {"opt_id": best_iter['opt_id'],
+                       "type": self.opt_log.get_metadata(best_iter['opt_id'], "Optimizer Type")}
 
         best_stats = {'f_evals': self.f_counter,
                       'opts_started': self.o_counter,
@@ -1541,7 +1532,7 @@ class GloMPOManager:
                       'opts_conv': self.conv_counter,
                       'end_cond': None}
 
-        return Result(best_x, best_fx, best_stats, best_origin)
+        return Result(best_iter['x'], best_iter['fx'], best_stats, best_origin)
 
     def _stop_all_children(self, crash_reason: Optional[str] = None):
         """ Shuts down and cleansup all active children """
