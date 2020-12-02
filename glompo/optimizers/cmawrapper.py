@@ -28,6 +28,7 @@ class CMAOptimizer(BaseOptimizer):
     """
 
     def __init__(self, sampler: str = 'full', verbose: bool = True, keep_files: bool = False,
+                 force_injects: Optional[bool] = None, injection_frequency: Optional[int] = None,
                  opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
                  results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
                  backend: str = 'threads', **cmasettings):
@@ -43,11 +44,25 @@ class CMAOptimizer(BaseOptimizer):
             workers: int = 1
                 The number of parallel evaluators used by this instance of CMA.
             keep_files: bool = False
-                If True the files produced by CMA are retained otherwise they are not produced..
+                If True the files produced by CMA are retained otherwise they are not produced.
+            force_injects: Optional[bool] = None
+                If True, injections of parameter vectors into the solver will be exact, guaranteeing that that
+                solution will be in the next iteration's population. If False, the injection will result in a direction
+                relative nudge towards the vector. Forcing the injecting can limit global exploration but non-forced
+                injections may have little effect.
+            injection_frequency: Optional[int] = None
+                If None, injections are ignored by the optimizer. If an int is provided then injection are only accepted
+                if at least injection_frequency iterations have passed since the last injection.
             cmasettings: Optional[Dict[str, Any]]
                 cma module-specific settings as ``k,v`` pairs. See ``cma.s.pprint(cma.CMAOptions())`` for a list of
                 available options. Most useful keys are: `timeout`, `tolstagnation`, `popsize`. Additionally,
                 the key `minsigma` is supported: Termination if ``sigma < minsigma``.
+
+            Notes
+            -----
+            Although not the default, by adjusting the injection settings above, the optimizer will inject the saved
+            incumbent solution into the solver influencing the points sampled by the following iteration. The incumbent
+            begins at x0 and is updated by the inject method called by the GloMPO manager.
         """
         super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
 
@@ -57,6 +72,10 @@ class CMAOptimizer(BaseOptimizer):
         self.keep_files = keep_files
         self.cmasettings = cmasettings
         self.popsize = cmasettings['popsize'] if 'popsize' in cmasettings else None
+
+        self.force_injects = force_injects
+        self.injection_frequency = injection_frequency
+        self.injection_counter = 0
 
         # Sort all non-native CMA options into the custom cmaoptions key 'vv':
         customopts = {}
@@ -95,7 +114,8 @@ class CMAOptimizer(BaseOptimizer):
             function: Callable[[Sequence[float]], float]
                 Task to be minimised accepting a sequence of unknown parameters and returning a float result.
             x0: Sequence[float]
-                Initial mean of the distribution from with trial parameter sets are sampled.
+                Initial mean of the distribution from with trial parameter sets are sampled. Force injected into the
+                solver to guarantee it is evaluated.
             bounds: Sequence[Tuple[float, float]]
                 Bounds on the sampling limits of each dimension. CMA supports handling bounds as non-linear
                 transformations so that they are never exceeded (but bounds are likely to be over sampled) or with a
@@ -134,6 +154,7 @@ class CMAOptimizer(BaseOptimizer):
             self.result = MinimizeResult()
             task_settings.update({'bounds': np.transpose(bounds).tolist()})
             self.es = cma.CMAEvolutionStrategy(x0, sigma0, task_settings)
+            self.es.inject([x0], force=True)
 
         self.logger.debug("Entering optimization loop")
 
@@ -150,6 +171,9 @@ class CMAOptimizer(BaseOptimizer):
             if len(x) != len(fx):
                 self.logger.debug("Unfinished evaluation detected. Breaking out of loop")
                 break
+
+            if i == 1:
+                self._incumbent = {'x': x0, 'fx': fx[0]}
 
             self.es.tell(x, fx)
             self.logger.debug("Told solutions")
@@ -177,6 +201,12 @@ class CMAOptimizer(BaseOptimizer):
                 self.logger.debug("Passed pause test")
             self._customtermination(task_settings)
             self.logger.debug("callbacks called")
+
+            if self._incumbent['fx'] < min(fx) and \
+                    self.injection_frequency and i - self.injection_counter > self.injection_frequency:
+                self.injection_counter = i
+                self.es.inject([self._incumbent['x']], force=self.force_injects)
+                print("Incumbent solution injected.")
 
         self.logger.debug("Exited optimization loop")
 

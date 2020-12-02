@@ -124,6 +124,9 @@ class GloMPOManager:
             killing_conditions in an attempt to terminate children.
         hunt_victims: Dict[int, float]
             Mapping of manager-killed optimizer ID numbers and timestamps when they were terminated.
+        incumbent_sharing: bool
+            If True the manager will send iteration information about the best ever seen solution to all its children
+            whenever this is updated.
         killing_conditions: BaseHunter
             GloMPO object which evaluates whether an optimizer meets its conditions to be terminated early.
             (See glompo.hunters.basehunter.BaseHunter).
@@ -318,6 +321,7 @@ class GloMPOManager:
         self.visualisation_args: Dict[str, Any] = {}
         self.hunt_frequency: int = None
         self.spawning_opts: bool = None
+        self.incumbent_sharing: bool = None
         self.status_frequency: float = None
         self.checkpoint_control: CheckpointingControl = None
 
@@ -346,6 +350,7 @@ class GloMPOManager:
               convergence_checker: Optional[BaseChecker] = None,
               x0_generator: Optional[BaseGenerator] = None,
               killing_conditions: Optional[BaseHunter] = None,
+              share_best_solutions: bool = False,
               hunt_frequency: int = 100,
               status_frequency: int = 600,
               checkpoint_control: Optional[CheckpointingControl] = None,
@@ -432,6 +437,9 @@ class GloMPOManager:
             Note, for performance and to allow conditionality between hunters conditions are evaluated 'lazily' i.e.
             x or y will return if x is True without evaluating y. x and y will return False if x is False without
             evaluating y.
+
+        share_best_solutions: bool = False
+            If True the manager will send the best ever seen solution to all its children whenever this is updated.
 
         hunt_frequency: int = 100
             The number of function calls between successive attempts to evaluate optimizer performance and determine
@@ -576,6 +584,7 @@ class GloMPOManager:
         self.visualisation = visualisation
         self.hunt_frequency = hunt_frequency
         self.spawning_opts = True
+        self.incumbent_sharing = share_best_solutions
         self.status_frequency = int(status_frequency)
 
         # Setup Checkpointing
@@ -1522,6 +1531,11 @@ class GloMPOManager:
         """ Returns the best results found in the log of results. """
 
         best_iter = self.opt_log.best_iter
+
+        if self.incumbent_sharing and (not self.result.fx or best_iter['fx'] < self.result.fx):
+            for opt_id, pack in self._optimizer_packs.items():
+                if opt_id != best_iter['opt_id'] and pack.process.is_alive():
+                    pack.signal_pipe.send((4, best_iter['x'], best_iter['fx']))
 
         best_origin = {"opt_id": best_iter['opt_id'],
                        "type": self.opt_log.get_metadata(best_iter['opt_id'], "Optimizer Type")}
