@@ -25,6 +25,7 @@ class ValueAnnealing(BaseHunter):
         """
         super().__init__()
         assert 0 < med_kill_chance < 1, "med_kill_chance must be between 0 and 1"
+        self.med_kill_chance = med_kill_chance
         self.strictness = np.log(med_kill_chance)
 
     def __call__(self,

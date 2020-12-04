@@ -11,7 +11,7 @@ def get_readme():
 
 setup(
     name="glompo",
-    version="2.0.6",
+    version="2.0.7",
     description="Globally managed parallel optimization",
     long_description=get_readme(),
     author="Michael Freitas Gustavo",
