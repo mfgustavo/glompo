@@ -157,7 +157,7 @@ class GlompoParamsWrapper(BaseOptimizer):
 
 class ReaxFFError:
     """ Setups a function which when called returns the error value of a parameterised ReaxFF force field as compared to
-        a provided trainign set of data.
+        a provided training set of data.
     """
 
     @classmethod
