@@ -173,7 +173,7 @@ class CMAOptimizer(BaseOptimizer):
                 break
 
             if i == 1:
-                self._incumbent = {'x': x0, 'fx': fx[0]}
+                self.incumbent = {'x': x0, 'fx': fx[0]}
 
             self.es.tell(x, fx)
             self.logger.debug("Told solutions")
@@ -202,10 +202,10 @@ class CMAOptimizer(BaseOptimizer):
             self._customtermination(task_settings)
             self.logger.debug("callbacks called")
 
-            if self._incumbent['fx'] < min(fx) and \
+            if self.incumbent['fx'] < min(fx) and \
                     self.injection_frequency and i - self.injection_counter > self.injection_frequency:
                 self.injection_counter = i
-                self.es.inject([self._incumbent['x']], force=self.force_injects)
+                self.es.inject([self.incumbent['x']], force=self.force_injects)
                 print("Incumbent solution injected.")
 
         self.logger.debug("Exited optimization loop")

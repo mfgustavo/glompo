@@ -118,7 +118,6 @@ class BaseOptimizer(ABC):
         self._backend = backend
         self._result_cache = None
         self._is_restart = False
-        self._incumbent = {'x': None, 'fx': None}
 
         self._FROM_MANAGER_SIGNAL_DICT = {0: self.checkpoint_save,
                                           1: self.callstop,
@@ -129,6 +128,7 @@ class BaseOptimizer(ABC):
                                         1: "Confirm Pause",
                                         9: "Other Message (Saved to Log)"}
         self.workers = workers
+        self.incumbent = {'x': None, 'fx': None}
 
     def _minimize(self,
                   function: Callable[[Sequence[float]], float],
@@ -261,10 +261,10 @@ class BaseOptimizer(ABC):
 
     def inject(self, x: Sequence[float], fx: float):
         """ If configured to do so, the manager will share the best solution seen by any optimizer with the others
-            through this method. The default is to save the iteration into the _incumbent property which the minimize
+            through this method. The default is to save the iteration into the incumbent property which the minimize
             algorithm may be able to use in some way.
         """
-        self._incumbent = {'x': x, 'fx': fx}
+        self.incumbent = {'x': x, 'fx': fx}
 
     def _checkpoint_pass(self):
         """ Empty method. Allows optimizers captured by checkpoint to pass out without saving.
