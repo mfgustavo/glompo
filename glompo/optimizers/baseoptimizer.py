@@ -10,7 +10,7 @@ from multiprocessing.connection import Connection
 from pathlib import Path
 from queue import Full, Queue
 from threading import Event
-from typing import Any, Callable, Optional, Sequence, Set, Tuple, Type, Union
+from typing import Any, Callable, List, Optional, Sequence, Set, Tuple, Type, Union
 
 from dill import dill
 
@@ -190,20 +190,32 @@ class BaseOptimizer(ABC):
 
         """
 
-    def check_messages(self):
-        """ Processes and executes manager signals from the manager. Should not be overwritten. """
+    def check_messages(self, return_signals: bool = False) -> Optional[List[int]]:
+        """ Processes and executes manager signals from the manager. Should not be overwritten.
+
+            Parameters
+            -------
+            return_signals: bool = False
+                If True the method returns the signal keys received by the manager in the call
+        """
+        processed_signals = []
         while self._signal_pipe.poll():
             message = self._signal_pipe.recv()
             self.logger.debug(f"Received signal: {message}")
             if isinstance(message, int) and message in self._FROM_MANAGER_SIGNAL_DICT:
                 self.logger.debug(f"Executing: {self._FROM_MANAGER_SIGNAL_DICT[message].__name__}")
+                processed_signals.append(message)
                 self._FROM_MANAGER_SIGNAL_DICT[message]()
             elif isinstance(message, tuple) and message[0] in self._FROM_MANAGER_SIGNAL_DICT:
+                processed_signals.append(message[0])
                 self.logger.debug(f"Executing: {self._FROM_MANAGER_SIGNAL_DICT[message[0]].__name__}")
                 self._FROM_MANAGER_SIGNAL_DICT[message[0]](*message[1:])
             else:
                 self.logger.warning("Cannot parse message, ignoring")
                 warnings.warn("Cannot parse message, ignoring", RuntimeWarning)
+
+        if return_signals:
+            return processed_signals
 
     def push_iter_result(self, result: 'IterationResult'):
         """ Put an iteration result into _results_queue.
@@ -283,9 +295,11 @@ class BaseOptimizer(ABC):
         self.message_manager(1)  # Certify waiting for next instruction
         self.logger.debug("Wait signal messaged to manager, waiting for reply...")
 
-        self._signal_pipe.poll(timeout=None)  # Wait on instruction to save or end
-        self.logger.debug("Instruction received. Executing...")
-        self.check_messages()
+        processed_signals = []
+        while all([s not in processed_signals for s in (0, 3)]):
+            self._signal_pipe.poll(timeout=None)  # Wait on instruction to save or end
+            self.logger.debug("Instruction received. Executing...")
+            processed_signals = self.check_messages(return_signals=True)
         self.logger.debug("Instructions processed. Pausing until release...")
         self._pause_signal.clear()  # Wait on pause event, to be released by manager
         self._pause_signal.wait()
