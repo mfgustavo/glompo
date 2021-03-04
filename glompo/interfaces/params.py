@@ -161,7 +161,9 @@ class BaseParamsError:
     """ Base error function instance from which other classes derive depending on the engine used e.g. ReaxFF, xTB etc.
     """
 
-    def __init__(self, data_set: DataSet, job_collection: JobCollection, parameters: BaseParameters):
+    def __init__(self, data_set: DataSet, job_collection: JobCollection, parameters: BaseParameters,
+                 validation_dataset: Optional[DataSet] = None,
+                 scale_residuals: bool = True):
         """ Initialisation of the error function. To initialise the object from files use the class factory
             methods from_classic_files or from_params_files.
 
@@ -174,10 +176,20 @@ class BaseParamsError:
             parameters: BaseParameters
                 BaseParameters object which holds the force field values, ranges, engine and which parameters are active
                 or not.
+            validation_dataset: Optional[DataSet]
+                If a validation set is being used and evaluated along with the training set, it may be added here.
+                Jobs for the validation set are expected to be included in job_collection
+            scale_residuals: bool = True
+                If True then the raw residuals (i.e. the differences between engine evaluation and training data) will
+                be scaled by the weight and sigma values in the datasets i.e. r_scaled = weight * r / sigma. Otherwise
+                the raw residual is returned. This setting effects both the resids and detailed_call methods.
         """
         self.dat_set = data_set
         self.job_col = job_collection
         self.par_eng = parameters
+        self.val_set = validation_dataset
+
+        self.scale_residuals = scale_residuals
 
         self.loss = SSE()
         self.scaler = LinearParameterScaler(self.par_eng.active.range)
@@ -190,23 +202,54 @@ class BaseParamsError:
 
     def __call__(self, x: Sequence[float]) -> float:
         """ Returns the error value between the the force field with the given parameters and the training values. """
-        return self._calculate(x)[0]
+        return self._calculate(x)[0][0]
+
+    def detailed_call(self, x: Sequence[float]) -> Sequence[float]:
+        """ A full return of the error results. Returns a sequence:
+                [training_set_error, training_set_residual_1, ..., training_set_residual_N,
+                 validation_set_error, validation_set_residual_1, ..., validation_set_residual_N]
+            The list is truncated after the training set residuals if no validation set is present.
+        """
+        calc = self._calculate(x)
+        ts_fx = [calc[0][0]]
+        ts_resids = calc[0][1]
+        vs_fx = []
+        vs_resids = []
+
+        if self.val_set:
+            vs_fx = [calc[1][0]]
+            vs_resids = calc[1][1]
+
+        if self.scale_residuals:
+            ts_resids = self._scale_residuals(ts_resids, self.dat_set)
+            vs_resids = self._scale_residuals(vs_resids, self.val_set)
+
+        return [*ts_fx, *ts_resids, *vs_fx, *vs_resids]
+
+    def detailed_call_header(self) -> Sequence[str]:
+        """ Returns a sequence of strings which represent the column headers for the detailed_call return.
+            GloMPO optimizers will attached this sequence to the head of their CSV log files.
+        """
+        n_ts = len(self.dat_set)
+        n_vs = len(self.val_set) if self.val_set else 0
+
+        ts_digits = len(str(n_ts))
+        vs_digits = len(str(n_vs))
+
+        ts_heads = ['fx', *[f"r{i:0{ts_digits}}" for i in range(n_ts)]]
+        vs_heads = ['fx', *[f"r{i:0{vs_digits}}_vs" for i in range(n_vs)]] if self.val_set else []
+
+        return ts_heads + vs_heads
 
     def resids(self, x: Sequence[float]) -> Sequence[float]:
         """ Method for compatibility with GFLS optimizer. Returns the signed differences between the force field and
             training set but DOES NOT include weights and sigma values
         """
-        return self._calculate(x)[1]
+        residuals = self._calculate(x)[0][1]
+        if self.scale_residuals:
+            residuals = self._scale_residuals(residuals, self.dat_set)
 
-    def _calculate(self, x: Sequence[float]) -> Tuple[float, List[float], List[float]]:
-        """ Core calculation function, returns both the error function value and the residuals. """
-        try:
-            engine = self.par_eng.get_engine(self.scaler.scaled2real(x))
-            ff_results = self.job_col.run(engine.settings, parallel=self.par_levels)
-            err_result = self.dat_set.evaluate(ff_results, self.loss, True)
-            return err_result
-        except ResultsError:
-            return float('inf'), [float('inf')], [float('inf')]
+        return residuals
 
     def save(self, path: Union[Path, str], filenames: Optional[Dict[str, str]] = None,
              parameters: Optional[Sequence[float]] = None):
@@ -235,6 +278,23 @@ class BaseParamsError:
         self.dat_set.store(Path(path, names['ds']))
         self.job_col.store(Path(path, names['jc']))
         self.par_eng.write(Path(path, names['ff']), parameters)
+
+    def _calculate(self, x: Sequence[float]) -> Sequence[Tuple[float, List[float], List[float]]]:
+        """ Core calculation function, returns both the error function value and the residuals. """
+        default = (float('inf'), [float('inf')], [float('inf')])
+        try:
+            engine = self.par_eng.get_engine(self.scaler.scaled2real(x))
+            ff_results = self.job_col.run(engine.settings, parallel=self.par_levels)
+            ts_result = self.dat_set.evaluate(ff_results, self.loss, True)
+            vs_result = self.val_set.evaluate(ff_results, self.loss, True) if self.val_set else default
+            return ts_result, vs_result
+        except ResultsError:
+            return default, default
+
+    @staticmethod
+    def _scale_residuals(resids: Sequence[float], data_set: DataSet) -> Sequence[float]:
+        """ Scales a sequence of residuals by weight and sigma values in the associated DataSet"""
+        return [w / s * r for w, s, r in zip(data_set.get('weight'), data_set.get('sigma'), resids)]
 
 
 class ReaxFFError(BaseParamsError):
