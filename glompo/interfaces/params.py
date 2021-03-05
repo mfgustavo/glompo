@@ -24,7 +24,6 @@ from scm.plams.interfaces.adfsuite.reaxff import reaxff_control_to_settings
 
 from ..core.manager import GloMPOManager
 from ..opt_selectors.baseselector import BaseSelector
-from ..optimizers.gflswrapper import GFLSOptimizer
 
 __all__ = ("GlompoParamsWrapper",
            "ReaxFFError")
@@ -71,7 +70,10 @@ class _FunctionWrapper:
 
 
 class GlompoParamsWrapper(BaseOptimizer):
-    """ Wraps the GloMPO manager into a ParAMS optimizer. """
+    """ Wraps the GloMPO manager into a ParAMS optimizer. This is not the recommended way to make use of the GloMPO
+        interface, it is preferable to make use of the BaseParamsError classes. This class is only applicable in cases
+        where the ParAMS Optimization class interface is preferred.
+    """
 
     def __init__(self, optimizer_selector: BaseSelector, **manager_kwargs):
         """ Accepts GloMPO configuration information.
@@ -86,16 +88,13 @@ class GlompoParamsWrapper(BaseOptimizer):
                 Note that all arguments are accepted but required GloMPO arguments 'task' and 'bounds'
                 will be overwritten as they are passed by the 'minimize' function in accordance with ParAMS API.
         """
-
+        self.manager = GloMPOManager()
         self.manager_kwargs = manager_kwargs
         for kw in ['task', 'bounds']:
             if kw in self.manager_kwargs:
                 del self.manager_kwargs[kw]
 
         self.selector = optimizer_selector
-
-        if GFLSOptimizer in optimizer_selector:
-            self._loss = SSE()
 
     def minimize(self,
                  function: _Step,
@@ -142,17 +141,16 @@ class GlompoParamsWrapper(BaseOptimizer):
         # Silence function printing
         function.v = False
 
-        manager = GloMPOManager()
-        manager.setup(task=_FunctionWrapper(function), bounds=bounds, opt_selector=self.selector,
-                      **self.manager_kwargs)
+        self.manager.setup(task=_FunctionWrapper(function), bounds=bounds, opt_selector=self.selector,
+                           **self.manager_kwargs)
 
-        result = manager.start_manager()
+        result = self.manager.start_manager()
 
         # Reshape glompo.common.namedtuples.Result into scm.params.optimizers.base.MinimizeResult
         params_res = MinimizeResult()
         params_res.x = result.x
         params_res.fx = result.fx
-        params_res.success = manager.converged and len(result.x) > 0
+        params_res.success = self.manager.converged and len(result.x) > 0
 
         return params_res
 
