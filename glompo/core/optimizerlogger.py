@@ -116,8 +116,8 @@ class OptimizerLogger:
 
             digits = len(str(max(self._storage))) if self._storage else 1
             for optimizer in self._storage:
-                opt_id = int(self._storage[optimizer].metadata["Optimizer ID"])
-                opt_type = self._storage[optimizer].metadata["Optimizer Type"]
+                opt_id = int(self._storage[optimizer].metadata["opt_id"])
+                opt_type = self._storage[optimizer].metadata["opt_type"]
                 title = f"{opt_id:0{digits}}_{opt_type}"
                 self._write_file(optimizer, path / title)
 
@@ -126,8 +126,8 @@ class OptimizerLogger:
             termination.
         """
         sum_data = {}
-        for optimizer in self._storage:
-            opt_history = self.get_history(optimizer)
+        for opt_id, opt_log in self._storage.items():
+            opt_history = self.get_history(opt_id)
 
             i_tot = len(opt_history)
             x_best = None
@@ -142,12 +142,12 @@ class OptimizerLogger:
 
                 x_best = FlowList(best['x'])
                 f_best = best['fx_best']
-            end_cond = self._storage[optimizer].metadata["End Condition"] \
-                if "End Condition" in self._storage[optimizer].metadata else None
-            sum_data[optimizer] = {'end_cond': end_cond,
-                                   'f_calls': f_calls,
+            sum_data[opt_id] = {**opt_log.metadata,
+                                **{'f_calls': f_calls,
                                    'f_best': f_best,
-                                   'x_best': x_best}
+                                   'x_best': x_best},
+                                'messages': opt_log.messages}
+            del sum_data[opt_id]['opt_id']
 
         with Path(path).open("w+") as file:
             yaml.dump(sum_data, file, Dumper=Dumper, default_flow_style=False, sort_keys=False)
@@ -229,10 +229,10 @@ class OptimizerLogger:
 
             ax.plot(f_calls, traj, ls='-', marker='.', c=colors(opt_id))
             leg_elements.append(lines.Line2D([], [], ls='-', c=colors(opt_id),
-                                             label=f"{opt_id}: {self.get_metadata(opt_id, 'Optimizer Type')}"))
+                                             label=f"{opt_id}: {self.get_metadata(opt_id, 'opt_type')}"))
 
             try:
-                end_cond = self.get_metadata(opt_id, "End Condition")
+                end_cond = self.get_metadata(opt_id, "end_cond")
                 if "GloMPO Termination" in end_cond:
                     marker = 'x'
                 elif "Optimizer convergence" in end_cond:
@@ -273,9 +273,9 @@ class _OptimizerLogger:
     """ Stores history and meta data of a single optimizer started by GloMPO. """
 
     def __init__(self, opt_id: int, class_name: str, time_start: str):
-        self.metadata = {"Optimizer ID": str(opt_id),
-                         "Optimizer Type": class_name,
-                         "Start Time": time_start}
+        self.metadata = {"opt_id": str(opt_id),
+                         "opt_type": class_name,
+                         "t_start": time_start}
         self.history = {}
         self.messages = []
         self.exit_cond = None
@@ -302,7 +302,7 @@ class _OptimizerLogger:
         finally:
             if i > 1:
                 assert i == max(
-                    self.history) + 1, f"Opt {self.metadata['Optimizer ID']}: {i} != {max(self.history) + 1}"
+                    self.history) + 1, f"Opt {self.metadata['opt_id']}: {i} != {max(self.history) + 1}"
             self.history[i] = {'f_call_overall': int(f_call_overall),
                                'f_call_opt': int(f_call_opt),
                                'fx': float(fx),

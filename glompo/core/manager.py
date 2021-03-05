@@ -779,7 +779,7 @@ class GloMPOManager:
                 try:
                     self.scope.load_state(tmp_dir)
                 except Exception as e:
-                    warnings.warn("Could not load scope, building fresh.", RuntimeWarning)
+                    warnings.warn(f"Could not load scope, building fresh. Error: {e}", RuntimeWarning)
                     self.scope = GloMPOScope(**self.visualisation_args)
             else:
                 self.scope = GloMPOScope(**self.visualisation_args)
@@ -1308,8 +1308,8 @@ class GloMPOManager:
                 self._last_feedback[opt_id] = time()
                 self.logger.info(f"Signal {key} from {opt_id}.")
                 if key == 0:
-                    self.opt_log.put_metadata(opt_id, "Stop Time", str(datetime.now()))
-                    self.opt_log.put_metadata(opt_id, "End Condition", message)
+                    self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+                    self.opt_log.put_metadata(opt_id, "end_cond", message)
                     self._graveyard.add(opt_id)
                     self.conv_counter += 1
                 elif key == 9:
@@ -1343,16 +1343,16 @@ class GloMPOManager:
                                       f"minimization complete signal to the manager.", RuntimeWarning)
                         self.logger.warning(f"Optimizer {opt_id} terminated normally without sending a "
                                             f"minimization complete signal to the manager.")
-                        self.opt_log.put_metadata(opt_id, "Approximate Stop Time", str(datetime.now()))
-                        self.opt_log.put_metadata(opt_id, "End Condition", "Normal termination (Reason unknown)")
+                        self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+                        self.opt_log.put_metadata(opt_id, "end_cond", "Normal termination (Reason unknown)")
                 else:
                     self._graveyard.add(opt_id)
                     self.opt_log.put_message(opt_id, f"Terminated in error with code {-exitcode}")
                     warnings.warn(f"Optimizer {opt_id} terminated in error with code {-exitcode}",
                                   RuntimeWarning)
                     self.logger.error(f"Optimizer {opt_id} terminated in error with code {-exitcode}")
-                    self.opt_log.put_metadata(opt_id, "Approximate Stop Time", str(datetime.now()))
-                    self.opt_log.put_metadata(opt_id, "End Condition", f"Error termination (exitcode {-exitcode}).")
+                    self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+                    self.opt_log.put_metadata(opt_id, "end_cond", f"Error termination (exitcode {-exitcode}).")
 
             # Find hanging processes
             if pack.process.is_alive() and \
@@ -1364,8 +1364,8 @@ class GloMPOManager:
                 self.logger.error(f"Optimizer {opt_id} seems to be hanging. Forcing termination.")
                 self._graveyard.add(opt_id)
                 self.opt_log.put_message(opt_id, "Force terminated due to no feedback timeout.")
-                self.opt_log.put_metadata(opt_id, "Approximate Stop Time", str(datetime.now()))
-                self.opt_log.put_metadata(opt_id, "End Condition", "Forced GloMPO Termination")
+                self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+                self.opt_log.put_metadata(opt_id, "end_cond", "Forced GloMPO Termination")
                 pack.process.terminate()
 
             # Force kill zombies
@@ -1378,8 +1378,8 @@ class GloMPOManager:
                 pack.process.join(3)
                 self.opt_log.put_message(opt_id, "Force terminated due to no feedback after kill signal "
                                                  "timeout.")
-                self.opt_log.put_metadata(opt_id, "Approximate Stop Time", str(datetime.now()))
-                self.opt_log.put_metadata(opt_id, "End Condition", "Forced GloMPO Termination")
+                self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+                self.opt_log.put_metadata(opt_id, "end_cond", "Forced GloMPO Termination")
                 warnings.warn(f"Forced termination signal sent to optimizer {opt_id}.", RuntimeWarning)
                 self.logger.error(f"Forced termination signal sent to optimizer {opt_id}.")
 
@@ -1518,11 +1518,11 @@ class GloMPOManager:
         self._optimizer_packs[opt_id].signal_pipe.send(1)
         self.logger.debug(f"Termination signal sent to {opt_id}")
 
-        self.opt_log.put_metadata(opt_id, "Stop Time", str(datetime.now()))
-        self.opt_log.put_metadata(opt_id, "End Condition", LiteralWrapper(f"GloMPO Termination\n"
-                                                                          f"Hunter: {hunter_id}\n"
-                                                                          f"Reason: \n"
-                                                                          f"{reason}"))
+        self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+        self.opt_log.put_metadata(opt_id, "end_cond", LiteralWrapper(f"GloMPO Termination\n"
+                                                                     f"Hunter: {hunter_id}\n"
+                                                                     f"Reason: \n"
+                                                                     f"{reason}"))
 
         if self.visualisation:
             self.scope.update_kill(opt_id)
@@ -1538,7 +1538,7 @@ class GloMPOManager:
                     pack.signal_pipe.send((4, best_iter['x'], best_iter['fx']))
 
         best_origin = {"opt_id": best_iter['opt_id'],
-                       "type": self.opt_log.get_metadata(best_iter['opt_id'], "Optimizer Type")}
+                       "type": self.opt_log.get_metadata(best_iter['opt_id'], "opt_type")}
 
         best_stats = {'f_evals': self.f_counter,
                       'opts_started': self.o_counter,
@@ -1569,12 +1569,12 @@ class GloMPOManager:
         for opt_id, pack in self._optimizer_packs.items():
             # Add stop condition to logs without overwriting existing ones
             try:
-                self.opt_log.get_metadata(opt_id, "End Condition")
-                self.opt_log.get_metadata(opt_id, "Stop Time")
+                self.opt_log.get_metadata(opt_id, "end_cond")
+                self.opt_log.get_metadata(opt_id, "t_stop")
             except KeyError:
                 self._graveyard.add(opt_id)
-                self.opt_log.put_metadata(opt_id, "Stop Time", str(datetime.now()))
-                self.opt_log.put_metadata(opt_id, "End Condition",
+                self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+                self.opt_log.put_metadata(opt_id, "end_cond",
                                           crash_reason if crash_reason else "GloMPO Convergence")
 
             if pack.process.is_alive():
@@ -1729,8 +1729,8 @@ class GloMPOManager:
                         key, message = pack.signal_pipe.recv()
                         self.logger.debug(f"Received {key, message} from {opt_id}")
                         if key == 0:
-                            self.opt_log.put_metadata(opt_id, "Stop Time", str(datetime.now()))
-                            self.opt_log.put_metadata(opt_id, "End Condition", message)
+                            self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+                            self.opt_log.put_metadata(opt_id, "end_cond", message)
                             self._graveyard.add(opt_id)
                             self.conv_counter += 1
                             not_chkpt.add(opt_id)
