@@ -1667,9 +1667,6 @@ class GloMPOManager:
             if summary_files >= 2:
                 self.logger.debug("Saving optimizers summary file.")
                 self.opt_log.save_summary(dump_dir / "opt_best_summary.yml")
-            if summary_files >= 3:
-                self.logger.debug("Saving optimizer log files.")
-                self.opt_log.save_optimizer(dump_dir / "glompo_optimizer_logs")
             if summary_files >= 4:
                 self.logger.debug("Saving trajectory plot.")
                 signs = set()

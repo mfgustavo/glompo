@@ -20,8 +20,7 @@ try:
 except (ModuleNotFoundError, ImportError):
     HAS_MATPLOTLIB = False
 
-from glompo.common.helpers import LiteralWrapper, FlowList, literal_presenter, glompo_colors, \
-    flow_presenter
+from glompo.common.helpers import FlowList, glompo_colors, flow_presenter
 
 __all__ = ("OptimizerLogger",)
 
@@ -37,13 +36,36 @@ class OptimizerLogger:
     def __len__(self):
         return len(self._storage)
 
+    def __iter__(self):
+        """ Returns an iterable of optimizer IDs. """
+        return iter(self._storage)
+
+    def __setitem__(self, key, value):
+        self._storage[key] = value
+
+    def __getitem__(self, item) -> '_OptimizerLogger':
+        """ Returns an individual optimizer log. """
+        return self._storage[item]
+
+    def items(self):
+        """ Returns an iterable of tuples of optimizer IDs and logs. """
+        return self._storage.items()
+
+    def keys(self):
+        """ Returns an iterable of optimizer IDs. """
+        return self._storage.keys()
+
+    def values(self):
+        """ Returns an iterable of individual optimizer logs. """
+        return self._storage.values()
+
     @property
     def best_iter(self) -> Dict[str, Any]:
         return self._best_iter
 
     def add_optimizer(self, opt_id: int, class_name: str, time_start: str):
         """ Adds a new optimizer data stream to the log. """
-        self._storage[opt_id] = _OptimizerLogger(opt_id, class_name, time_start)
+        self[opt_id] = _OptimizerLogger(opt_id, class_name, time_start)
 
     def put_iteration(self, opt_id: int, i: int, f_call_overall: int, f_call_opt: int, x: Sequence[float], fx: float):
         """ Adds an iteration result to an optimizer data stream. """
@@ -52,17 +74,17 @@ class OptimizerLogger:
             self._best_iter['x'] = x
             self._best_iter['fx'] = fx
 
-        self._storage[opt_id].append(i, f_call_overall, f_call_opt, x, fx)
+        self[opt_id].append(i, f_call_overall, f_call_opt, x, fx)
 
     def put_metadata(self, opt_id: int, key: str, value: str):
         """ Adds metadata about an optimizer. """
-        self._storage[opt_id].update_metadata(key, value)
+        self[opt_id].update_metadata(key, value)
 
     def put_message(self, opt_id: int, message: str):
         """ Optimizers can signal special messages to the optimizer during the optimization which can be saved to
             the log.
         """
-        self._storage[opt_id].append_message(message)
+        self[opt_id].append_message(message)
 
     @overload
     def get_history(self, opt_id: int) -> Dict[int, Dict[str, float]]:
@@ -86,64 +108,40 @@ class OptimizerLogger:
                         iteration of opt_id,
                     - 'f_call_opt': The number of function evaluations used by opt_id after each of its iterations,
                     - 'fx': The function evaluations after each iteration,
-                    - 'i_best': The iteration number at which the best function evaluation was located,
-                    - 'fx_best': The best function evaluation value after each iteration,
                     - 'x': The task input values trialed at each iteration.
         """
-        extract = []
         if track:
-            for item in self._storage[opt_id].history.values():
-                extract.append(item[track])
+            extract = [item[track] for item in self[opt_id].history.values()]
         else:
-            extract = self._storage[opt_id].history
+            extract = self[opt_id].history
         return extract
 
     def get_metadata(self, opt_id, key: str) -> Any:
         """ Returns metadata of a given optimizer and key. """
-        return self._storage[opt_id].metadata[key]
-
-    def save_optimizer(self, path: Union[Path, str], opt_id: Optional[int] = None):
-        """ Saves the contents of the logger into yaml files. If an opt_id is provided only that optimizer will be
-            saved using the provided name. Else all optimizers are saved by their opt_id numbers and type in a directory
-            called name.
-        """
-        path = Path(path)
-        if opt_id:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            self._write_file(opt_id, path)
-        else:
-            path.mkdir(parents=True, exist_ok=True)
-
-            digits = len(str(max(self._storage))) if self._storage else 1
-            for optimizer in self._storage:
-                opt_id = int(self._storage[optimizer].metadata["opt_id"])
-                opt_type = self._storage[optimizer].metadata["opt_type"]
-                title = f"{opt_id:0{digits}}_{opt_type}"
-                self._write_file(optimizer, path / title)
+        return self[opt_id].metadata[key]
 
     def save_summary(self, path: Union[Path, str]):
         """ Generates a summary file containing the best found point of each optimizer and the reason for their
             termination.
         """
         sum_data = {}
-        for opt_id, opt_log in self._storage.items():
-            opt_history = self.get_history(opt_id)
+        for opt_id, opt_log in self.items():
+            i_tot = len(opt_log.history)
 
-            i_tot = len(opt_history)
+            i_best = None
             x_best = None
             f_best = float('nan')
             f_calls = None
-            if i_tot > 0 and opt_history[i_tot]['i_best'] > -1:
-                last = opt_history[i_tot]
-                i_best = last['i_best']
-                f_calls = last['f_call_opt']
 
-                best = opt_history[i_best]
+            if i_tot > 0 and opt_log.i_best > -1:
+                i_best = opt_log.i_best
+                x_best = FlowList(opt_log.x_best)
+                f_best = opt_log.fx_best
+                f_calls = opt_log.history[i_tot]['f_call_opt']
 
-                x_best = FlowList(best['x'])
-                f_best = best['fx_best']
             sum_data[opt_id] = {**opt_log.metadata,
                                 **{'f_calls': f_calls,
+                                   'i_best': i_best,
                                    'f_best': f_best,
                                    'x_best': x_best},
                                 'messages': opt_log.messages}
@@ -165,7 +163,7 @@ class OptimizerLogger:
         if is_interactive:
             plt.ioff()
 
-        opt_id = [opt_id] if opt_id else self._storage.keys()
+        opt_id = [opt_id] if opt_id else self.keys()
         for opt in opt_id:
             x_all = self.get_history(opt, 'x')
 
@@ -218,7 +216,7 @@ class OptimizerLogger:
         colors = glompo_colors()
         track = 'fx_best' if best_fx else 'fx'
         y_lab = "Best Function Evaluation" if best_fx else "Function Evaluation"
-        for opt_id in self._storage:
+        for opt_id in self:
             f_calls = self.get_history(opt_id, 'f_call_overall')
             traj = self.get_history(opt_id, track)
 
@@ -258,16 +256,6 @@ class OptimizerLogger:
         if is_interactive:
             plt.ion()
 
-    def _write_file(self, opt_id, filename: Path):
-        yaml.add_representer(LiteralWrapper, literal_presenter, Dumper=Dumper)
-        if filename.suffix != '.yml':
-            filename = filename.with_suffix('.yml')
-        with filename.open('w') as file:
-            data = {"DETAILS": self._storage[opt_id].metadata,
-                    "MESSAGES": self._storage[opt_id].messages,
-                    "ITERATION_HISTORY": self._storage[opt_id].history}
-            yaml.dump(data, file, Dumper=Dumper, default_flow_style=False, sort_keys=False)
-
 
 class _OptimizerLogger:
     """ Stores history and meta data of a single optimizer started by GloMPO. """
@@ -282,6 +270,10 @@ class _OptimizerLogger:
 
         self.fx_best = inf
         self.i_best = -1
+        self.x_best = []
+
+    def __len__(self):
+        return len(self.history)
 
     def update_metadata(self, key: str, value: str):
         """ Appends or overwrites given key-value pair in the stored optimizer metadata. """
@@ -292,6 +284,7 @@ class _OptimizerLogger:
         if fx < self.fx_best:
             self.fx_best = fx
             self.i_best = i
+            self.x_best = x
 
         ls = None
         try:
@@ -306,8 +299,6 @@ class _OptimizerLogger:
             self.history[i] = {'f_call_overall': int(f_call_overall),
                                'f_call_opt': int(f_call_opt),
                                'fx': float(fx),
-                               'i_best': int(self.i_best),
-                               'fx_best': float(self.fx_best),
                                'x': FlowList(ls)}
 
     def append_message(self, message):
