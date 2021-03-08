@@ -20,7 +20,7 @@ try:
 except (ModuleNotFoundError, ImportError):
     HAS_MATPLOTLIB = False
 
-from glompo.common.helpers import FlowList, glompo_colors, flow_presenter
+from ..common.helpers import FlowList, glompo_colors, flow_presenter, rolling_best
 
 __all__ = ("OptimizerLogger",)
 
@@ -214,11 +214,12 @@ class OptimizerLogger:
                         lines.Line2D([], [], ls='', marker='*', c='black', label='Optimizer Converged')]
 
         colors = glompo_colors()
-        track = 'fx_best' if best_fx else 'fx'
         y_lab = "Best Function Evaluation" if best_fx else "Function Evaluation"
         for opt_id in self:
             f_calls = self.get_history(opt_id, 'f_call_overall')
-            traj = self.get_history(opt_id, track)
+            traj = self.get_history(opt_id, 'fx')
+            if best_fx:
+                traj = rolling_best(traj)
 
             if log_scale:
                 traj = np.sign(traj) * np.log10(np.abs(traj))
@@ -270,6 +271,7 @@ class _OptimizerLogger:
 
         self.fx_best = inf
         self.i_best = -1
+        self.f_call_best = -1
         self.x_best = []
 
     def __len__(self):
@@ -285,6 +287,7 @@ class _OptimizerLogger:
             self.fx_best = fx
             self.i_best = i
             self.x_best = x
+            self.f_call_best = f_call_opt
 
         ls = None
         try:

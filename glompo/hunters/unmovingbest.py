@@ -1,6 +1,7 @@
 import numpy as np
 
 from .basehunter import BaseHunter
+from ..common.helpers import rolling_best
 from ..core.optimizerlogger import OptimizerLogger
 
 __all__ = ("BestUnmoving",)
@@ -20,7 +21,7 @@ class BestUnmoving(BaseHunter):
                  log: OptimizerLogger,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
-        vals = log.get_history(victim_opt_id, "fx_best")
+        vals = rolling_best(log.get_history(victim_opt_id, "fx"))
         fcalls = log.get_history(victim_opt_id, "f_call_opt")
 
         i_crit = np.searchsorted(fcalls - np.max(fcalls) + self.calls, 0) - 1
