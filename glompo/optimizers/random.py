@@ -1,6 +1,7 @@
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
-from typing import Callable, Sequence, Tuple
+from pathlib import Path
+from typing import Callable, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -16,9 +17,12 @@ class RandomOptimizer(BaseOptimizer):
     """
 
     def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
-                 pause_flag: Event = None, workers: int = 1, backend: str = 'processes', iters: int = 100):
+                 pause_flag: Event = None, workers: int = 1, backend: str = 'processes',
+                 log_path: Union[None, str, Path] = None, log_opt_extras: Optional[Sequence[str]] = None,
+                 is_log_detailed: bool = False, iters: int = 100):
         """ Initialize with the above parameters. """
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag,
+                         workers, backend, log_path, log_opt_extras, is_log_detailed)
         self.max_iters = iters
         self.used_iters = 0
         self.result = MinimizeResult()

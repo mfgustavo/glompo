@@ -202,27 +202,26 @@ class BaseParamsError:
         """ Returns the error value between the the force field with the given parameters and the training values. """
         return self._calculate(x)[0][0]
 
-    def detailed_call(self, x: Sequence[float]) -> Sequence[float]:
-        """ A full return of the error results. Returns a sequence:
-                [training_set_error, training_set_residual_1, ..., training_set_residual_N,
-                 validation_set_error, validation_set_residual_1, ..., validation_set_residual_N]
-            The list is truncated after the training set residuals if no validation set is present.
+    def detailed_call(self, x: Sequence[float]) -> Union[Tuple[float, Sequence[float]],
+                                                         Tuple[float, Sequence[float], float, Sequence[float]]]:
+        """ A full return of the error results. Returns a tuple of:
+                training_set_error, [training_set_residual_1, ..., training_set_residual_N]
+            If a validation set is included then returned tuple is:
+                training_set_error, [training_set_residual_1, ..., training_set_residual_N],
+                validation_set_error, [validation_set_residual_1, ..., validation_set_residual_N]
         """
         calc = self._calculate(x)
-        ts_fx = [calc[0][0]]
+        ts_fx = calc[0][0]
         ts_resids = calc[0][1]
-        vs_fx = []
-        vs_resids = []
+        ts_resids = self._scale_residuals(ts_resids, self.dat_set) if self.scale_residuals else ts_resids
 
         if self.val_set:
-            vs_fx = [calc[1][0]]
+            vs_fx = calc[1][0]
             vs_resids = calc[1][1]
+            vs_resids = self._scale_residuals(vs_resids, self.val_set) if self.scale_residuals else vs_resids
+            return ts_fx, ts_resids, vs_fx, vs_resids
 
-        if self.scale_residuals:
-            ts_resids = self._scale_residuals(ts_resids, self.dat_set)
-            vs_resids = self._scale_residuals(vs_resids, self.val_set)
-
-        return [*ts_fx, *ts_resids, *vs_fx, *vs_resids]
+        return ts_fx, ts_resids
 
     def detailed_call_header(self) -> Sequence[str]:
         """ Returns a sequence of strings which represent the column headers for the detailed_call return.
@@ -235,7 +234,7 @@ class BaseParamsError:
         vs_digits = len(str(n_vs))
 
         ts_heads = ['fx', *[f"r{i:0{ts_digits}}" for i in range(n_ts)]]
-        vs_heads = ['fx', *[f"r{i:0{vs_digits}}_vs" for i in range(n_vs)]] if self.val_set else []
+        vs_heads = ['fx_vs', *[f"r{i:0{vs_digits}}_vs" for i in range(n_vs)]] if self.val_set else []
 
         return ts_heads + vs_heads
 

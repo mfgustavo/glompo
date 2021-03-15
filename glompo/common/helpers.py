@@ -2,7 +2,7 @@
 import inspect
 import os
 from pathlib import Path
-from typing import Optional, Sequence, Tuple, Union, overload
+from typing import Any, Iterator, Optional, Sequence, Tuple, Union, overload
 
 import matplotlib
 import numpy as np
@@ -14,6 +14,7 @@ __all__ = ("nested_string_formatting",
            "glompo_colors",
            "present_memory",
            "rolling_best",
+           "unravel",
            "LiteralWrapper",
            "FlowList",
            "BoundGroup",
@@ -140,6 +141,19 @@ def rolling_best(x: Sequence[float]) -> Sequence[float]:
     for i, val in enumerate(x[1:], 1):
         y[i] = min(val, y[i - 1])
     return y
+
+
+def unravel(seq: Union[Any, Sequence[Any]]) -> Iterator[str]:
+    """ From a nested sequence of items of any type, return a flatten sequence of items. """
+    try:  # First catch in case seq is not iterable at all
+        for item in seq:
+            try:
+                for nested_item in unravel(item):
+                    yield str(nested_item)
+            except TypeError:
+                yield item
+    except TypeError:
+        yield seq
 
 
 """ YAML Representers """

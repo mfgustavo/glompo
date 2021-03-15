@@ -1281,11 +1281,20 @@ class GloMPOManager:
         else:
             backend = 'threads' if self.opts_daemonic else 'processes'
 
+        if 'log_path' in init_kwargs:
+            log_path = init_kwargs['log_path']
+            del init_kwargs['log_path']
+        elif self.summary_files >= 3:
+            log_path = self.working_dir / 'glompo_optimizer_logs' / f'{self.o_counter:03}.csv'
+        else:
+            log_path = None
+
         optimizer = selected(opt_id=self.o_counter,
                              signal_pipe=child_pipe,
                              results_queue=self.optimizer_queue,
                              pause_flag=event,
                              backend=backend,
+                             log_path=log_path,
                              **init_kwargs)
 
         self.opt_log.add_optimizer(self.o_counter, type(optimizer).__name__, str(datetime.now()))

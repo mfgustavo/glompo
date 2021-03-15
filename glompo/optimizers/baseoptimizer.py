@@ -2,7 +2,9 @@
 Base class from which all optimizers must inherit in order to be compatible with GloMPO.
 """
 
+import csv
 import logging
+import time
 import traceback
 import warnings
 from abc import ABC, abstractmethod
@@ -10,21 +12,18 @@ from multiprocessing.connection import Connection
 from pathlib import Path
 from queue import Full, Queue
 from threading import Event
-from typing import Any, Callable, List, Optional, Sequence, Set, Tuple, Type, Union
+from typing import Any, Callable, Iterator, List, Optional, Sequence, Set, Tuple, Type, Union
 
 from dill import dill
 
-from ..common.helpers import LiteralWrapper
+from ..common.helpers import LiteralWrapper, unravel
 
 __all__ = ('BaseOptimizer', 'MinimizeResult')
 
 
 class MinimizeResult:
     """
-    This class is the return value of
-       * :meth:`Baseoptimizer.minimize() <scm.params.optimizers.base.BaseOptimizer.minimize>`
-       * :meth:`ParameterOptimization.optimize() <scm.params.core.parameteroptimization.ParameterOptimization.optimize>`
-
+    This class is the return value of BaseOptimizer classes.
     The results of an optimization can be accessed by:
 
     Attributes:
@@ -43,6 +42,82 @@ class MinimizeResult:
         self.fx = float('inf')
         self.stats = None
         self.origin = None
+
+
+class _LoggingWrapper:
+    """ Wraps the function provided to BaseOptimizer.minimize and adds automatic logging functionality. """
+
+    def __init__(self,
+                 func: Callable[[Sequence[float]], float],
+                 csv_writer: csv.writer,
+                 optimizer: 'BaseOptimizer'):
+        """ Initialises the wrapper class.
+
+            Parameters
+            ----------
+            func: Callable[[Sequence[float]], float]
+                Function to be minimized.
+            csv_writer: csv.writer
+                csv.writer object into which function call information will be written every time the function is
+                called.
+            optimizer: BaseOptimizer
+                Provides access to optimizer attributes so its details can be appended to the log.
+        """
+        self.func = func
+        self.csv_writer = csv_writer
+        self.optimizer = optimizer
+        self.first_call = True
+
+        if self.optimizer.is_log_detailed and not hasattr(self.func, 'detailed_call'):
+            raise AttributeError("func does not have 'detailed_call' method")
+
+    def __call__(self, x: Sequence[float]) -> float:
+        return self._calculate(x, caller='call')
+
+    def detailed_call(self, x: Sequence[float]) -> Sequence:
+        return self._calculate(x, caller='detailed_call')
+
+    def _calculate(self, x: Sequence[float], caller: str) -> Union[float, Sequence]:
+        is_det_call = self.optimizer.is_log_detailed or caller == 'detailed_call'
+        if is_det_call:
+            calc = self.func.detailed_call(x)
+        else:
+            calc = self.func(x)
+
+        # Write header if first iter
+        if self.first_call:
+            self.first_call = False
+
+            if is_det_call and hasattr(self.func, 'detailed_call_header'):
+                return_names = self.func.detailed_call_header()
+            else:
+                return_names = (f'return{i}' for i, _ in enumerate(unravel(calc)))
+
+            self.csv_writer.writerow(('timestamp',
+                                      *(f'x{i}' for i, _ in enumerate(x)),
+                                      *return_names,
+                                      *self.optimizer.log_opt_extras))
+
+        self.csv_writer.writerow((time.time(),
+                                  *x,
+                                  *unravel(calc),
+                                  *self.get_log_opt_extras()))
+
+        if is_det_call and caller == 'call':
+            return calc[0]
+        return calc
+
+    def get_log_opt_extras(self) -> Iterator[str]:
+        """ Yields current optimizer values for attributes which the user would like logged with the function calls. """
+        for attr_name in self.optimizer.log_opt_extras:
+            attr = self.optimizer
+            for sub_attr_name in attr_name.split('.'):
+                try:
+                    attr = getattr(attr, sub_attr_name)
+                except AttributeError:
+                    warnings.warn(f"Attribute: '{attr_name}' not found in optimizer.", UserWarning)
+                    attr = 'None'
+            yield attr
 
 
 class BaseOptimizer(ABC):
@@ -84,7 +159,8 @@ class BaseOptimizer(ABC):
 
     def __init__(self, opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
                  results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
-                 backend: str = 'threads', **kwargs):
+                 backend: str = 'threads', log_path: Union[None, str, Path] = None,
+                 log_opt_extras: Optional[Sequence[str]] = None, is_log_detailed: bool = False, **kwargs):
         """
         Initialisation of the base optimizer. Must be called by any child classes.
 
@@ -92,21 +168,42 @@ class BaseOptimizer(ABC):
         ----------
         opt_id: Optional[int] = None
             Unique identifier automatically assigned within the GloMPO manager framework.
+
         signal_pipe: Optional[multiprocessing.connection.Connection] = None
             Bidirectional pipe used to message management behaviour between the manager and optimizer.
+
         results_queue: Optional[queue.Queue] = None
             Threading queue into which optimizer iteration results are centralised across all optimizers and sent to
             the manager.
+
         pause_flag: Optional[threading.Event] = None
             Event flag which can be used to pause the optimizer between iterations.
+
         workers: int = 1
             The number of concurrent calculations used by the optimizer. Defaults to one. The manager will only start
             the optimizer if there are sufficient slots available for it:
                 workers <= manager.max_jobs - manager.n_slots_occupied.
+
         backend: str = 'threads'
             The type of concurrency used by the optimizers (processes or threads). This is not necessarily applicable to
             all optimizers. This will default to threads unless forced to used processes (see GloMPOManger backend
             argument for details).
+
+        log_path: Union[None, str, Path] = None
+            If provided the optimizer will produce a CSV file saved at log_path. The log contains details of every
+            function evaluation made by the optimizer. Otherwise, no log is produced.
+
+        log_opt_extras: Optional[Sequence[str]] = None
+            An optional list of optimizer class attribute names which will be appended to the end of each iteration
+            added to the log file. For example, some optimizer convergence check parameter or step size.
+
+        is_log_detailed: bool = False
+            If True, a detailed_call will be run and logged everytime a normal function call is made. Note that this
+            will NOT result in a doubling of the computational time as the original call will be intercepted. This
+            setting is useful for cases where optimizers do not need/cannot handle the extra information generated by a
+            detailed call but one would still like the iteration details logged for analysis.
+            See BaseOptimizer.minimize docstring for more information on detailed calls.
+
         kwargs
             Optimizer specific initialization arguments.
         """
@@ -129,25 +226,9 @@ class BaseOptimizer(ABC):
                                         9: "Other Message (Saved to Log)"}
         self.workers = workers
         self.incumbent = {'x': None, 'fx': None}
-
-    def _minimize(self,
-                  function: Callable[[Sequence[float]], float],
-                  x0: Sequence[float],
-                  bounds: Sequence[Tuple[float, float]],
-                  callbacks: Callable = None, **kwargs) -> MinimizeResult:
-        """ Wrapper around minimize that captures KeyboardInterrupt exceptions to exit gracefully and
-            other Exceptions to log them.
-        """
-        try:
-            return self.minimize(function, x0, bounds, callbacks, **kwargs)
-        except (KeyboardInterrupt, BrokenPipeError):
-            print("Interrupt signal received. Process stopping.")
-            self.logger.warning("Interrupt signal received. Process stopping.")
-        except Exception as e:
-            formatted_e = "".join(traceback.TracebackException.from_exception(e).format())
-            self.logger.critical("Critical error encountered", exc_info=e)
-            self._signal_pipe.send((9, LiteralWrapper(formatted_e)))
-            raise e
+        self.log_path = Path(log_path) if log_path else None
+        self.log_opt_extras = log_opt_extras if log_opt_extras else ()
+        self.is_log_detailed = is_log_detailed
 
     @abstractmethod
     def minimize(self,
@@ -175,19 +256,48 @@ class BaseOptimizer(ABC):
             - Should be able to handle resuming an optimization from any point using the checkpoint_save and
               checkpoint_load methods.
 
+        Parameters
+        ----------
+        function: Callable[[Sequence[float]], float]
+            Function to be minimised. The minimum requirement is a Callable which accepts a vector in input space and
+            returns a single float.
 
-        Example:
+            Optionally, the function may also be configured with an detailed_call method. The return values from
+            detailed_call may be anything but the first element must be the float returned by call (i.e. the value of
+            the cost function itself).
 
-        .. code-block:: python
+            The extra information provided by detailed_call may return information required for the optimizer
+            algorithm itself or generally useful to appear in the optimizer log file (see BaseOptimizer.__init__). E.g.
+            local function derivative information, validation set error values, individual training set residuals etc.
 
-            while not self.stop:
-                self.optimize()     # Do one optimization step
-                if callbacks and callbacks():     # Stop if callbacks() returns `True`
-                    self.callstop('Callbacks returned True')
+            To make the logfile more informative, the optimizer will attempt to write the return of
+            function.detailed_call_header as the first line of the CSV file. If no such method is provided then returns
+            are simply labelled 'return0', 'return1', ... 'returnN'.
 
+            If detailed_call is not being used then the header defaults to:
+                timestamp, x0, x1, ..., xN, return0, log_opt_extras_0, ...  log_opt_extras_N
 
-        :Returns: An instance of |MinimizeResult|
+            An example function class API is given below, please note that it is still possible to send a simple method
+            instead of a class instance:
 
+                class ExampleFunction:
+                    def __call__(x: Sequence[float]) -> float:
+                        ...
+                    def detailed_call(x: Sequence[float]) -> Sequence[float, Any, ...]:
+                        ...
+                    def detailed_call_header() -> Sequence[str]:
+                        ...
+
+        x0: Sequence[float]
+            The initial optimizer starting point.
+
+        bounds: Sequence[Tuple[float, float]]
+            Min max boundary limit pairs for each element of the input vector to the minimisation function.
+
+        callbacks: Callable = None
+            Code snippets usually called once per iteration that are able to signal early termination. Callbacks are
+            leveraged differently by different optimizer implementations, the user is encouraged to consult the child
+            classes for more details.
         """
 
     def check_messages(self, return_signals: bool = False) -> Optional[List[int]]:
@@ -304,3 +414,39 @@ class BaseOptimizer(ABC):
         self._pause_signal.clear()  # Wait on pause event, to be released by manager
         self._pause_signal.wait()
         self.logger.debug("Pause released by manager. Checkpointing completed.")
+
+    def _minimize(self,
+                  function: Callable[[Sequence[float]], float],
+                  x0: Sequence[float],
+                  bounds: Sequence[Tuple[float, float]],
+                  callbacks: Callable = None, **kwargs) -> MinimizeResult:
+        """ Wrapper around minimize that captures KeyboardInterrupt exceptions to exit gracefully and
+            other Exceptions to log them.
+
+            Also correctly handles the opening and closing of the optimizer log file if it is being constructed.
+        """
+        file = None
+        try:
+            if self.log_path:
+                self.log_path.parent.mkdir(parents=True, exist_ok=True)
+                self.log_path.touch(exist_ok=True)
+                file = self.log_path.open('a')
+                writer = csv.writer(file)
+
+                function = _LoggingWrapper(function, writer, self)
+
+            return self.minimize(function, x0, bounds, callbacks, **kwargs)
+
+        except (KeyboardInterrupt, BrokenPipeError):
+            print("Interrupt signal received. Process stopping.")
+            self.logger.warning("Interrupt signal received. Process stopping.")
+
+        except Exception as e:
+            formatted_e = "".join(traceback.TracebackException.from_exception(e).format())
+            self.logger.critical("Critical error encountered", exc_info=e)
+            self._signal_pipe.send((9, LiteralWrapper(formatted_e)))
+            raise e
+
+        finally:
+            if file:
+                file.close()

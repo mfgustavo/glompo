@@ -8,7 +8,8 @@ import warnings
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
-from typing import Any, Callable, Optional, Sequence, Tuple
+from pathlib import Path
+from typing import Any, Callable, Optional, Sequence, Tuple, Union
 
 import cma
 import numpy as np
@@ -31,7 +32,8 @@ class CMAOptimizer(BaseOptimizer):
                  force_injects: Optional[bool] = None, injection_frequency: Optional[int] = None,
                  opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
                  results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
-                 backend: str = 'threads', **cmasettings):
+                 backend: str = 'threads', log_path: Union[None, str, Path] = None,
+                 log_opt_extras: Optional[Sequence[str]] = None, is_log_detailed: bool = False, **cmasettings):
         """ Initialises the optimizer. It is built in such a way that it minimize can be called multiple times on
             different functions.
 
@@ -64,7 +66,8 @@ class CMAOptimizer(BaseOptimizer):
             incumbent solution into the solver influencing the points sampled by the following iteration. The incumbent
             begins at x0 and is updated by the inject method called by the GloMPO manager.
         """
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag,
+                         workers, backend, log_path, log_opt_extras, is_log_detailed)
 
         self.verbose = verbose
         self.es = None
