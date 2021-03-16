@@ -12,7 +12,8 @@ __all__ = ("Result",
            "OptimizerPackage",
            "IterationResult",
            "ProcessPackage",
-           "OptimizerCheckpoint")
+           "OptimizerCheckpoint",
+           "LoggingOptions")
 
 
 class Result(NamedTuple):
@@ -58,6 +59,16 @@ class ProcessPackage(NamedTuple):
 
 
 class OptimizerCheckpoint(NamedTuple):
-    """ Information needed in the manager about initialized optimizers for checkpoint loading """
+    """ Information needed in the manager about initialized optimizers for checkpoint loading. """
     opt_type: Type[BaseOptimizer]
     slots: int
+
+
+class LoggingOptions(NamedTuple):
+    """ Holds GloMPO manager logging and saving options. """
+    save_manager_summary: bool = True  # YAML file with summary info about the optimization and the result.
+    save_optimizer_summary: bool = True  # YAML file with summary info of every optimizer started.
+    save_optimizer_logs: bool = False  # CSVs with iteration history of every optimizer started.
+    make_detailed_optimizer_logs: bool = False  # CSVs will log results of task.detailed_call (see BaseOptimizer).
+    make_trajectory_plot: bool = True  # PNG of all explored error values v time.
+    make_optimizer_plots: bool = False  # PNG for each optimizer showing parameter values tested v time.
