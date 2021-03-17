@@ -146,12 +146,18 @@ def rolling_best(x: Sequence[float]) -> Sequence[float]:
 def unravel(seq: Union[Any, Sequence[Any]]) -> Iterator[str]:
     """ From a nested sequence of items of any type, return a flatten sequence of items. """
     try:  # First catch in case seq is not iterable at all
-        for item in seq:
-            try:
-                for nested_item in unravel(item):
-                    yield str(nested_item)
-            except TypeError:
-                yield item
+        if isinstance(seq, str):
+            yield seq
+        else:
+            for item in seq:
+                try:
+                    if not isinstance(item, str):
+                        for nested_item in unravel(item):
+                            yield nested_item
+                    else:
+                        yield item
+                except TypeError:
+                    yield item
     except TypeError:
         yield seq
 
