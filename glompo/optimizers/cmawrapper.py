@@ -89,14 +89,10 @@ class CMAOptimizer(BaseOptimizer):
 
         self.cmasettings['vv'] = customopts
         self.cmasettings['verbose'] = -3  # Silence CMA Logger
-        if 'tolstagnation' not in self.cmasettings:
-            self.cmasettings['tolstagnation'] = int(1e22)
+
+        # Deactivated to not interfere with GloMPO hunting
         if 'maxiter' not in self.cmasettings:
             self.cmasettings['maxiter'] = float('inf')
-        if 'tolfunhist' not in self.cmasettings:
-            self.cmasettings['tolfunhist'] = 1e-15
-        if 'tolfun' not in self.cmasettings:
-            self.cmasettings['tolfun'] = 1e-20
 
         if sampler == 'vd':
             self.cmasettings = GaussVDSampler.extend_cma_options(self.cmasettings)
@@ -202,7 +198,6 @@ class CMAOptimizer(BaseOptimizer):
                 self.logger.debug("Checked messages")
                 self._pause_signal.wait()
                 self.logger.debug("Passed pause test")
-            self._customtermination(task_settings)
             self.logger.debug("callbacks called")
 
             if self.incumbent['fx'] < min(fx) and \
@@ -222,6 +217,7 @@ class CMAOptimizer(BaseOptimizer):
 
         if self.verbose:
             print(f"Optimization terminated: success = {self.result.success}")
+            print(f"Optimizer convergence {self.es.stop()}")
             print(f"Final fx={self.result.fx:.2E}")
 
         if self._results_queue:
@@ -239,28 +235,6 @@ class CMAOptimizer(BaseOptimizer):
                     pickle.dump(self.es.result, file)
 
         return self.result
-
-    def _customtermination(self, settings):
-        if 'tolstagnation' in settings:
-            # The default 'tolstagnation' criterium is way too complex (as most 'tol*' criteria are).
-            # Here we hack it to actually do what it is supposed to do: Stop when no change after last x iterations.
-            if not hasattr(self, '_stagnationcounter'):
-                self._stagnationcounter = 0
-                self._prev_best = self.es.best.f
-
-            if self._prev_best == self.es.best.f:
-                self._stagnationcounter += 1
-            else:
-                self._prev_best = self.es.best.f
-                self._stagnationcounter = 0
-
-            if self._stagnationcounter > settings['tolstagnation']:
-                self.callstop("Early CMA stop: 'tolstagnation'.")
-
-        opts = settings['vv']
-        if 'minsigma' in opts and self.es.sigma < opts['minsigma']:
-            # Stop if sigma falls below minsigma
-            self.callstop("Early CMA stop: 'minsigma'.")
 
     def _parallel_map(self, function: Callable[[Sequence[float]], float],
                       x: Sequence[Sequence[float]]) -> Sequence[float]:
