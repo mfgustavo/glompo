@@ -1,6 +1,5 @@
 """ Implementation of CMA-ES as a GloMPO compatible optimizer.
         Adapted from:   SCM ParAMS
-        Authors:        Robert Rüger, Leonid Komissarov
 """
 import copy
 import pickle
@@ -57,8 +56,7 @@ class CMAOptimizer(BaseOptimizer):
                 if at least injection_frequency iterations have passed since the last injection.
             cmasettings: Optional[Dict[str, Any]]
                 cma module-specific settings as ``k,v`` pairs. See ``cma.s.pprint(cma.CMAOptions())`` for a list of
-                available options. Most useful keys are: `timeout`, `tolstagnation`, `popsize`. Additionally,
-                the key `minsigma` is supported: Termination if ``sigma < minsigma``.
+                available options. Most useful keys are: `timeout`, `tolstagnation`, `popsize`.
 
             Notes
             -----
