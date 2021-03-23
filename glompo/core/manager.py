@@ -1649,7 +1649,7 @@ class GloMPOManager:
                     "Working Dir": str(Path.cwd()),
                     "Username": getpass.getuser(),
                     "Hostname": socket.gethostname(),
-                    "Time": {"optimization Periods": t_periods,
+                    "Time": {"Optimization Periods": t_periods,
                              "Total": t_total,
                              "Session": t_session}},
                 "Settings": {"x0 Generator": self.x0_generator,
