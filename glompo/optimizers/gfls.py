@@ -4,7 +4,7 @@ from multiprocessing import Event
 from multiprocessing.connection import Connection
 from pathlib import Path
 from queue import Queue
-from typing import Callable, Optional, Sequence, Set, Tuple, Type, Union
+from typing import Callable, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from optsam import GFLS, Hook, Logger, Reporter
@@ -15,32 +15,16 @@ from ..common.namedtuples import IterationResult
 
 class GFLSOptimizer(BaseOptimizer):
 
-    @classmethod
-    def checkpoint_load(cls: Type['BaseOptimizer'], path: Union[Path, str], opt_id: Optional[int] = None,
-                        signal_pipe: Optional[Connection] = None,
-                        results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
-                        backend: str = 'threads') -> 'BaseOptimizer':
-        """ Recreates a previous instance of the optimizer suitable to continue a optimization from its previous
-            state. Below is a basic implementation which should suit most optimizers, may need to be overwritten.
-
-            Parameters
-            ----------
-            path: Union[Path, str]
-                Path to checkpoint file from which to build from. It must be a file produced by the corresponding
-                BaseOptimizer().checkpoint_save method.
-            opt_id, signal_pipe, results_queue, pause_flag, workers, backend
-                These parameters are the same as the corresponding ones in BaseOptimizer.__init__. These will be
-                regenerated and supplied by the manager during reconstruction.
-        """
-
     @property
     def is_restart(self):
         return self._is_restart
 
     def __init__(self, opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
                  results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
-                 backend: str = 'threads', logger: bool = False, verbose: bool = False,
-                 other_hooks: Optional[Sequence[Hook]] = None, **gfls_algo_kwargs):
+                 backend: str = 'threads', log_path: Union[None, str, Path] = None,
+                 log_opt_extras: Optional[Sequence[str]] = None, is_log_detailed: bool = False,
+                 logger: bool = False, verbose: bool = False, other_hooks: Optional[Sequence[Hook]] = None,
+                 **gfls_algo_kwargs):
         """
         Initialisation of the GFLS optimizer wrapper for interface with GloMPO.
 
@@ -66,7 +50,8 @@ class GFLSOptimizer(BaseOptimizer):
                 diis_mode   : "qrsvd"
                 seed        : None
         """
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag,
+                         workers, backend, log_path, log_opt_extras, is_log_detailed)
         self.gfls = None
         self.result = None
         self.stopcond = None
@@ -75,7 +60,7 @@ class GFLSOptimizer(BaseOptimizer):
         if 'tr_max' not in self.algo_kwargs:
             self.algo_kwargs['tr_max'] = 0.5
 
-        self.hooks = list(other_hooks)
+        self.hooks = list(other_hooks) if other_hooks else []
         if logger:
             self.hooks.append(Logger())
         if verbose:
@@ -106,18 +91,15 @@ class GFLSOptimizer(BaseOptimizer):
                 Initial guess from where to begin searching.
             bounds: Sequence[Tuple[float, float]]
                 Sequence of min, max tuples of the same length as x0.
-            callbacks: Callable = None, **kwargs
+            callbacks: Callable = None
                 Callbacks are called once per iteration. They receive no arguments. If they return anything other than
                 None the minimization will terminate early.
         """
 
-        # TODO: Resume from checkpoint
-        # TODO: Save to checkpoint
-
         def function_pack(ask, func):
             _x, _is_constrained = ask()
-            _fx, _resids = func(x)
-            return _x, _fx, _is_constrained, _resids
+            _fx, _resids = func.resids(_x)
+            return _x, _is_constrained, _fx, _resids
 
         self._wrapped_func = partial(function_pack, func=function)
 
@@ -128,6 +110,9 @@ class GFLSOptimizer(BaseOptimizer):
             self.result = MinimizeResult()
             for hook in self.hooks:
                 hook.before_start(self.gfls)
+        else:
+            self._pool_evaluator = None
+            self._futures = set()
 
         # Open executor pool
         if self.workers > 1:
@@ -138,15 +123,15 @@ class GFLSOptimizer(BaseOptimizer):
 
         while not self.stopcond:
             x, is_constrained, fx, resids = self.get_evaluation()
-            self.gfls.tell(x, is_constrained, fx)
+            self.gfls.tell(x, is_constrained, resids)
 
             for hook in self.hooks:
                 new_stopcond = hook.after_tell(self.gfls, self.stopcond)
                 if new_stopcond:
                     self.stopcond = new_stopcond
 
-            for callback in callbacks:
-                new_stopcond = callback()
+            if callbacks:
+                new_stopcond = callbacks()
                 if new_stopcond:
                     self.stopcond = new_stopcond
 
@@ -157,6 +142,9 @@ class GFLSOptimizer(BaseOptimizer):
                 self._pause_signal.wait()
 
         self.logger.debug("Exited optimization loop")
+
+        for hook in self.hooks:
+            hook.after_stop(self.gfls, self.stopcond)
 
         if self._pool_evaluator:
             self._pool_evaluator.shutdown()
@@ -175,52 +163,21 @@ class GFLSOptimizer(BaseOptimizer):
 
         if self.workers > 1:
             while len(self._futures) < self.workers:
-                if self.injection_frequency and self.gfls.itell - self.injection_counter > self.injection_frequency:
-                    x_pack = lambda: self._incumbent, True
-                    self.injection_counter = self.gfls.itell
-                else:
-                    x_pack = self.gfls.ask()
-
-                future = self._pool_evaluator.submit(self._wrapped_func, x_pack)
+                future = self._pool_evaluator.submit(self._wrapped_func, self.gfls.ask())
                 self._futures.add(future)
                 self.gfls.state["ncall"] += 1
 
             done, not_done = wait(self._futures, return_when=FIRST_COMPLETED)
 
             result = done.pop().result()
-            self._futures = done + not_done  # To prevent conditions where an evaluation may be accidentally dropped
+            self._futures = done | not_done  # To prevent conditions where an evaluation may be accidentally dropped
 
             return result
 
         else:
-            if self.injection_frequency and self.gfls.itell - self.injection_counter > self.injection_frequency:
-                x_pack = lambda: self._incumbent, True
-                self.injection_counter = self.gfls.itell
-            else:
-                x_pack = self.gfls.ask()
+            return self._wrapped_func(self.gfls.ask())
 
-            return self._wrapped_func(x_pack)
-
-    def callstop(self, reason: str):
-        """ Signal to terminate the minimize loop while still returning a result. """
-
-    def checkpoint_save(self, path: Union[Path, str], force: Optional[Set[str]] = None):
-        """ Save current state, suitable for restarting. Path is the location for the file or folder to be constructed.
-            Note that only the absolutely critical aspects of the state of the optimizer need to be saved. The manager
-            will resupply multiprocessing parameters when the optimizer is reconstructed. Below is a basic
-            implementation which should suit most optimizers, may need to be overwritten.
-
-            Parameters
-            ----------
-            path: Union[Path, str]
-                Path to file into which the object will be dumped.
-            force: Optional[str]
-                Set of variable names which will be forced into the dumped file. Convenient shortcut for overwriting if
-                fails for a particular optimizer because a certain variable is filtered out of the data dump.
-        """
-
-    def inject(self, x: Sequence[float], fx: float):
-        """ If configured to do so, the manager will share the best solution seen by any optimizer with the others
-            through this method. The default is to save the iteration into the _incumbent property which the minimize
-            algorithm may be able to use in some way.
-        """
+    def callstop(self, reason: str = "Manager termination signal"):
+        self.logger.debug(f"Calling stop. Reason = {reason}")
+        self.stopcond = reason
+        self.result.success = all([reason != cond for cond in ("GloMPO Crash", "Manager termination signal")])
