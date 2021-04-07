@@ -1,9 +1,10 @@
-from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, ThreadPoolExecutor, as_completed, wait
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, ThreadPoolExecutor, wait
+from functools import partial
 from multiprocessing import Event
 from multiprocessing.connection import Connection
 from pathlib import Path
 from queue import Queue
-from typing import Any, Callable, Dict, Optional, Sequence, Set, Tuple, Type, Union
+from typing import Callable, Optional, Sequence, Set, Tuple, Type, Union
 
 import numpy as np
 from optsam import GFLS, Hook, Logger, Reporter
@@ -39,7 +40,7 @@ class GFLSOptimizer(BaseOptimizer):
     def __init__(self, opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
                  results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
                  backend: str = 'threads', logger: bool = False, verbose: bool = False,
-                 other_hooks: Optional[Sequence[Hook]] = None, gfls_algo_kwargs: Dict[str, Any] = None):
+                 other_hooks: Optional[Sequence[Hook]] = None, **gfls_algo_kwargs):
         """
         Initialisation of the GFLS optimizer wrapper for interface with GloMPO.
 
@@ -51,9 +52,8 @@ class GFLSOptimizer(BaseOptimizer):
             If True an optsam Reporter Hook will be run along with the optimisation to print progress in realtime.
         other_hooks: Optional[Sequence[Hook]] = None
             Any extra optsam Hook instances which should be manually configured.
-        gfls_algo_kwargs: Optional[Dict[str, Any]] = None
-            Keyword arguments for the optsam GFLS class. If None, the default arguments are used and a value of 2 is
-            used for tr_max.
+        gfls_algo_kwargs
+            Keyword arguments for the optsam GFLS class. If None, the default arguments are used:
             Valid settings and defaults:
                 tr_max      : 0.5
                 xtol        : 1e-3
@@ -81,26 +81,45 @@ class GFLSOptimizer(BaseOptimizer):
         if verbose:
             self.hooks.append(Reporter())
 
+        # Used to manage async evaluation
+        self._pool_evaluator = None
+        self._futures = set()
+        self._wrapped_func = None
+
     def minimize(self,
-                 function: Callable[[Sequence[float]], float],
+                 function,
                  x0: Sequence[float],
                  bounds: Sequence[Tuple[float, float]],
                  callbacks: Callable = None, **kwargs) -> MinimizeResult:
-        """
-        Minimizes a function, given an initial list of variable values `x0`, and possibly a list of `bounds` on the
-        variable values. The `callbacks` argument allows for specific callbacks such as early stopping.
+        """ Minimizes a function, given an initial list of variable values `x0`, and a list of `bounds` on the
+            variable values. The `callbacks` argument allows for specific callbacks such as early stopping.
 
-
+            Parameters
+            ----------
+            function
+                GFLSOptimizer requires residuals (differences between a training set and evaluated values) to work. Thus
+                it cannot be used on all global optimization cases. To ensure compatibility and allow simultaneous use
+                of multiple optimizer types, GFLSOptimizer will call function.resids(x) when evaluating the function.
+                The API is:
+                    function.resids(x: Sequence[float]) -> Tuple[fx: float, residuals: Sequence[float]]
+            x0: Sequence[float]
+                Initial guess from where to begin searching.
+            bounds: Sequence[Tuple[float, float]]
+                Sequence of min, max tuples of the same length as x0.
+            callbacks: Callable = None, **kwargs
+                Callbacks are called once per iteration. They receive no arguments. If they return anything other than
+                None the minimization will terminate early.
         """
 
         # TODO: Resume from checkpoint
         # TODO: Save to checkpoint
-        # TODO: Incumbent inject
-        # TODO: Define 'function' since it has resids
 
-        def _function_after_ask(ask, function):
-            x, aux = ask()
-            return x, aux, function(x)
+        def function_pack(ask, func):
+            _x, _is_constrained = ask()
+            _fx, _resids = func(x)
+            return _x, _fx, _is_constrained, _resids
+
+        self._wrapped_func = partial(function_pack, func=function)
 
         if not self.is_restart:
             self.logger.info("Setting up fresh GFLS")
@@ -110,126 +129,77 @@ class GFLSOptimizer(BaseOptimizer):
             for hook in self.hooks:
                 hook.before_start(self.gfls)
 
+        # Open executor pool
+        if self.workers > 1:
+            self._pool_evaluator = ProcessPoolExecutor if self._backend == 'processes' else ThreadPoolExecutor
+            self._pool_evaluator = self._pool_evaluator(max_workers=self.workers)
+
         self.logger.debug("Entering optimization loop")
 
-        futures = set()
         while not self.stopcond:
-            if self.workers > 1:
-                pool_executor = ProcessPoolExecutor if self._backend == 'processes' else ThreadPoolExecutor
-                with pool_executor(max_workers=self.workers) as executor:
-                    while len(futures) < self.workers:
-                        future = executor.submit(_function_after_ask, self.gfls.ask(), function)
-                        futures.add(future)
-                        self.gfls.state["ncall"] += 1
+            x, is_constrained, fx, resids = self.get_evaluation()
+            self.gfls.tell(x, is_constrained, fx)
 
-                    done, not_done = wait(futures, return_when=FIRST_COMPLETED)
+            for hook in self.hooks:
+                new_stopcond = hook.after_tell(self.gfls, self.stopcond)
+                if new_stopcond:
+                    self.stopcond = new_stopcond
 
-                    while len(done) > 0 and not stopcond:
-                        future = done.pop()
-
-                        stopcond = self.gfls.tell(*future.result())
-                        for hook in self.hooks:
-                            new_stopcond = hook.after_tell(self.gfls, stopcond)
-                            if new_stopcond is not None:
-                                stopcond = new_stopcond
-
-                        if self._results_queue:
-                            x, _,
-                            result = IterationResult(self._opt_id, self.gfls.itell, 1, )
-
-                    futures = not_done
-
-                    if self._results_queue:
-                        for _ in as_completed(submitted.values()):
-                            loop += 1
-                            self.logger.debug(f"Result {loop}/{len(x)} returned.")
-                            self._pause_signal.wait()
-                            self.check_messages()
-                            if self._stop_called:
-                                self.logger.debug("Stop command received during function evaluations.")
-                                cancelled = [future.cancel() for future in submitted.values()]
-                                self.logger.debug(f"Aborted {sum(cancelled)} calls.")
-                                break
-                    fx = [future.result() for future in submitted.values() if not future.cancelled()]
-            else:
-                x, aux = self.gfls.ask()()
-                ys = function(x)
-
-            self.gfls.tell(x, aux, ys)
-
-            self.logger.debug("Asking for parameter vectors")
-            x, auxs = self.gfls.ask()()
-            self.logger.debug("Parameter vectors generated")
-            fx = self.parallel_map(function, [x0, *x])
-
-            if len(x) != len(fx):
-                self.logger.debug("Unfinished evaluation detected. Breaking out of loop")
-                break
-
-            if i == 1:
-                self._incumbent = {'x': x0, 'fx': fx[0]}
-
-            self.es.tell(x, fx)
-            self.logger.debug("Told solutions")
-            self.result.x, self.result.fx = self.es.result[:2]
-            if self.result.fx == float('inf'):
-                self.logger.warning("CMA iteration found no valid results."
-                                    "fx = 'inf' and x = (first vector generated by es.ask())")
-                self.result.x = x[0]
-            self.logger.debug("Extracted x and fx from result")
-            if self.verbose and i % 10 == 0 or i == 1:
-                print(f"@ iter = {i} fx={self.result.fx:.2E} sigma={self.es.sigma:.3E}")
-
-            if callbacks and callbacks():
-                self.callstop("Callbacks termination.")
+            for callback in callbacks:
+                new_stopcond = callback()
+                if new_stopcond:
+                    self.stopcond = new_stopcond
 
             if self._results_queue:
-                i_best = np.argmin(fx)
-                result = IterationResult(self._opt_id, self.es.countiter, self.popsize, x[i_best], fx[i_best],
-                                         bool(self.es.stop()))
+                result = IterationResult(self._opt_id, self.gfls.itell, 1, x, fx, bool(self.stopcond))
                 self.push_iter_result(result)
-                self.logger.debug("Pushed result to queue")
                 self.check_messages()
-                self.logger.debug("Checked messages")
                 self._pause_signal.wait()
-                self.logger.debug("Passed pause test")
-            self._customtermination(task_settings)
-            self.logger.debug("callbacks called")
-
-            if self._incumbent['fx'] < min(fx) and \
-                    self.injection_frequency and i - self.injection_counter > self.injection_frequency:
-                self.injection_counter = i
-                self.es.inject([self._incumbent['x']], force=self.force_injects)
-                print("Incumbent solution injected.")
 
         self.logger.debug("Exited optimization loop")
 
-        self.result.x, self.result.fx = self.es.result[:2]
-        self.result.success = np.isfinite(self.result.fx) and self.result.success
-        if self.result.fx == float('inf'):
-            self.logger.warning("CMA iteration found no valid results."
-                                "fx = 'inf' and x = (first vector generated by es.ask())")
-            self.result.x = x[0]
-
-        if self.verbose:
-            print(f"Optimization terminated: success = {self.result.success}")
-            print(f"Final fx={self.result.fx:.2E}")
+        if self._pool_evaluator:
+            self._pool_evaluator.shutdown()
 
         if self._results_queue:
             self.logger.debug("Messaging termination to manager.")
-            self.message_manager(0, f"Optimizer convergence {self.es.stop()}")
-
-        if self.es.stop() != "Checkpoint Shutdown":
-            if self.keep_files:
-                name = 'cma_'
-                if self._opt_id:
-                    name += f'opt{self._opt_id}_'
-                name += 'results.pkl'
-                with open(name, 'wb') as file:
-                    self.logger.debug("Pickling results")
-                    pickle.dump(self.es.result, file)
+            self.message_manager(0, f"Optimizer convergence {self.stopcond}")
 
         return self.result
+
+    def get_evaluation(self) -> Tuple[Sequence[float], bool, float, Sequence[float]]:
+        """ When called returns a parameter vector and its evaluation. Depending on the configuration of the optimizer
+            this can be a simple serial evaluation or retrieving from a list of completed evaluations from a pool of
+            asynchronous parallel evaluations.
+        """
+
+        if self.workers > 1:
+            while len(self._futures) < self.workers:
+                if self.injection_frequency and self.gfls.itell - self.injection_counter > self.injection_frequency:
+                    x_pack = lambda: self._incumbent, True
+                    self.injection_counter = self.gfls.itell
+                else:
+                    x_pack = self.gfls.ask()
+
+                future = self._pool_evaluator.submit(self._wrapped_func, x_pack)
+                self._futures.add(future)
+                self.gfls.state["ncall"] += 1
+
+            done, not_done = wait(self._futures, return_when=FIRST_COMPLETED)
+
+            result = done.pop().result()
+            self._futures = done + not_done  # To prevent conditions where an evaluation may be accidentally dropped
+
+            return result
+
+        else:
+            if self.injection_frequency and self.gfls.itell - self.injection_counter > self.injection_frequency:
+                x_pack = lambda: self._incumbent, True
+                self.injection_counter = self.gfls.itell
+            else:
+                x_pack = self.gfls.ask()
+
+            return self._wrapped_func(x_pack)
 
     def callstop(self, reason: str):
         """ Signal to terminate the minimize loop while still returning a result. """
