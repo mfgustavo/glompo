@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Callable, Dict, Optional, Tuple, Type, Union
 
 from .baseselector import BaseSelector
 from ..core.optimizerlogger import OptimizerLogger
@@ -11,11 +11,10 @@ class CycleSelector(BaseSelector):
     """ Iterates and loops through the list of given optimizers each time it is called. """
 
     def __init__(self,
-                 avail_opts: List[Union[Type[BaseOptimizer],
-                                        Tuple[Type[BaseOptimizer],
-                                              Optional[Dict[str, Any]], Optional[Dict[str, Any]]]]],
+                 *avail_opts: Union[Type[BaseOptimizer],
+                                    Tuple[Type[BaseOptimizer], Optional[Dict[str, Any]], Optional[Dict[str, Any]]]],
                  allow_spawn: Optional[Callable] = None):
-        super().__init__(avail_opts, allow_spawn)
+        super().__init__(*avail_opts, allow_spawn=allow_spawn)
         self.i = -1
         self.old = -1
 

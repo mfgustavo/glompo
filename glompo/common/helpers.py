@@ -2,7 +2,7 @@
 import inspect
 import os
 from pathlib import Path
-from typing import Optional, Sequence, Tuple, Union, overload
+from typing import Any, Iterator, Optional, Sequence, Tuple, Union, overload
 
 import matplotlib
 import numpy as np
@@ -13,6 +13,8 @@ __all__ = ("nested_string_formatting",
            "distance",
            "glompo_colors",
            "present_memory",
+           "rolling_best",
+           "unravel",
            "LiteralWrapper",
            "FlowList",
            "BoundGroup",
@@ -128,6 +130,36 @@ def present_memory(bytes_: float, digits: int = 2) -> str:
         digits = 0
 
     return f"{bytes_:.{digits}f}{['', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'][units]}B"
+
+
+def rolling_best(x: Sequence[float]) -> Sequence[float]:
+    """ Returns a vector of shape x where each index has been replaced by the smallest number seen thus far when
+        reading the list sequentially from left to right. For example:
+            rolling_best([3, 4, 5, 6, 2, 3, 4, 1, 2, 3]) == [3, 3, 3, 3, 2, 2, 2, 1, 1, 1]
+    """
+    y = list(x).copy()
+    for i, val in enumerate(x[1:], 1):
+        y[i] = min(val, y[i - 1])
+    return y
+
+
+def unravel(seq: Union[Any, Sequence[Any]]) -> Iterator[str]:
+    """ From a nested sequence of items of any type, return a flatten sequence of items. """
+    try:  # First catch in case seq is not iterable at all
+        if isinstance(seq, str):
+            yield seq
+        else:
+            for item in seq:
+                try:
+                    if not isinstance(item, str):
+                        for nested_item in unravel(item):
+                            yield nested_item
+                    else:
+                        yield item
+                except TypeError:
+                    yield item
+    except TypeError:
+        yield seq
 
 
 """ YAML Representers """

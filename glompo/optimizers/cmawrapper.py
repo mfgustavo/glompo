@@ -1,6 +1,5 @@
 """ Implementation of CMA-ES as a GloMPO compatible optimizer.
         Adapted from:   SCM ParAMS
-        Authors:        Robert Rüger, Leonid Komissarov
 """
 import copy
 import pickle
@@ -8,7 +7,8 @@ import warnings
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
-from typing import Any, Callable, Optional, Sequence, Tuple
+from pathlib import Path
+from typing import Any, Callable, Optional, Sequence, Tuple, Union
 
 import cma
 import numpy as np
@@ -28,9 +28,11 @@ class CMAOptimizer(BaseOptimizer):
     """
 
     def __init__(self, sampler: str = 'full', verbose: bool = True, keep_files: bool = False,
+                 force_injects: Optional[bool] = None, injection_frequency: Optional[int] = None,
                  opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
                  results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
-                 backend: str = 'threads', **cmasettings):
+                 backend: str = 'threads', log_path: Union[None, str, Path] = None,
+                 log_opt_extras: Optional[Sequence[str]] = None, is_log_detailed: bool = False, **cmasettings):
         """ Initialises the optimizer. It is built in such a way that it minimize can be called multiple times on
             different functions.
 
@@ -43,13 +45,27 @@ class CMAOptimizer(BaseOptimizer):
             workers: int = 1
                 The number of parallel evaluators used by this instance of CMA.
             keep_files: bool = False
-                If True the files produced by CMA are retained otherwise they are not produced..
+                If True the files produced by CMA are retained otherwise they are not produced.
+            force_injects: Optional[bool] = None
+                If True, injections of parameter vectors into the solver will be exact, guaranteeing that that
+                solution will be in the next iteration's population. If False, the injection will result in a direction
+                relative nudge towards the vector. Forcing the injecting can limit global exploration but non-forced
+                injections may have little effect.
+            injection_frequency: Optional[int] = None
+                If None, injections are ignored by the optimizer. If an int is provided then injection are only accepted
+                if at least injection_frequency iterations have passed since the last injection.
             cmasettings: Optional[Dict[str, Any]]
                 cma module-specific settings as ``k,v`` pairs. See ``cma.s.pprint(cma.CMAOptions())`` for a list of
-                available options. Most useful keys are: `timeout`, `tolstagnation`, `popsize`. Additionally,
-                the key `minsigma` is supported: Termination if ``sigma < minsigma``.
+                available options. Most useful keys are: `timeout`, `tolstagnation`, `popsize`.
+
+            Notes
+            -----
+            Although not the default, by adjusting the injection settings above, the optimizer will inject the saved
+            incumbent solution into the solver influencing the points sampled by the following iteration. The incumbent
+            begins at x0 and is updated by the inject method called by the GloMPO manager.
         """
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag,
+                         workers, backend, log_path, log_opt_extras, is_log_detailed)
 
         self.verbose = verbose
         self.es = None
@@ -57,6 +73,10 @@ class CMAOptimizer(BaseOptimizer):
         self.keep_files = keep_files
         self.cmasettings = cmasettings
         self.popsize = cmasettings['popsize'] if 'popsize' in cmasettings else None
+
+        self.force_injects = force_injects
+        self.injection_frequency = injection_frequency
+        self.injection_counter = 0
 
         # Sort all non-native CMA options into the custom cmaoptions key 'vv':
         customopts = {}
@@ -67,14 +87,10 @@ class CMAOptimizer(BaseOptimizer):
 
         self.cmasettings['vv'] = customopts
         self.cmasettings['verbose'] = -3  # Silence CMA Logger
-        if 'tolstagnation' not in self.cmasettings:
-            self.cmasettings['tolstagnation'] = int(1e22)
+
+        # Deactivated to not interfere with GloMPO hunting
         if 'maxiter' not in self.cmasettings:
             self.cmasettings['maxiter'] = float('inf')
-        if 'tolfunhist' not in self.cmasettings:
-            self.cmasettings['tolfunhist'] = 1e-15
-        if 'tolfun' not in self.cmasettings:
-            self.cmasettings['tolfun'] = 1e-20
 
         if sampler == 'vd':
             self.cmasettings = GaussVDSampler.extend_cma_options(self.cmasettings)
@@ -95,7 +111,8 @@ class CMAOptimizer(BaseOptimizer):
             function: Callable[[Sequence[float]], float]
                 Task to be minimised accepting a sequence of unknown parameters and returning a float result.
             x0: Sequence[float]
-                Initial mean of the distribution from with trial parameter sets are sampled.
+                Initial mean of the distribution from with trial parameter sets are sampled. Force injected into the
+                solver to guarantee it is evaluated.
             bounds: Sequence[Tuple[float, float]]
                 Bounds on the sampling limits of each dimension. CMA supports handling bounds as non-linear
                 transformations so that they are never exceeded (but bounds are likely to be over sampled) or with a
@@ -134,6 +151,7 @@ class CMAOptimizer(BaseOptimizer):
             self.result = MinimizeResult()
             task_settings.update({'bounds': np.transpose(bounds).tolist()})
             self.es = cma.CMAEvolutionStrategy(x0, sigma0, task_settings)
+            self.es.inject([x0], force=True)
 
         self.logger.debug("Entering optimization loop")
 
@@ -150,6 +168,9 @@ class CMAOptimizer(BaseOptimizer):
             if len(x) != len(fx):
                 self.logger.debug("Unfinished evaluation detected. Breaking out of loop")
                 break
+
+            if i == 1:
+                self.incumbent = {'x': x0, 'fx': fx[0]}
 
             self.es.tell(x, fx)
             self.logger.debug("Told solutions")
@@ -175,8 +196,13 @@ class CMAOptimizer(BaseOptimizer):
                 self.logger.debug("Checked messages")
                 self._pause_signal.wait()
                 self.logger.debug("Passed pause test")
-            self._customtermination(task_settings)
             self.logger.debug("callbacks called")
+
+            if self.incumbent['fx'] < min(fx) and \
+                    self.injection_frequency and i - self.injection_counter > self.injection_frequency:
+                self.injection_counter = i
+                self.es.inject([self.incumbent['x']], force=self.force_injects)
+                print("Incumbent solution injected.")
 
         self.logger.debug("Exited optimization loop")
 
@@ -189,6 +215,7 @@ class CMAOptimizer(BaseOptimizer):
 
         if self.verbose:
             print(f"Optimization terminated: success = {self.result.success}")
+            print(f"Optimizer convergence {self.es.stop()}")
             print(f"Final fx={self.result.fx:.2E}")
 
         if self._results_queue:
@@ -206,28 +233,6 @@ class CMAOptimizer(BaseOptimizer):
                     pickle.dump(self.es.result, file)
 
         return self.result
-
-    def _customtermination(self, settings):
-        if 'tolstagnation' in settings:
-            # The default 'tolstagnation' criterium is way too complex (as most 'tol*' criteria are).
-            # Here we hack it to actually do what it is supposed to do: Stop when no change after last x iterations.
-            if not hasattr(self, '_stagnationcounter'):
-                self._stagnationcounter = 0
-                self._prev_best = self.es.best.f
-
-            if self._prev_best == self.es.best.f:
-                self._stagnationcounter += 1
-            else:
-                self._prev_best = self.es.best.f
-                self._stagnationcounter = 0
-
-            if self._stagnationcounter > settings['tolstagnation']:
-                self.callstop("Early CMA stop: 'tolstagnation'.")
-
-        opts = settings['vv']
-        if 'minsigma' in opts and self.es.sigma < opts['minsigma']:
-            # Stop if sigma falls below minsigma
-            self.callstop("Early CMA stop: 'minsigma'.")
 
     def _parallel_map(self, function: Callable[[Sequence[float]], float],
                       x: Sequence[Sequence[float]]) -> Sequence[float]:

@@ -47,7 +47,8 @@ from ..common.helpers import LiteralWrapper, literal_presenter, nested_string_fo
     unknown_object_presenter, generator_presenter, optimizer_selector_presenter, present_memory, FlowList, \
     flow_presenter, numpy_array_presenter, numpy_dtype_presenter, BoundGroup, bound_group_presenter, \
     CheckpointingError, is_bounds_valid
-from ..common.namedtuples import Bound, IterationResult, OptimizerPackage, ProcessPackage, Result, OptimizerCheckpoint
+from ..common.namedtuples import Bound, IterationResult, OptimizerPackage, ProcessPackage, Result, OptimizerCheckpoint, \
+    LoggingOptions
 from ..common.wrappers import process_print_redirect
 from ..convergence import BaseChecker, KillsAfterConvergence
 from ..generators import BaseGenerator, RandomGenerator
@@ -124,6 +125,9 @@ class GloMPOManager:
             killing_conditions in an attempt to terminate children.
         hunt_victims: Dict[int, float]
             Mapping of manager-killed optimizer ID numbers and timestamps when they were terminated.
+        incumbent_sharing: bool
+            If True the manager will send iteration information about the best ever seen solution to all its children
+            whenever this is updated.
         killing_conditions: BaseHunter
             GloMPO object which evaluates whether an optimizer meets its conditions to be terminated early.
             (See glompo.hunters.basehunter.BaseHunter).
@@ -183,15 +187,8 @@ class GloMPOManager:
             and this is False.
         status_frequency: float
             Frequency (in seconds) with which a status message is produced for the logger.
-        summary_files: int
-            Indicates the level of saving the user would like in terms of datafiles and plots:
-                0 - No opt_log files are saved;
-                1 - Only the manager summary file is saved;
-                2 - The manager summary log and combined optimizers summary files are saved;
-                3 - All of the above plus all the individual optimizer log files are saved;
-                4 - All of the above plus plot of the optimizer trajectories
-                5 - All of the above plus plots of trailed parameters as a function of optimizer iteration for each
-                    optimizer.
+        logging_options: LoggingOptions
+            Options on what optimization information the user would like GloMPO to save to disk.
         t_end: float
             Timestamp of the ending time of an optimization run.
         t_start: float
@@ -311,13 +308,14 @@ class GloMPOManager:
 
         self.allow_forced_terminations: bool = None
         self._too_long: float = None
-        self.summary_files: int = None
+        self.logging_options: LoggingOptions = None
         self.split_printstreams: bool = None
         self.overwrite_existing: bool = None
         self.visualisation: bool = None
         self.visualisation_args: Dict[str, Any] = {}
         self.hunt_frequency: int = None
         self.spawning_opts: bool = None
+        self.incumbent_sharing: bool = None
         self.status_frequency: float = None
         self.checkpoint_control: CheckpointingControl = None
 
@@ -346,10 +344,11 @@ class GloMPOManager:
               convergence_checker: Optional[BaseChecker] = None,
               x0_generator: Optional[BaseGenerator] = None,
               killing_conditions: Optional[BaseHunter] = None,
+              share_best_solutions: bool = False,
               hunt_frequency: int = 100,
               status_frequency: int = 600,
               checkpoint_control: Optional[CheckpointingControl] = None,
-              summary_files: int = 0,
+              logging_options: Optional[LoggingOptions] = None,
               visualisation: bool = False,
               visualisation_args: Optional[Dict[str, Any]] = None,
               force_terminations_after: int = -1,
@@ -433,6 +432,9 @@ class GloMPOManager:
             x or y will return if x is True without evaluating y. x and y will return False if x is False without
             evaluating y.
 
+        share_best_solutions: bool = False
+            If True the manager will send the best ever seen solution to all its children whenever this is updated.
+
         hunt_frequency: int = 100
             The number of function calls between successive attempts to evaluate optimizer performance and determine
             if they should be terminated.
@@ -450,15 +452,21 @@ class GloMPOManager:
                 supply checkpoint controls without this package present, a warning will be raised and no checkpointing
                 will occur.
 
-        summary_files: int = 0
-            Indicates the level of saving the user would like in terms of datafiles and plots:
-                0 - No opt_log files are saved;
-                1 - Only the manager summary file is saved;
-                2 - The manager summary log and combined optimizers summary files are saved;
-                3 - All of the above plus all the individual optimizer log files are saved;
-                4 - All of the above plus plot of the optimizer trajectories
-                5 - All of the above plus plots of trailed parameters as a function of optimizer iteration for each
-                    optimizer.
+        logging_options: LoggingOptions = Optional[LoggingOptions]
+            Indicates what information the user would like saved to disk. If not provided nothing will be saved.
+            LoggingOptions attributes:
+                save_manager_summary: bool = True
+                    YAML file with summary info about the optimization and the result.
+                save_optimizer_summary: bool = True
+                    YAML file with summary info of every optimizer started.
+                save_optimizer_logs: bool = False
+                    CSVs with iteration history of every optimizer started.
+                make_detailed_optimizer_logs: bool = False
+                    CSVs will log results of task.detailed_call (see BaseOptimizer).
+                make_trajectory_plot: bool = True
+                    PNG of all explored error values v time.
+                make_optimizer_plots: bool = False
+                    PNG for each optimizer showing parameter values tested v time.
 
         visualisation: bool = False
             If True then a dynamic plot is generated to demonstrate the performance of the optimizers. Further options
@@ -568,14 +576,16 @@ class GloMPOManager:
         # Save behavioural args
         self.allow_forced_terminations = force_terminations_after > 0
         self._too_long = force_terminations_after
-        self.summary_files = np.clip(int(summary_files), 0, 5)
-        if self.summary_files != summary_files:
-            self.logger.warning(f"summary_files argument given as {summary_files} clipped to {self.summary_files}")
+        if logging_options and isinstance(logging_options, LoggingOptions):
+            self.logging_options = logging_options
+        else:
+            self.logging_options = LoggingOptions(False, False, False, False, False, False)
         self.split_printstreams = bool(split_printstreams)
         self.overwrite_existing = bool(overwrite_existing)
         self.visualisation = visualisation
         self.hunt_frequency = hunt_frequency
         self.spawning_opts = True
+        self.incumbent_sharing = share_best_solutions
         self.status_frequency = int(status_frequency)
 
         # Setup Checkpointing
@@ -770,7 +780,7 @@ class GloMPOManager:
                 try:
                     self.scope.load_state(tmp_dir)
                 except Exception as e:
-                    warnings.warn("Could not load scope, building fresh.", RuntimeWarning)
+                    warnings.warn(f"Could not load scope, building fresh. Error: {e}", RuntimeWarning)
                     self.scope = GloMPOScope(**self.visualisation_args)
             else:
                 self.scope = GloMPOScope(**self.visualisation_args)
@@ -1024,7 +1034,7 @@ class GloMPOManager:
                 self.scope.close_fig()
 
             self.logger.debug("Saving summary file results")
-            self._save_log(self.result, reason, caught_exception, self.working_dir, self.summary_files)
+            self._save_log(self.result, reason, caught_exception, self.working_dir, self.logging_options)
 
             self.result = Result(self.result.x,
                                  self.result.fx,
@@ -1138,16 +1148,16 @@ class GloMPOManager:
         self._toggle_optimizers(1)
         self.logger.info(f"Checkpoint '{path.name}' successfully built")
 
-    def dump_state(self, summary_files: Optional[int] = None, dump_dir: Optional[Path] = None):
+    def dump_state(self, logging_options: Optional[LoggingOptions] = None, dump_dir: Optional[Path] = None):
         """ Produces the same output files produced by start_manager without actually running any optimization. Useful
             to extract output files from checkpoints.
 
             Parameters
             ----------
-            summary_files: Optional[int] = None
-                If provided, this will overwrite the manager summary_files setting allowing this method to produce more
-                or less output as desired. If not provided and the manager summary_files setting is not set then this
-                method will pass and produce no output. This would typically only happen if trying to dump an
+            logging_options: Optional[LoggingOptions] = None
+                If provided, this will overwrite the manager logging_options setting allowing this method to produce
+                more or less output as desired. If not provided and the manager logging_options setting is not set then
+                this method will pass and produce no output. This would typically only happen if trying to dump an
                 uninitialised manager.
             dump_dir: Optional[Path] = None
                 If provided, this will overwrite the manager working_dir allowing the output to be redirected to a
@@ -1161,12 +1171,12 @@ class GloMPOManager:
         else:
             dump_dir = self.working_dir
 
-        if summary_files is None:
-            summary_files = self.summary_files
-        if summary_files is None:  # Possible if self.summary_files has not been set
-            summary_files = 0
+        if logging_options is None:
+            logging_options = self.logging_options
+        if logging_options is None:  # Possible if self.logging_options has not been set
+            logging_options = LoggingOptions(False, False, False, False, False, False)
 
-        self._save_log(self.result, "Manual Save State", None, dump_dir, summary_files)
+        self._save_log(self.result, "Manual Save State", None, dump_dir, logging_options)
 
     """ Management Sub-Tasks """
 
@@ -1272,11 +1282,29 @@ class GloMPOManager:
         else:
             backend = 'threads' if self.opts_daemonic else 'processes'
 
+        if 'log_path' in init_kwargs:
+            log_path = init_kwargs['log_path']
+            del init_kwargs['log_path']
+        elif self.logging_options.save_optimizer_logs:
+            log_path = self.working_dir / 'glompo_optimizer_logs' / f'{self.o_counter:03}.csv'
+        else:
+            log_path = None
+
+        if 'is_log_detailed' in init_kwargs:
+            is_log_detailed = init_kwargs['is_log_detailed']
+            del init_kwargs['is_log_detailed']
+        elif self.logging_options.make_detailed_optimizer_logs:
+            is_log_detailed = True
+        else:
+            is_log_detailed = False
+
         optimizer = selected(opt_id=self.o_counter,
                              signal_pipe=child_pipe,
                              results_queue=self.optimizer_queue,
                              pause_flag=event,
                              backend=backend,
+                             log_path=log_path,
+                             is_log_detailed=is_log_detailed,
                              **init_kwargs)
 
         self.opt_log.add_optimizer(self.o_counter, type(optimizer).__name__, str(datetime.now()))
@@ -1299,8 +1327,8 @@ class GloMPOManager:
                 self._last_feedback[opt_id] = time()
                 self.logger.info(f"Signal {key} from {opt_id}.")
                 if key == 0:
-                    self.opt_log.put_metadata(opt_id, "Stop Time", str(datetime.now()))
-                    self.opt_log.put_metadata(opt_id, "End Condition", message)
+                    self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+                    self.opt_log.put_metadata(opt_id, "end_cond", message)
                     self._graveyard.add(opt_id)
                     self.conv_counter += 1
                 elif key == 9:
@@ -1334,16 +1362,16 @@ class GloMPOManager:
                                       f"minimization complete signal to the manager.", RuntimeWarning)
                         self.logger.warning(f"Optimizer {opt_id} terminated normally without sending a "
                                             f"minimization complete signal to the manager.")
-                        self.opt_log.put_metadata(opt_id, "Approximate Stop Time", str(datetime.now()))
-                        self.opt_log.put_metadata(opt_id, "End Condition", "Normal termination (Reason unknown)")
+                        self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+                        self.opt_log.put_metadata(opt_id, "end_cond", "Normal termination (Reason unknown)")
                 else:
                     self._graveyard.add(opt_id)
                     self.opt_log.put_message(opt_id, f"Terminated in error with code {-exitcode}")
                     warnings.warn(f"Optimizer {opt_id} terminated in error with code {-exitcode}",
                                   RuntimeWarning)
                     self.logger.error(f"Optimizer {opt_id} terminated in error with code {-exitcode}")
-                    self.opt_log.put_metadata(opt_id, "Approximate Stop Time", str(datetime.now()))
-                    self.opt_log.put_metadata(opt_id, "End Condition", f"Error termination (exitcode {-exitcode}).")
+                    self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+                    self.opt_log.put_metadata(opt_id, "end_cond", f"Error termination (exitcode {-exitcode}).")
 
             # Find hanging processes
             if pack.process.is_alive() and \
@@ -1355,8 +1383,8 @@ class GloMPOManager:
                 self.logger.error(f"Optimizer {opt_id} seems to be hanging. Forcing termination.")
                 self._graveyard.add(opt_id)
                 self.opt_log.put_message(opt_id, "Force terminated due to no feedback timeout.")
-                self.opt_log.put_metadata(opt_id, "Approximate Stop Time", str(datetime.now()))
-                self.opt_log.put_metadata(opt_id, "End Condition", "Forced GloMPO Termination")
+                self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+                self.opt_log.put_metadata(opt_id, "end_cond", "Forced GloMPO Termination")
                 pack.process.terminate()
 
             # Force kill zombies
@@ -1369,8 +1397,8 @@ class GloMPOManager:
                 pack.process.join(3)
                 self.opt_log.put_message(opt_id, "Force terminated due to no feedback after kill signal "
                                                  "timeout.")
-                self.opt_log.put_metadata(opt_id, "Approximate Stop Time", str(datetime.now()))
-                self.opt_log.put_metadata(opt_id, "End Condition", "Forced GloMPO Termination")
+                self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+                self.opt_log.put_metadata(opt_id, "end_cond", "Forced GloMPO Termination")
                 warnings.warn(f"Forced termination signal sent to optimizer {opt_id}.", RuntimeWarning)
                 self.logger.error(f"Forced termination signal sent to optimizer {opt_id}.")
 
@@ -1509,11 +1537,11 @@ class GloMPOManager:
         self._optimizer_packs[opt_id].signal_pipe.send(1)
         self.logger.debug(f"Termination signal sent to {opt_id}")
 
-        self.opt_log.put_metadata(opt_id, "Stop Time", str(datetime.now()))
-        self.opt_log.put_metadata(opt_id, "End Condition", LiteralWrapper(f"GloMPO Termination\n"
-                                                                          f"Hunter: {hunter_id}\n"
-                                                                          f"Reason: \n"
-                                                                          f"{reason}"))
+        self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+        self.opt_log.put_metadata(opt_id, "end_cond", LiteralWrapper(f"GloMPO Termination\n"
+                                                                     f"Hunter: {hunter_id}\n"
+                                                                     f"Reason: \n"
+                                                                     f"{reason}"))
 
         if self.visualisation:
             self.scope.update_kill(opt_id)
@@ -1523,8 +1551,13 @@ class GloMPOManager:
 
         best_iter = self.opt_log.best_iter
 
+        if self.incumbent_sharing and (not self.result.fx or best_iter['fx'] < self.result.fx):
+            for opt_id, pack in self._optimizer_packs.items():
+                if opt_id != best_iter['opt_id'] and pack.process.is_alive():
+                    pack.signal_pipe.send((4, best_iter['x'], best_iter['fx']))
+
         best_origin = {"opt_id": best_iter['opt_id'],
-                       "type": self.opt_log.get_metadata(best_iter['opt_id'], "Optimizer Type")}
+                       "type": self.opt_log.get_metadata(best_iter['opt_id'], "opt_type")}
 
         best_stats = {'f_evals': self.f_counter,
                       'opts_started': self.o_counter,
@@ -1555,12 +1588,12 @@ class GloMPOManager:
         for opt_id, pack in self._optimizer_packs.items():
             # Add stop condition to logs without overwriting existing ones
             try:
-                self.opt_log.get_metadata(opt_id, "End Condition")
-                self.opt_log.get_metadata(opt_id, "Stop Time")
+                self.opt_log.get_metadata(opt_id, "end_cond")
+                self.opt_log.get_metadata(opt_id, "t_stop")
             except KeyError:
                 self._graveyard.add(opt_id)
-                self.opt_log.put_metadata(opt_id, "Stop Time", str(datetime.now()))
-                self.opt_log.put_metadata(opt_id, "End Condition",
+                self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+                self.opt_log.put_metadata(opt_id, "end_cond",
                                           crash_reason if crash_reason else "GloMPO Convergence")
 
             if pack.process.is_alive():
@@ -1574,10 +1607,10 @@ class GloMPOManager:
                                             f"and thus generate errors. Terminations cannot be sent to threads.")
 
     def _save_log(self, result: Result, reason: str, caught_exception: Optional[str], dump_dir: Path,
-                  summary_files: int):
-        """ Saves the manager's state and history into the collection of files requested by summary_files. """
+                  logging_options: LoggingOptions):
+        """ Saves the manager's state and history into the collection of files requested by logging_options. """
 
-        if summary_files > 0:
+        if logging_options.save_manager_summary:
             if caught_exception:
                 reason = f"Process Crash: {caught_exception}"
 
@@ -1616,7 +1649,7 @@ class GloMPOManager:
                     "Working Dir": str(Path.cwd()),
                     "Username": getpass.getuser(),
                     "Hostname": socket.gethostname(),
-                    "Time": {"optimization Periods": t_periods,
+                    "Time": {"Optimization Periods": t_periods,
                              "Total": t_total,
                              "Session": t_session}},
                 "Settings": {"x0 Generator": self.x0_generator,
@@ -1650,37 +1683,36 @@ class GloMPOManager:
                 self.logger.debug("Saving manager summary file.")
                 yaml.dump(data, file, Dumper=Dumper, default_flow_style=False, sort_keys=False)
 
-            if summary_files >= 2:
-                self.logger.debug("Saving optimizers summary file.")
-                self.opt_log.save_summary(dump_dir / "opt_best_summary.yml")
-            if summary_files >= 3:
-                self.logger.debug("Saving optimizer log files.")
-                self.opt_log.save_optimizer(dump_dir / "glompo_optimizer_logs")
-            if summary_files >= 4:
-                self.logger.debug("Saving trajectory plot.")
-                signs = set()
-                large = 0
-                small = float('inf')
-                for opt_id in range(1, self.o_counter + 1):
-                    fx = self.opt_log.get_history(opt_id, 'fx')
-                    [signs.add(i) for i in set(np.sign(fx))]
-                    if len(fx) > 0:
-                        large = max(fx) if max(fx) > large else large
-                        small = min(fx) if min(fx) < small else small
+        if logging_options.save_optimizer_summary or logging_options.save_optimizer_logs:
+            self.logger.debug("Saving optimizers summary file.")
+            self.opt_log.save_summary(dump_dir / "opt_best_summary.yml")
 
-                all_sign = len(signs) == 1
-                range_large = large - small > 1e5
-                log_scale = all_sign and range_large
-                for best_fx in (True, False):
-                    name = "trajectories_"
-                    name += "log_" if log_scale else ""
-                    name += "best_" if best_fx else ""
-                    name = name[:-1] if name.endswith("_") else name
-                    name += ".png"
-                    self.opt_log.plot_trajectory(dump_dir / name, log_scale, best_fx)
-            if summary_files == 5:
-                self.logger.debug("Saving optimizer parameter trials.")
-                self.opt_log.plot_optimizer_trials(dump_dir)
+        if logging_options.make_trajectory_plot:
+            self.logger.debug("Saving trajectory plot.")
+            signs = set()
+            large = 0
+            small = float('inf')
+            for opt_id in range(1, self.o_counter + 1):
+                fx = self.opt_log.get_history(opt_id, 'fx')
+                [signs.add(i) for i in set(np.sign(fx))]
+                if len(fx) > 0:
+                    large = max(fx) if max(fx) > large else large
+                    small = min(fx) if min(fx) < small else small
+
+            all_sign = len(signs) == 1
+            range_large = large - small > 1e5
+            log_scale = all_sign and range_large
+            for best_fx in (True, False):
+                name = "trajectories_"
+                name += "log_" if log_scale else ""
+                name += "best_" if best_fx else ""
+                name = name[:-1] if name.endswith("_") else name
+                name += ".png"
+                self.opt_log.plot_trajectory(dump_dir / name, log_scale, best_fx)
+
+        if logging_options.make_optimizer_plots:
+            self.logger.debug("Saving optimizer parameter trials.")
+            self.opt_log.plot_optimizer_trials(dump_dir)
 
     """ Checkpointing Sub-Tasks """
 
@@ -1715,8 +1747,8 @@ class GloMPOManager:
                         key, message = pack.signal_pipe.recv()
                         self.logger.debug(f"Received {key, message} from {opt_id}")
                         if key == 0:
-                            self.opt_log.put_metadata(opt_id, "Stop Time", str(datetime.now()))
-                            self.opt_log.put_metadata(opt_id, "End Condition", message)
+                            self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+                            self.opt_log.put_metadata(opt_id, "end_cond", message)
                             self._graveyard.add(opt_id)
                             self.conv_counter += 1
                             not_chkpt.add(opt_id)

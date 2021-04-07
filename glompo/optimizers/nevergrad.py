@@ -20,8 +20,9 @@ class Nevergrad(BaseOptimizer):
     """
 
     def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
-                 pause_flag: Event = None, workers: int = 1, backend: str = 'processes', optimizer: str = 'TBPSA',
-                 zero: float = -float('inf')):
+                 pause_flag: Event = None, workers: int = 1, backend: str = 'processes',
+                 log_path: Union[None, str, Path] = None, log_opt_extras: Optional[Sequence[str]] = None,
+                 is_log_detailed: bool = False, optimizer: str = 'TBPSA', zero: float = -float('inf')):
         """
         Parameters
         ----------
@@ -30,7 +31,8 @@ class Nevergrad(BaseOptimizer):
         zero : float
             Will stop the optimization when this cost function value is reached.
         """
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag,
+                         workers, backend, log_path, log_opt_extras, is_log_detailed)
 
         self.opt_algo = ng.optimizers.registry[optimizer]
         self.optimizer = None

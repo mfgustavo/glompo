@@ -11,7 +11,7 @@ def get_readme():
 
 setup(
     name="glompo",
-    version="2.0.6",
+    version="3.0.0",
     description="Globally managed parallel optimization",
     long_description=get_readme(),
     author="Michael Freitas Gustavo",
@@ -32,5 +32,6 @@ setup(
         'ParAMSWrapper': ['scm'],
         'Checkpointing': ['dill~=0.2.7'],
         'ResourceUsageStatusPrinting': ['psutil>=5.0'],
+        'OptimizationAnalysis': ['dask', 'pandas'],
     }
 )

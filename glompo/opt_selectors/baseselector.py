@@ -2,7 +2,7 @@
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Callable, Dict, Optional, Tuple, Type, Union
 
 from ..core.optimizerlogger import OptimizerLogger
 from ..optimizers.baseoptimizer import BaseOptimizer
@@ -18,9 +18,8 @@ class BaseSelector(ABC):
     """
 
     def __init__(self,
-                 avail_opts: List[Union[Type[BaseOptimizer],
-                                        Tuple[Type[BaseOptimizer],
-                                              Optional[Dict[str, Any]], Optional[Dict[str, Any]]]]],
+                 *avail_opts: Union[Type[BaseOptimizer],
+                                    Tuple[Type[BaseOptimizer], Optional[Dict[str, Any]], Optional[Dict[str, Any]]]],
                  allow_spawn: Optional[Callable[['GloMPOManager'], bool]] = None):
         """ Parameters
             ----------
@@ -40,8 +39,6 @@ class BaseSelector(ABC):
                 returns False the manager will no longer spawn optimizers.
         """
         self.logger = logging.getLogger('glompo.selector')
-        if not isinstance(avail_opts, list):
-            raise TypeError("avail_opts must be a list.")
 
         self.avail_opts = []
         for item in avail_opts:

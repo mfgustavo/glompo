@@ -16,13 +16,14 @@ from scm.params.core.dataset import DataSet, SSE
 from scm.params.core.jobcollection import JobCollection
 from scm.params.core.opt_components import LinearParameterScaler, _Step
 from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
+from scm.params.parameterinterfaces.base import BaseParameters
 from scm.params.parameterinterfaces.reaxff import ReaxParams
+from scm.params.parameterinterfaces.xtb import XTBParams
 from scm.plams.core.errors import ResultsError
 from scm.plams.interfaces.adfsuite.reaxff import reaxff_control_to_settings
 
 from ..core.manager import GloMPOManager
 from ..opt_selectors.baseselector import BaseSelector
-from ..optimizers.gflswrapper import GFLSOptimizer
 
 __all__ = ("GlompoParamsWrapper",
            "ReaxFFError")
@@ -69,7 +70,10 @@ class _FunctionWrapper:
 
 
 class GlompoParamsWrapper(BaseOptimizer):
-    """ Wraps the GloMPO manager into a ParAMS optimizer. """
+    """ Wraps the GloMPO manager into a ParAMS optimizer. This is not the recommended way to make use of the GloMPO
+        interface, it is preferable to make use of the BaseParamsError classes. This class is only applicable in cases
+        where the ParAMS Optimization class interface is preferred.
+    """
 
     def __init__(self, optimizer_selector: BaseSelector, **manager_kwargs):
         """ Accepts GloMPO configuration information.
@@ -84,16 +88,13 @@ class GlompoParamsWrapper(BaseOptimizer):
                 Note that all arguments are accepted but required GloMPO arguments 'task' and 'bounds'
                 will be overwritten as they are passed by the 'minimize' function in accordance with ParAMS API.
         """
-
+        self.manager = GloMPOManager()
         self.manager_kwargs = manager_kwargs
         for kw in ['task', 'bounds']:
             if kw in self.manager_kwargs:
                 del self.manager_kwargs[kw]
 
         self.selector = optimizer_selector
-
-        if GFLSOptimizer in optimizer_selector:
-            self._loss = SSE()
 
     def minimize(self,
                  function: _Step,
@@ -140,24 +141,162 @@ class GlompoParamsWrapper(BaseOptimizer):
         # Silence function printing
         function.v = False
 
-        manager = GloMPOManager()
-        manager.setup(task=_FunctionWrapper(function), bounds=bounds, opt_selector=self.selector,
-                      **self.manager_kwargs)
+        self.manager.setup(task=_FunctionWrapper(function), bounds=bounds, opt_selector=self.selector,
+                           **self.manager_kwargs)
 
-        result = manager.start_manager()
+        result = self.manager.start_manager()
 
         # Reshape glompo.common.namedtuples.Result into scm.params.optimizers.base.MinimizeResult
         params_res = MinimizeResult()
         params_res.x = result.x
         params_res.fx = result.fx
-        params_res.success = manager.converged and len(result.x) > 0
+        params_res.success = self.manager.converged and len(result.x) > 0
 
         return params_res
 
 
-class ReaxFFError:
+class BaseParamsError:
+    """ Base error function instance from which other classes derive depending on the engine used e.g. ReaxFF, xTB etc.
+    """
+
+    def __init__(self, data_set: DataSet, job_collection: JobCollection, parameters: BaseParameters,
+                 validation_dataset: Optional[DataSet] = None,
+                 scale_residuals: bool = True):
+        """ Initialisation of the error function. To initialise the object from files use the class factory
+            methods from_classic_files or from_params_files.
+
+            Parameters
+            ----------
+            data_set: DataSet
+                Reference data used to compare against force field results.
+            job_collection: JobCollection
+                AMS jobs from which the data can be extracted for comparison to the DataSet
+            parameters: BaseParameters
+                BaseParameters object which holds the force field values, ranges, engine and which parameters are active
+                or not.
+            validation_dataset: Optional[DataSet]
+                If a validation set is being used and evaluated along with the training set, it may be added here.
+                Jobs for the validation set are expected to be included in job_collection
+            scale_residuals: bool = True
+                If True then the raw residuals (i.e. the differences between engine evaluation and training data) will
+                be scaled by the weight and sigma values in the datasets i.e. r_scaled = weight * r / sigma. Otherwise
+                the raw residual is returned. This setting effects both the resids and detailed_call methods.
+        """
+        self.dat_set = data_set
+        self.job_col = job_collection
+        self.par_eng = parameters
+        self.val_set = validation_dataset
+
+        self.scale_residuals = scale_residuals
+
+        self.loss = SSE()
+        self.scaler = LinearParameterScaler(self.par_eng.active.range)
+        self.par_levels = ParallelLevels(jobs=1)
+
+    @property
+    def n_parms(self) -> int:
+        """ Returns the number of active parameters. """
+        return len(self.par_eng.active.x)
+
+    def __call__(self, x: Sequence[float]) -> float:
+        """ Returns the error value between the the force field with the given parameters and the training values. """
+        return self._calculate(x)[0][0]
+
+    def detailed_call(self, x: Sequence[float]) -> Union[Tuple[float, Sequence[float]],
+                                                         Tuple[float, Sequence[float], float, Sequence[float]]]:
+        """ A full return of the error results. Returns a tuple of:
+                training_set_error, [training_set_residual_1, ..., training_set_residual_N]
+            If a validation set is included then returned tuple is:
+                training_set_error, [training_set_residual_1, ..., training_set_residual_N],
+                validation_set_error, [validation_set_residual_1, ..., validation_set_residual_N]
+        """
+        calc = self._calculate(x)
+        ts_fx = calc[0][0]
+        ts_resids = calc[0][1]
+        ts_resids = self._scale_residuals(ts_resids, self.dat_set) if self.scale_residuals else ts_resids
+
+        if self.val_set:
+            vs_fx = calc[1][0]
+            vs_resids = calc[1][1]
+            vs_resids = self._scale_residuals(vs_resids, self.val_set) if self.scale_residuals else vs_resids
+            return ts_fx, ts_resids, vs_fx, vs_resids
+
+        return ts_fx, ts_resids
+
+    def detailed_call_header(self) -> Sequence[str]:
+        """ Returns a sequence of strings which represent the column headers for the detailed_call return.
+            GloMPO optimizers will attached this sequence to the head of their CSV log files.
+        """
+        n_ts = len(self.dat_set)
+        n_vs = len(self.val_set) if self.val_set else 0
+
+        ts_digits = len(str(n_ts))
+        vs_digits = len(str(n_vs))
+
+        ts_heads = ['fx', *[f"r{i:0{ts_digits}}" for i in range(n_ts)]]
+        vs_heads = ['fx_vs', *[f"r{i:0{vs_digits}}_vs" for i in range(n_vs)]] if self.val_set else []
+
+        return ts_heads + vs_heads
+
+    def resids(self, x: Sequence[float]) -> Sequence[float]:
+        """ Method for compatibility with GFLS optimizer. Returns the signed differences between the force field and
+            training set but DOES NOT include weights and sigma values
+        """
+        residuals = self._calculate(x)[0][1]
+        if self.scale_residuals:
+            residuals = self._scale_residuals(residuals, self.dat_set)
+
+        return residuals
+
+    def save(self, path: Union[Path, str], filenames: Optional[Dict[str, str]] = None,
+             parameters: Optional[Sequence[float]] = None):
+        """ Writes the data set and job collection to YAML files. Writes the engine object to an appropriate parameter
+            file.
+
+            Parameters
+            ----------
+            path: Union[Path, str]
+                Path to directory in which files will be saved.
+            filenames: Optional[Dict[str, str]] = None
+                Custom filenames for the written files. The dictionary may include any/all of the keys in the example
+                below. This example contains the default names used if not given:
+                    {'ds': 'data_set.yml', 'jc': 'job_collection.yml', 'ff': 'ffield'}
+            parameters: Optional[Sequence[float]] = None
+                Optional parameters to be written into the force field file. If not given, the parameters currently
+                therein will be used.
+        """
+        if not filenames:
+            filenames = {}
+
+        names = {'ds': filenames['ds'] if 'ds' in filenames else 'data_set.yml',
+                 'jc': filenames['jc'] if 'jc' in filenames else 'job_collection.yml',
+                 'ff': filenames['ff'] if 'ff' in filenames else 'ffield'}
+
+        self.dat_set.store(Path(path, names['ds']))
+        self.job_col.store(Path(path, names['jc']))
+        self.par_eng.write(Path(path, names['ff']), parameters)
+
+    def _calculate(self, x: Sequence[float]) -> Sequence[Tuple[float, List[float], List[float]]]:
+        """ Core calculation function, returns both the error function value and the residuals. """
+        default = (float('inf'), [float('inf')], [float('inf')])
+        try:
+            engine = self.par_eng.get_engine(self.scaler.scaled2real(x))
+            ff_results = self.job_col.run(engine.settings, parallel=self.par_levels)
+            ts_result = self.dat_set.evaluate(ff_results, self.loss, True)
+            vs_result = self.val_set.evaluate(ff_results, self.loss, True) if self.val_set else default
+            return ts_result, vs_result
+        except ResultsError:
+            return default, default
+
+    @staticmethod
+    def _scale_residuals(resids: Sequence[float], data_set: DataSet) -> Sequence[float]:
+        """ Scales a sequence of residuals by weight and sigma values in the associated DataSet"""
+        return [w / s * r for w, s, r in zip(data_set.get('weight'), data_set.get('sigma'), resids)]
+
+
+class ReaxFFError(BaseParamsError):
     """ Setups a function which when called returns the error value of a parameterised ReaxFF force field as compared to
-        a provided trainign set of data.
+        a provided training set of data.
     """
 
     @classmethod
@@ -186,42 +325,32 @@ class ReaxFFError:
         dat_set, job_col, rxf_eng = setup_reax_from_params(path)
         return cls(dat_set, job_col, rxf_eng)
 
-    def __init__(self, data_set: DataSet, job_collection: JobCollection, reax_params: ReaxParams):
-        """ Initialisation of the ReaxFF error function. To initialise the object from files use the class factory
-            methods: ReaxFFError.from_classic_files or ReaxFFError.from_params_files
+    def checkpoint_save(self, path: Union[Path, str]):
+        """ Used to store files into a GloMPO checkpoint (at path) suitable to reconstruct the task when the checkpoint
+            is loaded.
+        """
+        self.dat_set.pickle_dump(Path(path, 'data_set.pkl'))
+        self.job_col.pickle_dump(Path(path, 'job_collection.pkl'))
+        self.par_eng.pickle_dump(str(Path(path, 'reax_params.pkl')))  # Method does not support Path
+
+
+class XTBError(BaseParamsError):
+    """ Setups a function which when called returns the error value of a parameterised xTB force field as compared to
+        a provided training set of data.
+    """
+
+    @classmethod
+    def from_params_files(cls, path: Union[Path, str]) -> 'XTBError':
+        """ Initializes the error function from ParAMS data files.
 
             Parameters
             ----------
-            data_set: DataSet
-                Reference data used to compare against force field results.
-            job_collection: JobCollection
-                AMS jobs from which the data can be extracted for comparison to the DataSet
-            reax_params: ReaxParams
-                ReaxParams object which holds the force field values, ranges, engine and which parameters are active or
-                not.
+            path: Union[Path, str]
+                Path to directory containing ParAMS data set, job collection and ReaxFF engine files.
+                (see setup_reax_from_params for what files are expected).
         """
-        self.dat_set = data_set
-        self.job_col = job_collection
-        self.rxf_eng = reax_params
-
-        self.loss = SSE()
-        self.scaler = LinearParameterScaler(self.rxf_eng.active.range)
-        self.par_levels = ParallelLevels(jobs=1)
-
-    @property
-    def n_parms(self) -> int:
-        """ Returns the number of active parameters. """
-        return len(self.rxf_eng.active.x)
-
-    def __call__(self, x: Sequence[float]) -> float:
-        """ Returns the error value between the the force field with the given parameters and the training values. """
-        return self._calculate(x)[0]
-
-    def resids(self, x: Sequence[float]) -> Sequence[float]:
-        """ Method for compatibility with GFLS optimizer. Returns the signed differences between the force field and
-            training set.
-        """
-        return self._calculate(x)[1]
+        dat_set, job_col, rxf_eng = setup_xtb_from_params(path)
+        return cls(dat_set, job_col, rxf_eng)
 
     def checkpoint_save(self, path: Union[Path, str]):
         """ Used to store files into a GloMPO checkpoint (at path) suitable to reconstruct the task when the checkpoint
@@ -229,44 +358,7 @@ class ReaxFFError:
         """
         self.dat_set.pickle_dump(Path(path, 'data_set.pkl'))
         self.job_col.pickle_dump(Path(path, 'job_collection.pkl'))
-        self.rxf_eng.pickle_dump(str(Path(path, 'reax_params.pkl')))  # Method does not support Path
-
-    def save(self, path: Union[Path, str], filenames: Optional[Dict[str, str]] = None,
-             parameters: Optional[Sequence[float]] = None):
-        """ Writes the data set and job collection to YAML files. Writes the ReaxFF engine object to a force field file.
-
-            Parameters
-            ----------
-            path: Union[Path, str]
-                Path to directory in which files will be saved.
-            filenames: Optional[Dict[str, str]] = None
-                Custom filenames for the written files. The dictionary may include any/all of the keys in the example
-                below. This example contains the default names used if not given:
-                    {'ds': 'data_set.yml', 'jc': 'job_collection.yml', 'ff': 'ffield'}
-            parameters: Optional[Sequence[float]] = None
-                Optional parameters to be written into the force field file. If not given, the parameters currently
-                therein will be used.
-        """
-        if not filenames:
-            filenames = {}
-
-        names = {'ds': filenames['ds'] if 'ds' in filenames else 'data_set.yml',
-                 'jc': filenames['jc'] if 'jc' in filenames else 'job_collection.yml',
-                 'ff': filenames['ff'] if 'ff' in filenames else 'ffield'}
-
-        self.dat_set.store(Path(path, names['ds']))
-        self.job_col.store(Path(path, names['jc']))
-        self.rxf_eng.write(Path(path, names['ff']), parameters)
-
-    def _calculate(self, x: Sequence[float]) -> Tuple[float, List[float], List[float]]:
-        """ Core calculation function, returns both the error function value and the residuals. """
-        try:
-            engine = self.rxf_eng.get_engine(self.scaler.scaled2real(x))
-            ff_results = self.job_col.run(engine.settings, parallel=self.par_levels)
-            err_result = self.dat_set.evaluate(ff_results, self.loss, True)
-            return err_result
-        except ResultsError:
-            return float('inf'), [float('inf')], [float('inf')]
+        self.par_eng.write(path)
 
 
 def setup_reax_from_classic(path: Union[Path, str]) -> Tuple[DataSet, JobCollection, ReaxParams]:
@@ -330,6 +422,39 @@ def setup_reax_from_classic(path: Union[Path, str]) -> Tuple[DataSet, JobCollect
     return dat_set, job_col, rxf_eng
 
 
+def _setup_collections_from_params(path: Union[Path, str]) -> Tuple[DataSet, JobCollection]:
+    """ Loads ParAMS produced ReaxFF files into ParAMS objects.
+
+        Parameters
+        ----------
+        path: Union[Path, str]
+            Path to folder containing:
+            - data_set.yml OR data_set.pkl
+                Contains the description of the items in the training set. A YAML file must be of the form produced by
+                scm.params.core.dataset.DataSet.store, a pickle file must be of the form produced by
+                scm.params.core.dataset.DataSet.pickle_dump. If both files are present, the pickle is given priority.
+            - job_collection.yml OR job_collection.pkl
+                Contains descriptions of the AMS jobs to evaluate. A YAML file must be of the form produced by
+                scm.params.core.jobcollection.JobCollection.store, a pickle file must be of the form produced by
+                scm.params.core.jobcollection.JobCollection.pickle_dump.  If both files are present, the pickle is given
+                priority.
+    """
+    dat_set = DataSet()
+    job_col = JobCollection()
+
+    for name, params_obj in {'data_set': dat_set, 'job_collection': job_col}.items():
+        built = False
+        for suffix, loader in {'.pkl': 'pickle_load', '.yml': 'load'}.items():
+            file = Path(path, name + suffix)
+            if file.exists():
+                getattr(params_obj, loader)(file)
+                built = True
+        if not built:
+            raise FileNotFoundError(f"No {name.replace('_', ' ')} data found")
+
+    return dat_set, job_col
+
+
 def setup_reax_from_params(path: Union[Path, str]) -> Tuple[DataSet, JobCollection, ReaxParams]:
     """ Loads ParAMS produced ReaxFF files into ParAMS objects.
 
@@ -350,19 +475,33 @@ def setup_reax_from_params(path: Union[Path, str]) -> Tuple[DataSet, JobCollecti
                 Pickle produced by scm.params.parameterinterfaces.reaxff.ReaxParams.pickle_dump, representing the force
                 field, active parameters and their ranges.
     """
-    dat_set = DataSet()
-    job_col = JobCollection()
-
-    for name, params_obj in {'data_set': dat_set, 'job_collection': job_col}.items():
-        built = False
-        for suffix, loader in {'.pkl': 'pickle_load', '.yml': 'load'}.items():
-            file = Path(path, name + suffix)
-            if file.exists():
-                getattr(params_obj, loader)(file)
-                built = True
-        if not built:
-            raise FileNotFoundError(f"No {name.replace('_', ' ')} data found")
-
+    dat_set, job_col = _setup_collections_from_params(path)
     rxf_eng = ReaxParams.pickle_load(Path(path, 'reax_params.pkl'))
 
     return dat_set, job_col, rxf_eng
+
+
+def setup_xtb_from_params(path: Union[Path, str]) -> Tuple[DataSet, JobCollection, XTBParams]:
+    """ Loads ParAMS produced ReaxFF files into ParAMS objects.
+
+        Parameters
+        ----------
+        path: Union[Path, str]
+            Path to folder containing:
+            - data_set.yml OR data_set.pkl
+                Contains the description of the items in the training set. A YAML file must be of the form produced by
+                scm.params.core.dataset.DataSet.store, a pickle file must be of the form produced by
+                scm.params.core.dataset.DataSet.pickle_dump. If both files are present, the pickle is given priority.
+            - job_collection.yml OR job_collection.pkl
+                Contains descriptions of the AMS jobs to evaluate. A YAML file must be of the form produced by
+                scm.params.core.jobcollection.JobCollection.store, a pickle file must be of the form produced by
+                scm.params.core.jobcollection.JobCollection.pickle_dump.  If both files are present, the pickle is given
+                priority.
+            - elements.xtbpar, basis.xtbpar, globals.xtbpar, additional_parameters.yaml, metainfo.yaml,
+              atomic_configurations.xtbpar, metals.xtbpar
+                Classic xTB parameter files.
+    """
+    dat_set, job_col = _setup_collections_from_params(path)
+    xtb_eng = XTBParams(path)
+
+    return dat_set, job_col, xtb_eng

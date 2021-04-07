@@ -25,14 +25,15 @@ class ValueAnnealing(BaseHunter):
         """
         super().__init__()
         assert 0 < med_kill_chance < 1, "med_kill_chance must be between 0 and 1"
+        self.med_kill_chance = med_kill_chance
         self.strictness = np.log(med_kill_chance)
 
     def __call__(self,
                  log: OptimizerLogger,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
-        f_hunter = log.get_history(hunter_opt_id, "fx_best")[-1]
-        f_victim = log.get_history(victim_opt_id, "fx_best")[-1]
+        f_hunter = log[hunter_opt_id].fx_best
+        f_victim = log[victim_opt_id].fx_best
 
         if f_hunter == 0 or f_victim <= f_hunter:
             # Catch very unlikely corner cases

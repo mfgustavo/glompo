@@ -12,9 +12,8 @@ class ChainSelector(BaseSelector):
     """
 
     def __init__(self,
-                 avail_opts: List[Union[Type[BaseOptimizer],
-                                        Tuple[Type[BaseOptimizer],
-                                              Optional[Dict[str, Any]], Optional[Dict[str, Any]]]]],
+                 *avail_opts: Union[Type[BaseOptimizer],
+                                    Tuple[Type[BaseOptimizer], Optional[Dict[str, Any]], Optional[Dict[str, Any]]]],
                  fcall_thresholds: List[float],
                  allow_spawn: Optional[Callable[['GloMPOManager'], bool]] = None):
         """
@@ -42,7 +41,7 @@ class ChainSelector(BaseSelector):
             In this case OptimizerA instances will be started in the first 1000 iterations and OptimizerB instances will
             be started until iteration 2000. No new optimizers will be spawned thereafter.
         """
-        super().__init__(avail_opts, allow_spawn)
+        super().__init__(*avail_opts, allow_spawn=allow_spawn)
         self.fcall_thresholds = fcall_thresholds
         n = len(avail_opts)
         assert n - 1 <= len(fcall_thresholds) <= n, "Must be one threshold less than available optimizers"
