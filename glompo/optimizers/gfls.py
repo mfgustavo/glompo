@@ -84,9 +84,11 @@ class GFLSOptimizer(BaseOptimizer):
             function
                 GFLSOptimizer requires residuals (differences between a training set and evaluated values) to work. Thus
                 it cannot be used on all global optimization cases. To ensure compatibility and allow simultaneous use
-                of multiple optimizer types, GFLSOptimizer will call function.resids(x) when evaluating the function.
+                of multiple optimizer types, GFLSOptimizer will automatically use function.detailed_call(x) when
+                evaluating the function. It is assumed that the first element of the return is the total error and the
+                second element is the list of residuals. Other returns are ignored.
                 The API is:
-                    function.resids(x: Sequence[float]) -> Tuple[fx: float, residuals: Sequence[float]]
+                    function.detailed_call(x: Sequence[float]) -> Tuple[fx: float, residuals: Sequence[float], ...]
             x0: Sequence[float]
                 Initial guess from where to begin searching.
             bounds: Sequence[Tuple[float, float]]
@@ -98,7 +100,7 @@ class GFLSOptimizer(BaseOptimizer):
 
         def function_pack(ask, func):
             _x, _is_constrained = ask()
-            _fx, _resids = func.resids(_x)
+            _fx, _resids = func.detailed_call(_x)[:2]
             return _x, _is_constrained, _fx, _resids
 
         self._wrapped_func = partial(function_pack, func=function)
