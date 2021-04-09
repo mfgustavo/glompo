@@ -44,10 +44,9 @@ class IterationResult(NamedTuple):
     """ Return type of each optimizer iteration. """
     opt_id: int
     n_iter: int
-    i_fcalls: int  # Number of functions calls in iteration *not* cumulative calls
     x: Sequence[float]
     fx: float
-    final: bool  # True if this is the final result sent to the queue by this optimizer
+    extras: Sequence[Any]  # Possible returns if detailed_call is used
 
 
 class ProcessPackage(NamedTuple):

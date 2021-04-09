@@ -1,12 +1,10 @@
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
-from pathlib import Path
-from typing import Callable, Optional, Sequence, Tuple, Union
+from typing import Callable, Optional, Sequence, Tuple
 
 import numpy as np
 
 from .baseoptimizer import BaseOptimizer, MinimizeResult
-from ..common.namedtuples import IterationResult
 
 __all__ = ('RandomOptimizer',)
 
@@ -16,18 +14,28 @@ class RandomOptimizer(BaseOptimizer):
     Evaluates random points within the bounds for a fixed number of iterations (used for debugging).
     """
 
-    def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
-                 pause_flag: Event = None, workers: int = 1, backend: str = 'processes',
-                 log_path: Union[None, str, Path] = None, log_opt_extras: Optional[Sequence[str]] = None,
-                 is_log_detailed: bool = False, iters: int = 100):
+    def __init__(self,
+                 opt_id: int = None,
+                 signal_pipe: Connection = None,
+                 results_queue: Queue = None,
+                 pause_flag: Event = None,
+                 workers: int = 1,
+                 backend: str = 'processes',
+                 log_opt_extras: Optional[Sequence[str]] = None,
+                 is_log_detailed: bool = False,
+                 iters: int = 100):
         """ Initialize with the above parameters. """
         super().__init__(opt_id, signal_pipe, results_queue, pause_flag,
-                         workers, backend, log_path, log_opt_extras, is_log_detailed)
+                         workers, backend, log_opt_extras, is_log_detailed)
         self.max_iters = iters
         self.used_iters = 0
         self.result = MinimizeResult()
         self.stop_called = False
         self.logger.debug("Setup optimizer")
+
+    @property
+    def n_iter(self) -> int:
+        return self.used_iters
 
     def minimize(self,
                  function: Callable,
@@ -56,10 +64,6 @@ class RandomOptimizer(BaseOptimizer):
                 self.stop_called = True
 
             if self._results_queue:
-                self.logger.debug("Pushing result")
-                result = IterationResult(self._opt_id, self.used_iters, 1, vector, fx,
-                                         self.used_iters >= self.max_iters or self.stop_called)
-                self.push_iter_result(result)
                 self.logger.debug("Checking messages")
                 self.check_messages()
                 self._pause_signal.wait()

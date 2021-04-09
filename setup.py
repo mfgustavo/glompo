@@ -20,7 +20,7 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     package_dir={"glompo": "glompo"},
-    install_requires=['numpy', 'PyYAML'],
+    install_requires=['numpy', 'PyYAML', 'tables'],
     extras_require={
         'Plotting': ['matplotlib'],
         'Video': ['matplotlib>=3.0', 'ffmpeg', 'PySide2'],

@@ -9,7 +9,6 @@ import nevergrad as ng
 import numpy as np
 
 from .baseoptimizer import BaseOptimizer, MinimizeResult
-from ..common.namedtuples import IterationResult
 
 __all__ = ('Nevergrad',)
 
@@ -19,10 +18,17 @@ class Nevergrad(BaseOptimizer):
         For more information see the module's `documentation <https://facebookresearch.github.io/nevergrad/>`.
     """
 
-    def __init__(self, opt_id: int = None, signal_pipe: Connection = None, results_queue: Queue = None,
-                 pause_flag: Event = None, workers: int = 1, backend: str = 'processes',
-                 log_path: Union[None, str, Path] = None, log_opt_extras: Optional[Sequence[str]] = None,
-                 is_log_detailed: bool = False, optimizer: str = 'TBPSA', zero: float = -float('inf')):
+    def __init__(self,
+                 opt_id: int = None,
+                 signal_pipe: Connection = None,
+                 results_queue: Queue = None,
+                 pause_flag: Event = None,
+                 workers: int = 1,
+                 backend: str = 'processes',
+                 log_opt_extras: Optional[Sequence[str]] = None,
+                 is_log_detailed: bool = False,
+                 optimizer: str = 'TBPSA',
+                 zero: float = -float('inf')):
         """
         Parameters
         ----------
@@ -32,7 +38,7 @@ class Nevergrad(BaseOptimizer):
             Will stop the optimization when this cost function value is reached.
         """
         super().__init__(opt_id, signal_pipe, results_queue, pause_flag,
-                         workers, backend, log_path, log_opt_extras, is_log_detailed)
+                         workers, backend, log_opt_extras, is_log_detailed)
 
         self.opt_algo = ng.optimizers.registry[optimizer]
         self.optimizer = None
@@ -43,6 +49,10 @@ class Nevergrad(BaseOptimizer):
         self.zero = zero
         self.stop = False
         self.ng_callbacks = None
+
+    @property
+    def n_iter(self) -> int:
+        return self.ng_callbacks.n_iter if self.ng_callbacks else 0
 
     def minimize(self, function, x0, bounds, callbacks=None, **kwargs) -> MinimizeResult:
         lower, upper = np.transpose(bounds)
@@ -145,18 +155,13 @@ class _NevergradCallbacksWrapper:
                 if not stop_cond and self.parent.stop:
                     stop_cond = "GloMPO termination signal."
                 self.parent.logger.debug(f"Stop = {bool(stop_cond)} after message check from manager")
-                self.parent.logger.debug("Pushing result to queue")
-                self.parent.push_iter_result(
-                    IterationResult(opt_id=self.parent._opt_id,
-                                    n_iter=opt.num_tell + 1,
-                                    i_fcalls=self.i_fcalls - opt.num_tell + 1,
-                                    x=x.value,
-                                    fx=fx,
-                                    final=bool(stop_cond)))
-                self.parent.logger.debug("Result pushed successfully")
                 self.i_fcalls = opt.num_tell + 1
                 if stop_cond:
                     self.parent.logger.debug("Stop is True so shutting down optimizer.")
                     self.parent.stop = True
                     opt._num_ask = opt.budget - 1
                     self.parent.message_manager(0, stop_cond)
+
+    @property
+    def n_iter(self):
+        return self.i_fcalls

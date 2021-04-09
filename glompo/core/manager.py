@@ -5,9 +5,11 @@ import getpass
 import logging
 import multiprocessing as mp
 import queue
+import random
 import re
 import shutil
 import socket
+import string
 import sys
 import tarfile
 import tempfile
@@ -20,6 +22,7 @@ from time import time
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 import numpy as np
+import tables as tb
 import yaml
 
 try:
@@ -47,8 +50,8 @@ from ..common.helpers import LiteralWrapper, literal_presenter, nested_string_fo
     unknown_object_presenter, generator_presenter, optimizer_selector_presenter, present_memory, FlowList, \
     flow_presenter, numpy_array_presenter, numpy_dtype_presenter, BoundGroup, bound_group_presenter, \
     CheckpointingError, is_bounds_valid
-from ..common.namedtuples import Bound, IterationResult, OptimizerPackage, ProcessPackage, Result, OptimizerCheckpoint, \
-    LoggingOptions
+from ..common.namedtuples import Bound, IterationResult, OptimizerPackage, ProcessPackage, Result, \
+    OptimizerCheckpoint, LoggingOptions
 from ..common.wrappers import process_print_redirect
 from ..convergence import BaseChecker, KillsAfterConvergence
 from ..generators import BaseGenerator, RandomGenerator
@@ -253,6 +256,8 @@ class GloMPOManager:
 
         self.logger = logging.getLogger('glompo.manager')
         self.working_dir: Path = None
+        self.log_file: Path = None
+        self._pytab: tb.File = None
 
         self._mp_manager = mp.Manager()
         self.optimizer_queue = self._mp_manager.Queue(10)
@@ -325,6 +330,7 @@ class GloMPOManager:
 
         self.proc_backend: bool = None
         self.opts_daemonic: bool = None
+        self._checksum: str = None  # Used to match checkpoint to log file
 
     @property
     def is_initialised(self) -> bool:
@@ -512,6 +518,7 @@ class GloMPOManager:
                           f"work directory.", UserWarning)
             working_dir = "."
         self.working_dir = Path(working_dir).resolve()
+        self.log_file = self.working_dir / 'glompo_log.h5'
 
         # Save and wrap task
         if not callable(task):
@@ -626,6 +633,7 @@ class GloMPOManager:
             else:
                 self.end_timeout = None
 
+        self._checksum = ''.join([random.choice(string.ascii_letters + string.digits) for _ in range(20)])
         self._is_restart = False
 
         if self.checkpoint_control and self.checkpoint_control.checkpoint_at_init:
@@ -908,8 +916,32 @@ class GloMPOManager:
             reason = "None"
             self.converged = False
 
-        # Make working dir
+        # Make working dir & open log file
         self.working_dir.mkdir(parents=True, exist_ok=True)
+        if self._is_restart:
+            # Loaded checkpoint points to missing logfile
+            if not self.log_file.exists():
+                warnings.warn("glompo_log.h5 not found in working_dir, checkpoint iteration information "
+                              "missing. Starting new log file.", RuntimeWarning)
+                self.logger.warning("glompo_log.h5 not found in working_dir, checkpoint iteration "
+                                    "information missing. Starting new log file.")
+
+            else:
+                # Loaded checkpoint points to incorrect logfile
+                with tb.open_file(str(self.log_file), 'r') as peek:
+                    if peek.root.checksum != self._checksum:
+                        self.logger.critical(f"Checkpoint points to log file ({self.log_file}) which is for an "
+                                             f"optimization which does not match this one! Aborting optimization.")
+                        raise RuntimeError(f"Checkpoint points to log file ({self.log_file}) which is for an "
+                                           f"optimization which does not match this one! Aborting optimization.")
+
+                # Loaded checkpoint points to logfile NOT in working_dir
+                if not self.working_dir.samefile(self.log_file.parent):
+                    warnings.warn(f"Checkpoint points to log file ({self.log_file}) which is not in the selected "
+                                  f"working_dir ({self.working_dir}). Copying logfile to working_dir.", RuntimeWarning)
+                    self.logger.warning(f"Checkpoint points to log file ({self.log_file}) which is not in the selected "
+                                        f"working_dir ({self.working_dir}). Copying logfile to working_dir.")
+                    shutil.copy(self.log_file, self.working_dir)
 
         self._purge_old_results()
 
@@ -938,6 +970,7 @@ class GloMPOManager:
             self.last_status = self.t_start
             self.last_time_checkpoint = self.t_start
             self.dt_starts.append(datetime.fromtimestamp(self.t_start))
+            self._pytab = tb.open_file(str(self.log_file), 'a')  # TODO Expected rows and filters
 
             # Restart specific tasks
             if self._is_restart:
@@ -1019,6 +1052,8 @@ class GloMPOManager:
         finally:
 
             self.logger.info("Cleaning up and closing GloMPO")
+
+            self._pytab.close()
 
             self.t_end = time()
             dt_end = datetime.fromtimestamp(self.t_end)
@@ -1272,6 +1307,9 @@ class GloMPOManager:
 
         self.logger.info(f"Setting up optimizer {self.o_counter} of type {selected.__name__}")
 
+        # TODO Add pytab groups and tables
+        # TODO Define automatic table description
+
         parent_pipe, child_pipe = mp.Pipe()
         event = self._mp_manager.Event()
         event.set()
@@ -1281,14 +1319,6 @@ class GloMPOManager:
             del init_kwargs['backend']
         else:
             backend = 'threads' if self.opts_daemonic else 'processes'
-
-        if 'log_path' in init_kwargs:
-            log_path = init_kwargs['log_path']
-            del init_kwargs['log_path']
-        elif self.logging_options.save_optimizer_logs:
-            log_path = self.working_dir / 'glompo_optimizer_logs' / f'{self.o_counter:03}.csv'
-        else:
-            log_path = None
 
         if 'is_log_detailed' in init_kwargs:
             is_log_detailed = init_kwargs['is_log_detailed']
@@ -1303,7 +1333,6 @@ class GloMPOManager:
                              results_queue=self.optimizer_queue,
                              pause_flag=event,
                              backend=backend,
-                             log_path=log_path,
                              is_log_detailed=is_log_detailed,
                              **init_kwargs)
 
@@ -1439,6 +1468,8 @@ class GloMPOManager:
                 opt_fcalls = res.i_fcalls
 
             if res.opt_id not in self.hunt_victims:
+                # TODO send results to log
+                # TODO what is sent to opt_log???
                 self.opt_log.put_iteration(res.opt_id, res.n_iter, self.f_counter, opt_fcalls, list(res.x), res.fx)
                 self.logger.debug(f"Result from {res.opt_id} @ iter {res.n_iter} fx = {res.fx}")
 
@@ -1767,7 +1798,7 @@ class GloMPOManager:
 
         # Process outstanding results and hunts
         accepted, victims = self._process_results()
-        [not_chkpt.add(res.opt_id) for res in accepted if res.final]
+        [not_chkpt.add(res.opt_id) for res in accepted if res.final]  # TODO tuple no longer supports final flag
         [not_chkpt.add(vic) for vic in victims]
         self.logger.info("Outstanding results processed")
 
@@ -1812,7 +1843,7 @@ class GloMPOManager:
                                                                 '_optimizer_packs', 'scope', 'task',
                                                                 'optimizer_queue', 'is_initialised',
                                                                 'queue_monitor_arrest', 'queue_monitor_end',
-                                                                'queue_monitor_thread')]):
+                                                                'queue_monitor_thread', '_pytab')]):
                 if dill.pickles(val):
                     pickle_vars[var] = val
                 else:
@@ -1891,12 +1922,14 @@ class GloMPOManager:
         to_remove += [*self.working_dir.glob("opt_best_summary.yml")]
         to_remove += [*self.working_dir.glob("trajectories*.png")]
         to_remove += [*self.working_dir.glob("opt*_parms.png")]
+        if not self._is_restart:
+            to_remove += [*self.working_dir.glob("glompo_log.h5")]
+
         if to_remove:
             if self.overwrite_existing:
                 self.logger.debug("Old results found")
                 for old in to_remove:
                     old.unlink()
-                shutil.rmtree(self.working_dir / "glompo_optimizer_logs", ignore_errors=True)
                 shutil.rmtree(self.working_dir / "glompo_optimizer_printstreams", ignore_errors=True)
                 self.logger.warning("Deleted old results.")
             else:

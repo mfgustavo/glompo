@@ -7,15 +7,13 @@ import warnings
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
-from pathlib import Path
-from typing import Any, Callable, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Optional, Sequence, Tuple
 
 import cma
 import numpy as np
 from cma.restricted_gaussian_sampler import GaussVDSampler, GaussVkDSampler
 
 from .baseoptimizer import BaseOptimizer, MinimizeResult
-from ..common.namedtuples import IterationResult
 
 __all__ = ('CMAOptimizer',)
 
@@ -27,12 +25,21 @@ class CMAOptimizer(BaseOptimizer):
         * Module: https://github.com/CMA-ES/pycma
     """
 
-    def __init__(self, sampler: str = 'full', verbose: bool = True, keep_files: bool = False,
-                 force_injects: Optional[bool] = None, injection_frequency: Optional[int] = None,
-                 opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
-                 results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
-                 backend: str = 'threads', log_path: Union[None, str, Path] = None,
-                 log_opt_extras: Optional[Sequence[str]] = None, is_log_detailed: bool = False, **cmasettings):
+    def __init__(self,
+                 sampler: str = 'full',
+                 verbose: bool = True,
+                 keep_files: bool = False,
+                 force_injects: Optional[bool] = None,
+                 injection_frequency: Optional[int] = None,
+                 opt_id: Optional[int] = None,
+                 signal_pipe: Optional[Connection] = None,
+                 results_queue: Optional[Queue] = None,
+                 pause_flag: Optional[Event] = None,
+                 workers: int = 1,
+                 backend: str = 'threads',
+                 log_opt_extras: Optional[Sequence[str]] = None,
+                 is_log_detailed: bool = False,
+                 **cmasettings):
         """ Initialises the optimizer. It is built in such a way that it minimize can be called multiple times on
             different functions.
 
@@ -65,7 +72,7 @@ class CMAOptimizer(BaseOptimizer):
             begins at x0 and is updated by the inject method called by the GloMPO manager.
         """
         super().__init__(opt_id, signal_pipe, results_queue, pause_flag,
-                         workers, backend, log_path, log_opt_extras, is_log_detailed)
+                         workers, backend, log_opt_extras, is_log_detailed)
 
         self.verbose = verbose
         self.es = None
@@ -96,6 +103,10 @@ class CMAOptimizer(BaseOptimizer):
             self.cmasettings = GaussVDSampler.extend_cma_options(self.cmasettings)
         elif sampler == 'vkd':
             self.cmasettings = GaussVkDSampler.extend_cma_options(self.cmasettings)
+
+    @property
+    def n_iter(self) -> int:
+        return self.es.countiter if self.es else 0
 
     def minimize(self,
                  function: Callable[[Sequence[float]], float],
@@ -187,11 +198,6 @@ class CMAOptimizer(BaseOptimizer):
                 self.callstop("Callbacks termination.")
 
             if self._results_queue:
-                i_best = np.argmin(fx)
-                result = IterationResult(self._opt_id, self.es.countiter, self.popsize, x[i_best], fx[i_best],
-                                         bool(self.es.stop()))
-                self.push_iter_result(result)
-                self.logger.debug("Pushed result to queue")
                 self.check_messages()
                 self.logger.debug("Checked messages")
                 self._pause_signal.wait()

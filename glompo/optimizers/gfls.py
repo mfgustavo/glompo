@@ -2,15 +2,13 @@ from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, ThreadPoolE
 from functools import partial
 from multiprocessing import Event
 from multiprocessing.connection import Connection
-from pathlib import Path
 from queue import Queue
-from typing import Callable, Optional, Sequence, Tuple, Union
+from typing import Callable, Optional, Sequence, Tuple
 
 import numpy as np
 from optsam import GFLS, Hook, Logger, Reporter
 
 from .baseoptimizer import BaseOptimizer, MinimizeResult
-from ..common.namedtuples import IterationResult
 
 
 class GFLSOptimizer(BaseOptimizer):
@@ -19,11 +17,17 @@ class GFLSOptimizer(BaseOptimizer):
     def is_restart(self):
         return self._is_restart
 
-    def __init__(self, opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
-                 results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
-                 backend: str = 'threads', log_path: Union[None, str, Path] = None,
-                 log_opt_extras: Optional[Sequence[str]] = None, is_log_detailed: bool = False,
-                 logger: bool = False, verbose: bool = False, other_hooks: Optional[Sequence[Hook]] = None,
+    def __init__(self,
+                 opt_id: Optional[int] = None,
+                 signal_pipe: Optional[Connection] = None,
+                 results_queue: Optional[Queue] = None,
+                 pause_flag: Optional[Event] = None,
+                 workers: int = 1,
+                 backend: str = 'threads',
+                 log_opt_extras: Optional[Sequence[str]] = None,
+                 is_log_detailed: bool = False,
+                 logger: bool = False, verbose: bool = False,
+                 other_hooks: Optional[Sequence[Hook]] = None,
                  **gfls_algo_kwargs):
         """
         Initialisation of the GFLS optimizer wrapper for interface with GloMPO.
@@ -51,7 +55,7 @@ class GFLSOptimizer(BaseOptimizer):
                 seed        : None
         """
         super().__init__(opt_id, signal_pipe, results_queue, pause_flag,
-                         workers, backend, log_path, log_opt_extras, is_log_detailed)
+                         workers, backend, log_opt_extras, is_log_detailed)
         self.gfls = None
         self.result = None
         self.stopcond = None
@@ -70,6 +74,10 @@ class GFLSOptimizer(BaseOptimizer):
         self._pool_evaluator = None
         self._futures = set()
         self._wrapped_func = None
+
+    @property
+    def n_iter(self) -> int:
+        return self.gfls.itell if self.gfls else 0
 
     def minimize(self,
                  function,
@@ -138,8 +146,6 @@ class GFLSOptimizer(BaseOptimizer):
                     self.stopcond = new_stopcond
 
             if self._results_queue:
-                result = IterationResult(self._opt_id, self.gfls.itell, 1, x, fx, bool(self.stopcond))
-                self.push_iter_result(result)
                 self.check_messages()
                 self._pause_signal.wait()
 

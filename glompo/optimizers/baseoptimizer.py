@@ -2,9 +2,7 @@
 Base class from which all optimizers must inherit in order to be compatible with GloMPO.
 """
 
-import csv
 import logging
-import time
 import traceback
 import warnings
 from abc import ABC, abstractmethod
@@ -16,7 +14,8 @@ from typing import Any, Callable, Iterator, List, Optional, Sequence, Set, Tuple
 
 from dill import dill
 
-from ..common.helpers import LiteralWrapper, unravel
+from ..common.helpers import LiteralWrapper
+from ..common.namedtuples import IterationResult
 
 __all__ = ('BaseOptimizer', 'MinimizeResult')
 
@@ -44,12 +43,11 @@ class MinimizeResult:
         self.origin = None
 
 
-class _LoggingWrapper:
-    """ Wraps the function provided to BaseOptimizer.minimize and adds automatic logging functionality. """
+class _TaskWrapper:
+    """ Wraps the objective function to automatic log every call made to it. """
 
     def __init__(self,
                  func: Callable[[Sequence[float]], float],
-                 csv_writer: csv.writer,
                  optimizer: 'BaseOptimizer'):
         """ Initialises the wrapper class.
 
@@ -57,15 +55,12 @@ class _LoggingWrapper:
             ----------
             func: Callable[[Sequence[float]], float]
                 Function to be minimized.
-            csv_writer: csv.writer
-                csv.writer object into which function call information will be written every time the function is
-                called.
             optimizer: BaseOptimizer
                 Provides access to optimizer attributes so its details can be appended to the log.
         """
         self.func = func
-        self.csv_writer = csv_writer
         self.optimizer = optimizer
+        self.results_queue = optimizer._results_queue
         self.first_call = True
 
         if self.optimizer.is_log_detailed and not hasattr(self.func, 'detailed_call'):
@@ -82,28 +77,16 @@ class _LoggingWrapper:
         if is_det_call:
             calc = self.func.detailed_call(x)
         else:
-            calc = self.func(x)
+            calc = (self.func(x),)
 
-        # Write header if first iter
-        if self.first_call:
-            self.first_call = False
+        result = IterationResult(opt_id=self.optimizer.opt_id,
+                                 n_iter=self.optimizer.n_iter,
+                                 x=x,
+                                 fx=calc[0],
+                                 extras=calc[1:])
+        self.results_queue.put(result)
 
-            if is_det_call and hasattr(self.func, 'detailed_call_header'):
-                return_names = self.func.detailed_call_header()
-            else:
-                return_names = (f'return{i}' for i, _ in enumerate(unravel(calc)))
-
-            self.csv_writer.writerow(('timestamp',
-                                      *(f'x{i}' for i, _ in enumerate(x)),
-                                      *return_names,
-                                      *self.optimizer.log_opt_extras))
-
-        self.csv_writer.writerow((time.time(),
-                                  *x,
-                                  *unravel(calc),
-                                  *self.get_log_opt_extras()))
-
-        if is_det_call and caller == 'call':
+        if caller == 'call':
             return calc[0]
         return calc
 
@@ -127,7 +110,8 @@ class BaseOptimizer(ABC):
     def checkpoint_load(cls: Type['BaseOptimizer'], path: Union[Path, str], opt_id: Optional[int] = None,
                         signal_pipe: Optional[Connection] = None,
                         results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
-                        backend: str = 'threads') -> 'BaseOptimizer':
+                        backend: str = 'threads', log_opt_extras: Optional[Sequence[str]] = None,
+                        is_log_detailed: bool = False) -> 'BaseOptimizer':
         """ Recreates a previous instance of the optimizer suitable to continue a optimization from its previous
             state. Below is a basic implementation which should suit most optimizers, may need to be overwritten.
 
@@ -141,7 +125,8 @@ class BaseOptimizer(ABC):
                 regenerated and supplied by the manager during reconstruction.
         """
         opt = cls.__new__(cls)
-        super(cls, opt).__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
+        super(cls, opt).__init__(opt_id, signal_pipe, results_queue, pause_flag,
+                                 workers, backend, log_opt_extras, is_log_detailed)
 
         with open(path, 'rb') as file:
             state = dill.load(file)
@@ -157,10 +142,19 @@ class BaseOptimizer(ABC):
     def is_restart(self):
         return self._is_restart
 
+    @property
+    def opt_id(self):
+        return self._opt_id
+
+    @property
+    @abstractmethod
+    def n_iter(self) -> int:
+        """ Returns the iteration number the optimizer is executing. """
+
     def __init__(self, opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
                  results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
-                 backend: str = 'threads', log_path: Union[None, str, Path] = None,
-                 log_opt_extras: Optional[Sequence[str]] = None, is_log_detailed: bool = False, **kwargs):
+                 backend: str = 'threads', log_opt_extras: Optional[Sequence[str]] = None,
+                 is_log_detailed: bool = False, **kwargs):
         """
         Initialisation of the base optimizer. Must be called by any child classes.
 
@@ -188,10 +182,6 @@ class BaseOptimizer(ABC):
             The type of concurrency used by the optimizers (processes or threads). This is not necessarily applicable to
             all optimizers. This will default to threads unless forced to used processes (see GloMPOManger backend
             argument for details).
-
-        log_path: Union[None, str, Path] = None
-            If provided the optimizer will produce a CSV file saved at log_path. The log contains details of every
-            function evaluation made by the optimizer. Otherwise, no log is produced.
 
         log_opt_extras: Optional[Sequence[str]] = None
             An optional list of optimizer class attribute names which will be appended to the end of each iteration
@@ -226,7 +216,6 @@ class BaseOptimizer(ABC):
                                         9: "Other Message (Saved to Log)"}
         self.workers = workers
         self.incumbent = {'x': None, 'fx': None}
-        self.log_path = Path(log_path) if log_path else None
         self.log_opt_extras = log_opt_extras if log_opt_extras else ()
         self.is_log_detailed = is_log_detailed
 
@@ -242,13 +231,13 @@ class BaseOptimizer(ABC):
 
         NB
             To Ensure GloMPO Functionality:
-            - Must include a call to put every iteration in the results_queue via the push_iter_result method.
-            - Each deposit into the results queue must be an instance of the IterationResult NamedTuple.
             - Messages to the GloMPO manager must be sent via the message_manager method. The keys for these messages
               are detailed in the _TO_MANAGER_SIGNAL_DICT dictionary.
             - A convergence termination message should be sent if the optimizer successfully converges.
             - Messages from the manager can be read by the check_messages method. See the _FROM_MANAGER_SIGNAL_DICT
-              for all the methods which must be implemented to interpret GloMPO signals correctly.
+              for all the methods which must be implemented to interpret GloMPO signals correctly. The defaults are
+              generally suitable, however, and do not need to be overwritten! The only requirement is the implementation
+              of the callstop method which interrupts the optimization loop.
             - self._pause_signal.wait() must be implemented in the body of the iterative loop to allow the optimizer to
               be paused by the manager as needed.
             - The TestSubclassGlompoCompatible test in test_optimizers.py can be used to test that an optimizer meets
@@ -373,7 +362,7 @@ class BaseOptimizer(ABC):
         for var in dir(self):
             if not callable(getattr(self, var)) and \
                     not var.startswith('_') and \
-                    all([var != forbidden for forbidden in ('logger', 'is_restart')]) or \
+                    all([var != forbidden for forbidden in ('logger', 'is_restart', 'opt_id', 'n_iter')]) or \
                     var in force:
                 dump_collection[var] = getattr(self, var)
         with open(path, 'wb') as file:
@@ -425,16 +414,8 @@ class BaseOptimizer(ABC):
 
             Also correctly handles the opening and closing of the optimizer log file if it is being constructed.
         """
-        file = None
         try:
-            if self.log_path:
-                self.log_path.parent.mkdir(parents=True, exist_ok=True)
-                self.log_path.touch(exist_ok=True)
-                file = self.log_path.open('a')
-                writer = csv.writer(file)
-
-                function = _LoggingWrapper(function, writer, self)
-
+            function = _TaskWrapper(function, self)
             return self.minimize(function, x0, bounds, callbacks, **kwargs)
 
         except (KeyboardInterrupt, BrokenPipeError):
@@ -446,7 +427,3 @@ class BaseOptimizer(ABC):
             self.logger.critical("Critical error encountered", exc_info=e)
             self._signal_pipe.send((9, LiteralWrapper(formatted_e)))
             raise e
-
-        finally:
-            if file:
-                file.close()
