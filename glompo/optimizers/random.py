@@ -1,6 +1,6 @@
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
-from typing import Callable, Optional, Sequence, Tuple
+from typing import Callable, Sequence, Tuple
 
 import numpy as np
 
@@ -21,12 +21,11 @@ class RandomOptimizer(BaseOptimizer):
                  pause_flag: Event = None,
                  workers: int = 1,
                  backend: str = 'processes',
-                 log_opt_extras: Optional[Sequence[str]] = None,
                  is_log_detailed: bool = False,
                  iters: int = 100):
         """ Initialize with the above parameters. """
         super().__init__(opt_id, signal_pipe, results_queue, pause_flag,
-                         workers, backend, log_opt_extras, is_log_detailed)
+                         workers, backend, is_log_detailed)
         self.max_iters = iters
         self.used_iters = 0
         self.result = MinimizeResult()

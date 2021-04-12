@@ -24,7 +24,6 @@ class GFLSOptimizer(BaseOptimizer):
                  pause_flag: Optional[Event] = None,
                  workers: int = 1,
                  backend: str = 'threads',
-                 log_opt_extras: Optional[Sequence[str]] = None,
                  is_log_detailed: bool = False,
                  logger: bool = False, verbose: bool = False,
                  other_hooks: Optional[Sequence[Hook]] = None,
@@ -55,7 +54,7 @@ class GFLSOptimizer(BaseOptimizer):
                 seed        : None
         """
         super().__init__(opt_id, signal_pipe, results_queue, pause_flag,
-                         workers, backend, log_opt_extras, is_log_detailed)
+                         workers, backend, is_log_detailed)
         self.gfls = None
         self.result = None
         self.stopcond = None

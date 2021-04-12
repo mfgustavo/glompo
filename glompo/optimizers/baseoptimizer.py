@@ -10,7 +10,7 @@ from multiprocessing.connection import Connection
 from pathlib import Path
 from queue import Full, Queue
 from threading import Event
-from typing import Any, Callable, Iterator, List, Optional, Sequence, Set, Tuple, Type, Union
+from typing import Any, Callable, List, Optional, Sequence, Set, Tuple, Type, Union
 
 from dill import dill
 
@@ -43,8 +43,10 @@ class MinimizeResult:
         self.origin = None
 
 
-class _TaskWrapper:
-    """ Wraps the objective function to automatic log every call made to it. """
+class _MessagingWrapper:
+    """ Core functionality which messages evaluations to the manager from the children.
+        Automatically wrapped around the optimization task by each optimizer.
+    """
 
     def __init__(self,
                  func: Callable[[Sequence[float]], float],
@@ -90,27 +92,19 @@ class _TaskWrapper:
             return calc[0]
         return calc
 
-    def get_log_opt_extras(self) -> Iterator[str]:
-        """ Yields current optimizer values for attributes which the user would like logged with the function calls. """
-        for attr_name in self.optimizer.log_opt_extras:
-            attr = self.optimizer
-            for sub_attr_name in attr_name.split('.'):
-                try:
-                    attr = getattr(attr, sub_attr_name)
-                except AttributeError:
-                    warnings.warn(f"Attribute: '{attr_name}' not found in optimizer.", UserWarning)
-                    attr = 'None'
-            yield attr
-
 
 class BaseOptimizer(ABC):
     """ Base class of parameter optimizers in GloMPO """
 
     @classmethod
-    def checkpoint_load(cls: Type['BaseOptimizer'], path: Union[Path, str], opt_id: Optional[int] = None,
+    def checkpoint_load(cls: Type['BaseOptimizer'],
+                        path: Union[Path, str],
+                        opt_id: Optional[int] = None,
                         signal_pipe: Optional[Connection] = None,
-                        results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
-                        backend: str = 'threads', log_opt_extras: Optional[Sequence[str]] = None,
+                        results_queue: Optional[Queue] = None,
+                        pause_flag: Optional[Event] = None,
+                        workers: int = 1,
+                        backend: str = 'threads',
                         is_log_detailed: bool = False) -> 'BaseOptimizer':
         """ Recreates a previous instance of the optimizer suitable to continue a optimization from its previous
             state. Below is a basic implementation which should suit most optimizers, may need to be overwritten.
@@ -126,7 +120,7 @@ class BaseOptimizer(ABC):
         """
         opt = cls.__new__(cls)
         super(cls, opt).__init__(opt_id, signal_pipe, results_queue, pause_flag,
-                                 workers, backend, log_opt_extras, is_log_detailed)
+                                 workers, backend, is_log_detailed)
 
         with open(path, 'rb') as file:
             state = dill.load(file)
@@ -151,9 +145,13 @@ class BaseOptimizer(ABC):
     def n_iter(self) -> int:
         """ Returns the iteration number the optimizer is executing. """
 
-    def __init__(self, opt_id: Optional[int] = None, signal_pipe: Optional[Connection] = None,
-                 results_queue: Optional[Queue] = None, pause_flag: Optional[Event] = None, workers: int = 1,
-                 backend: str = 'threads', log_opt_extras: Optional[Sequence[str]] = None,
+    def __init__(self,
+                 opt_id: Optional[int] = None,
+                 signal_pipe: Optional[Connection] = None,
+                 results_queue: Optional[Queue] = None,
+                 pause_flag: Optional[Event] = None,
+                 workers: int = 1,
+                 backend: str = 'threads',
                  is_log_detailed: bool = False, **kwargs):
         """
         Initialisation of the base optimizer. Must be called by any child classes.
@@ -182,10 +180,6 @@ class BaseOptimizer(ABC):
             The type of concurrency used by the optimizers (processes or threads). This is not necessarily applicable to
             all optimizers. This will default to threads unless forced to used processes (see GloMPOManger backend
             argument for details).
-
-        log_opt_extras: Optional[Sequence[str]] = None
-            An optional list of optimizer class attribute names which will be appended to the end of each iteration
-            added to the log file. For example, some optimizer convergence check parameter or step size.
 
         is_log_detailed: bool = False
             If True, a detailed_call will be run and logged everytime a normal function call is made. Note that this
@@ -216,7 +210,6 @@ class BaseOptimizer(ABC):
                                         9: "Other Message (Saved to Log)"}
         self.workers = workers
         self.incumbent = {'x': None, 'fx': None}
-        self.log_opt_extras = log_opt_extras if log_opt_extras else ()
         self.is_log_detailed = is_log_detailed
 
     @abstractmethod
@@ -250,32 +243,6 @@ class BaseOptimizer(ABC):
         function: Callable[[Sequence[float]], float]
             Function to be minimised. The minimum requirement is a Callable which accepts a vector in input space and
             returns a single float.
-
-            Optionally, the function may also be configured with an detailed_call method. The return values from
-            detailed_call may be anything but the first element must be the float returned by call (i.e. the value of
-            the cost function itself).
-
-            The extra information provided by detailed_call may return information required for the optimizer
-            algorithm itself or generally useful to appear in the optimizer log file (see BaseOptimizer.__init__). E.g.
-            local function derivative information, validation set error values, individual training set residuals etc.
-
-            To make the logfile more informative, the optimizer will attempt to write the return of
-            function.detailed_call_header as the first line of the CSV file. If no such method is provided then returns
-            are simply labelled 'return0', 'return1', ... 'returnN'.
-
-            If detailed_call is not being used then the header defaults to:
-                timestamp, x0, x1, ..., xN, return0, log_opt_extras_0, ...  log_opt_extras_N
-
-            An example function class API is given below, please note that it is still possible to send a simple method
-            instead of a class instance:
-
-                class ExampleFunction:
-                    def __call__(x: Sequence[float]) -> float:
-                        ...
-                    def detailed_call(x: Sequence[float]) -> Sequence[float, Any, ...]:
-                        ...
-                    def detailed_call_header() -> Sequence[str]:
-                        ...
 
         x0: Sequence[float]
             The initial optimizer starting point.
@@ -415,7 +382,7 @@ class BaseOptimizer(ABC):
             Also correctly handles the opening and closing of the optimizer log file if it is being constructed.
         """
         try:
-            function = _TaskWrapper(function, self)
+            function = _MessagingWrapper(function, self)
             return self.minimize(function, x0, bounds, callbacks, **kwargs)
 
         except (KeyboardInterrupt, BrokenPipeError):

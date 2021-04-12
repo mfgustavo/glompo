@@ -5,9 +5,9 @@ from multiprocessing.connection import Connection
 from pathlib import Path
 from typing import Callable, Optional, Sequence, Set, Union
 
-import nevergrad as ng
 import numpy as np
 
+import nevergrad as ng
 from .baseoptimizer import BaseOptimizer, MinimizeResult
 
 __all__ = ('Nevergrad',)
@@ -25,7 +25,6 @@ class Nevergrad(BaseOptimizer):
                  pause_flag: Event = None,
                  workers: int = 1,
                  backend: str = 'processes',
-                 log_opt_extras: Optional[Sequence[str]] = None,
                  is_log_detailed: bool = False,
                  optimizer: str = 'TBPSA',
                  zero: float = -float('inf')):
@@ -38,7 +37,7 @@ class Nevergrad(BaseOptimizer):
             Will stop the optimization when this cost function value is reached.
         """
         super().__init__(opt_id, signal_pipe, results_queue, pause_flag,
-                         workers, backend, log_opt_extras, is_log_detailed)
+                         workers, backend, is_log_detailed)
 
         self.opt_algo = ng.optimizers.registry[optimizer]
         self.optimizer = None

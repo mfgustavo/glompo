@@ -37,7 +37,6 @@ class CMAOptimizer(BaseOptimizer):
                  pause_flag: Optional[Event] = None,
                  workers: int = 1,
                  backend: str = 'threads',
-                 log_opt_extras: Optional[Sequence[str]] = None,
                  is_log_detailed: bool = False,
                  **cmasettings):
         """ Initialises the optimizer. It is built in such a way that it minimize can be called multiple times on
@@ -72,7 +71,7 @@ class CMAOptimizer(BaseOptimizer):
             begins at x0 and is updated by the inject method called by the GloMPO manager.
         """
         super().__init__(opt_id, signal_pipe, results_queue, pause_flag,
-                         workers, backend, log_opt_extras, is_log_detailed)
+                         workers, backend, is_log_detailed)
 
         self.verbose = verbose
         self.es = None
