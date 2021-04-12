@@ -49,11 +49,11 @@ from .optimizerlogger import OptimizerLogger
 from ..common.helpers import LiteralWrapper, literal_presenter, nested_string_formatting, \
     unknown_object_presenter, generator_presenter, optimizer_selector_presenter, present_memory, FlowList, \
     flow_presenter, numpy_array_presenter, numpy_dtype_presenter, BoundGroup, bound_group_presenter, \
-    CheckpointingError, is_bounds_valid
+    CheckpointingError, is_bounds_valid, infer_headers
 from ..common.namedtuples import Bound, IterationResult, OptimizerPackage, ProcessPackage, Result, \
     OptimizerCheckpoint, LoggingOptions
 from ..common.wrappers import process_print_redirect
-from ..convergence import BaseChecker, KillsAfterConvergence
+from ..convergence import BaseChecker, KillsAfterConvergence, MaxFuncCalls
 from ..generators import BaseGenerator, RandomGenerator
 from ..hunters import BaseHunter
 from ..opt_selectors.baseselector import BaseSelector
@@ -257,7 +257,6 @@ class GloMPOManager:
         self.logger = logging.getLogger('glompo.manager')
         self.working_dir: Path = None
         self.log_file: Path = None
-        self._pytab: tb.File = None
 
         self._mp_manager = mp.Manager()
         self.optimizer_queue = self._mp_manager.Queue(10)
@@ -324,7 +323,7 @@ class GloMPOManager:
         self.status_frequency: float = None
         self.checkpoint_control: CheckpointingControl = None
 
-        self.opt_log: OptimizerLogger = OptimizerLogger()
+        self.opt_log: OptimizerLogger = None
         # noinspection PyUnresolvedReferences
         self.scope: Optional['GloMPOScope'] = None
 
@@ -559,6 +558,10 @@ class GloMPOManager:
         else:
             self.convergence_checker = KillsAfterConvergence()
             self.logger.info("Convergence set to default: KillsAfterConvergence(0, 1)")
+
+        # Setup optimizer logger
+        self.opt_log = OptimizerLogger(self.working_dir / 'glompo_log.h5', self._checksum, self.n_parms,
+                                       self._log_expected_rows())
 
         # Save x0 generator
         if x0_generator:
@@ -942,6 +945,7 @@ class GloMPOManager:
                     self.logger.warning(f"Checkpoint points to log file ({self.log_file}) which is not in the selected "
                                         f"working_dir ({self.working_dir}). Copying logfile to working_dir.")
                     shutil.copy(self.log_file, self.working_dir)
+        self.opt_log = OptimizerLogger(self.log_file, self._checksum, self.n_parms, self._log_expected_rows())
 
         self._purge_old_results()
 
@@ -970,7 +974,6 @@ class GloMPOManager:
             self.last_status = self.t_start
             self.last_time_checkpoint = self.t_start
             self.dt_starts.append(datetime.fromtimestamp(self.t_start))
-            self._pytab = tb.open_file(str(self.log_file), 'a')  # TODO Expected rows and filters
 
             # Restart specific tasks
             if self._is_restart:
@@ -1053,7 +1056,7 @@ class GloMPOManager:
 
             self.logger.info("Cleaning up and closing GloMPO")
 
-            self._pytab.close()
+            self.opt_log.close()
 
             self.t_end = time()
             dt_end = datetime.fromtimestamp(self.t_end)
@@ -1307,9 +1310,6 @@ class GloMPOManager:
 
         self.logger.info(f"Setting up optimizer {self.o_counter} of type {selected.__name__}")
 
-        # TODO Add pytab groups and tables
-        # TODO Define automatic table description
-
         parent_pipe, child_pipe = mp.Pipe()
         event = self._mp_manager.Event()
         event.set()
@@ -1336,7 +1336,6 @@ class GloMPOManager:
                              is_log_detailed=is_log_detailed,
                              **init_kwargs)
 
-        self.opt_log.add_optimizer(self.o_counter, type(optimizer).__name__, str(datetime.now()))
         self._opt_checkpoints[self.o_counter] = OptimizerCheckpoint(selected, init_kwargs['workers'])
 
         if call_kwargs:
@@ -1360,10 +1359,14 @@ class GloMPOManager:
                     self.opt_log.put_metadata(opt_id, "end_cond", message)
                     self._graveyard.add(opt_id)
                     self.conv_counter += 1
+                    if self.visualisation:
+                        self.scope.update_norm_terminate(opt_id)
                 elif key == 9:
                     self.opt_log.put_message(opt_id, message)
                     self.logger.warning(f"Optimizer {opt_id} Exception: {message}")
                     self.opt_crashed = "Traceback" in message or self.opt_crashed
+                    if self.visualisation:
+                        self.scope.update_crash_terminate(opt_id)
                 found_signal = True
             except EOFError:
                 self.logger.error(f"Opt{opt_id} pipe closed. Opt{opt_id} should be in graveyard")
@@ -1431,14 +1434,12 @@ class GloMPOManager:
                 warnings.warn(f"Forced termination signal sent to optimizer {opt_id}.", RuntimeWarning)
                 self.logger.error(f"Forced termination signal sent to optimizer {opt_id}.")
 
-    def _process_results(self, max_results: Optional[int] = None) -> Tuple[List[IterationResult], Set[int]]:
+    def _process_results(self, max_results: Optional[int] = None) -> Set[int]:
         """ Retrieve results from the queue and process them into the opt_log.
             If max_results is provided, accept at most this number of results.
             Otherwise will loop until the queue is empty.
 
-            Returns a tuple of:
-                - a list of accepted results
-                - a list of hunt victims.
+            Returns a list of hunt victims.
         """
 
         results_accepted = []
@@ -1452,31 +1453,30 @@ class GloMPOManager:
 
         while condition():
             try:
-                res = self.optimizer_queue.get(block=True, timeout=1)
-                results_accepted.append(res)
+                res: IterationResult = self.optimizer_queue.get(block=True, timeout=1)
             except queue.Empty:
                 self.logger.debug("Timeout on result queue.")
                 break
 
             self._last_feedback[res.opt_id] = time()
-            self.f_counter += res.i_fcalls
-
-            history = self.opt_log.get_history(res.opt_id, "f_call_opt")
-            if len(history) > 0:
-                opt_fcalls = history[-1] + res.i_fcalls
-            else:
-                opt_fcalls = res.i_fcalls
+            self.f_counter += 1
 
             if res.opt_id not in self.hunt_victims:
-                # TODO send results to log
-                # TODO what is sent to opt_log???
-                self.opt_log.put_iteration(res.opt_id, res.n_iter, self.f_counter, opt_fcalls, list(res.x), res.fx)
-                self.logger.debug(f"Result from {res.opt_id} @ iter {res.n_iter} fx = {res.fx}")
+                # TODO Complete
+                if res.opt_id not in self.opt_log:
+                    extra_heads = {}
+                    if res.extras:
+                        try:
+                            extra_heads = self.task.headers()
+                        except (AttributeError, NotImplementedError):
+                            extra_heads = infer_headers(res.extras)
+                    self.opt_log.add_optimizer(res, extra_heads)
+
+                self.opt_log.put_iteration(res)
+                self.logger.debug(f"Result from {res.opt_id} @ iter {res.iter_id} fx = {res.fx}")
 
                 if self.visualisation:
                     self.scope.update_optimizer(res.opt_id, (self.f_counter, res.fx))
-                    if res.final:
-                        self.scope.update_norm_terminate(res.opt_id)
 
                 # Start hunt if required
                 best_id = -1
@@ -1487,7 +1487,7 @@ class GloMPOManager:
                 if best_id > 0 and self.killing_conditions and self.f_counter - self.last_hunt >= self.hunt_frequency:
                     [victims.add(vic) for vic in self._start_hunt(best_id)]
 
-        return results_accepted, victims
+        return victims
 
     def _start_hunt(self, hunter_id: int) -> Set[int]:
         """ Creates a new hunt with the provided hunter_id as the 'best' optimizer looking to terminate
@@ -1767,6 +1767,8 @@ class GloMPOManager:
                               f"Waiting on {wait_reply}.")
 
             if self.optimizer_queue.full():
+                # TODO Deal with accepted not being returned
+                # TODO Deal with final not being in results
                 accepted, victims = self._process_results(n_alive)  # Free space on queue to avoid blocking
                 [not_chkpt.add(res.opt_id) for res in accepted if res.final]
                 [not_chkpt.add(vic) for vic in victims]
@@ -1797,7 +1799,7 @@ class GloMPOManager:
         self.logger.info("Optimizers paused and synced.")
 
         # Process outstanding results and hunts
-        accepted, victims = self._process_results()
+        accepted, victims = self._process_results()  # TODO accepted is no longer returned
         [not_chkpt.add(res.opt_id) for res in accepted if res.final]  # TODO tuple no longer supports final flag
         [not_chkpt.add(vic) for vic in victims]
         self.logger.info("Outstanding results processed")
@@ -2028,3 +2030,18 @@ class GloMPOManager:
         return {'load_ave': load_ave, 'load_std': load_std,
                 'mem_ave': mem_ave, 'mem_max': mem_max,
                 'cpu_ave': cpu_ave, 'cpu_std': cpu_std}
+
+    def _log_expected_rows(self) -> int:
+        """ Provides an estimate for the maximum number of rows which will be used by each optimizer iteration history
+            log.
+        """
+
+        expected_rows = 0
+        for cond in self.convergence_checker:
+            if isinstance(cond, MaxFuncCalls):
+                expected_rows = cond.fmax / 20
+
+        if not expected_rows:
+            expected_rows = 150 * self.n_parms + 5_000
+
+        return expected_rows
