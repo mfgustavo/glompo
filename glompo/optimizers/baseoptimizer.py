@@ -63,7 +63,7 @@ class _MessagingWrapper:
         self.func = func
         self.optimizer = optimizer
         self.results_queue = optimizer._results_queue
-        self.first_call = True
+        self.n_called = 0
 
         if self.optimizer.is_log_detailed and not hasattr(self.func, 'detailed_call'):
             raise AttributeError("func does not have 'detailed_call' method")
@@ -81,8 +81,10 @@ class _MessagingWrapper:
         else:
             calc = (self.func(x),)
 
+        self.n_called += 1
         result = IterationResult(opt_id=self.optimizer.opt_id,
-                                 n_iter=self.optimizer.n_iter,
+                                 iter_id=self.optimizer.n_iter,
+                                 call_id=self.n_called,
                                  x=x,
                                  fx=calc[0],
                                  extras=calc[1:])

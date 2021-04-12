@@ -43,7 +43,8 @@ class OptimizerPackage(NamedTuple):
 class IterationResult(NamedTuple):
     """ Return type of each optimizer iteration. """
     opt_id: int
-    n_iter: int
+    iter_id: int
+    call_id: int
     x: Sequence[float]
     fx: float
     extras: Sequence[Any]  # Possible returns if detailed_call is used
