@@ -103,6 +103,7 @@ class GloMPOScope:
         self.leg_elements = [lines.Line2D([], [], ls='-', c='black', label='Optimizer Evaluations'),
                              lines.Line2D([], [], ls='', marker='x', c='black', label='Optimizer Killed'),
                              lines.Line2D([], [], ls='', marker='*', c='black', label='Optimizer Converged'),
+                             lines.Line2D([], [], ls='', marker='s', c='black', label='Optimizer Crashed'),
                              lines.Line2D([], [], ls='', marker='4', c='black', label='Optimizer Paused'),
                              lines.Line2D([], [], ls='', marker='|', c='black', label='Checkpoint')]
 
@@ -112,6 +113,7 @@ class GloMPOScope:
         self.gen_streams: Dict[str, plt.Axes.plot] = {
             'opt_kill': self.ax.plot([], [], ls='', marker='x', color='black', zorder=500)[0],
             'opt_norm': self.ax.plot([], [], ls='', marker='*', color='black', zorder=500)[0],
+            'opt_crash': self.ax.plot([], [], ls='', marker='s', color='black', zorder=500)[0],
             'pause': self.ax.plot([], [], ls='', marker='4', color='black', zorder=500)[0],
             'chkpt': self.ax.plot([], [], ls='', marker='|', color='black', zorder=500)[0]}
 
@@ -287,8 +289,13 @@ class GloMPOScope:
         self._redraw_graph()
 
     def update_norm_terminate(self, opt_id: int):
-        """ The opt_id normal optimizer plot is updated at its final point. """
+        """ The opt_id normal optimizer plot is updated at its final point if the optimizer converged normally. """
         self._update_point(opt_id, 'opt_norm')
+        self._redraw_graph()
+
+    def update_crash_terminate(self, opt_id: int):
+        """ The opt_id normal optimizer plot is updated at its final point if the optimizer crashed. """
+        self._update_point(opt_id, 'opt_crash')
         self._redraw_graph()
 
     def update_pause(self, opt_id: int):
