@@ -107,29 +107,6 @@ the Shubert function will be used.
 For a more sophisticated setup with specially configured hunting and convergence
 components consult the documentation in ``core/manager.py``
 
-Optimization Tasks
-==================
-
-To allow for the maximum flexibility and interfacing with complex codes,
-GloMPO has only a single API specification for the minimization task; the task
-must take the form ``function(x: Sequence[float]) -> float``. In this case,
-``function`` may be a function or the ``__call__`` method of an object.
-
-Occasionally more information or flexibility is required. In these cases
-``function`` must be an object which includes a
-``detailed_call(x: Sequence[float]) -> float, Any, ...`` method over and above
-the ``__call__`` method. The first element returned by ``detailed_call`` must be
-the function value being minimized. All subsequent returns can take whichever form
-is appropriate. This extra information may be required by certain kinds of
-optimizers, or can be included in logs for future processing. For example, the
-GFLS optimizer requires residuals rather than function evaluations in its
-algorithm. Alternatively, when reparameterizing a model against a training set
-it may be useful to simultaneously log the error of validation set.
-
-A final optional specification is including the method
-``detailed_call_header() -> Sequence[str]``. This will print the output in the
-first line of the logfile rather than using an uninformative default.
-
 Logging
 =======
 
