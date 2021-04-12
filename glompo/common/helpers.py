@@ -2,10 +2,11 @@
 import inspect
 import os
 from pathlib import Path
-from typing import Any, Iterator, Optional, Sequence, Tuple, Union, overload
+from typing import Any, Dict, Iterator, Optional, Sequence, Tuple, Union, overload
 
 import matplotlib
 import numpy as np
+import tables as tb
 import yaml
 
 __all__ = ("nested_string_formatting",
@@ -15,6 +16,7 @@ __all__ = ("nested_string_formatting",
            "present_memory",
            "rolling_best",
            "unravel",
+           "infer_headers",
            "LiteralWrapper",
            "FlowList",
            "BoundGroup",
@@ -160,6 +162,41 @@ def unravel(seq: Union[Any, Sequence[Any]]) -> Iterator[str]:
                     yield item
     except TypeError:
         yield seq
+
+
+def infer_headers(infer_from: Sequence[Any]) -> Dict[str, tb.Col]:
+    """ If task.headers is not defined according to the description in function.BaseFunction, this function will attempt
+        to guess a construction of the extra returns. Default header names will be used: 'result_0', ..., 'result_N'
+    """
+
+    tb_type = {}
+    for pos, arg in enumerate(infer_from):
+        if isinstance(arg, float):
+            tb_type[f'result_{pos}'] = tb.Float64Col(pos=pos)
+
+        elif isinstance(arg, int):
+            tb_type[f'result_{pos}'] = tb.Int64Col(pos=pos)
+
+        elif isinstance(arg, str):
+            tb_type[f'result_{pos}'] = tb.StringCol(280, pos=pos)
+
+        elif any((isinstance(arg, t) for t in (tuple, list))):
+            arr = np.array(list(arg))
+            tb_type[f'result_{pos}'] = tb.Col.from_dtype(np.dtype((arr.dtype, arr.shape)), pos=pos)
+
+        elif isinstance(arg, bool):
+            tb_type[f'result_{pos}'] = tb.BoolCol(pos=pos)
+
+        elif isinstance(arg, type(None)):
+            tb_type[f'result_{pos}'] = tb.Float64Col(pos=pos)
+
+        elif isinstance(arg, complex):
+            tb_type[f'result_{pos}'] = tb.ComplexCol(itemsize=16, pos=pos)
+
+        else:
+            raise TypeError(f"Cannot resolve type {type(arg)}.")
+
+    return tb_type
 
 
 """ YAML Representers """
