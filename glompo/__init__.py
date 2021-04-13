@@ -10,10 +10,4 @@
 
 import logging
 
-from glompo.core.manager import GloMPOManager
-
-
-__all__ = ("GloMPOManager",)
-
-
 logging.getLogger('glompo').addHandler(logging.NullHandler())

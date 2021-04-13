@@ -1,5 +1,5 @@
-from glompo import GloMPOManager
 from glompo.benchmark_fncs import Michalewicz
+from glompo.core.manager import GloMPOManager
 from glompo.opt_selectors import CycleSelector
 from glompo.optimizers.cmawrapper import CMAOptimizer
 
