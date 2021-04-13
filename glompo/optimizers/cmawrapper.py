@@ -105,7 +105,7 @@ class CMAOptimizer(BaseOptimizer):
 
     @property
     def n_iter(self) -> int:
-        return self.es.countiter if self.es else 0
+        return self.es.countiter + 1 if self.es else 0
 
     def minimize(self,
                  function: Callable[[Sequence[float]], float],
