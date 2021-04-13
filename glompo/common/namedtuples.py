@@ -5,8 +5,6 @@ from multiprocessing.connection import Connection
 from threading import Thread
 from typing import Any, Callable, Dict, NamedTuple, Sequence, Type, Union
 
-from ..optimizers.baseoptimizer import BaseOptimizer
-
 __all__ = ("Result",
            "Bound",
            "OptimizerPackage",
@@ -60,7 +58,7 @@ class ProcessPackage(NamedTuple):
 
 class OptimizerCheckpoint(NamedTuple):
     """ Information needed in the manager about initialized optimizers for checkpoint loading. """
-    opt_type: Type[BaseOptimizer]
+    opt_type: Type['BaseOptimizer']
     slots: int
 
 
