@@ -559,10 +559,6 @@ class GloMPOManager:
             self.convergence_checker = KillsAfterConvergence()
             self.logger.info("Convergence set to default: KillsAfterConvergence(0, 1)")
 
-        # Setup optimizer logger
-        self.opt_log = OptimizerLogger(self.working_dir / 'glompo_log.h5', self._checksum, self.n_parms,
-                                       self._log_expected_rows())
-
         # Save x0 generator
         if x0_generator:
             if isinstance(x0_generator, BaseGenerator):
@@ -575,6 +571,7 @@ class GloMPOManager:
 
         # Save killing conditions
         if killing_conditions:
+            # TODO adapt hunters to h5 interface
             if isinstance(killing_conditions, BaseHunter):
                 self.killing_conditions = killing_conditions
             else:
@@ -586,6 +583,7 @@ class GloMPOManager:
         # Save behavioural args
         self.allow_forced_terminations = force_terminations_after > 0
         self._too_long = force_terminations_after
+        # TODO save_optimizers option in logging options not working
         if logging_options and isinstance(logging_options, LoggingOptions):
             self.logging_options = logging_options
         else:
@@ -921,6 +919,7 @@ class GloMPOManager:
 
         # Make working dir & open log file
         self.working_dir.mkdir(parents=True, exist_ok=True)
+        self._purge_old_results()
         if self._is_restart:
             # Loaded checkpoint points to missing logfile
             if not self.log_file.exists():
@@ -945,9 +944,8 @@ class GloMPOManager:
                     self.logger.warning(f"Checkpoint points to log file ({self.log_file}) which is not in the selected "
                                         f"working_dir ({self.working_dir}). Copying logfile to working_dir.")
                     shutil.copy(self.log_file, self.working_dir)
-        self.opt_log = OptimizerLogger(self.log_file, self._checksum, self.n_parms, self._log_expected_rows())
-
-        self._purge_old_results()
+        self.opt_log = OptimizerLogger(self.log_file, self._checksum, self.n_parms,
+                                       self._log_expected_rows(), not self._is_restart)
 
         if self.visualisation and self.scope.record_movie:
             self.scope.setup_moviemaker(self.working_dir)
@@ -1056,8 +1054,6 @@ class GloMPOManager:
 
             self.logger.info("Cleaning up and closing GloMPO")
 
-            self.opt_log.close()
-
             self.t_end = time()
             dt_end = datetime.fromtimestamp(self.t_end)
             if len(self.dt_starts) == len(self.dt_ends):
@@ -1079,6 +1075,8 @@ class GloMPOManager:
                                  {**self.result.stats, 'end_cond': reason} if self.result.stats else {
                                      'end_cond': reason},
                                  self.result.origin)
+
+            self.opt_log.close()
 
             if not self.proc_backend and self.split_printstreams:
                 sys.stdout.close()
@@ -1336,6 +1334,7 @@ class GloMPOManager:
                              is_log_detailed=is_log_detailed,
                              **init_kwargs)
 
+        self.opt_log.add_optimizer(self.o_counter, type(optimizer).__name__, datetime.now())
         self._opt_checkpoints[self.o_counter] = OptimizerCheckpoint(selected, init_kwargs['workers'])
 
         if call_kwargs:
@@ -1442,11 +1441,11 @@ class GloMPOManager:
             Returns a list of hunt victims.
         """
 
-        results_accepted = []
+        results_accepted = 0
         victims = set()
         if max_results:
             def condition():
-                return len(results_accepted) < max_results
+                return results_accepted < max_results
         else:
             def condition():
                 return not self.optimizer_queue.empty()
@@ -1459,19 +1458,22 @@ class GloMPOManager:
                 break
 
             self._last_feedback[res.opt_id] = time()
-            self.f_counter += 1
 
             if res.opt_id not in self.hunt_victims:
                 # TODO Complete
-                if res.opt_id not in self.opt_log:
+                if 'iter_hist' not in self.opt_log[res.opt_id]:
                     extra_heads = {}
                     if res.extras:
                         try:
+                            # noinspection PyUnresolvedReferences
                             extra_heads = self.task.headers()
                         except (AttributeError, NotImplementedError):
                             extra_heads = infer_headers(res.extras)
-                    self.opt_log.add_optimizer(res, extra_heads)
+                    self.opt_log.add_iter_history(res.opt_id, extra_heads)
 
+                results_accepted += 1
+
+                self.f_counter += 1
                 self.opt_log.put_iteration(res)
                 self.logger.debug(f"Result from {res.opt_id} @ iter {res.iter_id} fx = {res.fx}")
 
@@ -1580,7 +1582,7 @@ class GloMPOManager:
     def _update_best_result(self) -> Result:
         """ Returns the best results found in the log of results. """
 
-        best_iter = self.opt_log.best_iter
+        best_iter = self.opt_log.best_iter()
 
         if self.incumbent_sharing and (not self.result.fx or best_iter['fx'] < self.result.fx):
             for opt_id, pack in self._optimizer_packs.items():
@@ -1641,6 +1643,8 @@ class GloMPOManager:
                   logging_options: LoggingOptions):
         """ Saves the manager's state and history into the collection of files requested by logging_options. """
 
+        # TODO adjust yaml presenters now that only one yml is made
+        # TODO Build manager log in hdf5 too
         if logging_options.save_manager_summary:
             if caught_exception:
                 reason = f"Process Crash: {caught_exception}"
@@ -1708,15 +1712,11 @@ class GloMPOManager:
             data["Solution"] = {"fx": result.fx,
                                 "origin": result.origin,
                                 "exit cond.": LiteralWrapper(nested_string_formatting(reason)),
-                                "x": FlowList(result.x) if result.x else result.x}
+                                "x": FlowList(result.x) if len(result.x) > 0 else result.x}
 
             with (dump_dir / "glompo_manager_log.yml").open("w") as file:
                 self.logger.debug("Saving manager summary file.")
                 yaml.dump(data, file, Dumper=Dumper, default_flow_style=False, sort_keys=False)
-
-        if logging_options.save_optimizer_summary or logging_options.save_optimizer_logs:
-            self.logger.debug("Saving optimizers summary file.")
-            self.opt_log.save_summary(dump_dir / "opt_best_summary.yml")
 
         if logging_options.make_trajectory_plot:
             self.logger.debug("Saving trajectory plot.")
@@ -1921,7 +1921,6 @@ class GloMPOManager:
         """ Identifies and removes old log files if allowed. """
 
         to_remove = [*self.working_dir.glob("glompo_manager_log.yml")]
-        to_remove += [*self.working_dir.glob("opt_best_summary.yml")]
         to_remove += [*self.working_dir.glob("trajectories*.png")]
         to_remove += [*self.working_dir.glob("opt*_parms.png")]
         if not self._is_restart:
