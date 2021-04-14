@@ -185,6 +185,6 @@ class GFLSOptimizer(BaseOptimizer):
             return self._wrapped_func(self.gfls.ask())
 
     def callstop(self, reason: str = "Manager termination signal"):
-        self.logger.debug(f"Calling stop. Reason = {reason}")
+        self.logger.debug("Calling stop. Reason = %s", reason)
         self.stopcond = reason
         self.result.success = all([reason != cond for cond in ("GloMPO Crash", "Manager termination signal")])

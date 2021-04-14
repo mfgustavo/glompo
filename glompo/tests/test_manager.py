@@ -1162,7 +1162,7 @@ class TestCheckpointing:
                     fx = np.random.random() if self._opt_id == 1 else 2
                     self.push_iter_result(
                         IterationResult(self._opt_id, i, 1, np.random.random(10), fx, False))
-                    self.logger.debug(f"Pushed Iter {i}")
+                    self.logger.debug("Pushed Iter %d", i)
                     self.check_messages()
                     self.logger.debug("Checked messages")
                 self.logger.debug("Exited manager loop")

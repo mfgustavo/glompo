@@ -5,9 +5,9 @@ from multiprocessing.connection import Connection
 from pathlib import Path
 from typing import Callable, Optional, Sequence, Set, Union
 
+import nevergrad as ng
 import numpy as np
 
-import nevergrad as ng
 from .baseoptimizer import BaseOptimizer, MinimizeResult
 
 __all__ = ('Nevergrad',)
@@ -73,7 +73,7 @@ class Nevergrad(BaseOptimizer):
         self.optimizer.register_callback('tell', self.ng_callbacks)
         self.logger.debug("Callbacks registered with optimizer")
         if self.workers > 1:
-            self.logger.debug(f"Executing within pool with {self.workers} workers")
+            self.logger.debug("Executing within pool with %d workers", self.workers)
             if self._backend == 'processes':
                 with ProcessPoolExecutor(max_workers=self.workers) as executor:
                     opt_vec = self.optimizer.minimize(function, executor=executor, batch_mode=False)
@@ -140,12 +140,12 @@ class _NevergradCallbacksWrapper:
                 stop_cond = f"Nevergrad termination conditions:\n" \
                             f"(fx >= 1e30) = {fx >= 1e30}\n" \
                             f"(fx <= {self.parent.zero}) = {fx <= self.parent.zero}"
-            self.parent.logger.debug(f"Stop = {bool(stop_cond)} at convergence condition")
+            self.parent.logger.debug("Stop = %s at convergence condition", bool(stop_cond))
 
             # User sent callbacks
             if not stop_cond and any([cb(opt, x, fx) for cb in self.callbacks]):
                 stop_cond = "Direct user callbacks"
-            self.parent.logger.debug(f"Stop = {bool(stop_cond)} at user callbacks (iter: {opt.num_tell})")
+            self.parent.logger.debug("Stop = %s at user callbacks (iter: %d)", bool(stop_cond), opt.num_tell)
 
             # GloMPO specific callbacks
             if self.parent._results_queue:
@@ -153,7 +153,7 @@ class _NevergradCallbacksWrapper:
                 self.parent.check_messages()
                 if not stop_cond and self.parent.stop:
                     stop_cond = "GloMPO termination signal."
-                self.parent.logger.debug(f"Stop = {bool(stop_cond)} after message check from manager")
+                self.parent.logger.debug("Stop = %s after message check from manager", bool(stop_cond))
                 self.i_fcalls = opt.num_tell + 1
                 if stop_cond:
                     self.parent.logger.debug("Stop is True so shutting down optimizer.")

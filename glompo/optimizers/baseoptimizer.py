@@ -277,14 +277,14 @@ class BaseOptimizer(ABC):
         processed_signals = []
         while self._signal_pipe.poll():
             message = self._signal_pipe.recv()
-            self.logger.debug(f"Received signal: {message}")
+            self.logger.debug("Received signal: %s", message)
             if isinstance(message, int) and message in self._FROM_MANAGER_SIGNAL_DICT:
-                self.logger.debug(f"Executing: {self._FROM_MANAGER_SIGNAL_DICT[message].__name__}")
+                self.logger.debug("Executing: %s", self._FROM_MANAGER_SIGNAL_DICT[message].__name__)
                 processed_signals.append(message)
                 self._FROM_MANAGER_SIGNAL_DICT[message]()
             elif isinstance(message, tuple) and message[0] in self._FROM_MANAGER_SIGNAL_DICT:
                 processed_signals.append(message[0])
-                self.logger.debug(f"Executing: {self._FROM_MANAGER_SIGNAL_DICT[message[0]].__name__}")
+                self.logger.debug("Executing: %s", self._FROM_MANAGER_SIGNAL_DICT[message[0]].__name__)
                 self._FROM_MANAGER_SIGNAL_DICT[message[0]](*message[1:])
             else:
                 self.logger.warning("Cannot parse message, ignoring")
@@ -365,7 +365,7 @@ class BaseOptimizer(ABC):
         if self._result_cache:
             self.logger.debug("Outstanding result found. Pushing to queue...")
             self._results_queue.put(self._result_cache, block=True)
-            self.logger.debug(f"Oustanding result (iter={self._result_cache.n_iter}) pushed")
+            self.logger.debug("Outstanding result (iter=%d) pushed", self._result_cache.n_iter)
             self._result_cache = None
 
         self.message_manager(1)  # Certify waiting for next instruction

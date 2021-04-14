@@ -204,7 +204,7 @@ class GloMPOScope:
                         done.append(len(x_vals) == 0)
                         if all(done):
                             self._dead_streams.add(opt_id)
-                            self.logger.debug(f"Opt{opt_id} identified as out of scope.")
+                            self.logger.debug("Opt%d identified as out of scope.", opt_id)
 
             self.ax.relim()
             self.ax.autoscale_view()
@@ -229,7 +229,7 @@ class GloMPOScope:
 
         if opt_id in self._dead_streams:
             self._dead_streams.remove(opt_id)
-            self.logger.warning(f"Receiving data for opt{opt_id} previously identified as truncated.")
+            self.logger.warning("Receiving data for Opt%d previously identified as truncated.", opt_id)
 
         if pt:
             x, y = pt
@@ -268,7 +268,7 @@ class GloMPOScope:
 
         self.leg_elements.append(lines.Line2D([], [], ls=line_style, marker=marker, c=color, label=label))
         self.ax.legend(loc='upper right', handles=self.leg_elements, bbox_to_anchor=(1.35, 1))
-        self.logger.debug(f"Added new plot set for optimizer {opt_id}")
+        self.logger.debug("Added new plot set for optimizer %d", opt_id)
 
     def update_optimizer(self, opt_id: int, pt: tuple):
         """ Given pt tuple is used to update the opt_id optimizer plot."""

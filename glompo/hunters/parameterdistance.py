@@ -60,7 +60,7 @@ class ParameterDistance(BaseHunter):
                 try:
                     h1 = np.array(log.get_history(opt_id, 'x')[-1])
                 except IndexError:
-                    self.logger.debug(f"Unable to compare to Opt{opt_id}, no points in log")
+                    self.logger.debug("Unable to compare to Opt%d, no points in log", opt_id)
                     continue
                 v1 = np.array(log.get_history(victim_opt_id, 'x')[-1])
                 opt_dist = distance(h1, v1)

@@ -53,11 +53,11 @@ class RandomOptimizer(BaseOptimizer):
             for bnd in bounds:
                 vector.append(np.random.uniform(bnd[0], bnd[1]))
             vector = np.array(vector)
-            self.logger.debug(f"Generated vector = {vector}")
+            self.logger.debug("Generated vector = %s", vector)
 
             self.logger.debug("Evaluating function.")
             fx = function(vector)
-            self.logger.debug(f"Function returned fx = {fx}")
+            self.logger.debug("Function returned fx = %f", fx)
 
             if callbacks and callbacks():
                 self.stop_called = True

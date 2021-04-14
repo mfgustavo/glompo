@@ -2,6 +2,7 @@
         Adapted from:   SCM ParAMS
 """
 import copy
+import logging
 import pickle
 import warnings
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
@@ -152,8 +153,8 @@ class CMAOptimizer(BaseOptimizer):
         if self.popsize < self.workers:
             warnings.warn(f"'popsize'={self.popsize} is less than 'workers'={self.workers}. "
                           f"This is an inefficient use of resources")
-            self.logger.warning(f"'popsize'={self.popsize} is less than 'workers'={self.workers}. "
-                                f"This is an inefficient use of resources")
+            self.logger.warning("'popsize'=%d is less than 'workers'=%d. This is an inefficient use of resources",
+                                self.popsize, self.workers)
 
         if not self.is_restart:
             self.logger.info("Setting up fresh CMA")
@@ -247,7 +248,7 @@ class CMAOptimizer(BaseOptimizer):
         """
         if self.workers > 1:
             pool_executor = ProcessPoolExecutor if self._backend == 'processes' else ThreadPoolExecutor
-            self.logger.debug(f"Executing within {pool_executor.__name__} with {self.workers} workers")
+            self.logger.debug("Executing within %s with %d workers", pool_executor.__name__, self.workers)
             with pool_executor(max_workers=self.workers) as executor:
                 submitted = {slot: executor.submit(function, parms) for slot, parms in enumerate(x)}
                 # For very slow evaluations this will allow evaluations to be interrupted.
@@ -255,13 +256,14 @@ class CMAOptimizer(BaseOptimizer):
                     loop = 0
                     for _ in as_completed(submitted.values()):
                         loop += 1
-                        self.logger.debug(f"Result {loop}/{len(x)} returned.")
+                        self.logger.debug("Result %d/%d returned.", loop, len(x))
                         self._pause_signal.wait()
                         self.check_messages()
                         if self.es.callbackstop == 1:
                             self.logger.debug("Stop command received during function evaluations.")
                             cancelled = [future.cancel() for future in submitted.values()]
-                            self.logger.debug(f"Aborted {sum(cancelled)} calls.")
+                            if self.logger.isEnabledFor(logging.DEBUG):
+                                self.logger.debug("Aborted %d calls.", sum(cancelled))
                             break
                 fx = [future.result() for future in submitted.values() if not future.cancelled()]
         else:
@@ -272,6 +274,6 @@ class CMAOptimizer(BaseOptimizer):
     def callstop(self, reason: str = "Manager termination signal"):
         if reason and self.verbose:
             print(reason)
-        self.logger.debug(f"Calling stop. Reason = {reason}")
+        self.logger.debug("Calling stop. Reason = %s", reason)
         self.es.callbackstop = 1
         self.result.success = all([reason != cond for cond in ("GloMPO Crash", "Manager termination signal")])
