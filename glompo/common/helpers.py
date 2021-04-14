@@ -1,6 +1,7 @@
 """ Useful static functions used throughout GloMPO. """
 import inspect
 import os
+import sys
 from pathlib import Path
 from typing import Any, Dict, Iterator, Optional, Sequence, Tuple, Union, overload
 
@@ -16,6 +17,7 @@ __all__ = ("nested_string_formatting",
            "present_memory",
            "rolling_best",
            "unravel",
+           "deepsizeof",
            "infer_headers",
            "LiteralWrapper",
            "FlowList",
@@ -197,6 +199,20 @@ def infer_headers(infer_from: Sequence[Any]) -> Dict[str, tb.Col]:
             raise TypeError(f"Cannot resolve type {type(arg)}.")
 
     return tb_type
+
+
+def deepsizeof(obj) -> int:
+    """ Recursively determines the byte size of an object. """
+
+    # Adapted from: https://stackoverflow.com/questions/449560/how-do-i-determine-the-size-of-an-object-in-python
+    # Author: Marcin Wojnarski
+
+    size = sys.getsizeof(obj)
+    if isinstance(obj, dict):
+        return size + sum(map(deepsizeof, obj.keys())) + sum(map(deepsizeof, obj.values()))
+    if isinstance(obj, (list, tuple, set, frozenset)):
+        return size + sum(map(deepsizeof, obj))
+    return size
 
 
 """ YAML Representers """

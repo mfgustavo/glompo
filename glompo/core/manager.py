@@ -1004,6 +1004,8 @@ class GloMPOManager:
                 for opt_id, pack in [*self._optimizer_packs.items()]:
                     if not pack.process.is_alive() and opt_id in self._graveyard:
                         del self._optimizer_packs[opt_id]
+                        if self.result.origin['opt_id'] != opt_id:
+                            self.opt_log.clear_cache(opt_id)
 
                 all_dead = len([p for p in self._optimizer_packs.values() if p.process.is_alive()]) == 0
                 checker_condition = self.convergence_checker(self)
@@ -1437,7 +1439,6 @@ class GloMPOManager:
         """ Retrieve results from the queue and process them into the opt_log.
             If max_results is provided, accept at most this number of results.
             Otherwise will loop until the queue is empty.
-
             Returns a list of hunt victims.
         """
 
@@ -1460,7 +1461,6 @@ class GloMPOManager:
             self._last_feedback[res.opt_id] = time()
 
             if res.opt_id not in self.hunt_victims:
-                # TODO Complete
                 if 'iter_hist' not in self.opt_log[res.opt_id]:
                     extra_heads = {}
                     if res.extras:
@@ -1720,18 +1720,8 @@ class GloMPOManager:
 
         if logging_options.make_trajectory_plot:
             self.logger.debug("Saving trajectory plot.")
-            signs = set()
-            large = 0
-            small = float('inf')
-            for opt_id in range(1, self.o_counter + 1):
-                fx = self.opt_log.get_history(opt_id, 'fx')
-                [signs.add(i) for i in set(np.sign(fx))]
-                if len(fx) > 0:
-                    large = max(fx) if max(fx) > large else large
-                    small = min(fx) if min(fx) < small else small
-
-            all_sign = len(signs) == 1
-            range_large = large - small > 1e5
+            all_sign = self.opt_log._largest_eval * self.opt_log.best_iter()['fx'] > 0
+            range_large = self.opt_log._largest_eval - self.opt_log.best_iter()['fx'] > 1e5
             log_scale = all_sign and range_large
             for best_fx in (True, False):
                 name = "trajectories_"
