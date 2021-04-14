@@ -12,16 +12,13 @@ class MinIterations(BaseHunter):
             equal one function call.
         """
         super().__init__()
-        if min_pts > 0 and isinstance(min_pts, int):
-            self.min_pts = min_pts
-        else:
-            raise ValueError("min_pts must be a positive integer.")
+        self.min_pts = min_pts
 
     def __call__(self,
                  log: OptimizerLogger,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
-        items = len(log.get_history(victim_opt_id))
+        items = log.get_history(victim_opt_id, 'iter_id')[-1]
 
         self._last_result = items >= self.min_pts
         return self._last_result

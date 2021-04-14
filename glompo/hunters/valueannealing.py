@@ -32,8 +32,8 @@ class ValueAnnealing(BaseHunter):
                  log: OptimizerLogger,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
-        f_hunter = log[hunter_opt_id].fx_best
-        f_victim = log[victim_opt_id].fx_best
+        f_hunter = log.best_iter(hunter_opt_id)['fx']
+        f_victim = log.best_iter(victim_opt_id)['fx']
 
         if f_hunter == 0 or f_victim <= f_hunter:
             # Catch very unlikely corner cases

@@ -4,6 +4,7 @@ from typing import Callable, Sequence, Tuple, Union
 
 import numpy as np
 import pytest
+
 from glompo.common.corebase import _CombiCore
 from glompo.core.optimizerlogger import OptimizerLogger
 from glompo.hunters.basehunter import BaseHunter, _AndHunter, _OrHunter
@@ -53,17 +54,25 @@ def all_hunter():
     return _AndHunter(PlainHunter(), PlainHunter())
 
 
-class FakeLog:
+class FakeLog(OptimizerLogger):
     def __init__(self, *args):
         self.path = [*args]
 
-    def __len__(self):
+    @property
+    def n_optimizers(self):
         return len(self.path)
 
+    def best_iter(self, opt_id=None):
+        return {'opt_id': opt_id, 'x': None, 'fx': min(self.path[opt_id - 1])}
+
+    def __len__(self):
+        return sum(len(i) for i in self.path)
+
+    def len(self, opt_id):
+        return len(self.path[opt_id - 1])
+
     def get_history(self, opt_id, track):
-        if track != "f_call_opt":
-            return self.path[opt_id - 1]
-        return list(range(1, len(self.path[opt_id - 1]) + 1))
+        return self.path[opt_id - 1]
 
     @staticmethod
     def get_metadata(*args):
@@ -71,6 +80,10 @@ class FakeLog:
 
 
 class FakeOpt(BaseOptimizer):
+
+    @property
+    def n_iter(self) -> int:
+        return 0
 
     def checkpoint_load(self, path: Union[Path, str]):
         pass
@@ -124,55 +137,27 @@ class TestBase:
         assert hunter(*(None,) * 3) is True
 
 
-class TestMinTrainingPoints:
-    class FakeLog:
-        def __init__(self, n_pts):
-            self.history = np.ones(n_pts)
-
-        def get_history(self, *args):
-            return self.history
-
-    @pytest.mark.parametrize("n_pts", [1, 2, 3, 5, 6])
-    def test_condition(self, n_pts):
+class TestMinIterations:
+    @pytest.mark.parametrize("iter_hist", [[1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4],
+                                           [1, 2, 3, 4, 5]])
+    def test_condition(self, iter_hist):
         cond = MinIterations(5)
-        log = self.FakeLog(n_pts)
-        assert cond(log, None, None) == (n_pts >= 5)
-
-    @pytest.mark.parametrize("threshold", [-5, -5.0, 0, 32.5, 0.25])
-    def test_init_crash(self, threshold):
-        with pytest.raises(ValueError):
-            MinIterations(threshold)
-
-    @pytest.mark.parametrize("threshold", [5, 2])
-    def test_init_pass(self, threshold):
-        MinIterations(threshold)
+        log = FakeLog(iter_hist)
+        assert cond(log, None, 1) == (iter_hist[-1] >= 5)
 
 
 class TestBestUnmoving:
-    @pytest.fixture
-    def log(self, request):
-        log = OptimizerLogger()
-        log.add_optimizer(1, None, None)
-        calls_per_iter = request.param
-        for i in range(10):
-            log.put_iteration(1, i, calls_per_iter * i, calls_per_iter * i, i, 10)
-        for i in range(10, 20):
-            log.put_iteration(1, i, calls_per_iter * i, calls_per_iter * i, i, 1)
-        for i in range(20, 30):
-            log.put_iteration(1, i, calls_per_iter * i, calls_per_iter * i, i, 0.9)
-        return log
-
-    @pytest.mark.parametrize("iters, tol, output, log", [(10, 0, False, 1),
-                                                         (8, 0, True, 1),
-                                                         (11, 0, False, 1),
-                                                         (11, 0.1, True, 1),
-                                                         (20, 0.1, False, 1),
-                                                         (60, 0, False, 1),
-                                                         (60, 0.90, False, 1),
-                                                         (25, 0.91, True, 1),
-                                                         (30, 0, False, 3),
-                                                         (125, 0.91, True, 5)], indirect=("log",))
-    def test_condition(self, iters, tol, output, log):
+    @pytest.mark.parametrize("iters, tol, output", [(12, 0, False),
+                                                    (8, 0, True),
+                                                    (11, 0, False),
+                                                    (11, 0.1, True),
+                                                    (20, 0.1, False),
+                                                    (60, 0, False),
+                                                    (60, 0.90, False),
+                                                    (12, 0.91, True),
+                                                    (30, 0, False)])
+    def test_condition(self, iters, tol, output):
+        log = FakeLog([10] * 10 + [1] * 10 + [0.9] * 10)
         cond = BestUnmoving(iters, tol)
         assert cond(log, None, 1) is output
 
@@ -289,9 +274,9 @@ class TestLastPointsInvalid:
 class TestMinFCalls:
 
     @pytest.mark.parametrize("path, output",
-                             [([12, 12, 12, 12, 12], True),
-                              ([1, 1, 1], True),
-                              ([3, 3], False)])
+                             [([12] * 5, True),
+                              ([1] * 3, True),
+                              ([3] * 2, False)])
     def test_condition(self, path, output):
         cond = MinFuncCalls(3)
         log = FakeLog([], path)
@@ -313,7 +298,7 @@ class TestStepSize:
     @pytest.fixture()
     def log(self):
         np.random.seed(64)
-        history = {1: {'f_call_opt': [i * 4 for i in range(1, 201)], 'x': np.random.random((200, 2))}}
+        history = {1: {'f_call_opt': [*range(1, 201)], 'x': np.random.random((200, 2))}}
 
         class FakeLog:
             def __init__(self, hist):
@@ -329,7 +314,7 @@ class TestStepSize:
                                                           ([(0, 1)] * 2, 100, 0.1, False),
                                                           ([(0, 10)] * 2, 200, 0.1, True),
                                                           ([(0, 10)] * 2, 900, 0.1, False),
-                                                          ([(0, 10)] * 2, 3, 0.1, False)])
+                                                          ([(0, 10)] * 2, 3, 0.1, True)])
     def test_condition(self, log, bnds, calls, tol, output):
         cond = StepSize(bnds, calls, tol)
         assert cond(log, None, 1) == output
@@ -340,14 +325,15 @@ class TestEvaluationsUnmoving:
     @pytest.fixture()
     def log(self):
         np.random.seed(35)
-        history = {1: {'f_call_opt': [i * 4 for i in range(1, 201)],
-                       'fx': [1 / i * np.random.random() + 1 for i in range(1, 201)]},
-                   2: {'f_call_opt': [5, 10],
-                       'fx': [float('inf')] * 2}}
+        history = {1: {'fx': [1 / i * np.random.random() + 1 for i in range(1, 201)]},
+                   2: {'fx': [float('inf')] * 10}}
 
         class FakeLog:
             def __init__(self, hist):
                 self.hist = hist
+
+            def len(self, opt_id):
+                return len(self.hist[opt_id]['fx'])
 
             def get_history(self, opt_id, track):
                 return self.hist[opt_id][track]
@@ -356,8 +342,7 @@ class TestEvaluationsUnmoving:
 
     @pytest.mark.parametrize('calls, tol, opt_id, output', [(900, 0.1, 1, False),
                                                             (100, 0.01, 1, True),
-                                                            (500, 0.01, 1, True),
-                                                            (780, 0.01, 1, False),
+                                                            (180, 0.00001, 1, False),
                                                             (3, 0.01, 2, False)])
     def test_condition(self, log, calls, tol, opt_id, output):
         cond = EvaluationsUnmoving(calls, tol)

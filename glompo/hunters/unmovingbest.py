@@ -1,7 +1,4 @@
-import numpy as np
-
 from .basehunter import BaseHunter
-from ..common.helpers import rolling_best
 from ..core.optimizerlogger import OptimizerLogger
 
 __all__ = ("BestUnmoving",)
@@ -21,14 +18,15 @@ class BestUnmoving(BaseHunter):
                  log: OptimizerLogger,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
-        vals = rolling_best(log.get_history(victim_opt_id, "fx"))
-        fcalls = log.get_history(victim_opt_id, "f_call_opt")
+        vals = log.get_history(victim_opt_id, "fx")
+        fcalls = log.len(victim_opt_id)
 
-        i_crit = np.searchsorted(fcalls - np.max(fcalls) + self.calls, 0) - 1
-        if i_crit == -1:
+        if fcalls <= self.calls:
             # If there are insufficient iterations the hunter will return False
             self._last_result = False
             return self._last_result
 
-        self._last_result = abs(vals[-1] - vals[i_crit]) <= abs(vals[i_crit] * self.tol)
+        best_at_calls = min(vals[:-self.calls])
+        best_at_end = min(vals)
+        self._last_result = abs(best_at_end - best_at_calls) <= abs(best_at_calls * self.tol)
         return self._last_result

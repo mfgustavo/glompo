@@ -51,7 +51,7 @@ class ParameterDistance(BaseHunter):
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
         if self.test_all:
-            compare_to = range(1, len(log) + 1)
+            compare_to = range(1, log.n_optimizers + 1)
         else:
             compare_to = [hunter_opt_id]
 

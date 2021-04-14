@@ -18,7 +18,5 @@ class MinFuncCalls(BaseHunter):
                  log: OptimizerLogger,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
-
-        fcalls = log.get_history(victim_opt_id, "f_call_opt")[-1]
-        self._last_result = fcalls >= self.min_pts
+        self._last_result = log.len(victim_opt_id) >= self.min_pts
         return self._last_result

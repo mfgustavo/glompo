@@ -28,20 +28,12 @@ class StepSize(BaseHunter):
                  log: OptimizerLogger,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
-        trials = log.get_history(victim_opt_id, "x")[::-1]
-        fcalls = log.get_history(victim_opt_id, "f_call_opt")[::-1]
+        trials = log.get_history(victim_opt_id, "x")[-self.calls:]
 
-        dists = []
         self._last_result = False
-        if fcalls[0] > self.calls:
-            generator = enumerate(fcalls[1:], 1)
-            i, fcall = next(generator)
-            while fcalls[0] - fcall < self.calls:
-                dists.append(distance(trials[i - 1], trials[i]))
-                i, fcall = next(generator)
-
-        if len(dists) > 0:
-            mean_dist = np.mean(dists)
+        if len(trials) >= self.calls:
+            dists = map(distance, trials[1:], trials[:-1])
+            mean_dist = np.mean([*dists])
             self._last_result = mean_dist <= self.tol * self.trans_space_dist
             self.logger.debug(f"{hunter_opt_id} -> {victim_opt_id}\n"
                               f"Mean: {mean_dist}\n"

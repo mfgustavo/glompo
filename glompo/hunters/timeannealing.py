@@ -31,8 +31,8 @@ class TimeAnnealing(BaseHunter):
                  log: OptimizerLogger,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
-        n_hunter = log.get_history(hunter_opt_id, "f_call_opt")[-1]
-        n_victim = log.get_history(victim_opt_id, "f_call_opt")[-1]
+        n_hunter = log.len(hunter_opt_id)
+        n_victim = log.len(victim_opt_id)
 
         ratio = n_hunter / n_victim
         test_num = random.uniform(0, self.crit_ratio)

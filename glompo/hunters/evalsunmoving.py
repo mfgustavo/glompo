@@ -23,15 +23,14 @@ class EvaluationsUnmoving(BaseHunter):
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
         vals = log.get_history(victim_opt_id, "fx")
-        fcalls = log.get_history(victim_opt_id, "f_call_opt")
+        n_calls = log.len(victim_opt_id)
 
-        i_crit = np.searchsorted(fcalls - np.max(fcalls) + self.calls, 0) - 1
-        if i_crit == -1:
+        if n_calls < self.calls:
             # If there are insufficient iterations the hunter will return False
             self._last_result = False
             return self._last_result
 
-        st_dev = np.std(vals[i_crit:])
+        st_dev = np.std(vals[-self.calls:])
         if np.isnan(st_dev):
             self._last_result = False
             return self._last_result
