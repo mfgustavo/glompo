@@ -1453,41 +1453,42 @@ class GloMPOManager:
 
         while condition():
             try:
-                res: IterationResult = self.optimizer_queue.get(block=True, timeout=1)
+                chunk: List[IterationResult] = self.optimizer_queue.get(block=True, timeout=1)
             except queue.Empty:
                 self.logger.debug("Timeout on result queue.")
                 break
 
-            self._last_feedback[res.opt_id] = time()
+            for res in chunk:
+                self._last_feedback[res.opt_id] = time()
 
-            if res.opt_id not in self.hunt_victims:
-                if 'iter_hist' not in self.opt_log[res.opt_id]:
-                    extra_heads = {}
-                    if res.extras:
-                        try:
-                            # noinspection PyUnresolvedReferences
-                            extra_heads = self.task.headers()
-                        except (AttributeError, NotImplementedError):
-                            extra_heads = infer_headers(res.extras)
-                    self.opt_log.add_iter_history(res.opt_id, extra_heads)
+                if res.opt_id not in self.hunt_victims:
+                    if 'iter_hist' not in self.opt_log[res.opt_id]:
+                        extra_heads = {}
+                        if res.extras:
+                            try:
+                                # noinspection PyUnresolvedReferences
+                                extra_heads = self.task.headers()
+                            except (AttributeError, NotImplementedError):
+                                extra_heads = infer_headers(res.extras)
+                        self.opt_log.add_iter_history(res.opt_id, extra_heads)
 
-                results_accepted += 1
+                    results_accepted += 1
 
-                self.f_counter += 1
-                self.opt_log.put_iteration(res)
-                self.logger.debug(f"Result from {res.opt_id} @ iter {res.iter_id} fx = {res.fx}")
+                    self.f_counter += 1
+                    self.opt_log.put_iteration(res)
+                    self.logger.debug(f"Result from {res.opt_id} @ iter {res.iter_id} fx = {res.fx}")
 
-                if self.visualisation:
-                    self.scope.update_optimizer(res.opt_id, (self.f_counter, res.fx))
+                    if self.visualisation:
+                        self.scope.update_optimizer(res.opt_id, (self.f_counter, res.fx))
 
-                # Start hunt if required
-                best_id = -1
-                self.result = self._update_best_result()
-                if self.result.origin and 'opt_id' in self.result.origin:
-                    best_id = self.result.origin['opt_id']
+                    # Start hunt if required
+                    best_id = -1
+                    self.result = self._update_best_result()
+                    if self.result.origin and 'opt_id' in self.result.origin:
+                        best_id = self.result.origin['opt_id']
 
-                if best_id > 0 and self.killing_conditions and self.f_counter - self.last_hunt >= self.hunt_frequency:
-                    [victims.add(vic) for vic in self._start_hunt(best_id)]
+                    if best_id > 0 and self.killing_conditions and self.f_counter - self.last_hunt >= self.hunt_frequency:
+                        [victims.add(vic) for vic in self._start_hunt(best_id)]
 
         return victims
 

@@ -152,7 +152,8 @@ class OptimizerLogger:
 
         last_iter = self.get_history(opt_id, 'iter_id')
         last_iter = last_iter[-1] if len(last_iter) > 0 else 0
-        assert (iter_res.iter_id == last_iter) or (iter_res.iter_id == last_iter + 1), "Iteration missing."
+        assert (iter_res.iter_id == last_iter) or (iter_res.iter_id == last_iter + 1), \
+            f"Received iter {iter_res.iter_id}, iter {last_iter} in log. Iteration missing."
 
         if iter_res.fx < self._best_iters[opt_id]['fx']:
             self._best_iters[opt_id] = {'opt_id': opt_id, 'x': iter_res.x, 'fx': iter_res.fx}

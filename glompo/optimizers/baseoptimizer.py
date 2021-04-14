@@ -63,6 +63,10 @@ class _MessagingWrapper:
         self.func = func
         self.optimizer = optimizer
         self.results_queue = optimizer._results_queue
+
+        self._cache = []
+        self._uncached = 0
+
         if self.optimizer.is_log_detailed and not hasattr(self.func, 'detailed_call'):
             raise AttributeError("func does not have 'detailed_call' method")
 
@@ -84,11 +88,19 @@ class _MessagingWrapper:
                                  x=x,
                                  fx=calc[0],
                                  extras=calc[1:])
-        self.results_queue.put(result)
+        self._cache.append(result)
+        self._uncached += 1
+        if self._uncached >= 10:
+            self.push_cache()
 
         if caller == 'call':
             return calc[0]
         return calc
+
+    def push_cache(self):
+        self._uncached = 0
+        self.results_queue.put(self._cache)
+        self._cache = []
 
 
 class BaseOptimizer(ABC):
@@ -392,3 +404,6 @@ class BaseOptimizer(ABC):
             self.logger.critical("Critical error encountered", exc_info=e)
             self._signal_pipe.send((9, LiteralWrapper(formatted_e)))
             raise e
+
+        finally:
+            function.push_cache()
