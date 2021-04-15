@@ -1052,7 +1052,7 @@ class GloMPOManager:
             caught_exception = "".join(traceback.TracebackException.from_exception(e).format())
             reason = "GloMPO Crash"
             self.logger.critical("Critical error encountered. Attempting to close GloMPO gracefully", exc_info=e)
-            warnings.warn(f"Optimization failed. Caught exception: {e}", RuntimeWarning)
+            warnings.warn(f"Optimization failed. Caught exception: {caught_exception}", RuntimeWarning)
             self._stop_all_children("GloMPO Crash")
 
         finally:

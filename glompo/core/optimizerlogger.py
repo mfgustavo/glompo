@@ -57,8 +57,8 @@ class OptimizerLogger:
 
         self._f_counter = 0  # Total number of evaluations accepted
         self._o_counter = 0  # Total number of optimizers started
-        self._cache = Cache()
-        self._chunk = {}  # Iterations are written to in chunks save time
+        self._cache = Cache()  # In memory copy of iteration results to stops reads from disk and speed hunting
+        self._chunk = {}  # Iterations are written to disk in chunks save time
         self._unflushed = 0
         self._est_iter_size = 0  # Estimated size of a single iteration result
 
@@ -338,7 +338,7 @@ class OptimizerLogger:
         opt_ids = [opt_id] if opt_id else self._chunk.keys()
 
         for opt in opt_ids:
-            if opt not in self._chunk:
+            if opt not in self._chunk or f'/optimizer_{opt}/iter_hist' not in self.pytab_file:
                 continue
 
             table = self.pytab_file.get_node(f'/optimizer_{opt}/iter_hist')
@@ -348,9 +348,13 @@ class OptimizerLogger:
             table.flush()
 
     def clear_cache(self, opt_id: Optional[int] = None):
-        self.flush(opt_id)
-        del self._chunk[opt_id]
-        self._cache.clear_cache(opt_id)
+        opt_ids = [opt_id] if opt_id else self._cache
+        for o in opt_ids:
+            if o in self._chunk:
+                self.flush(opt_id)
+                del self._chunk[opt_id]
+            if o in self._cache:
+                self._cache.clear_cache(opt_id)
 
     def close(self):
         self.pytab_file.root._v_attrs.opts_started = self._o_counter
@@ -374,6 +378,9 @@ class Cache:
 
     def __contains__(self, item):
         return item in self._storage
+
+    def __iter__(self):
+        return self._storage
 
     def add_optimizer(self, opt_id: int):
         self._storage[opt_id] = {'metadata': {},
