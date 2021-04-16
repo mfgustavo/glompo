@@ -16,6 +16,7 @@ import tempfile
 import traceback
 import warnings
 from datetime import datetime, timedelta
+from multiprocessing.managers import SyncManager
 from pathlib import Path
 from pickle import PickleError
 from time import time
@@ -44,7 +45,7 @@ try:
 except ModuleNotFoundError:
     HAS_PSUTIL = False
 
-from ._backends import CustomThread, ThreadPrintRedirect
+from ._backends import ChunkingQueue, CustomThread, ThreadPrintRedirect
 from .optimizerlogger import OptimizerLogger
 from ..common.helpers import LiteralWrapper, literal_presenter, nested_string_formatting, \
     unknown_object_presenter, generator_presenter, optimizer_selector_presenter, present_memory, FlowList, \
@@ -258,8 +259,9 @@ class GloMPOManager:
         self.working_dir: Path = None
         self.log_file: Path = None
 
+        SyncManager.register('ChunkingQueue', ChunkingQueue)
         self._mp_manager = mp.Manager()
-        self.optimizer_queue = self._mp_manager.Queue(10)
+        self.optimizer_queue: ChunkingQueue = self._mp_manager.ChunkingQueue(10, 10)
 
         yaml.add_representer(LiteralWrapper, literal_presenter, Dumper=Dumper)
         yaml.add_representer(FlowList, flow_presenter, Dumper=Dumper)
@@ -571,7 +573,6 @@ class GloMPOManager:
 
         # Save killing conditions
         if killing_conditions:
-            # TODO adapt hunters to h5 interface
             if isinstance(killing_conditions, BaseHunter):
                 self.killing_conditions = killing_conditions
             else:
@@ -1007,8 +1008,6 @@ class GloMPOManager:
                 for opt_id, pack in [*self._optimizer_packs.items()]:
                     if not pack.process.is_alive() and opt_id in self._graveyard:
                         del self._optimizer_packs[opt_id]
-                        if self.result.origin['opt_id'] != opt_id:
-                            self.opt_log.clear_cache(opt_id)
 
                 all_dead = len([p for p in self._optimizer_packs.values() if p.process.is_alive()]) == 0
                 checker_condition = self.convergence_checker(self)
@@ -1467,6 +1466,11 @@ class GloMPOManager:
                 break
 
             for res in chunk:
+                if isinstance(res, int):
+                    # Optimizers automatically send just an opt_id to indicated no more iterations.
+                    self.opt_log.clear_cache(res)
+                    continue
+
                 self._last_feedback[res.opt_id] = time()
 
                 if res.opt_id not in self.hunt_victims:

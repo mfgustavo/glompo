@@ -3,6 +3,7 @@ Base class from which all optimizers must inherit in order to be compatible with
 """
 
 import logging
+import queue
 import traceback
 import warnings
 from abc import ABC, abstractmethod
@@ -16,6 +17,7 @@ from dill import dill
 
 from ..common.helpers import LiteralWrapper
 from ..common.namedtuples import IterationResult
+from ..core._backends import ChunkingQueue
 
 __all__ = ('BaseOptimizer', 'MinimizeResult')
 
@@ -50,24 +52,29 @@ class _MessagingWrapper:
 
     def __init__(self,
                  func: Callable[[Sequence[float]], float],
-                 optimizer: 'BaseOptimizer'):
+                 results_queue: ChunkingQueue,
+                 opt_id: int,
+                 is_log_detailed: bool):
         """ Initialises the wrapper class.
 
             Parameters
             ----------
             func: Callable[[Sequence[float]], float]
                 Function to be minimized.
-            optimizer: BaseOptimizer
-                Provides access to optimizer attributes so its details can be appended to the log.
+            results_queue: ChunkingQueue
+                Results queue into which results are put.
+            opt_id: int
+                Optimizer to which this wrapper is associated.
+            is_log_detailed: bool
+                If True, using __call__ will log the return of detailed_call in the log.
+                If False, using __call__ will log the return of call in the log.
         """
         self.func = func
-        self.optimizer = optimizer
-        self.results_queue = optimizer._results_queue
+        self.results_queue = results_queue
+        self.opt_id = opt_id
+        self.is_log_detailed = is_log_detailed
 
-        self._cache = []
-        self._uncached = 0
-
-        if self.optimizer.is_log_detailed and not hasattr(self.func, 'detailed_call'):
+        if is_log_detailed and not hasattr(self.func, 'detailed_call'):
             raise AttributeError("func does not have 'detailed_call' method")
 
     def __call__(self, x: Sequence[float]) -> float:
@@ -77,30 +84,26 @@ class _MessagingWrapper:
         return self._calculate(x, caller='detailed_call')
 
     def _calculate(self, x: Sequence[float], caller: str) -> Union[float, Sequence]:
-        is_det_call = self.optimizer.is_log_detailed or caller == 'detailed_call'
+        is_det_call = self.is_log_detailed or caller == 'detailed_call'
         if is_det_call:
             calc = self.func.detailed_call(x)
         else:
             calc = (self.func(x),)
 
-        result = IterationResult(opt_id=self.optimizer.opt_id,
-                                 iter_id=self.optimizer.n_iter,
+        # TODO Fix iter_id
+        result = IterationResult(opt_id=self.opt_id,
+                                 iter_id=0,
                                  x=x,
                                  fx=calc[0],
                                  extras=calc[1:])
-        self._cache.append(result)
-        self._uncached += 1
-        if self._uncached >= 10:
-            self.push_cache()
+        try:
+            self.results_queue.put_nowait(result)
+        except queue.Full:
+            self.results_queue.put_incache(result)
 
         if caller == 'call':
             return calc[0]
         return calc
-
-    def push_cache(self):
-        self._uncached = 0
-        self.results_queue.put(self._cache)
-        self._cache = []
 
 
 class BaseOptimizer(ABC):
@@ -392,7 +395,7 @@ class BaseOptimizer(ABC):
             Also correctly handles the opening and closing of the optimizer log file if it is being constructed.
         """
         try:
-            function = _MessagingWrapper(function, self)
+            function = _MessagingWrapper(function, self._results_queue, self.opt_id, self.is_log_detailed)
             return self.minimize(function, x0, bounds, callbacks, **kwargs)
 
         except (KeyboardInterrupt, BrokenPipeError):
@@ -406,4 +409,5 @@ class BaseOptimizer(ABC):
             raise e
 
         finally:
-            function.push_cache()
+            # TODO Might be the cause of forced terminations at end because this statement is blocking
+            self._results_queue.put(self.opt_id)

@@ -398,6 +398,7 @@ class Cache:
         self._storage[opt_id]['metadata'][key] = value
 
     def put_iteration(self, opt_id: int, call_id: int, iter_id: int, x: Sequence[float], fx: float):
+        # TODO Something breaks here
         self._storage[opt_id]['call_id'].append(call_id)
         self._storage[opt_id]['iter_id'].append(iter_id)
         self._storage[opt_id]['x'].append(x)
