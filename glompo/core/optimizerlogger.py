@@ -119,8 +119,7 @@ class OptimizerLogger:
         self._best_iters[opt_id] = {'opt_id': opt_id, 'x': [], 'fx': float('inf'), 'type': opt_type, 'call_id': 0}
 
     def add_iter_history(self, opt_id: int, extra_headers: Optional[Dict[str, tb.Col]] = None):
-        headers = {'call_id': tb.UInt32Col(pos=-4),
-                   'iter_id': tb.UInt32Col(pos=-3),
+        headers = {'call_id': tb.UInt32Col(pos=-3),
                    'x': tb.Float64Col(shape=self.n_task_dims, pos=-2),
                    'fx': tb.Float64Col(pos=-1)}
 
@@ -145,11 +144,6 @@ class OptimizerLogger:
         if self._est_iter_size == 0:
             self._est_iter_size = deepsizeof(iter_res)
 
-        last_iter = self.get_history(opt_id, 'iter_id')
-        last_iter = last_iter[-1] if len(last_iter) > 0 else 0
-        assert (iter_res.iter_id == last_iter) or (iter_res.iter_id == last_iter + 1), \
-            f"Received iter {iter_res.iter_id}, iter {last_iter} in log. Iteration missing."
-
         if iter_res.fx < self._best_iters[opt_id]['fx']:
             self._best_iters[opt_id]['x'] = iter_res.x
             self._best_iters[opt_id]['fx'] = iter_res.fx
@@ -161,9 +155,9 @@ class OptimizerLogger:
         elif iter_res.fx > self._max_eval and np.isfinite(iter_res.fx):
             self._max_eval = iter_res.fx
 
-        self._hunting_cache.put_iteration(opt_id, self._f_counter, iter_res.iter_id, iter_res.x, iter_res.fx)
+        self._hunting_cache.put_iteration(opt_id, self._f_counter, iter_res.x, iter_res.fx)
         self._writing_chunk[opt_id].append(
-            [(self._f_counter, iter_res.iter_id, iter_res.x, iter_res.fx, *iter_res.extras)])
+            [(self._f_counter, iter_res.x, iter_res.fx, *iter_res.extras)])
 
         if self._est_iter_size * sum((len(c) for c in self._writing_chunk.values())) > 100_000_000:  # Flush every 100MB
             self.flush(opt_id)
@@ -204,15 +198,12 @@ class OptimizerLogger:
                 Column name to return. Any column name in the logfile can be used. The following are always present:
                     - 'call_id'
                         The overall evaluation number across all function calls.
-                    - 'iter_id'
-                        Iteration numbers for the evaluations used by the optimizer (some population based
-                        optimizers use several evaluations per algorithm iteration).
                     - 'x'
                         Input vectors evaluated by the optimizer.
                     - 'fx'
                         The function response for each iteration.
         """
-        if opt_id in self._hunting_cache and track in ('call_id', 'iter_id', 'x', 'fx'):
+        if opt_id in self._hunting_cache and track in ('call_id', 'x', 'fx'):
             return self._hunting_cache.get_history(opt_id, track)
 
         if self.has_iter_history(opt_id):
@@ -406,7 +397,6 @@ class Cache:
     def add_optimizer(self, opt_id: int):
         self._storage[opt_id] = {'metadata': {},
                                  'call_id': [],
-                                 'iter_id': [],
                                  'x': [],
                                  'fx': []}
 
@@ -418,9 +408,8 @@ class Cache:
     def put_metadata(self, opt_id: int, key: str, value: Any):
         self._storage[opt_id]['metadata'][key] = value
 
-    def put_iteration(self, opt_id: int, call_id: int, iter_id: int, x: Sequence[float], fx: float):
+    def put_iteration(self, opt_id: int, call_id: int, x: Sequence[float], fx: float):
         self._storage[opt_id]['call_id'].append(call_id)
-        self._storage[opt_id]['iter_id'].append(iter_id)
         self._storage[opt_id]['x'].append(x)
         self._storage[opt_id]['fx'].append(fx)
 

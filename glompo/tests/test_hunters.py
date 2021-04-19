@@ -4,14 +4,12 @@ from typing import Callable, Sequence, Tuple, Union
 
 import numpy as np
 import pytest
-
 from glompo.common.corebase import _CombiCore
 from glompo.core.optimizerlogger import OptimizerLogger
 from glompo.hunters.basehunter import BaseHunter, _AndHunter, _OrHunter
 from glompo.hunters.evalsunmoving import EvaluationsUnmoving
 from glompo.hunters.lastptsinvalid import LastPointsInvalid
 from glompo.hunters.min_fcalls import MinFuncCalls
-from glompo.hunters.min_iterations import MinIterations
 from glompo.hunters.parameterdistance import ParameterDistance
 from glompo.hunters.stepsize import StepSize
 from glompo.hunters.timeannealing import TimeAnnealing
@@ -81,10 +79,6 @@ class FakeLog(OptimizerLogger):
 
 class FakeOpt(BaseOptimizer):
 
-    @property
-    def n_iter(self) -> int:
-        return 0
-
     def checkpoint_load(self, path: Union[Path, str]):
         pass
 
@@ -135,15 +129,6 @@ class TestBase:
     def test_kill_condition(self):
         hunter = FalseHunter() | FalseHunter() & TrueHunter() | TrueHunter() & (TrueHunter() | FalseHunter())
         assert hunter(*(None,) * 3) is True
-
-
-class TestMinIterations:
-    @pytest.mark.parametrize("iter_hist", [[1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4],
-                                           [1, 2, 3, 4, 5]])
-    def test_condition(self, iter_hist):
-        cond = MinIterations(5)
-        log = FakeLog(iter_hist)
-        assert cond(log, None, 1) == (iter_hist[-1] >= 5)
 
 
 class TestBestUnmoving:

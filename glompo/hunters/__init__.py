@@ -6,7 +6,6 @@ from .basehunter import BaseHunter
 from .evalsunmoving import EvaluationsUnmoving
 from .lastptsinvalid import LastPointsInvalid
 from .min_fcalls import MinFuncCalls
-from .min_iterations import MinIterations
 from .parameterdistance import ParameterDistance
 from .stepsize import StepSize
 from .timeannealing import TimeAnnealing
@@ -15,7 +14,6 @@ from .unmovingbest import BestUnmoving
 from .valueannealing import ValueAnnealing
 
 __all__ = ("BaseHunter",
-           "MinIterations",
            "BestUnmoving",
            "ValueAnnealing",
            "TimeAnnealing",

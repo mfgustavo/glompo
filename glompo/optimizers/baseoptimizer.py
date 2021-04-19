@@ -89,9 +89,7 @@ class _MessagingWrapper:
         else:
             calc = (self.func(x),)
 
-        # TODO Fix iter_id
         result = IterationResult(opt_id=self.opt_id,
-                                 iter_id=0,
                                  x=x,
                                  fx=calc[0],
                                  extras=calc[1:])
@@ -148,11 +146,6 @@ class BaseOptimizer(ABC):
     @property
     def opt_id(self):
         return self._opt_id
-
-    @property
-    @abstractmethod
-    def n_iter(self) -> int:
-        """ Returns the iteration number the optimizer is executing. """
 
     def __init__(self,
                  opt_id: Optional[int] = None,

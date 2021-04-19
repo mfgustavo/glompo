@@ -74,10 +74,6 @@ class GFLSOptimizer(BaseOptimizer):
         self._futures = set()
         self._wrapped_func = None
 
-    @property
-    def n_iter(self) -> int:
-        return self.gfls.itell if self.gfls else 0
-
     def minimize(self,
                  function,
                  x0: Sequence[float],

@@ -49,10 +49,6 @@ class Nevergrad(BaseOptimizer):
         self.stop = False
         self.ng_callbacks = None
 
-    @property
-    def n_iter(self) -> int:
-        return self.ng_callbacks.n_iter if self.ng_callbacks else 0
-
     def minimize(self, function, x0, bounds, callbacks=None, **kwargs) -> MinimizeResult:
         lower, upper = np.transpose(bounds)
         parametrization = ng.p.Array(init=x0)

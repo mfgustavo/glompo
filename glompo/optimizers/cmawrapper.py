@@ -104,10 +104,6 @@ class CMAOptimizer(BaseOptimizer):
         elif sampler == 'vkd':
             self.cmasettings = GaussVkDSampler.extend_cma_options(self.cmasettings)
 
-    @property
-    def n_iter(self) -> int:
-        return self.es.countiter + 1 if self.es else 0
-
     def minimize(self,
                  function: Callable[[Sequence[float]], float],
                  x0: Sequence[float],

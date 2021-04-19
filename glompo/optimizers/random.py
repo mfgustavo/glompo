@@ -32,10 +32,6 @@ class RandomOptimizer(BaseOptimizer):
         self.stop_called = False
         self.logger.debug("Setup optimizer")
 
-    @property
-    def n_iter(self) -> int:
-        return self.used_iters
-
     def minimize(self,
                  function: Callable,
                  x0: Sequence[float],
