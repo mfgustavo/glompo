@@ -1626,7 +1626,7 @@ class GloMPOManager:
 
         # Purge the queue to ensure no optimizers are blocking
         try:
-            while not self.optimizer_queue.empty() and not crash_reason:
+            while not self.optimizer_queue.empty():
                 self.optimizer_queue.get_nowait()
         except Exception as e:
             # Queue may not be accessible in a crash

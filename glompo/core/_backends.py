@@ -114,19 +114,22 @@ class ChunkingQueue(queue.Queue):
         self.chunk_size = max_chunk_size
         self.fast_func = False
         self.cache = []
+        self.cache_lock = threading.Lock()
         self.logger = logging.getLogger('glompo.manager')
 
     def has_cache(self):
-        return bool(self.cache)
+        with self.cache_lock:
+            return bool(self.cache)
 
     def put(self, item, block=True, timeout=None):
         """ A put is attempted according to block and timeout. If the cache is being used the item is first added to the
             cache and then the entire cache is put on the queue in accordance with block and timeout.
         """
         if self.fast_func:
-            self.cache.append(item)
-            super().put(self.cache, block, timeout)
-            self.cache = []
+            with self.cache_lock:
+                self.cache.append(item)
+                super().put(self.cache, block, timeout)
+                self.cache = []
         else:
             super().put([item], block, timeout)
 
@@ -140,15 +143,17 @@ class ChunkingQueue(queue.Queue):
             try:
                 super().put([item], False)
             except queue.Full:
-                self.logger.info("Queue caching activated.")
-                self.fast_func = True
-                self.cache.append(item)
+                with self.cache_lock:
+                    self.logger.info("Queue caching activated.")
+                    self.fast_func = True
+                    self.cache.append(item)
 
         else:
-            self.cache.append(item)
-            if len(self.cache) >= self.chunk_size:
-                super().put(self.cache)
-                self.cache = []
+            with self.cache_lock:
+                self.cache.append(item)
+                if len(self.cache) >= self.chunk_size:
+                    super().put(self.cache)
+                    self.cache = []
 
     def put_incache(self, item):
         """ Item is explicitly placed in the cache rather than the queue. If the cache is not yet in use it is
@@ -156,10 +161,12 @@ class ChunkingQueue(queue.Queue):
         """
         self.logger.info("Queue caching activated.")
         self.fast_func = True
-        self.cache.append(item)
+        with self.cache_lock:
+            self.cache.append(item)
 
     def flush(self, block=True, timeout=None):
         """ Attempts to put cache items (if any) in the queue according to block and timeout. """
         if self.fast_func:
-            super().put(self.cache, block, timeout)
-            self.cache = []
+            with self.cache_lock:
+                super().put(self.cache, block, timeout)
+                self.cache = []

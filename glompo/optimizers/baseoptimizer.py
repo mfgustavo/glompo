@@ -3,13 +3,12 @@ Base class from which all optimizers must inherit in order to be compatible with
 """
 
 import logging
-import queue
 import traceback
 import warnings
 from abc import ABC, abstractmethod
 from multiprocessing.connection import Connection
 from pathlib import Path
-from queue import Full, Queue
+from queue import Queue
 from threading import Event
 from typing import Any, Callable, List, Optional, Sequence, Set, Tuple, Type, Union
 
@@ -96,10 +95,7 @@ class _MessagingWrapper:
                                  x=x,
                                  fx=calc[0],
                                  extras=calc[1:])
-        try:
-            self.results_queue.put_nowait(result)
-        except queue.Full:
-            self.results_queue.put_incache(result)
+        self.results_queue.put_nowait(result)
 
         if caller == 'call':
             return calc[0]
@@ -161,7 +157,7 @@ class BaseOptimizer(ABC):
     def __init__(self,
                  opt_id: Optional[int] = None,
                  signal_pipe: Optional[Connection] = None,
-                 results_queue: Optional[Queue] = None,
+                 results_queue: Optional[ChunkingQueue] = None,
                  pause_flag: Optional[Event] = None,
                  workers: int = 1,
                  backend: str = 'threads',
@@ -177,7 +173,7 @@ class BaseOptimizer(ABC):
         signal_pipe: Optional[multiprocessing.connection.Connection] = None
             Bidirectional pipe used to message management behaviour between the manager and optimizer.
 
-        results_queue: Optional[queue.Queue] = None
+        results_queue: Optional[ChunkingQueue] = None
             Threading queue into which optimizer iteration results are centralised across all optimizers and sent to
             the manager.
 
@@ -210,7 +206,6 @@ class BaseOptimizer(ABC):
         self._results_queue = results_queue
         self._pause_signal = pause_flag  # If set allow run, if cleared wait.
         self._backend = backend
-        self._result_cache = None
         self._is_restart = False
 
         self._FROM_MANAGER_SIGNAL_DICT = {0: self.checkpoint_save,
@@ -296,21 +291,6 @@ class BaseOptimizer(ABC):
         if return_signals:
             return processed_signals
 
-    def push_iter_result(self, result: 'IterationResult'):
-        """ Put an iteration result into _results_queue.
-            Will block until the result is passed to the queue but does timeout every 1s to process any messages from
-            the manager. Should not be overwritten.
-        """
-        self._result_cache = result
-        while self._result_cache:
-            try:
-                self.logger.debug("Adding result to queue.")
-                self._results_queue.put(result, block=True, timeout=1)
-                self._result_cache = None
-            except Full:
-                self.logger.debug("Queue full. Checking messages.")
-                self.check_messages()
-
     def message_manager(self, key: int, message: Optional[Any] = None):
         """ Sends arguments to the manager. key indicates the type of signal sent (see _TO_MANAGER_SIGNAL_DICT) and
             message contains extra information which may be needed to process the request. Should not be overwritten.
@@ -365,12 +345,6 @@ class BaseOptimizer(ABC):
     def _prepare_checkpoint(self):
         """ Process to pause, synchronize and save optimizers. Should not be overwritten. """
         self.logger.debug("Preparing for Checkpoint")
-        if self._result_cache:
-            self.logger.debug("Outstanding result found. Pushing to queue...")
-            self._results_queue.put(self._result_cache, block=True)
-            self.logger.debug("Outstanding result (iter=%d) pushed", self._result_cache.n_iter)
-            self._result_cache = None
-
         self.message_manager(1)  # Certify waiting for next instruction
         self.logger.debug("Wait signal messaged to manager, waiting for reply...")
 
@@ -409,5 +383,4 @@ class BaseOptimizer(ABC):
             raise e
 
         finally:
-            # TODO Might be the cause of forced terminations at end because this statement is blocking
             self._results_queue.put(self.opt_id)
