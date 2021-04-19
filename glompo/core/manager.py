@@ -6,7 +6,6 @@ import logging
 import multiprocessing as mp
 import queue
 import random
-import re
 import shutil
 import socket
 import string
@@ -261,6 +260,7 @@ class GloMPOManager:
 
         SyncManager.register('ChunkingQueue', ChunkingQueue)
         self._mp_manager = mp.Manager()
+        # noinspection PyUnresolvedReferences
         self.optimizer_queue: ChunkingQueue = self._mp_manager.ChunkingQueue(10, 10)
 
         yaml.add_representer(LiteralWrapper, literal_presenter, Dumper=Dumper)
@@ -1298,6 +1298,7 @@ class GloMPOManager:
             available slots or spawning conditions is not found.
         """
 
+        # TODO Chage selectors API to handle new log
         selector_return = self.opt_selector.select_optimizer(self, self.opt_log, slots_available)
 
         if not selector_return:
@@ -1363,7 +1364,7 @@ class GloMPOManager:
                 self._last_feedback[opt_id] = time()
                 self.logger.info("Signal %d from %d.", key, opt_id)
                 if key == 0:
-                    self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+                    self.opt_log.put_metadata(opt_id, "t_stop", datetime.now())
                     self.opt_log.put_metadata(opt_id, "end_cond", message)
                     self._graveyard.add(opt_id)
                     self.conv_counter += 1
@@ -1402,7 +1403,7 @@ class GloMPOManager:
                                       f"minimization complete signal to the manager.", RuntimeWarning)
                         self.logger.warning("Optimizer %d terminated normally without sending a minimization complete "
                                             "signal to the manager.", opt_id)
-                        self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+                        self.opt_log.put_metadata(opt_id, "t_stop", datetime.now())
                         self.opt_log.put_metadata(opt_id, "end_cond", "Normal termination (Reason unknown)")
                 else:
                     self._graveyard.add(opt_id)
@@ -1410,7 +1411,7 @@ class GloMPOManager:
                     warnings.warn(f"Optimizer {opt_id} terminated in error with code {-exitcode}",
                                   RuntimeWarning)
                     self.logger.error("Optimizer %d terminated in error with code %d", opt_id, -exitcode)
-                    self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+                    self.opt_log.put_metadata(opt_id, "t_stop", datetime.now())
                     self.opt_log.put_metadata(opt_id, "end_cond", f"Error termination (exitcode {-exitcode}).")
 
             # Find hanging processes
@@ -1423,7 +1424,7 @@ class GloMPOManager:
                 self.logger.error("Optimizer %d seems to be hanging. Forcing termination.", opt_id)
                 self._graveyard.add(opt_id)
                 self.opt_log.put_message(opt_id, "Force terminated due to no feedback timeout.")
-                self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+                self.opt_log.put_metadata(opt_id, "t_stop", datetime.now())
                 self.opt_log.put_metadata(opt_id, "end_cond", "Forced GloMPO Termination")
                 pack.process.terminate()
 
@@ -1437,7 +1438,7 @@ class GloMPOManager:
                 pack.process.join(3)
                 self.opt_log.put_message(opt_id, "Force terminated due to no feedback after kill signal "
                                                  "timeout.")
-                self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+                self.opt_log.put_metadata(opt_id, "t_stop", datetime.now())
                 self.opt_log.put_metadata(opt_id, "end_cond", "Forced GloMPO Termination")
                 warnings.warn(f"Forced termination signal sent to optimizer {opt_id}.", RuntimeWarning)
                 self.logger.error("Forced termination signal sent to optimizer %d.", opt_id)
@@ -1467,41 +1468,44 @@ class GloMPOManager:
 
             for res in chunk:
                 if isinstance(res, int):
-                    # Optimizers automatically send just an opt_id to indicated no more iterations.
-                    self.opt_log.clear_cache(res)
+                    if self.result.origin['opt_id'] != res:
+                        # Optimizers automatically send just an opt_id to indicated no more iterations.
+                        self.opt_log.clear_cache(res)
+                    continue
+
+                if res.opt_id in self.hunt_victims:
                     continue
 
                 self._last_feedback[res.opt_id] = time()
 
-                if res.opt_id not in self.hunt_victims:
-                    if 'iter_hist' not in self.opt_log[res.opt_id]:
-                        extra_heads = {}
-                        if res.extras:
-                            try:
-                                # noinspection PyUnresolvedReferences
-                                extra_heads = self.task.headers()
-                            except (AttributeError, NotImplementedError):
-                                extra_heads = infer_headers(res.extras)
-                        self.opt_log.add_iter_history(res.opt_id, extra_heads)
+                if not self.opt_log.has_iter_history(res.opt_id):
+                    extra_heads = {}
+                    if res.extras:
+                        try:
+                            # noinspection PyUnresolvedReferences
+                            extra_heads = self.task.headers()
+                        except (AttributeError, NotImplementedError):
+                            extra_heads = infer_headers(res.extras)
+                    self.opt_log.add_iter_history(res.opt_id, extra_heads)
 
-                    results_accepted += 1
+                results_accepted += 1
+                self.f_counter += 1
 
-                    self.f_counter += 1
-                    self.opt_log.put_iteration(res)
-                    self.logger.debug("Result from %d @ iter %d fx = %e",
-                                      res.opt_id, res.iter_id, res.fx)
+                self.opt_log.put_iteration(res)
+                self.logger.debug("Result from %d @ iter %d fx = %e",
+                                  res.opt_id, res.iter_id, res.fx)
 
-                    if self.visualisation:
-                        self.scope.update_optimizer(res.opt_id, (self.f_counter, res.fx))
+                if self.visualisation:
+                    self.scope.update_optimizer(res.opt_id, (self.f_counter, res.fx))
 
-                    # Start hunt if required
-                    best_id = -1
-                    self.result = self._update_best_result()
-                    if self.result.origin and 'opt_id' in self.result.origin:
-                        best_id = self.result.origin['opt_id']
+                # Start hunt if required
+                best_id = -1
+                self.result = self._update_best_result()
+                if self.result.origin and 'opt_id' in self.result.origin:
+                    best_id = self.result.origin['opt_id']
 
-                    if best_id > 0 and self.killing_conditions and self.f_counter - self.last_hunt >= self.hunt_frequency:
-                        [victims.add(vic) for vic in self._start_hunt(best_id)]
+                if best_id > 0 and self.killing_conditions and self.f_counter - self.last_hunt >= self.hunt_frequency:
+                    [victims.add(vic) for vic in self._start_hunt(best_id)]
 
         return victims
 
@@ -1538,7 +1542,7 @@ class GloMPOManager:
     def _is_manual_shutdowns(self):
         """ If a file titled STOP_x is found in the working directory then the manager will shutdown optimizer x. """
 
-        stop_files = (x for x in self.working_dir.iterdir() if re.match("STOP_[0-9]+", x.name))
+        stop_files = self.working_dir.glob('STOP_')
         for file in stop_files:
             file.unlink()
             try:
@@ -1584,7 +1588,7 @@ class GloMPOManager:
         self._optimizer_packs[opt_id].signal_pipe.send(1)
         self.logger.debug("Termination signal sent to %d", opt_id)
 
-        self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+        self.opt_log.put_metadata(opt_id, "t_stop", datetime.now())
         self.opt_log.put_metadata(opt_id, "end_cond", LiteralWrapper(f"GloMPO Termination\n"
                                                                      f"Hunter: {hunter_id}\n"
                                                                      f"Reason: \n"
@@ -1596,7 +1600,7 @@ class GloMPOManager:
     def _update_best_result(self) -> Result:
         """ Returns the best results found in the log of results. """
 
-        best_iter = self.opt_log.best_iter()
+        best_iter = self.opt_log.get_best_iter()
 
         if self.incumbent_sharing and (not self.result.fx or best_iter['fx'] < self.result.fx):
             for opt_id, pack in self._optimizer_packs.items():
@@ -1604,7 +1608,7 @@ class GloMPOManager:
                     pack.signal_pipe.send((4, best_iter['x'], best_iter['fx']))
 
         best_origin = {"opt_id": best_iter['opt_id'],
-                       "type": self.opt_log.get_metadata(best_iter['opt_id'], "opt_type")}
+                       "type": best_iter['type']}
 
         best_stats = {'f_evals': self.f_counter,
                       'opts_started': self.o_counter,
@@ -1639,7 +1643,7 @@ class GloMPOManager:
                 self.opt_log.get_metadata(opt_id, "t_stop")
             except KeyError:
                 self._graveyard.add(opt_id)
-                self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+                self.opt_log.put_metadata(opt_id, "t_stop", datetime.now())
                 self.opt_log.put_metadata(opt_id, "end_cond",
                                           crash_reason if crash_reason else "GloMPO Convergence")
 
@@ -1734,8 +1738,8 @@ class GloMPOManager:
 
         if logging_options.make_trajectory_plot:
             self.logger.debug("Saving trajectory plot.")
-            all_sign = self.opt_log._largest_eval * self.opt_log.best_iter()['fx'] > 0
-            range_large = self.opt_log._largest_eval - self.opt_log.best_iter()['fx'] > 1e5
+            all_sign = self.opt_log._largest_eval * self.opt_log.get_best_iter()['fx'] > 0
+            range_large = self.opt_log._largest_eval - self.opt_log.get_best_iter()['fx'] > 1e5
             log_scale = all_sign and range_large
             for best_fx in (True, False):
                 name = "trajectories_"
@@ -1787,7 +1791,7 @@ class GloMPOManager:
                         key, message = pack.signal_pipe.recv()
                         self.logger.debug("Received %d, %s from %d", key, message, opt_id)
                         if key == 0:
-                            self.opt_log.put_metadata(opt_id, "t_stop", str(datetime.now()))
+                            self.opt_log.put_metadata(opt_id, "t_stop", datetime.now())
                             self.opt_log.put_metadata(opt_id, "end_cond", message)
                             self._graveyard.add(opt_id)
                             self.conv_counter += 1
