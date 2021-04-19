@@ -50,8 +50,7 @@ from ..common.helpers import LiteralWrapper, literal_presenter, nested_string_fo
     unknown_object_presenter, generator_presenter, optimizer_selector_presenter, present_memory, FlowList, \
     flow_presenter, numpy_array_presenter, numpy_dtype_presenter, BoundGroup, bound_group_presenter, \
     CheckpointingError, is_bounds_valid, infer_headers
-from ..common.namedtuples import Bound, IterationResult, OptimizerPackage, ProcessPackage, Result, \
-    OptimizerCheckpoint, LoggingOptions
+from ..common.namedtuples import Bound, IterationResult, OptimizerPackage, ProcessPackage, Result, OptimizerCheckpoint
 from ..common.wrappers import process_print_redirect
 from ..convergence import BaseChecker, KillsAfterConvergence, MaxFuncCalls
 from ..generators import BaseGenerator, RandomGenerator
@@ -131,6 +130,9 @@ class GloMPOManager:
         incumbent_sharing: bool
             If True the manager will send iteration information about the best ever seen solution to all its children
             whenever this is updated.
+        is_log_detailed: bool
+            If True optimizers will attempt to call a task's detailed_call method and save the expanded return to the
+            log.
         killing_conditions: BaseHunter
             GloMPO object which evaluates whether an optimizer meets its conditions to be terminated early.
             (See glompo.hunters.basehunter.BaseHunter).
@@ -190,8 +192,8 @@ class GloMPOManager:
             and this is False.
         status_frequency: float
             Frequency (in seconds) with which a status message is produced for the logger.
-        logging_options: LoggingOptions
-            Options on what optimization information the user would like GloMPO to save to disk.
+        summary_files: int
+            Logging level indicating how much information is saved to disk.
         t_end: float
             Timestamp of the ending time of an optimization run.
         t_start: float
@@ -314,7 +316,8 @@ class GloMPOManager:
 
         self.allow_forced_terminations: bool = None
         self._too_long: float = None
-        self.logging_options: LoggingOptions = None
+        self.summary_files: int = None
+        self.is_log_detailed: bool = None
         self.split_printstreams: bool = None
         self.overwrite_existing: bool = None
         self.visualisation: bool = None
@@ -355,7 +358,8 @@ class GloMPOManager:
               hunt_frequency: int = 100,
               status_frequency: int = 600,
               checkpoint_control: Optional[CheckpointingControl] = None,
-              logging_options: Optional[LoggingOptions] = None,
+              summary_files: int = 0,
+              is_log_detailed: bool = False,
               visualisation: bool = False,
               visualisation_args: Optional[Dict[str, Any]] = None,
               force_terminations_after: int = -1,
@@ -459,21 +463,17 @@ class GloMPOManager:
                 supply checkpoint controls without this package present, a warning will be raised and no checkpointing
                 will occur.
 
-        logging_options: LoggingOptions = Optional[LoggingOptions]
-            Indicates what information the user would like saved to disk. If not provided nothing will be saved.
-            LoggingOptions attributes:
-                save_manager_summary: bool = True
-                    YAML file with summary info about the optimization and the result.
-                save_optimizer_summary: bool = True
-                    YAML file with summary info of every optimizer started.
-                save_optimizer_logs: bool = False
-                    CSVs with iteration history of every optimizer started.
-                make_detailed_optimizer_logs: bool = False
-                    CSVs will log results of task.detailed_call (see BaseOptimizer).
-                make_trajectory_plot: bool = True
-                    PNG of all explored error values v time.
-                make_optimizer_plots: bool = False
-                    PNG for each optimizer showing parameter values tested v time.
+        summary_files: int = 0
+            Indicates what information the user would like saved to disk. Higher values also save all lower level
+            information:
+                0 - Nothing is saved.
+                1 - YAML file with summary info about the optimization settings, performance and the result.
+                2 - PNG file showing the trajectories of the optimizers.
+                3 - HDF5 file containing iteration history for each optimizer.
+
+        is_log_detailed: bool = False
+            If True the optimizers will call the task's detailed_call method and record the expanded return in the logs
+            instead of the normal return of the __call__ method. See BaseFunction for more information.
 
         visualisation: bool = False
             If True then a dynamic plot is generated to demonstrate the performance of the optimizers. Further options
@@ -584,11 +584,8 @@ class GloMPOManager:
         # Save behavioural args
         self.allow_forced_terminations = force_terminations_after > 0
         self._too_long = force_terminations_after
-        # TODO save_optimizers option in logging options not working
-        if logging_options and isinstance(logging_options, LoggingOptions):
-            self.logging_options = logging_options
-        else:
-            self.logging_options = LoggingOptions(False, False, False, False, False, False)
+        self.summary_files = summary_files
+        self.is_log_detailed = is_log_detailed
         self.split_printstreams = bool(split_printstreams)
         self.overwrite_existing = bool(overwrite_existing)
         self.visualisation = visualisation
@@ -1072,7 +1069,7 @@ class GloMPOManager:
                 self.scope.close_fig()
 
             self.logger.debug("Saving summary file results")
-            self._save_log(self.result, reason, caught_exception, self.working_dir, self.logging_options)
+            self._save_log(self.result, reason, caught_exception, self.working_dir, self.summary_files)
 
             self.result = Result(self.result.x,
                                  self.result.fx,
@@ -1187,17 +1184,12 @@ class GloMPOManager:
         self._toggle_optimizers(1)
         self.logger.info("Checkpoint '%s' successfully built", path.name)
 
-    def dump_state(self, logging_options: Optional[LoggingOptions] = None, dump_dir: Optional[Path] = None):
-        """ Produces the same output files produced by start_manager without actually running any optimization. Useful
-            to extract output files from checkpoints.
+    def write_summary_file(self, dump_dir: Optional[Path] = None):
+        """ Writes a manager summary YAML file detailing the state of the optimization. Useful to extract output from a
+            checkpoints.
 
             Parameters
             ----------
-            logging_options: Optional[LoggingOptions] = None
-                If provided, this will overwrite the manager logging_options setting allowing this method to produce
-                more or less output as desired. If not provided and the manager logging_options setting is not set then
-                this method will pass and produce no output. This would typically only happen if trying to dump an
-                uninitialised manager.
             dump_dir: Optional[Path] = None
                 If provided, this will overwrite the manager working_dir allowing the output to be redirected to a
                 different folder so as to not interfere with files in the working directory.
@@ -1210,12 +1202,7 @@ class GloMPOManager:
         else:
             dump_dir = self.working_dir
 
-        if logging_options is None:
-            logging_options = self.logging_options
-        if logging_options is None:  # Possible if self.logging_options has not been set
-            logging_options = LoggingOptions(False, False, False, False, False, False)
-
-        self._save_log(self.result, "Manual Save State", None, dump_dir, logging_options)
+        self._save_log(self.result, "Manual Save State", None, dump_dir, 1)
 
     """ Management Sub-Tasks """
 
@@ -1298,7 +1285,6 @@ class GloMPOManager:
             available slots or spawning conditions is not found.
         """
 
-        # TODO Chage selectors API to handle new log
         selector_return = self.opt_selector.select_optimizer(self, self.opt_log, slots_available)
 
         if not selector_return:
@@ -1328,20 +1314,12 @@ class GloMPOManager:
         else:
             backend = 'threads' if self.opts_daemonic else 'processes'
 
-        if 'is_log_detailed' in init_kwargs:
-            is_log_detailed = init_kwargs['is_log_detailed']
-            del init_kwargs['is_log_detailed']
-        elif self.logging_options.make_detailed_optimizer_logs:
-            is_log_detailed = True
-        else:
-            is_log_detailed = False
-
         optimizer = selected(opt_id=self.o_counter,
                              signal_pipe=child_pipe,
                              results_queue=self.optimizer_queue,
                              pause_flag=event,
                              backend=backend,
-                             is_log_detailed=is_log_detailed,
+                             is_log_detailed=self.is_log_detailed,
                              **init_kwargs)
 
         self.opt_log.add_optimizer(self.o_counter, type(optimizer).__name__, datetime.now())
@@ -1657,12 +1635,17 @@ class GloMPOManager:
                                             "generate errors. Terminations cannot be sent to threads.", opt_id)
 
     def _save_log(self, result: Result, reason: str, caught_exception: Optional[str], dump_dir: Path,
-                  logging_options: LoggingOptions):
-        """ Saves the manager's state and history into the collection of files requested by logging_options. """
+                  summary_files: int):
+        """ Saves the manager's state and history into the collection of files indicated by summary_files.
+            Valid options for summary_files:
+                0 - Nothing is saved.
+                1 - YAML file with summary info about the optimization settings, performance and the result.
+                2 - PNG file showing the trajectories of the optimizers.
+                3 - HDF5 file containing iteration history for each optimizer.
+        """
 
-        # TODO adjust yaml presenters now that only one yml is made
         # TODO Build manager log in hdf5 too
-        if logging_options.save_manager_summary:
+        if summary_files > 0:
             if caught_exception:
                 reason = f"Process Crash: {caught_exception}"
 
@@ -1735,22 +1718,19 @@ class GloMPOManager:
                 self.logger.debug("Saving manager summary file.")
                 yaml.dump(data, file, Dumper=Dumper, default_flow_style=False, sort_keys=False)
 
-        if logging_options.make_trajectory_plot:
+        if summary_files > 1:
             self.logger.debug("Saving trajectory plot.")
             all_sign = self.opt_log._largest_eval * self.opt_log.get_best_iter()['fx'] > 0
             range_large = self.opt_log._largest_eval - self.opt_log.get_best_iter()['fx'] > 1e5
             log_scale = all_sign and range_large
-            for best_fx in (True, False):
-                name = "trajectories_"
-                name += "log_" if log_scale else ""
-                name += "best_" if best_fx else ""
-                name = name[:-1] if name.endswith("_") else name
-                name += ".png"
-                self.opt_log.plot_trajectory(dump_dir / name, log_scale, best_fx)
+            name = "trajectories_"
+            name += "log_" if log_scale else ""
+            name = name[:-1] if name.endswith("_") else name
+            name += ".png"
+            self.opt_log.plot_trajectory(dump_dir / name, log_scale)
 
-        if logging_options.make_optimizer_plots:
-            self.logger.debug("Saving optimizer parameter trials.")
-            self.opt_log.plot_optimizer_trials(dump_dir)
+        if summary_files > 2:
+            self.opt_log.flush()
 
     """ Checkpointing Sub-Tasks """
 
