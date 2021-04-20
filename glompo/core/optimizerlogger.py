@@ -100,6 +100,9 @@ class BaseLogger:
         """ Adds metadata to storage. """
         self._storage[opt_id]['metadata'][key] = value
 
+    def put_manager_metadata(self, key: str, value: Any):
+        pass
+
     def put_message(self, opt_id: int, message: str):
         pass
 
@@ -393,6 +396,12 @@ class FileLogger(BaseLogger):
         except KeyError:
             pass
         self._get_group(opt_id)._v_attrs[key] = value
+
+    def put_manager_metadata(self, key: str, value: Any):
+        """ Records optimization settings and history information (similar to that in glompo_manager_log.yml) into the
+            H5 file.
+        """
+        self.pytab_file.root._v_attrs[key] = value
 
     def put_message(self, opt_id: int, message: str):
         """ Optimizers can signal special messages to the optimizer during the optimization which can be saved to

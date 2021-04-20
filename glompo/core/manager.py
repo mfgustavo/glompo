@@ -1649,7 +1649,7 @@ class GloMPOManager:
                 3 - HDF5 file containing iteration history for each optimizer.
         """
 
-        # TODO Build manager log in hdf5 too
+        data = {}
         if summary_files > 0:
             if caught_exception:
                 reason = f"Process Crash: {caught_exception}"
@@ -1735,6 +1735,21 @@ class GloMPOManager:
             self.opt_log.plot_trajectory(dump_dir / name, log_scale)
 
         if summary_files > 2:
+            self.opt_log.put_manager_metadata('task', data['Assignment']['Task'])
+            self.opt_log.put_manager_metadata('working_dir', data['Assignment']['Working Dir'])
+            self.opt_log.put_manager_metadata('username', data['Assignment']['Username'])
+            self.opt_log.put_manager_metadata('hostname', data['Assignment']['Hostname'])
+            self.opt_log.put_manager_metadata('total_time', data['Assignment']['Time']['Total'])
+            self.opt_log.put_manager_metadata('bounds', [list(bnd) for bnd in self.bounds])
+
+            self.opt_log.put_manager_metadata('n_evals', self.f_counter)
+            self.opt_log.put_manager_metadata('n_hunts', self.hunt_counter)
+            self.opt_log.put_manager_metadata('n_opts_started', self.o_counter)
+            self.opt_log.put_manager_metadata('n_opts_killed', len(self.hunt_victims))
+            self.opt_log.put_manager_metadata('n_opts_conv', self.conv_counter)
+
+            self.opt_log.put_manager_metadata('exit_reason', reason)
+
             self.opt_log.flush()
 
     """ Checkpointing Sub-Tasks """
