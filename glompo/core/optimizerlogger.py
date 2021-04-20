@@ -29,11 +29,7 @@ __all__ = ("BaseLogger",
 class BaseLogger:
     """ Holds iteration results in memory for faster access. """
 
-    def __init__(self, refresh: bool, build_traj_plot: bool, *args, **kwargs):
-        # TODO Refresh???
-        # TODO Checkpointing and at what point the log is created.
-        # TODO Handle putting into a cleared cache for example.
-
+    def __init__(self, build_traj_plot: bool, *args, **kwargs):
         self._f_counter = 0  # Total number of evaluations accepted
         self._best_iters = {0: {'opt_id': 0, 'x': [], 'fx': float('inf'), 'type': '', 'call_id': 0}}
         self._best_iter = {'opt_id': 0, 'x': [], 'fx': float('inf'), 'type': '', 'call_id': 0}
@@ -261,6 +257,9 @@ class BaseLogger:
     def flush(self, opt_id: Optional[int] = None):
         pass
 
+    def open(self, path: Union[Path, str], mode: str):
+        pass
+
     def close(self):
         """ Remove all records from memory. """
         self.clear_cache()
@@ -274,9 +273,9 @@ class FileLogger(BaseLogger):
 
     def __init__(self,
                  path: Union[str, Path],
-                 checksum: str, n_parms: int,
+                 checksum: str,
+                 n_parms: int,
                  expected_rows: int,
-                 refresh: bool,
                  build_traj_plot: bool):
         """ Setups and opens the logfile.
 
@@ -291,15 +290,12 @@ class FileLogger(BaseLogger):
             expected_rows: int
                 Estimated number of rows in each optimizer log file. Estimated by GloMPOManager based on convergence
                 settings and dimensionality of the optimization task.
-            refresh: bool
-                If True BaseLogger will build a new logfile rather than load an old one.
             build_traj_plot: bool
                 Flag the logger to hold trajectories in memory to construct the summary image.
         """
-        super().__init__(refresh, build_traj_plot)
-        mode = 'w' if refresh else 'a'
+        super().__init__(build_traj_plot)
+        self.pytab_file = tb.open_file(str(path), 'w', filters=tb.Filters(1, 'blosc'))
 
-        self.pytab_file = tb.open_file(str(path), mode, filters=tb.Filters(1, 'blosc'))
         self.expected_rows = expected_rows
         self.n_task_dims = n_parms
 
@@ -310,10 +306,6 @@ class FileLogger(BaseLogger):
         self._tables = {}  # In memory address to pytables_file tables (expensive otherwise)
 
         self.pytab_file.root._v_attrs.checksum = checksum
-        if not refresh:
-            self._best_iters = self.pytab_file.root._v_attrs.best_iters
-            self._best_iter = self.pytab_file.root._v_attrs.get_best_iter
-            self._max_eval = self.pytab_file.root._v_attrs.max_eval
 
     def __contains__(self, opt_id: int) -> bool:
         """ Returns True if a group exists in the HDF5 file for the optimizer with ID opt_id """
@@ -446,17 +438,15 @@ class FileLogger(BaseLogger):
 
     def _get_group(self, opt_id: int) -> tb.Group:
         """ Returns the the tables.Group object for optimizer opt_id"""
-        if opt_id in self._groups:
-            return self._groups[opt_id]
-        else:
-            return self.pytab_file.get_node('/', f'optimizer_{opt_id}')
+        if opt_id not in self._groups:
+            self._groups[opt_id] = self.pytab_file.get_node('/', f'optimizer_{opt_id}')
+        return self._groups[opt_id]
 
     def _get_table(self, opt_id: int) -> tb.Table:
         """ Returns the the tables.Table object for optimizer opt_id"""
-        if self.has_iter_history(opt_id):
-            return self._tables[opt_id]
-        else:
-            return self.pytab_file.get_node('/', f'optimizer_{opt_id}/iter_hist')
+        if not self.has_iter_history(opt_id):
+            self._tables[opt_id] = self.pytab_file.get_node('/', f'optimizer_{opt_id}/iter_hist')
+        return self._tables[opt_id]
 
     def flush(self, opt_id: Optional[int] = None):
         """ Writes iterations held in chunks to disk. If opt_id is provided then the corresponding
@@ -487,6 +477,10 @@ class FileLogger(BaseLogger):
             if super().__contains__(o):
                 super().clear_cache(o)
 
+    def open(self, path: Union[Path, str], mode: str):
+        """ Opens or creates the H5 file. """
+        self.pytab_file = tb.open_file(str(path), mode, filters=tb.Filters(1, 'blosc'))
+
     def close(self):
         """ Remove from memory, flush to file and close the file. """
         self.pytab_file.root._v_attrs.opts_started = self._o_counter
@@ -495,6 +489,6 @@ class FileLogger(BaseLogger):
         self.pytab_file.root._v_attrs.best_iter = self._best_iter
         self.pytab_file.root._v_attrs.max_eval = self._max_eval
 
-        self.clear_cache()
+        self.flush()
         self.pytab_file.flush()
         self.pytab_file.close()

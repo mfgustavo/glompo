@@ -612,6 +612,14 @@ class GloMPOManager:
             self.visualisation_args = visualisation_args if visualisation_args else {}
             self.scope = GloMPOScope(**visualisation_args) if visualisation_args else GloMPOScope()
 
+        self._checksum = ''.join([random.choice(string.ascii_letters + string.digits) for _ in range(20)])
+        self.opt_log = FileLogger if self.summary_files > 2 else BaseLogger
+        self.opt_log = self.opt_log(path=self.log_file,
+                                    checksum=self._checksum,
+                                    n_parms=self.n_parms,
+                                    expected_rows=self._log_expected_rows(),
+                                    build_traj_plot=self.summary_files > 1)
+
         # Setup backend
         if any([backend == valid_opt for valid_opt in ('processes', 'threads', 'processes_forced')]):
             self.proc_backend = 'processes' in backend
@@ -632,7 +640,6 @@ class GloMPOManager:
             else:
                 self.end_timeout = None
 
-        self._checksum = ''.join([random.choice(string.ascii_letters + string.digits) for _ in range(20)])
         self._is_restart = False
 
         if self.checkpoint_control and self.checkpoint_control.checkpoint_at_init:
@@ -800,6 +807,7 @@ class GloMPOManager:
         self.t_end = None
         self.opt_crashed = False
         self.last_opt_spawn = (0, 0)
+        self.opt_log.open(self.log_file, 'a')
         # noinspection PyBroadException
         try:
             self.converged = self.convergence_checker(self)
@@ -945,13 +953,6 @@ class GloMPOManager:
                                         "working_dir (%s). Copying logfile to working_dir.",
                                         self.log_file, self.working_dir)
                     shutil.copy(self.log_file, self.working_dir)
-        self.opt_log = FileLogger if self.summary_files > 2 else BaseLogger
-        self.opt_log = self.opt_log(path=self.log_file,
-                                    checksum=self._checksum,
-                                    n_parms=self.n_parms,
-                                    expected_rows=self._log_expected_rows(),
-                                    refresh=not self._is_restart,
-                                    build_traj_plot=self.summary_files > 1)
 
         if self.visualisation and self.scope.record_movie:
             self.scope.setup_moviemaker(self.working_dir)
@@ -1129,7 +1130,11 @@ class GloMPOManager:
             self.checkpoint_history.add(str(path.resolve().with_suffix('.tar.gz')))
 
             self._checkpoint_optimizers(path)
+
+            self.opt_log.close()
             self._checkpoint_manager(path)
+            self.opt_log.open(self.log_file, 'a')
+
             self._checkpoint_task(path)
 
             # Save scope
@@ -1426,14 +1431,18 @@ class GloMPOManager:
                 warnings.warn(f"Forced termination signal sent to optimizer {opt_id}.", RuntimeWarning)
                 self.logger.error("Forced termination signal sent to optimizer %d.", opt_id)
 
-    def _process_results(self, max_results: Optional[int] = None) -> Set[int]:
+    def _process_results(self, max_results: Optional[int] = None) -> Tuple[Set[int], Set[int]]:
         """ Retrieve results from the queue and process them into the opt_log.
             If max_results is provided, accept at most this number of results.
             Otherwise will loop until the queue is empty.
-            Returns a list of hunt victims.
+
+            Returns a tuple of:
+                - Opt_ids of optimizers closed during this execution of _process_results
+                - Opt_ids of optimizers killed during this execution of _process_results.
         """
 
         results_accepted = 0
+        closed = set()
         victims = set()
         if max_results:
             def condition():
@@ -1454,6 +1463,7 @@ class GloMPOManager:
                     if self.result.origin['opt_id'] != res:
                         # Optimizers automatically send just an opt_id to indicated no more iterations.
                         self.opt_log.clear_cache(res)
+                        closed.add(res)
                     continue
 
                 if res.opt_id in self.hunt_victims:
@@ -1489,7 +1499,7 @@ class GloMPOManager:
                 if best_id > 0 and self.killing_conditions and self.f_counter - self.last_hunt >= self.hunt_frequency:
                     [victims.add(vic) for vic in self._start_hunt(best_id)]
 
-        return victims
+        return closed, victims
 
     def _start_hunt(self, hunter_id: int) -> Set[int]:
         """ Creates a new hunt with the provided hunter_id as the 'best' optimizer looking to terminate
@@ -1777,10 +1787,8 @@ class GloMPOManager:
                                   wait=wait_reply)
 
             if self.optimizer_queue.full():
-                # TODO Deal with accepted not being returned
-                # TODO Deal with final not being in results
-                accepted, victims = self._process_results(n_alive)  # Free space on queue to avoid blocking
-                [not_chkpt.add(res.opt_id) for res in accepted if res.final]
+                closed, victims = self._process_results(n_alive)  # Free space on queue to avoid blocking
+                [not_chkpt.add(cld) for cld in closed]
                 [not_chkpt.add(vic) for vic in victims]
 
             for opt_id in wait_reply.copy():
@@ -1809,8 +1817,8 @@ class GloMPOManager:
         self.logger.info("Optimizers paused and synced.")
 
         # Process outstanding results and hunts
-        accepted, victims = self._process_results()  # TODO accepted is no longer returned
-        [not_chkpt.add(res.opt_id) for res in accepted if res.final]  # TODO tuple no longer supports final flag
+        closed, victims = self._process_results()
+        [not_chkpt.add(cld) for cld in closed]
         [not_chkpt.add(vic) for vic in victims]
         self.logger.info("Outstanding results processed")
 
