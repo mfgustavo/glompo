@@ -22,7 +22,7 @@ from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxFuncCalls,
 from glompo.core._backends import CustomThread
 from glompo.core.checkpointing import CheckpointingControl
 from glompo.core.manager import GloMPOManager
-from glompo.core.optimizerlogger import OptimizerLogger
+from glompo.core.optimizerlogger import BaseLogger
 from glompo.generators import BaseGenerator, RandomGenerator
 from glompo.hunters import BaseHunter, MinIterations, TypeHunter
 from glompo.opt_selectors import BaseSelector, CycleSelector, IterSpawnStop
@@ -35,7 +35,7 @@ from glompo.optimizers.random import RandomOptimizer
 class DummySelector(BaseSelector):
     def select_optimizer(self,
                          manager: 'GloMPOManager',
-                         log: OptimizerLogger,
+                         log: BaseLogger,
                          slots_available: int) -> Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]],
                                                         None]:
         pass

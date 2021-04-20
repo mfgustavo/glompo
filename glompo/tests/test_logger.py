@@ -5,7 +5,7 @@ import glompo.core.optimizerlogger
 import numpy as np
 import pytest
 import yaml
-from glompo.core.optimizerlogger import OptimizerLogger
+from glompo.core.optimizerlogger import BaseLogger
 from glompo.optimizers.baseoptimizer import BaseOptimizer
 from glompo.optimizers.cmawrapper import CMAOptimizer
 from glompo.optimizers.gflswrapper import GFLSOptimizer
@@ -15,7 +15,7 @@ class TestLogger:
 
     @pytest.fixture(scope='class')
     def filled_log(self):
-        log = OptimizerLogger()
+        log = BaseLogger()
 
         opt0 = GFLSOptimizer(0)
         opt1 = CMAOptimizer(1)

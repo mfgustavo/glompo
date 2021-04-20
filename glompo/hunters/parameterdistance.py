@@ -4,7 +4,7 @@ import numpy as np
 
 from .basehunter import BaseHunter
 from ..common.helpers import distance, is_bounds_valid
-from ..core.optimizerlogger import OptimizerLogger
+from ..core.optimizerlogger import BaseLogger
 
 __all__ = ("ParameterDistance",)
 
@@ -47,7 +47,7 @@ class ParameterDistance(BaseHunter):
         self.test_all = test_all
 
     def __call__(self,
-                 log: OptimizerLogger,
+                 log: BaseLogger,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
         if self.test_all:

@@ -1,7 +1,7 @@
 import random
 
 from .basehunter import BaseHunter
-from ..core.optimizerlogger import OptimizerLogger
+from ..core.optimizerlogger import BaseLogger
 
 __all__ = ("TimeAnnealing",)
 
@@ -28,7 +28,7 @@ class TimeAnnealing(BaseHunter):
             raise ValueError("threshold should be a positive float.")
 
     def __call__(self,
-                 log: OptimizerLogger,
+                 log: BaseLogger,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
         n_hunter = log.len(hunter_opt_id)

@@ -1,7 +1,7 @@
 import numpy as np
 
 from .basehunter import BaseHunter
-from ..core.optimizerlogger import OptimizerLogger
+from ..core.optimizerlogger import BaseLogger
 
 __all__ = ("EvaluationsUnmoving",)
 
@@ -19,7 +19,7 @@ class EvaluationsUnmoving(BaseHunter):
         self.tol = tol
 
     def __call__(self,
-                 log: OptimizerLogger,
+                 log: BaseLogger,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
         vals = log.get_history(victim_opt_id, "fx")

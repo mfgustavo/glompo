@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from .optimizerlogger import OptimizerLogger
+from .optimizerlogger import BaseLogger
 
 try:
     from yaml import CLoader as Loader
@@ -76,31 +76,31 @@ class OptimizationAnalyser:
             df.query(query)
         return df
 
-    def add_set(self, source: Union[str, Path, OptimizerLogger]):
+    def add_set(self, source: Union[str, Path, BaseLogger]):
         """ A 'set' encompasses all the optimizers and iterations of a single GloMPO optimisation.
             The data can be extracted from various sources and a single OptimizationAnalyser can handle multiple sets at
             once to allow larger quantities of data to be analysed simultaneously.
 
             Parameters
             ----------
-            source: Union[str, Path, OptimizerLogger]
+            source: Union[str, Path, BaseLogger]
                 Either:
                     - A Path to a glompo_optimizer_logs directory containing YAML files for each optimizer.
                     - A Path to a glompo_logger.pkl file containing a saved instance of the optimizations
-                      OptimizerLogger instance.
-                    - A OptimizerLogger instance containing and optimization history.
+                      BaseLogger instance.
+                    - A BaseLogger instance containing and optimization history.
         """
         if isinstance(source, str):
             source = Path(source)
 
-        if isinstance(source, OptimizerLogger):
+        if isinstance(source, BaseLogger):
             self._process_opt_logger(source)
 
         elif isinstance(source, Path):
             if source.name == 'glompo_logger.pkl':
                 with source.open('rb') as stream:
                     opt_log = pickle.load(stream)
-                    assert isinstance(opt_log, OptimizerLogger)
+                    assert isinstance(opt_log, BaseLogger)
                     self._process_opt_logger(opt_log)
 
             elif source.is_dir():
@@ -130,8 +130,8 @@ class OptimizationAnalyser:
         with path.open('wb') as file:
             pickle.dump(self, file)
 
-    def _process_opt_logger(self, opt_log: OptimizerLogger):
-        """ Handles the addition of an OptimizerLogger instance into the class DataFrame. """
+    def _process_opt_logger(self, opt_log: BaseLogger):
+        """ Handles the addition of an BaseLogger instance into the class DataFrame. """
         raise NotImplementedError
 
     def _process_files(self, dir_path: Path):

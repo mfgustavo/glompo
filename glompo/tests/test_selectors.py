@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Type, Union
 
 import pytest
-from glompo.core.optimizerlogger import OptimizerLogger
+from glompo.core.optimizerlogger import BaseLogger
 from glompo.opt_selectors.baseselector import BaseSelector
 from glompo.opt_selectors.chain import ChainSelector
 from glompo.opt_selectors.cycle import CycleSelector
@@ -45,7 +45,7 @@ class BasicSelector(BaseSelector):
 
     def select_optimizer(self,
                          manager: 'GloMPOManager',
-                         log: OptimizerLogger,
+                         log: BaseLogger,
                          slots_available: int) -> Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]],
                                                         None]:
         return self.avail_opts[0]

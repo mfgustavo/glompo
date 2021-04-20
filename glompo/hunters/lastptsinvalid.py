@@ -1,7 +1,7 @@
 import numpy as np
 
 from .basehunter import BaseHunter
-from ..core.optimizerlogger import OptimizerLogger
+from ..core.optimizerlogger import BaseLogger
 
 __all__ = ("LastPointsInvalid",)
 
@@ -17,7 +17,7 @@ class LastPointsInvalid(BaseHunter):
         self.n_iters = n_iters
 
     def __call__(self,
-                 log: OptimizerLogger,
+                 log: BaseLogger,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
         fcalls = log.get_history(victim_opt_id, "fx")[-self.n_iters:]

@@ -45,7 +45,7 @@ except ModuleNotFoundError:
     HAS_PSUTIL = False
 
 from ._backends import ChunkingQueue, CustomThread, ThreadPrintRedirect
-from .optimizerlogger import OptimizerLogger
+from .optimizerlogger import BaseLogger, FileLogger
 from ..common.helpers import LiteralWrapper, literal_presenter, nested_string_formatting, \
     unknown_object_presenter, generator_presenter, optimizer_selector_presenter, present_memory, FlowList, \
     flow_presenter, numpy_array_presenter, numpy_dtype_presenter, BoundGroup, bound_group_presenter, \
@@ -165,9 +165,9 @@ class GloMPOManager:
             Number of optimizers started.
         opt_crashed: bool
             True if any child optimizer crashed during its execution.
-        opt_log: OptimizerLogger
+        opt_log: BaseLogger
             GloMPO object collecting the entire iteration history and metadata of the manager's children.
-            (See glompo.core.optimizerlogger.OptimizerLogger)
+            (See glompo.core.optimizerlogger.BaseLogger)
         opt_selector: BaseSelector
             Object which returns an optimizer class and its configuration when requested by the manager. Can be based on
             previous results delivered by other optimizers. (See glompo.opt_selectors.baseselector.BaseSelector)
@@ -328,7 +328,7 @@ class GloMPOManager:
         self.status_frequency: float = None
         self.checkpoint_control: CheckpointingControl = None
 
-        self.opt_log: OptimizerLogger = None
+        self.opt_log: BaseLogger = None
         # noinspection PyUnresolvedReferences
         self.scope: Optional['GloMPOScope'] = None
 
@@ -945,8 +945,13 @@ class GloMPOManager:
                                         "working_dir (%s). Copying logfile to working_dir.",
                                         self.log_file, self.working_dir)
                     shutil.copy(self.log_file, self.working_dir)
-        self.opt_log = OptimizerLogger(self.log_file, self._checksum, self.n_parms,
-                                       self._log_expected_rows(), not self._is_restart)
+        self.opt_log = FileLogger if self.summary_files > 2 else BaseLogger
+        self.opt_log = self.opt_log(path=self.log_file,
+                                    checksum=self._checksum,
+                                    n_parms=self.n_parms,
+                                    expected_rows=self._log_expected_rows(),
+                                    refresh=not self._is_restart,
+                                    build_traj_plot=self.summary_files > 1)
 
         if self.visualisation and self.scope.record_movie:
             self.scope.setup_moviemaker(self.working_dir)
@@ -1498,7 +1503,7 @@ class GloMPOManager:
         self.logger.debug("Starting hunt")
         for victim_id in self._optimizer_packs:
             in_graveyard = victim_id in self._graveyard
-            has_points = len(self.opt_log.get_history(victim_id, "fx")) > 0
+            has_points = self.opt_log.has_iter_history(victim_id)
             if not in_graveyard and has_points and victim_id != hunter_id:
                 self.logger.debug("Optimizer %d -> Optimizer %d hunt started.", hunter_id, victim_id)
                 kill = self.killing_conditions(self.opt_log, hunter_id, victim_id)
@@ -1720,8 +1725,8 @@ class GloMPOManager:
 
         if summary_files > 1:
             self.logger.debug("Saving trajectory plot.")
-            all_sign = self.opt_log._largest_eval * self.opt_log.get_best_iter()['fx'] > 0
-            range_large = self.opt_log._largest_eval - self.opt_log.get_best_iter()['fx'] > 1e5
+            all_sign = self.opt_log.largest_eval * self.opt_log.get_best_iter()['fx'] > 0
+            range_large = self.opt_log.largest_eval - self.opt_log.get_best_iter()['fx'] > 1e5
             log_scale = all_sign and range_large
             name = "trajectories_"
             name += "log_" if log_scale else ""

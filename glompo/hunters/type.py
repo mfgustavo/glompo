@@ -1,5 +1,5 @@
 from .basehunter import BaseHunter
-from ..core.optimizerlogger import OptimizerLogger
+from ..core.optimizerlogger import BaseLogger
 from ..optimizers.baseoptimizer import BaseOptimizer
 
 __all__ = ("TypeHunter",)
@@ -23,7 +23,7 @@ class TypeHunter(BaseHunter):
             raise TypeError("Optimizer not recognized, must be a subclass of BaseOptimizer")
 
     def __call__(self,
-                 log: OptimizerLogger,
+                 log: BaseLogger,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
 

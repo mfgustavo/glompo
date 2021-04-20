@@ -1,7 +1,7 @@
 import numpy as np
 
 from .basehunter import BaseHunter
-from ..core.optimizerlogger import OptimizerLogger
+from ..core.optimizerlogger import BaseLogger
 
 __all__ = ("ValueAnnealing",)
 
@@ -29,7 +29,7 @@ class ValueAnnealing(BaseHunter):
         self.strictness = np.log(med_kill_chance)
 
     def __call__(self,
-                 log: OptimizerLogger,
+                 log: BaseLogger,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
         f_hunter = log.get_best_iter(hunter_opt_id)['fx']

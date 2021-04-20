@@ -4,7 +4,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, Optional, Tuple, Type, Union
 
-from ..core.optimizerlogger import OptimizerLogger
+from ..core.optimizerlogger import BaseLogger
 from ..optimizers.baseoptimizer import BaseOptimizer
 
 __all__ = ("BaseSelector",
@@ -77,7 +77,7 @@ class BaseSelector(ABC):
     @abstractmethod
     def select_optimizer(self,
                          manager: 'GloMPOManager',
-                         log: OptimizerLogger,
+                         log: BaseLogger,
                          slots_available: int) -> Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]],
                                                         None, bool]:
         """ Provided with the manager object and opt_log file of all optimizers, returns a optimizer class
@@ -88,7 +88,7 @@ class BaseSelector(ABC):
             ----------
             manager: GloMPOManager
                 Running manager instance, can be used to read certain counters and state variables.
-            log: OptimizerLogger
+            log: BaseLogger
                 Contains the details and iteration history of ever optimizer started thus far.
             slots_available: int
                 Number of threads the manager is allowed to start according to its max_jobs attribute and the number of

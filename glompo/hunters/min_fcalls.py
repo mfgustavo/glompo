@@ -1,5 +1,5 @@
 from .basehunter import BaseHunter
-from ..core.optimizerlogger import OptimizerLogger
+from ..core.optimizerlogger import BaseLogger
 
 __all__ = ("MinFuncCalls",)
 
@@ -15,7 +15,7 @@ class MinFuncCalls(BaseHunter):
             raise ValueError("min_pts must be a positive integer.")
 
     def __call__(self,
-                 log: OptimizerLogger,
+                 log: BaseLogger,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
         self._last_result = log.len(victim_opt_id) >= self.min_pts

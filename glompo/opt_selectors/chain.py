@@ -1,7 +1,7 @@
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 from .baseselector import BaseSelector
-from ..core.optimizerlogger import OptimizerLogger
+from ..core.optimizerlogger import BaseLogger
 from ..optimizers.baseoptimizer import BaseOptimizer
 
 __all__ = ("ChainSelector",)
@@ -47,7 +47,7 @@ class ChainSelector(BaseSelector):
         assert n - 1 <= len(fcall_thresholds) <= n, "Must be one threshold less than available optimizers"
         self.toggle = 0
 
-    def select_optimizer(self, manager: 'GloMPOManager', log: OptimizerLogger, slots_available: int) -> \
+    def select_optimizer(self, manager: 'GloMPOManager', log: BaseLogger, slots_available: int) -> \
             Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]], None, bool]:
 
         if not self.allow_spawn(manager):

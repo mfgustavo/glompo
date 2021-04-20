@@ -1,7 +1,7 @@
 from typing import Any, Callable, Dict, Optional, Tuple, Type, Union
 
 from .baseselector import BaseSelector
-from ..core.optimizerlogger import OptimizerLogger
+from ..core.optimizerlogger import BaseLogger
 from ..optimizers.baseoptimizer import BaseOptimizer
 
 __all__ = ("CycleSelector",)
@@ -20,7 +20,7 @@ class CycleSelector(BaseSelector):
 
     def select_optimizer(self,
                          manager: 'GloMPOManager',
-                         log: OptimizerLogger,
+                         log: BaseLogger,
                          slots_available: int) -> Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]],
                                                         None, bool]:
 

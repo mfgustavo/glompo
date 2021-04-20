@@ -4,7 +4,7 @@ import logging
 from abc import abstractmethod
 
 from ..common.corebase import _AndCore, _CoreBase, _OrCore
-from ..core.optimizerlogger import OptimizerLogger
+from ..core.optimizerlogger import BaseLogger
 
 __all__ = ("BaseHunter",)
 
@@ -18,7 +18,7 @@ class BaseHunter(_CoreBase):
 
     @abstractmethod
     def __call__(self,
-                 log: OptimizerLogger,
+                 log: BaseLogger,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
         """ When called, this method may check any values within the logs or GPRs of both hunter or the victim
@@ -29,7 +29,7 @@ class BaseHunter(_CoreBase):
 
             Parameters
             ----------
-            log: OptimizerLogger
+            log: BaseLogger
                 Instance of Logger class that contains the iteration history of every optimizer.
             hunter_opt_id: int
                 ID number of the 'hunter' optimizer currently identified as the best performer.

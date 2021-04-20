@@ -5,7 +5,7 @@ from typing import Callable, Sequence, Tuple, Union
 import numpy as np
 import pytest
 from glompo.common.corebase import _CombiCore
-from glompo.core.optimizerlogger import OptimizerLogger
+from glompo.core.optimizerlogger import BaseLogger
 from glompo.hunters.basehunter import BaseHunter, _AndHunter, _OrHunter
 from glompo.hunters.evalsunmoving import EvaluationsUnmoving
 from glompo.hunters.lastptsinvalid import LastPointsInvalid
@@ -52,7 +52,7 @@ def all_hunter():
     return _AndHunter(PlainHunter(), PlainHunter())
 
 
-class FakeLog(OptimizerLogger):
+class FakeLog(BaseLogger):
     def __init__(self, *args):
         self.path = [*args]
 

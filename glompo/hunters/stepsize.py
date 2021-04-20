@@ -5,7 +5,7 @@ import numpy as np
 
 from .basehunter import BaseHunter
 from ..common.helpers import distance, is_bounds_valid
-from ..core.optimizerlogger import OptimizerLogger
+from ..core.optimizerlogger import BaseLogger
 
 __all__ = ("StepSize",)
 
@@ -26,7 +26,7 @@ class StepSize(BaseHunter):
             self.trans_space_dist = distance(lower_pt, upper_pt)
 
     def __call__(self,
-                 log: OptimizerLogger,
+                 log: BaseLogger,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
         trials = log.get_history(victim_opt_id, "x")[-self.calls:]
