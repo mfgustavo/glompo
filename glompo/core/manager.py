@@ -612,11 +612,8 @@ class GloMPOManager:
             self.visualisation_args = visualisation_args if visualisation_args else {}
             self.scope = GloMPOScope(**visualisation_args) if visualisation_args else GloMPOScope()
 
-        self._checksum = ''.join([random.choice(string.ascii_letters + string.digits) for _ in range(20)])
         self.opt_log = FileLogger if self.summary_files > 2 else BaseLogger
-        self.opt_log = self.opt_log(path=self.log_file,
-                                    checksum=self._checksum,
-                                    n_parms=self.n_parms,
+        self.opt_log = self.opt_log(n_parms=self.n_parms,
                                     expected_rows=self._log_expected_rows(),
                                     build_traj_plot=self.summary_files > 1)
 
@@ -799,6 +796,10 @@ class GloMPOManager:
             else:
                 self.scope = GloMPOScope(**self.visualisation_args)
 
+        # Rebuild optimizer logger
+        self.opt_log = FileLogger if self.summary_files > 2 else BaseLogger
+        self.opt_log = self.opt_log.checkpoint_load(tmp_dir / 'opt_log')
+
         # Modify/create missing variables
         assert len(self.dt_starts) == len(self.dt_ends), "Timestamps missing from checkpoint."
         self._optimizer_packs: Dict[int, ProcessPackage] = {}
@@ -807,7 +808,6 @@ class GloMPOManager:
         self.t_end = None
         self.opt_crashed = False
         self.last_opt_spawn = (0, 0)
-        self.opt_log.open(self.log_file, 'a')
         # noinspection PyBroadException
         try:
             self.converged = self.convergence_checker(self)
@@ -927,6 +927,7 @@ class GloMPOManager:
         # Make working dir & open log file
         self.working_dir.mkdir(parents=True, exist_ok=True)
         self._purge_old_results()
+        mode = 'w'
         if self._is_restart:
             # Loaded checkpoint points to missing logfile
             if not self.log_file.exists():
@@ -937,22 +938,47 @@ class GloMPOManager:
 
             else:
                 # Loaded checkpoint points to incorrect logfile
-                with tb.open_file(str(self.log_file), 'r') as peek:
-                    if peek.root.checksum != self._checksum:
+                with tb.open_file(str(self.log_file), 'a') as peek:
+                    if peek.root._v_attrs.checksum != self._checksum:
                         self.logger.critical("Checkpoint points to log file (%s) which is for an "
                                              "optimization which does not match this one! Aborting optimization.",
                                              self.log_file)
                         raise RuntimeError(f"Checkpoint points to log file ({self.log_file}) which is for an "
                                            f"optimization which does not match this one! Aborting optimization.")
 
-                # Loaded checkpoint points to logfile NOT in working_dir
-                if not self.working_dir.samefile(self.log_file.parent):
-                    warnings.warn(f"Checkpoint points to log file ({self.log_file}) which is not in the selected "
-                                  f"working_dir ({self.working_dir}). Copying logfile to working_dir.", RuntimeWarning)
-                    self.logger.warning("Checkpoint points to log file (%s) which is not in the selected "
-                                        "working_dir (%s). Copying logfile to working_dir.",
-                                        self.log_file, self.working_dir)
-                    shutil.copy(self.log_file, self.working_dir)
+                    # Loaded checkpoint points to logfile NOT in working_dir
+                    if not self.working_dir.samefile(self.log_file.parent):
+                        warnings.warn(
+                            f"Checkpoint points to log file ({self.log_file}) which is not in the selected "
+                            f"working_dir ({self.working_dir}). Copying logfile to working_dir.", RuntimeWarning)
+                        self.logger.warning("Checkpoint points to log file (%s) which is not in the selected "
+                                            "working_dir (%s). Copying logfile to working_dir.",
+                                            self.log_file, self.working_dir)
+                        shutil.copy(self.log_file, self.working_dir)
+                        self.log_file = self.working_dir / 'glompo_log.h5'
+
+                    # Truncate the log back in time
+                    file_f_count = peek.root._v_attrs.f_counter
+                    if file_f_count > self.f_counter:
+                        self.logger.warning("The log file (%d evaluations) has iterated past the checkpoint "
+                                            "(%d evaluations). Rolling back the log file to the iteration point.",
+                                            file_f_count, self.f_counter)
+                        warnings.warn(f"The log file ({file_f_count} evaluations) has iterated past "
+                                      f"the checkpoint ({self.f_counter} evaluations). Rolling back the log file to "
+                                      f"the iteration point.")
+                        for tab in peek.walk_nodes('/', 'Table'):
+                            tab: tb.Table
+                            call_ids = tab.col('call_id')
+                            crit_i = np.searchsorted(call_ids, self.f_counter, 'right')
+                            tab.remove_rows(crit_i)
+
+                        for group in peek.iter_nodes('/', 'Group'):
+                            if int(group._v_name.split('_')[1]) > self.o_counter:
+                                peek.remove_node('/', group._v_name, recursive=True)
+
+                mode = 'a'
+        self._checksum = ''.join([random.choice(string.ascii_letters + string.digits) for _ in range(20)])
+        self.opt_log.open(self.log_file, mode, self._checksum)
 
         if self.visualisation and self.scope.record_movie:
             self.scope.setup_moviemaker(self.working_dir)
@@ -1121,6 +1147,11 @@ class GloMPOManager:
         ovw_path = path.parent / '_overwriting_chkpt.tar.gz'
 
         try:
+            # Flush logger
+            self.opt_log.flush()
+            self.opt_log.checkpoint_save(path)
+            self.logger.debug("Log successfully pickled")
+
             # Save timestamp and checkpoint name
             if len(self.dt_starts) > 0:
                 if len(self.dt_starts) == len(self.dt_ends):
@@ -1130,11 +1161,7 @@ class GloMPOManager:
             self.checkpoint_history.add(str(path.resolve().with_suffix('.tar.gz')))
 
             self._checkpoint_optimizers(path)
-
-            self.opt_log.close()
             self._checkpoint_manager(path)
-            self.opt_log.open(self.log_file, 'a')
-
             self._checkpoint_task(path)
 
             # Save scope
@@ -1861,9 +1888,7 @@ class GloMPOManager:
                     '__' not in var and \
                     not any([var == no_pickle for no_pickle in ('logger', '_process', '_mp_manager',
                                                                 '_optimizer_packs', 'scope', 'task',
-                                                                'optimizer_queue', 'is_initialised',
-                                                                'queue_monitor_arrest', 'queue_monitor_end',
-                                                                'queue_monitor_thread', '_pytab')]):
+                                                                'optimizer_queue', 'is_initialised', 'opt_log')]):
                 if dill.pickles(val):
                     pickle_vars[var] = val
                 else:
