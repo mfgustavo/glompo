@@ -1077,7 +1077,7 @@ class GloMPOManager:
             self.logger.debug("Saving summary file results")
             self._save_log(self.result, reason, caught_exception, self.working_dir, self.summary_files)
 
-            self.result = Result(self.result.x,
+            self.result = Result(list(self.result.x),
                                  self.result.fx,
                                  {**self.result.stats, 'end_cond': reason} if self.result.stats else {
                                      'end_cond': reason},
@@ -1608,7 +1608,7 @@ class GloMPOManager:
                       'opts_conv': self.conv_counter,
                       'end_cond': None}
 
-        return Result(best_iter['x'], best_iter['fx'], best_stats, best_origin)
+        return Result(list(best_iter['x']), best_iter['fx'], best_stats, best_origin)
 
     def _stop_all_children(self, crash_reason: Optional[str] = None):
         """ Shuts down and cleansup all active children """
@@ -1857,7 +1857,7 @@ class GloMPOManager:
         pickle_vars = {}
         for var in dir(self):
             val = getattr(self, var)
-            if not (callable(getattr(self, var)) and hasattr(val, '__self__')) and \
+            if not (callable(val) and hasattr(val, '__self__')) and \
                     '__' not in var and \
                     not any([var == no_pickle for no_pickle in ('logger', '_process', '_mp_manager',
                                                                 '_optimizer_packs', 'scope', 'task',
