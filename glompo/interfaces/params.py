@@ -240,7 +240,8 @@ class BaseParamsError:
 
     def resids(self, x: Sequence[float]) -> Sequence[float]:
         """ Method for compatibility with GFLS optimizer. Returns the signed differences between the force field and
-            training set but DOES NOT include weights and sigma values
+            training set residuals. Will be scaled by sigma and weight if ReaxFFError.scale_residuals is True, otherwise
+            not.
         """
         residuals = self._calculate(x)[0][1]
         if self.scale_residuals:
@@ -300,7 +301,7 @@ class ReaxFFError(BaseParamsError):
     """
 
     @classmethod
-    def from_classic_files(cls, path: Union[Path, str]) -> 'ReaxFFError':
+    def from_classic_files(cls, path: Union[Path, str], **kwargs) -> 'ReaxFFError':
         """ Initializes the error function from classic ReaxFF files.
 
             Parameters
@@ -310,10 +311,10 @@ class ReaxFFError(BaseParamsError):
                 expected).
         """
         dat_set, job_col, rxf_eng = setup_reax_from_classic(path)
-        return cls(dat_set, job_col, rxf_eng)
+        return cls(dat_set, job_col, rxf_eng, **kwargs)
 
     @classmethod
-    def from_params_files(cls, path: Union[Path, str]) -> 'ReaxFFError':
+    def from_params_files(cls, path: Union[Path, str], **kwargs) -> 'ReaxFFError':
         """ Initializes the error function from ParAMS data files.
 
             Parameters
@@ -323,7 +324,7 @@ class ReaxFFError(BaseParamsError):
                 (see setup_reax_from_params for what files are expected).
         """
         dat_set, job_col, rxf_eng = setup_reax_from_params(path)
-        return cls(dat_set, job_col, rxf_eng)
+        return cls(dat_set, job_col, rxf_eng, **kwargs)
 
     def checkpoint_save(self, path: Union[Path, str]):
         """ Used to store files into a GloMPO checkpoint (at path) suitable to reconstruct the task when the checkpoint
@@ -340,7 +341,7 @@ class XTBError(BaseParamsError):
     """
 
     @classmethod
-    def from_params_files(cls, path: Union[Path, str]) -> 'XTBError':
+    def from_params_files(cls, path: Union[Path, str], **kwargs) -> 'XTBError':
         """ Initializes the error function from ParAMS data files.
 
             Parameters
@@ -350,7 +351,7 @@ class XTBError(BaseParamsError):
                 (see setup_reax_from_params for what files are expected).
         """
         dat_set, job_col, rxf_eng = setup_xtb_from_params(path)
-        return cls(dat_set, job_col, rxf_eng)
+        return cls(dat_set, job_col, rxf_eng, **kwargs)
 
     def checkpoint_save(self, path: Union[Path, str]):
         """ Used to store files into a GloMPO checkpoint (at path) suitable to reconstruct the task when the checkpoint
