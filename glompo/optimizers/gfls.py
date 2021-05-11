@@ -11,6 +11,12 @@ from optsam import GFLS, Hook, Logger, Reporter
 from .baseoptimizer import BaseOptimizer, MinimizeResult
 
 
+def _function_pack(ask, func):
+    _x, _is_constrained = ask()
+    _fx, _resids = func.detailed_call(_x)[:2]
+    return _x, _is_constrained, _fx, _resids
+
+
 class GFLSOptimizer(BaseOptimizer):
 
     @property
@@ -101,12 +107,7 @@ class GFLSOptimizer(BaseOptimizer):
                 None the minimization will terminate early.
         """
 
-        def function_pack(ask, func):
-            _x, _is_constrained = ask()
-            _fx, _resids = func.detailed_call(_x)[:2]
-            return _x, _is_constrained, _fx, _resids
-
-        self._wrapped_func = partial(function_pack, func=function)
+        self._wrapped_func = partial(_function_pack, func=function)
 
         if not self.is_restart:
             self.logger.info("Setting up fresh GFLS")
@@ -178,6 +179,7 @@ class GFLSOptimizer(BaseOptimizer):
             return result
 
         else:
+            self.gfls.state["ncall"] += 1
             return self._wrapped_func(self.gfls.ask())
 
     def callstop(self, reason: str = "Manager termination signal"):

@@ -182,7 +182,7 @@ def infer_headers(infer_from: Sequence[Any]) -> Dict[str, tb.Col]:
         elif isinstance(arg, str):
             tb_type[f'result_{pos}'] = tb.StringCol(280, pos=pos)
 
-        elif any((isinstance(arg, t) for t in (tuple, list))):
+        elif any((isinstance(arg, t) for t in (tuple, list, np.ndarray))):
             arr = np.array(list(arg))
             tb_type[f'result_{pos}'] = tb.Col.from_dtype(np.dtype((arr.dtype, arr.shape)), pos=pos)
 
