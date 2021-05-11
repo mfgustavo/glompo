@@ -129,7 +129,7 @@ class GFLSOptimizer(BaseOptimizer):
 
         while not self.stopcond:
             x, is_constrained, fx, resids = self.get_evaluation()
-            self.gfls.tell(x, is_constrained, resids)
+            self.gfls.tell(np.array(x), is_constrained, np.array(resids))
 
             for hook in self.hooks:
                 new_stopcond = hook.after_tell(self.gfls, self.stopcond)
