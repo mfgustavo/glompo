@@ -7,7 +7,7 @@
 """
 import warnings
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple, Union
+from typing import Dict, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from scm.params.common.parallellevels import ParallelLevels
@@ -51,21 +51,21 @@ class _FunctionWrapper:
     def __call__(self, pars) -> float:
         return self.func(pars)
 
-    def resids(self, pars) -> Sequence[float]:
+    def resids(self, pars) -> np.ndarray:
         """ Method added to conform the function to optsam API and allow the GFLS algorithm to be used. """
 
         result = self.func(pars, full=True)[0]
 
-        resids = result.residuals
+        resids = np.squeeze(result.residuals)
         dataset = result.dataset
 
         if len(resids) == 0:
             return np.array([np.inf])
 
-        weights = dataset.get('weight')
-        sigmas = dataset.get('sigma')
+        weights = np.array(dataset.get('weight'))
+        sigmas = np.array(dataset.get('sigma'))
 
-        resids = np.concatenate([(w / s) * r for w, s, r in zip(weights, sigmas, resids)])
+        resids = weights / sigmas * resids
         return resids
 
 
@@ -202,8 +202,8 @@ class BaseParamsError:
         """ Returns the error value between the the force field with the given parameters and the training values. """
         return self._calculate(x)[0][0]
 
-    def detailed_call(self, x: Sequence[float]) -> Union[Tuple[float, Sequence[float]],
-                                                         Tuple[float, Sequence[float], float, Sequence[float]]]:
+    def detailed_call(self, x: Sequence[float]) -> Union[Tuple[float, np.ndarray],
+                                                         Tuple[float, np.ndarray, float, np.ndarray]]:
         """ A full return of the error results. Returns a tuple of:
                 training_set_error, [training_set_residual_1, ..., training_set_residual_N]
             If a validation set is included then returned tuple is:
@@ -238,7 +238,7 @@ class BaseParamsError:
 
         return ts_heads + vs_heads
 
-    def resids(self, x: Sequence[float]) -> Sequence[float]:
+    def resids(self, x: Sequence[float]) -> np.ndarray:
         """ Method for compatibility with GFLS optimizer. Returns the signed differences between the force field and
             training set residuals. Will be scaled by sigma and weight if ReaxFFError.scale_residuals is True, otherwise
             not.
@@ -277,22 +277,23 @@ class BaseParamsError:
         self.job_col.store(Path(path, names['jc']))
         self.par_eng.write(Path(path, names['ff']), parameters)
 
-    def _calculate(self, x: Sequence[float]) -> Sequence[Tuple[float, List[float], List[float]]]:
+    def _calculate(self, x: Sequence[float]) -> Sequence[Tuple[float, np.ndarray, np.ndarray]]:
         """ Core calculation function, returns both the error function value and the residuals. """
-        default = (float('inf'), [float('inf')], [float('inf')])
+        default = (float('inf'), np.array([float('inf')]), np.array([float('inf')]))
         try:
             engine = self.par_eng.get_engine(self.scaler.scaled2real(x))
             ff_results = self.job_col.run(engine.settings, parallel=self.par_levels)
             ts_result = self.dat_set.evaluate(ff_results, self.loss, True)
             vs_result = self.val_set.evaluate(ff_results, self.loss, True) if self.val_set else default
-            return ts_result, vs_result
+            return (ts_result[0], np.squeeze(ts_result[1]), np.squeeze(ts_result[2])), \
+                   (vs_result[0], np.squeeze(vs_result[1]), np.squeeze(vs_result[2]))
         except ResultsError:
             return default, default
 
     @staticmethod
-    def _scale_residuals(resids: Sequence[float], data_set: DataSet) -> Sequence[float]:
+    def _scale_residuals(resids: np.ndarray, data_set: DataSet) -> np.ndarray:
         """ Scales a sequence of residuals by weight and sigma values in the associated DataSet"""
-        return [w / s * r for w, s, r in zip(data_set.get('weight'), data_set.get('sigma'), resids)]
+        return np.array(data_set.get('weight')) / np.array(data_set.get('sigma')) * resids
 
 
 class ReaxFFError(BaseParamsError):
