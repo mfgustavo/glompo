@@ -30,10 +30,11 @@ class EvaluationsUnmoving(BaseHunter):
             self._last_result = False
             return self._last_result
 
-        st_dev = np.std(vals[-self.calls:])
-        if np.isnan(st_dev):
-            self._last_result = False
-            return self._last_result
+        try:
+            st_dev = np.std(vals[-self.calls:])
+        except FloatingPointError:
+            vals = vals[np.isfinite(vals)]
+            st_dev = np.std(vals[-self.calls:])
 
         self._last_result = st_dev <= np.abs(vals[-1] * self.tol)
         return self._last_result
