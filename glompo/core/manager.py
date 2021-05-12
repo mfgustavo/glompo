@@ -1809,9 +1809,9 @@ class GloMPOManager:
         while wait_reply:
             if self.logger.isEnabledFor(logging.DEBUG):
                 self.logger.debug("Blocking, %(sync)d/%(alive)d optimizers synced. Waiting on %(wait)s.",
-                                  sync=n_alive - len(wait_reply),
-                                  alive=n_alive,
-                                  wait=wait_reply)
+                                  {'sync': n_alive - len(wait_reply),
+                                   'alive': n_alive,
+                                   'wait': wait_reply})
 
             if self.optimizer_queue.full():
                 closed, victims = self._process_results(n_alive)  # Free space on queue to avoid blocking
