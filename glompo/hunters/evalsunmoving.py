@@ -33,7 +33,7 @@ class EvaluationsUnmoving(BaseHunter):
         try:
             st_dev = np.std(vals[-self.calls:])
         except FloatingPointError:
-            vals = vals[np.isfinite(vals)]
+            vals = np.array(vals)[np.isfinite(vals)]
             st_dev = np.std(vals[-self.calls:])
 
         self._last_result = st_dev <= np.abs(vals[-1] * self.tol)
