@@ -325,21 +325,18 @@ class GloMPOScope:
                                 "Aborting.")
             return
 
-        old_outfile = self._movie_kwargs['outfile']
         if path:
-            path = Path(path).with_suffix('.mp4')
+            path = (path / self._movie_kwargs['outfile']).with_suffix('.mp4')
             self._movie_kwargs['outfile'] = path
 
         try:
             self._writer.setup(fig=self.fig, **self._movie_kwargs)
-            self.is_setup = True
         except TypeError:
             warnings.warn("Unidentified key in writer_kwargs. Using default values.", UserWarning)
             self.logger.warning("Unidentified key in writer_kwargs. Using default values.")
-            self._writer.setup(fig=self.fig, outfile=path)
-            self.is_setup = True
+            self._writer.setup(fig=self.fig, outfile=str(self._movie_kwargs['outfile']))
         finally:
-            self._movie_kwargs['outfile'] = old_outfile
+            self.is_setup = True
 
     def generate_movie(self):
         """ Final call to write the saved frames into a single movie. """
