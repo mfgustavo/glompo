@@ -9,7 +9,7 @@ from ._base import BaseTestCase
 class Rastrigin(BaseTestCase):
     """ When called returns evaluations of the Rastrigin function. """
 
-    def __init__(self, dims: int = 2, delay: int = 0):
+    def __init__(self, dims: int = 2, delay: float = 0):
         """
         Implementation of the Rastrigin optimization test function.
         Recommended bounds: [-5.12, 5.12] * dims

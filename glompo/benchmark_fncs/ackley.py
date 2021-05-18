@@ -9,7 +9,7 @@ from ._base import BaseTestCase
 class Ackley(BaseTestCase):
     """ When called returns evaluations of the Ackley function. """
 
-    def __init__(self, dims: int = 2, delay: int = 0, a: float = 20, b: float = 0.2, c: float = 2 * np.pi):
+    def __init__(self, dims: int = 2, delay: float = 0, a: float = 20, b: float = 0.2, c: float = 2 * np.pi):
         """
         Implementation of the Ackley optimization test function.
         Recommended bounds: [-32.768, 32.768] * dims
@@ -21,7 +21,7 @@ class Ackley(BaseTestCase):
         ----------
         dims: int = 2
             Number of dimensions of the problem
-        delay: int = 0
+        delay: float = 0
             Delay in seconds after the function is called before results are returned.
             Useful to simulate harder problems.
         a: float = 20

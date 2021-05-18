@@ -9,7 +9,7 @@ from ._base import BaseTestCase
 class Easom(BaseTestCase):
     """ When called returns evaluations of the Easom function. """
 
-    def __init__(self, delay: int = 0, shift_positive: bool = False):
+    def __init__(self, delay: float = 0, shift_positive: bool = False):
         """
         Implementation of the Easom optimization test function.
         Recommended bounds: [-100, 100] * 2

@@ -10,7 +10,7 @@ from ._base import BaseTestCase
 class Shekel(BaseTestCase):
     """ When called returns evaluations of the Shekel function. """
 
-    def __init__(self, dims: int = 2, delay: int = 0, m: int = 10, shift_positive: bool = False):
+    def __init__(self, dims: int = 2, delay: float = 0, m: int = 10, shift_positive: bool = False):
         """
         Implementation of the Shekel optimization test function.
         Recommended bounds: [-32.768, 32.768] * dims
@@ -20,7 +20,7 @@ class Shekel(BaseTestCase):
         ----------
         dims: int = 2
             Number of dimensions [1, 4] allowed.
-        delay: int = 0
+        delay: float = 0
             Delay in seconds after the function is called before results are returned.
             Useful to simulate harder problems.
         m: int = 10

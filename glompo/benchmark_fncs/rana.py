@@ -8,7 +8,7 @@ from ._base import BaseTestCase
 class Rana(BaseTestCase):
     """ When called returns evaluations of the Rana function. """
 
-    def __init__(self, dims: int = 2, delay: int = 0):
+    def __init__(self, dims: int = 2, delay: float = 0):
         """
         Implementation of the Rana optimization test function.
         Recommended bounds: [-500.000001, 500.000001] * dims
@@ -19,7 +19,7 @@ class Rana(BaseTestCase):
         ----------
         dims: int = 2
             Number of dimensions of the problem
-        delay: int = 0
+        delay: float = 0
             Delay in seconds after the function is called before results are returned.
             Useful to simulate harder problems.
         """
