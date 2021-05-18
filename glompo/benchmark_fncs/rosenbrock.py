@@ -7,7 +7,7 @@ from ._base import BaseTestCase
 class Rosenbrock(BaseTestCase):
     """ When called returns evaluations of the Rosenbrock function. """
 
-    def __init__(self, dims: int, delay: int = 0):
+    def __init__(self, dims: int, delay: float = 0):
         """
         Implementation of the Rosenbrock optimization test function.
         Recommended bounds: [-2.048, 2.048] * dims

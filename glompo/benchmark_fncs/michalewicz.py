@@ -10,7 +10,7 @@ from ._base import BaseTestCase
 class Michalewicz(BaseTestCase):
     """ When called returns evaluations of the Michalewicz function. """
 
-    def __init__(self, dims: int = 2, delay: int = 0, m: float = 10):
+    def __init__(self, dims: int = 2, delay: float = 0, m: float = 10):
         """
         Implementation of the Michalewicz optimization test function.
         Recommended bounds: [0, pi] * dims

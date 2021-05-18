@@ -9,7 +9,7 @@ from ._base import BaseTestCase
 class Langermann(BaseTestCase):
     """ When called returns evaluations of the Langermann function. """
 
-    def __init__(self, delay: int = 0, shift_positive: bool = False):
+    def __init__(self, delay: float = 0, shift_positive: bool = False):
         """
         Implementation of the Levy optimization test function.
         Recommended bounds: [0, 10] * 2
@@ -19,7 +19,7 @@ class Langermann(BaseTestCase):
 
         Parameters
         ----------
-        delay: int = 0
+        delay: float = 0
             Delay in seconds after the function is called before results are returned.
             Useful to simulate harder problems.
         shift_positive: bool = False

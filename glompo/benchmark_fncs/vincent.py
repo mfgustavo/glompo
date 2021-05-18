@@ -8,7 +8,7 @@ from ._base import BaseTestCase
 class Vincent(BaseTestCase):
     """ When called returns evaluations of the Vincent function. """
 
-    def __init__(self, dims: int = 2, delay: int = 0):
+    def __init__(self, dims: int = 2, delay: float = 0):
         """
         Implementation of the Vincent optimization test function.
         Recommended bounds: [0.25, 10] * dims
@@ -20,7 +20,7 @@ class Vincent(BaseTestCase):
         ----------
         dims: int = 2
             Number of dimensions of the problem
-        delay: int = 0
+        delay: float = 0
             Delay in seconds after the function is called before results are returned.
             Useful to simulate harder problems.
         """

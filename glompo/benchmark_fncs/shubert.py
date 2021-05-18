@@ -25,7 +25,7 @@ class Shubert(BaseTestCase):
         ----------
         dims: int = 2
             Number of dimensions of the problem
-        delay: int = 0
+        delay: float = 0
             Delay in seconds after the function is called before results are returned.
             Useful to simulate harder problems.
         style: int = 1
