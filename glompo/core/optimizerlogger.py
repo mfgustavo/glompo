@@ -4,9 +4,9 @@ import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Union
 
+import dill
 import numpy as np
 import tables as tb
-from dill import dill
 
 from ..common.helpers import deepsizeof, glompo_colors, rolling_best
 from ..common.namedtuples import IterationResult

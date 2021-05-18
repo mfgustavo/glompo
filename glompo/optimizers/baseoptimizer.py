@@ -12,7 +12,7 @@ from queue import Queue
 from threading import Event
 from typing import Any, Callable, List, Optional, Sequence, Set, Tuple, Type, Union
 
-from dill import dill
+import dill
 
 from ..common.helpers import LiteralWrapper
 from ..common.namedtuples import IterationResult
