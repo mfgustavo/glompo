@@ -1989,7 +1989,7 @@ class GloMPOManager:
         f_best = f'{self.result.fx:.3E}' if self.result.fx is not None else None
         live_opts_status = ""
 
-        for opt_id, pack in self._optimizer_packs.items():
+        for opt_id, pack in sorted(self._optimizer_packs.items()):
             if pack.process.is_alive():
                 processes.append(pack.slots)
                 hist = self.opt_log.get_history(opt_id, 'fx')
