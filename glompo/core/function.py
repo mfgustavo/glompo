@@ -3,7 +3,7 @@
 __all__ = ('BaseFunction',)
 
 from abc import abstractmethod
-from typing import Dict, Sequence
+from typing import Any, Dict, Sequence
 
 import tables as tb
 
@@ -19,7 +19,7 @@ class BaseFunction:
             result.
         """
 
-    def detailed_call(self, x: Sequence[float]) -> Sequence[float, ...]:
+    def detailed_call(self, x: Sequence[float]) -> Sequence[Any]:
         """ Optional function evaluation method. When called with a parameter vector (x) it returns a sequence of data.
             The first element of this sequence is expected to be the function evaluation result (as returned by the call
             method). Subsequent elements of the sequence may take any form. This function may be used to return
