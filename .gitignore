@@ -1,7 +1,5 @@
-/glompo/.coverage
-_tmp
+/glompo/.coverage*
 .pytest_cache
 *egg-info
-.coverage*
-saved_test_outputs
-.idea
+/glompo/tests/saved_test_outputs
+.idea/
