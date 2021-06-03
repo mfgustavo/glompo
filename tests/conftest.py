@@ -33,5 +33,5 @@ def save_outputs(request, pytestconfig):
 
 @pytest.fixture(scope='session')
 def input_files():
-    inputs_path = Path(inspect.getabsfile(glompo.tests)).parent / '_test_inputs'
+    inputs_path = Path(inspect.getabsfile(glompo)).parent.parent / 'tests/_test_inputs'
     yield inputs_path
