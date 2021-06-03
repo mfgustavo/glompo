@@ -1,14 +1,19 @@
 import datetime
 from pathlib import Path
 
-import glompo.core.optimizerlogger
 import numpy as np
 import pytest
 import yaml
+
+import glompo.core.optimizerlogger
 from glompo.core.optimizerlogger import BaseLogger
 from glompo.optimizers.baseoptimizer import BaseOptimizer
 from glompo.optimizers.cmawrapper import CMAOptimizer
-from glompo.optimizers.gflswrapper import GFLSOptimizer
+
+
+# from glompo.optimizers.gflswrapper import GFLSOptimizer
+
+# TODO Remove optimizers from logger test
 
 
 class TestLogger:
@@ -17,11 +22,11 @@ class TestLogger:
     def filled_log(self):
         log = BaseLogger()
 
-        opt0 = GFLSOptimizer(0)
+        # opt0 = GFLSOptimizer(0)
         opt1 = CMAOptimizer(1)
         opt2 = BaseOptimizer
 
-        log.add_optimizer(0, type(opt0).__name__, datetime.datetime.now())
+        # log.add_optimizer(0, type(opt0).__name__, datetime.datetime.now())
         log.add_optimizer(1, type(opt1).__name__, datetime.datetime.now())
         log.add_optimizer(2, type(opt2).__name__, datetime.datetime.now())
 

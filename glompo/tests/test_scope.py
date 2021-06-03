@@ -9,8 +9,6 @@ try:
 
     import matplotlib
 
-    matplotlib.use('qt5agg')
-
     import matplotlib.pyplot as plt
 
     plt.ion()

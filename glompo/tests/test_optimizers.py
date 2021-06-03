@@ -23,7 +23,7 @@ except ModuleNotFoundError:
     pass
 
 try:
-    from glompo.optimizers.gflswrapper import GFLSOptimizer
+    from glompo.optimizers.gfls import GFLSOptimizer
 
     AVAILABLE_CLASSES['GFLSOptimizer'] = (GFLSOptimizer, {}, {})
 except ModuleNotFoundError:

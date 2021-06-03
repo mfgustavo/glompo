@@ -24,7 +24,7 @@ from glompo.core.checkpointing import CheckpointingControl
 from glompo.core.manager import GloMPOManager
 from glompo.core.optimizerlogger import BaseLogger
 from glompo.generators import BaseGenerator, RandomGenerator
-from glompo.hunters import BaseHunter, MinIterations, TypeHunter
+from glompo.hunters import BaseHunter, MinFuncCalls, TypeHunter
 from glompo.opt_selectors import BaseSelector, CycleSelector, IterSpawnStop
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from glompo.optimizers.random import RandomOptimizer
@@ -183,8 +183,9 @@ class TrueChecker(BaseChecker):
 
 
 class LogBlocker:
-    """ Pytest automatically captures logs. This makes GloMPO checkpointing since the loggers cannot be pickled within
-        a pytest run. LogBlocker replaces traditional Python Loggers with a blank object allowing checkoints.
+    """ Pytest automatically captures logs. This makes GloMPO checkpointing impossible since the loggers cannot be
+        pickled within a pytest run. LogBlocker replaces traditional Python Loggers with a blank object allowing
+        checkpoints.
     """
 
     def __init__(self, *args, **kwargs):
@@ -213,6 +214,10 @@ class LogBlocker:
 
     def removeHandler(self, *args, **kwargs):
         pass
+
+    @property
+    def handlers(self):
+        return []
 
 
 """ Module Fixtures """
@@ -277,7 +282,7 @@ class TestManagement:
                                         {'x0_generator': RandomGenerator},
                                         {'convergence_checker': KillsAfterConvergence},
                                         {'convergence_checker': OptimizerTest1()},
-                                        {'killing_conditions': MinIterations},
+                                        {'killing_conditions': MinFuncCalls},
                                         {'killing_conditions': OptimizerTest1()},
                                         {'killing_conditions': OptimizerTest1},
                                         {'task_args': 564},
@@ -318,7 +323,7 @@ class TestManagement:
                                         {'x0_generator': RandomGenerator(((0, 1), (0, 1)))},
                                         {'convergence_checker': KillsAfterConvergence()},
                                         {'max_jobs': 3},
-                                        {'killing_conditions': MinIterations(10)}])
+                                        {'killing_conditions': MinFuncCalls(10)}])
     def test_init(self, kwargs):
         kwargs = {**{'task': lambda x, y: x + y,
                      'opt_selector': DummySelector([OptimizerTest1]),
@@ -813,7 +818,7 @@ class TestManagement:
                       working_dir=tmp_path, overwrite_existing=True, max_jobs=3, backend=backend,
                       convergence_checker=KillsAfterConvergence(2, 1) | MaxFuncCalls(10000) | MaxSeconds(
                           session_max=60),
-                      x0_generator=IntervalGenerator(), killing_conditions=MinIterations(1000),
+                      x0_generator=IntervalGenerator(), killing_conditions=MinFuncCalls(1000),
                       summary_files=5, visualisation=False, visualisation_args=None)
         result = manager.start_manager()
         assert np.all(np.isclose(result.x, 0, atol=1e-6))
