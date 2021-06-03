@@ -3,3 +3,4 @@
 *egg-info
 /glompo/tests/saved_test_outputs
 .idea/
+__pycache__
