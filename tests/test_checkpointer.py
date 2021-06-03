@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+
 from glompo.core.checkpointing import CheckpointingControl
 
 
