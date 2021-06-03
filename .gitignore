@@ -1,6 +1,6 @@
-/glompo/.coverage*
+.coverage*
 .pytest_cache
 *egg-info
-/glompo/tests/saved_test_outputs
+saved_test_outputs
 .idea/
 __pycache__
