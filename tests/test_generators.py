@@ -93,86 +93,24 @@ class TestBest:
 
 
 class TestExploitExplore:
-    history_normal = {1:
-                          {1: {'f_call_overall': 9,
-                               'f_call_opt': 9,
-                               'fx': 14.719,
-                               'i_best': 1,
-                               'fx_best': 14.719,
-                               'x': [3.96, 7.06]},
-                           2: {'f_call_overall': 18,
-                               'f_call_opt': 18,
-                               'fx': 8.897,
-                               'i_best': 2,
-                               'fx_best': 8.897,
-                               'x': [1.35, 2.67]},
-                           3: {'f_call_overall': 27,
-                               'f_call_opt': 27,
-                               'fx': 8.897,
-                               'i_best': 2,
-                               'fx_best': 8.897,
-                               'x': [1.35, 9.78]},
-                           4: {'f_call_overall': 36,
-                               'f_call_opt': 36,
-                               'fx': 8.897,
-                               'i_best': 2,
-                               'fx_best': 8.897,
-                               'x': [1.35, 5.45]},
-                           5: {'f_call_overall': 45,
-                               'f_call_opt': 45,
-                               'fx': 2.595,
-                               'i_best': 5,
-                               'fx_best': 2.595,
-                               'x': [5.60, 2.48]},
-                           },
-                      2:
-                          {1: {'f_call_overall': 9,
-                               'f_call_opt': 9,
-                               'fx': 5.911,
-                               'i_best': 1,
-                               'fx_best': 5.911,
-                               'x': [1.65, 6.23]},
-                           2: {'f_call_overall': 18,
-                               'f_call_opt': 18,
-                               'fx': 5.911,
-                               'i_best': 1,
-                               'fx_best': 5.911,
-                               'x': [1.65, 6.23]},
-                           3: {'f_call_overall': 27,
-                               'f_call_opt': 27,
-                               'fx': -8.03,
-                               'i_best': 3,
-                               'fx_best': -8.03,
-                               'x': [1.91, 4.91]},
-                           4: {'f_call_overall': 36,
-                               'f_call_opt': 36,
-                               'fx': -8.031,
-                               'i_best': 3,
-                               'fx_best': -8.031,
-                               'x': [1.91, 4.91]},
-                           5: {'f_call_overall': 45,
-                               'f_call_opt': 45,
-                               'fx': -8.031,
-                               'i_best': 3,
-                               'fx_best': -8.031,
-                               'x': [1.91, 4.91]},
-                           }
-                      }
+    bests = {0: {'opt_id': 0, 'x': [], 'fx': float('inf'), 'type': '', 'call_id': 0},
+             1: {'opt_id': 1, 'x': [5.60, 2.48], 'fx': 2.595, 'type': '', 'call_id': 10},
+             2: {'opt_id': 2, 'x': [1.91, 4.91], 'fx': -8.03, 'type': '', 'call_id': 6}}
 
     @pytest.fixture()
     def manager(self, request):
         class OptLog:
-            def __init__(self, history):
-                self.history = history
+            def __init__(self, bests):
+                self._best_iters = bests
 
-            def get_history(self, opt):
-                return self.history[opt]
+            def get_best_iter(self, opt_id):
+                return self._best_iters[opt_id]
 
         class Manager:
-            def __init__(self, f_count, history):
-                self.o_counter = len(history)
+            def __init__(self, f_count, bests):
+                self.o_counter = len(bests) - 1
                 self.f_counter = f_count
-                self.opt_log = OptLog(history)
+                self.opt_log = OptLog(bests)
 
         return Manager(*request.param)
 
@@ -188,23 +126,23 @@ class TestExploitExplore:
         with pytest.raises(err):
             ExploitExploreGenerator(bounds, max_calls, focus)
 
-    @pytest.mark.parametrize("manager", [(0, history_normal)], indirect=["manager"])
+    @pytest.mark.parametrize("manager", [(0, bests)], indirect=["manager"])
     def test_generate_random(self, manager):
         gen = ExploitExploreGenerator(((-1, 0),) * 2, 100, 1)
         call = gen.generate(manager)
 
         assert all([-1 < i < 0 for i in call])
 
-    @pytest.mark.parametrize("manager", [(100, history_normal)], indirect=["manager"])
+    @pytest.mark.parametrize("manager", [(100, bests)], indirect=["manager"])
     def test_generate_incumbent(self, manager):
         gen = ExploitExploreGenerator(((0, 10),) * 2, 100, 1)
         call = gen.generate(manager)
 
         assert list(call) == [1.91, 4.91]
 
-    @pytest.mark.parametrize("focus, manager, alpha", [(1.0, (50, history_normal), 0.50),
-                                                       (2.0, (50, history_normal), 0.25),
-                                                       (0.5, (25, history_normal), 0.50)],
+    @pytest.mark.parametrize("focus, manager, alpha", [(1.0, (50, bests), 0.50),
+                                                       (2.0, (50, bests), 0.25),
+                                                       (0.5, (25, bests), 0.50)],
                              indirect=["manager"])
     def test_generate_midpoint(self, focus, manager, alpha):
         gen = ExploitExploreGenerator(((0, 1e-10),) * 2, 100, focus)
@@ -216,11 +154,9 @@ class TestExploitExplore:
         assert np.isclose(np.cross(b, c), 0)
         assert np.all(np.isclose(c / b, alpha))
 
-    @pytest.mark.parametrize("focus, manager, alpha", [(1.0, (50, {1: history_normal[1]}), 0.50),
-                                                       (1.0, (50, {1: {}}), 0.50)],
-                             indirect=["manager"])
-    def test_generate_insuff_info(self, focus, manager, alpha):
-        gen = ExploitExploreGenerator(((0, 1e-10),) * 2, 100, focus)
+    @pytest.mark.parametrize("manager", [(50, {0: bests[0], 1: bests[1]})], indirect=["manager"])
+    def test_generate_insuff_info(self, manager):
+        gen = ExploitExploreGenerator(((0, 1e-10),) * 2, 100, 1.0)
         call = gen.generate(manager)
 
         assert np.all(np.isclose(call, 0))
