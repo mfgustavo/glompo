@@ -2,6 +2,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import tables as tb
 import yaml
 
 try:
@@ -22,7 +23,7 @@ except (ModuleNotFoundError, ImportError):
 from glompo.common.helpers import WorkInDirectory, LiteralWrapper, literal_presenter, nested_string_formatting, \
     unknown_object_presenter, generator_presenter, optimizer_selector_presenter, present_memory, FlowList, \
     flow_presenter, numpy_array_presenter, numpy_dtype_presenter, BoundGroup, bound_group_presenter, is_bounds_valid, \
-    distance, glompo_colors
+    distance, glompo_colors, rolling_best, unravel, deepsizeof, infer_headers
 from glompo.opt_selectors import BaseSelector, CycleSelector, IterSpawnStop
 from glompo.generators import RandomGenerator, BaseGenerator
 from glompo.common.namedtuples import Bound
@@ -36,6 +37,51 @@ yaml.add_multi_representer(np.generic, numpy_dtype_presenter, Dumper=Dumper)
 yaml.add_multi_representer(BaseSelector, optimizer_selector_presenter, Dumper=Dumper)
 yaml.add_multi_representer(BaseGenerator, generator_presenter, Dumper=Dumper)
 yaml.add_multi_representer(object, unknown_object_presenter, Dumper=Dumper)
+
+
+@pytest.mark.parametrize('arr, output', [([0, 1, 2, 3, float('inf'), -1, 0, 1, -2, -4, -4],
+                                          [0, 0, 0, 0, 0, -1, -1, -1, -2, -4, -4]),
+                                         ([0, 1, 2, 3, float('nan'), -1, 0, 1, -4], [])])
+def test_rolling_best(arr, output):
+    if np.isnan(arr).any():
+        with pytest.raises(AssertionError):
+            rolling_best(arr)
+    else:
+        assert rolling_best(arr) == output
+
+
+@pytest.mark.parametrize('obj, ret', [([0, [1, [2, [3, 4, 5], 6, [7, [8]]], 9], 10, [11, 12, 13],
+                                        [14], 15, [[[[16]], '?']]], [*range(17), '?']),
+                                      ('averylongstring', ['averylongstring'])])
+def test_unravel(obj, ret):
+    assert [*unravel(obj)] == ret
+
+
+@pytest.mark.parametrize('obj, size', [([1, 2, 3, 4, [1, 2, 3, 4]], 200),
+                                       (11231, 28),
+                                       (1123131231, 32),
+                                       ([121, {'ag': [1, 2, 3], 'b': [4, 5, 6]}, ('4', None), [3, 3, 3]],
+                                        96 + 240 + 51 + 50 + 88 + 88 + 64 + 88)])
+def test_deepsizeof(obj, size):
+    assert deepsizeof(obj) == size
+
+
+@pytest.mark.parametrize('obj, ret', [(123.4, {'result_0': tb.Float64Col(pos=0)}),
+                                      (79, {'result_0': tb.Int64Col(pos=0)}),
+                                      ("XXX", {'result_0': tb.StringCol(280, pos=0)}),
+                                      (np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]]),
+                                       {'result_0': tb.Col.from_dtype(np.dtype((int, (3, 3))), pos=0)}),
+                                      ([[2, 0, 0], [0, 2, 0], [0, 0, 2]],
+                                       {'result_0': tb.Col.from_dtype(np.dtype((int, (3, 3))), pos=0)}),
+                                      ((4.0, 5.0),
+                                       {'result_0': tb.Col.from_dtype(np.dtype((float, (2,))), pos=0)}),
+                                      (False, {'result_0': tb.BoolCol(pos=0)}),
+                                      (None, {'result_0': tb.Float64Col(pos=0)}),
+                                      (float('inf'), {'result_0': tb.Float64Col(pos=0)}),
+                                      (float('nan'), {'result_0': tb.Float64Col(pos=0)}),
+                                      (complex(1, 3), {'result_0': tb.ComplexCol(itemsize=16, pos=0)})])
+def test_infer_headers(obj, ret):
+    assert infer_headers([obj]) == ret
 
 
 def test_string():

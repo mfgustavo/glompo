@@ -1,5 +1,6 @@
 """ Useful static functions used throughout GloMPO. """
 import inspect
+import math
 import os
 import sys
 from pathlib import Path
@@ -141,6 +142,9 @@ def rolling_best(x: Sequence[float]) -> Sequence[float]:
         reading the list sequentially from left to right. For example:
             rolling_best([3, 4, 5, 6, 2, 3, 4, 1, 2, 3]) == [3, 3, 3, 3, 2, 2, 2, 1, 1, 1]
     """
+    assert all([isinstance(i, (float, int)) and not math.isnan(i) for i in x]), \
+        "Non numerical values found in array, unable to process."
+
     y = list(x).copy()
     for i, val in enumerate(x[1:], 1):
         y[i] = min(val, y[i - 1])
@@ -154,13 +158,10 @@ def unravel(seq: Union[Any, Sequence[Any]]) -> Iterator[str]:
             yield seq
         else:
             for item in seq:
-                try:
-                    if not isinstance(item, str):
-                        for nested_item in unravel(item):
-                            yield nested_item
-                    else:
-                        yield item
-                except TypeError:
+                if not isinstance(item, str):
+                    for nested_item in unravel(item):
+                        yield nested_item
+                else:
                     yield item
     except TypeError:
         yield seq
@@ -176,6 +177,9 @@ def infer_headers(infer_from: Sequence[Any]) -> Dict[str, tb.Col]:
         if isinstance(arg, float):
             tb_type[f'result_{pos}'] = tb.Float64Col(pos=pos)
 
+        elif isinstance(arg, bool):
+            tb_type[f'result_{pos}'] = tb.BoolCol(pos=pos)
+
         elif isinstance(arg, int):
             tb_type[f'result_{pos}'] = tb.Int64Col(pos=pos)
 
@@ -183,11 +187,8 @@ def infer_headers(infer_from: Sequence[Any]) -> Dict[str, tb.Col]:
             tb_type[f'result_{pos}'] = tb.StringCol(280, pos=pos)
 
         elif any((isinstance(arg, t) for t in (tuple, list, np.ndarray))):
-            arr = np.array(list(arg))
+            arr = np.array(list(arg))  # Needed to properly pack nested arrays and save big memory
             tb_type[f'result_{pos}'] = tb.Col.from_dtype(np.dtype((arr.dtype, arr.shape)), pos=pos)
-
-        elif isinstance(arg, bool):
-            tb_type[f'result_{pos}'] = tb.BoolCol(pos=pos)
 
         elif isinstance(arg, type(None)):
             tb_type[f'result_{pos}'] = tb.Float64Col(pos=pos)
@@ -202,17 +203,21 @@ def infer_headers(infer_from: Sequence[Any]) -> Dict[str, tb.Col]:
 
 
 def deepsizeof(obj) -> int:
-    """ Recursively determines the byte size of an object. """
-
-    # Adapted from: https://stackoverflow.com/questions/449560/how-do-i-determine-the-size-of-an-object-in-python
-    # Author: Marcin Wojnarski
+    """ Recursively determines the byte size of an object. Any initialised objects (not including Python primitives)
+        must correct implement __sizeof__ for this method to work correctly.
+    """
 
     size = sys.getsizeof(obj)
-    if isinstance(obj, dict):
-        return size + sum(map(deepsizeof, obj.keys())) + sum(map(deepsizeof, obj.values()))
-    if isinstance(obj, (list, tuple, set, frozenset)):
-        return size + sum(map(deepsizeof, obj))
-    return size
+    try:
+        for i in obj:
+            if isinstance(i, dict):
+                size += sys.getsizeof({}) + sum(map(deepsizeof, i.keys())) + sum(map(deepsizeof, i.values()))
+            elif isinstance(i, (list, tuple, set, frozenset)):
+                size += deepsizeof(i)
+    except TypeError:
+        pass
+    finally:
+        return size
 
 
 """ YAML Representers """
