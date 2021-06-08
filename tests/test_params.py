@@ -5,7 +5,7 @@ import shutil
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict, Tuple, Type, Union
 
 import numpy as np
 import pytest
@@ -26,7 +26,11 @@ try:
 except (ModuleNotFoundError, ImportError):
     HAS_PARAMS = False
 
-from glompo.interfaces.params import _FunctionWrapper, ReaxFFError
+from glompo.interfaces.params import _FunctionWrapper, ReaxFFError, GlompoParamsWrapper
+from glompo.opt_selectors.baseselector import BaseSelector
+from glompo.optimizers.baseoptimizer import BaseOptimizer
+from glompo.common.namedtuples import Result
+from glompo.core.optimizerlogger import BaseLogger
 
 
 class FakeLossEvaluator(_LossEvaluator):
@@ -36,6 +40,28 @@ class FakeLossEvaluator(_LossEvaluator):
     def __call__(self, x):
         return EvaluatorReturn(100, x, self.name, self.ncalled, self.interface,
                                None, [5, 2, -1, -9], [0.10, 0.25, 0.30, 0.35], 0)
+
+
+class FakeStep(_Step):
+    def __init__(self):
+        self.cbs = None
+
+
+class FakeReaxParams(ReaxParams):
+    def __init__(self): ...
+
+    @property
+    def active(self):
+        return self
+
+    @property
+    def range(self):
+        return [(0, 1)]
+
+
+class FakeSelector(BaseSelector):
+    def select_optimizer(self, manager: 'GloMPOManager', log: BaseLogger, slots_available: int) -> \
+            Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]], None, bool]: ...
 
 
 @pytest.mark.skipif(not HAS_PARAMS, reason="SCM ParAMS needed to test and use the ParAMS interface.")
@@ -80,13 +106,32 @@ class TestParamsStep:
         wrapped = _FunctionWrapper(params_func)
 
         assert hasattr(wrapped, '__call__')
-        assert hasattr(wrapped, 'resids')
 
         params_func.cbs = lambda x: x
         with pytest.warns(UserWarning, match="Callbacks provided through the Optimization class are ignored"):
             _FunctionWrapper(params_func)
 
 
+@pytest.mark.skipif(not HAS_PARAMS, reason="SCM ParAMS needed to test and use the ParAMS interface.")
+def test_wrapper_run(monkeypatch):
+    def mock_start_manager():
+        return Result([0] * 5, 0, {}, {})
+
+    wrapper = GlompoParamsWrapper(FakeSelector(BaseOptimizer))
+
+    monkeypatch.setattr(wrapper.manager, 'start_manager', mock_start_manager)
+
+    with pytest.warns(RuntimeWarning, match="The x0 parameter is ignored by GloMPO."):
+        wrapper.manager.converged = True
+        res = wrapper.minimize(FakeStep(), [1] * 5, [[0, 1]] * 5)
+
+    assert isinstance(res, MinimizeResult)
+    assert res.x == [0] * 5
+    assert res.fx == 0
+    assert res.success
+
+
+@pytest.mark.skipif(not HAS_PARAMS, reason="SCM ParAMS needed to test and use the ParAMS interface.")
 class TestReaxFFError:
     built_tasks: Dict[str, ReaxFFError] = {}
 
@@ -95,6 +140,15 @@ class TestReaxFFError:
         with (input_files / 'check_result.pkl').open('rb') as file:
             result = pickle.load(file)
         return result
+
+    @pytest.fixture(scope='function')
+    def simple_func(self, request):
+        return ReaxFFError(None, None, FakeReaxParams(), request.param, False)
+
+    @staticmethod
+    def mock_calculate(x):
+        default = float('inf'), np.array([float('inf')]), np.array([float('inf')])
+        return default, default
 
     @pytest.mark.parametrize("name, factory", [('classic', ReaxFFError.from_classic_files),
                                                ('params_pkl', ReaxFFError.from_params_files),
@@ -114,7 +168,7 @@ class TestReaxFFError:
 
         assert isinstance(task.dat_set, DataSet)
         assert isinstance(task.job_col, JobCollection)
-        assert isinstance(task.rxf_eng, ReaxParams)
+        assert isinstance(task.par_eng, ReaxParams)
         assert isinstance(task.loss, Loss)
         assert isinstance(task.par_levels, ParallelLevels)
         assert isinstance(task.scaler, LinearParameterScaler)
@@ -133,24 +187,28 @@ class TestReaxFFError:
                      'reax_params.pkl' if suffix == 'pkl' else 'ffield'):
             assert Path(tmp_path, file).exists()
 
+    def test_detailed_call_header(self):
+        if 'classic' not in self.built_tasks:
+            pytest.xfail("Classic constructed task missing.")
+
+        header = self.built_tasks['classic'].detailed_call_header()
+        assert header == ['fx'] + [f'r{i:04}' for i in range(4875)]
+
     @pytest.mark.parametrize("name", ['classic', 'params_pkl', 'params_yml'])
     def test_calculate(self, name, check_result):
         if name not in self.built_tasks:
             pytest.xfail("Task not constructed successfully")
-
-        # TODO Remove when AMS bug is fixed
-        if name == 'params_yml':
-            pytest.xfail("Known AMS bug causes this to fail.")
 
         task = self.built_tasks[name]
         fx, resids, cont = check_result
         result = task._calculate([0.5] * task.n_parms)
 
         assert isinstance(result, tuple)
-        assert len(result) == 3
-        assert result[0] == fx
-        assert result[1] == resids
-        assert all([r == c for r, c in zip(result[2], cont)])
+        assert len(result) == 2
+        assert len(result[0]) == 3
+        assert result[0][0] == fx
+        assert np.all(result[0][1] == resids)
+        assert np.all(result[0][2] == cont)
 
     def test_race(self, monkeypatch, input_files):
         """ Tests calculate method with multiple calls from multiple threads to ensure there are no race conditions.
@@ -167,17 +225,36 @@ class TestReaxFFError:
                 return loaded_eng.x
 
         def mock_evaluate(ff_results, *args, **kwargs):
-            return ff_results
+            return (None, ff_results, None)
 
         monkeypatch.setattr(self.built_tasks['classic'].job_col, 'run', mock_run)
         monkeypatch.setattr(self.built_tasks['classic'].dat_set, 'evaluate', mock_evaluate)
 
         params_orig = np.random.uniform(size=(100, self.built_tasks['classic'].n_parms))
         with ThreadPoolExecutor(max_workers=np.clip(os.cpu_count(), 2, None)) as executor:
-            params_rtrn = np.array([*executor.map(self.built_tasks['classic']._calculate, params_orig)])
+            params_rtrn = np.array(
+                [*executor.map(lambda x: self.built_tasks['classic']._calculate(x)[0][1], params_orig)])
 
-        params_rtrn = np.array([vector[self.built_tasks['classic'].rxf_eng.is_active] for vector in params_rtrn])
+        params_rtrn = np.array([vector[self.built_tasks['classic'].par_eng.is_active] for vector in params_rtrn])
 
         params_orig = np.array([self.built_tasks['classic'].scaler.scaled2real(vector) for vector in params_orig])
         params_orig = np.round(params_orig, 4)
         assert np.all(params_orig == params_rtrn)
+
+    @pytest.mark.parametrize('simple_func', [None, DataSet()], indirect=['simple_func'])
+    def test_detailed_call(self, simple_func, monkeypatch):
+        monkeypatch.setattr(simple_func, '_calculate', self.mock_calculate)
+
+        res = simple_func.detailed_call([0.5])
+        expected = (float('inf'), np.array([float('inf')]))
+
+        if simple_func.val_set is not None:
+            expected *= 2
+
+        assert res == expected
+
+    @pytest.mark.parametrize('simple_func', [None, DataSet()], indirect=['simple_func'])
+    def test_resids(self, simple_func, monkeypatch):
+        monkeypatch.setattr(simple_func, '_calculate', self.mock_calculate)
+        res = simple_func.resids([0.5])
+        assert res == np.array([float('inf')])

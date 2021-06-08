@@ -51,23 +51,6 @@ class _FunctionWrapper:
     def __call__(self, pars) -> float:
         return self.func(pars)
 
-    def resids(self, pars) -> np.ndarray:
-        """ Method added to conform the function to optsam API and allow the GFLS algorithm to be used. """
-
-        result = self.func(pars, full=True)[0]
-
-        resids = np.squeeze(result.residuals)
-        dataset = result.dataset
-
-        if len(resids) == 0:
-            return np.array([np.inf])
-
-        weights = np.array(dataset.get('weight'))
-        sigmas = np.array(dataset.get('sigma'))
-
-        resids = weights / sigmas * resids
-        return resids
-
 
 class GlompoParamsWrapper(BaseOptimizer):
     """ Wraps the GloMPO manager into a ParAMS optimizer. This is not the recommended way to make use of the GloMPO
@@ -215,7 +198,7 @@ class BaseParamsError:
         ts_resids = calc[0][1]
         ts_resids = self._scale_residuals(ts_resids, self.dat_set) if self.scale_residuals else ts_resids
 
-        if self.val_set:
+        if self.val_set is not None:
             vs_fx = calc[1][0]
             vs_resids = calc[1][1]
             vs_resids = self._scale_residuals(vs_resids, self.val_set) if self.scale_residuals else vs_resids
@@ -228,13 +211,13 @@ class BaseParamsError:
             GloMPO optimizers will attached this sequence to the head of their CSV log files.
         """
         n_ts = len(self.dat_set)
-        n_vs = len(self.val_set) if self.val_set else 0
+        n_vs = len(self.val_set) if self.val_set is not None else 0
 
         ts_digits = len(str(n_ts))
         vs_digits = len(str(n_vs))
 
         ts_heads = ['fx', *[f"r{i:0{ts_digits}}" for i in range(n_ts)]]
-        vs_heads = ['fx_vs', *[f"r{i:0{vs_digits}}_vs" for i in range(n_vs)]] if self.val_set else []
+        vs_heads = ['fx_vs', *[f"r{i:0{vs_digits}}_vs" for i in range(n_vs)]] if self.val_set is not None else []
 
         return ts_heads + vs_heads
 
@@ -284,7 +267,7 @@ class BaseParamsError:
             engine = self.par_eng.get_engine(self.scaler.scaled2real(x))
             ff_results = self.job_col.run(engine.settings, parallel=self.par_levels)
             ts_result = self.dat_set.evaluate(ff_results, self.loss, True)
-            vs_result = self.val_set.evaluate(ff_results, self.loss, True) if self.val_set else default
+            vs_result = self.val_set.evaluate(ff_results, self.loss, True) if self.val_set is not None else default
             return (ts_result[0], np.squeeze(ts_result[1]), np.squeeze(ts_result[2])), \
                    (vs_result[0], np.squeeze(vs_result[1]), np.squeeze(vs_result[2]))
         except ResultsError:

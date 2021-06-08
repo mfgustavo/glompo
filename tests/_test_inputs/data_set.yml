@@ -1,19 +1,16 @@
 ---
 Expression: distance("hsshGeo",1,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 2.066
 Sigma: 0.01
 ---
 Expression: distance("hsshGeo",2,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.34
 Sigma: 0.04
 ---
 Expression: distance("hsshGeo",3,1)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.34
 Sigma: 0.04
 ---
@@ -34,13 +31,11 @@ Sigma: 3.0
 ---
 Expression: distance("h2sGeo",1,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.335
 Sigma: 0.04
 ---
 Expression: distance("h2sGeo",2,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.335
 Sigma: 0.04
 ---
@@ -51,37 +46,31 @@ Sigma: 3.0
 ---
 Expression: distance("mdtBase",1,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.819
 Sigma: 0.02
 ---
 Expression: distance("mdtBase",2,1)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.808
 Sigma: 0.02
 ---
 Expression: distance("mdtBase",3,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.341
 Sigma: 0.04
 ---
 Expression: distance("mdtBase",4,1)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.086
 Sigma: 0.05
 ---
 Expression: distance("mdtBase",5,1)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.087
 Sigma: 0.05
 ---
 Expression: distance("mdtBase",6,2)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.339
 Sigma: 0.04
 ---
@@ -132,49 +121,41 @@ Sigma: 3.0
 ---
 Expression: distance("dmteBase",1,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.805
 Sigma: 0.02
 ---
 Expression: distance("dmteBase",2,1)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.805
 Sigma: 0.02
 ---
 Expression: distance("dmteBase",3,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.088
 Sigma: 0.05
 ---
 Expression: distance("dmteBase",4,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.089
 Sigma: 0.05
 ---
 Expression: distance("dmteBase",5,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.089
 Sigma: 0.05
 ---
 Expression: distance("dmteBase",6,2)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.088
 Sigma: 0.05
 ---
 Expression: distance("dmteBase",7,2)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.089
 Sigma: 0.05
 ---
 Expression: distance("dmteBase",8,2)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.089
 Sigma: 0.05
 ---
@@ -245,55 +226,46 @@ Sigma: 3.0
 ---
 Expression: distance("dmds",1,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.813
 Sigma: 0.02
 ---
 Expression: distance("dmds",2,1)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 2.046
 Sigma: 0.01
 ---
 Expression: distance("dmds",3,2)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.813
 Sigma: 0.02
 ---
 Expression: distance("dmds",4,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.089
 Sigma: 0.05
 ---
 Expression: distance("dmds",5,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.087
 Sigma: 0.05
 ---
 Expression: distance("dmds",6,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.086
 Sigma: 0.05
 ---
 Expression: distance("dmds",7,3)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.089
 Sigma: 0.05
 ---
 Expression: distance("dmds",8,3)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.087
 Sigma: 0.05
 ---
 Expression: distance("dmds",9,3)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.086
 Sigma: 0.05
 ---
@@ -374,43 +346,36 @@ Sigma: 3.0
 ---
 Expression: distance("s8",1,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 2.059
 Sigma: 0.01
 ---
 Expression: distance("s8",2,1)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 2.059
 Sigma: 0.01
 ---
 Expression: distance("s8",3,2)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 2.059
 Sigma: 0.01
 ---
 Expression: distance("s8",4,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 2.059
 Sigma: 0.01
 ---
 Expression: distance("s8",5,4)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 2.059
 Sigma: 0.01
 ---
 Expression: distance("s8",6,3)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 2.059
 Sigma: 0.01
 ---
 Expression: distance("s8",7,5)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 2.059
 Sigma: 0.01
 ---
@@ -471,67 +436,56 @@ Sigma: 3.0
 ---
 Expression: distance("bnz",1,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.394
 Sigma: 0.02
 ---
 Expression: distance("bnz",2,1)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.394
 Sigma: 0.02
 ---
 Expression: distance("bnz",3,2)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.394
 Sigma: 0.02
 ---
 Expression: distance("bnz",4,3)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.394
 Sigma: 0.02
 ---
 Expression: distance("bnz",5,4)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.394
 Sigma: 0.02
 ---
 Expression: distance("bnz",6,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.081
 Sigma: 0.05
 ---
 Expression: distance("bnz",7,1)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.081
 Sigma: 0.05
 ---
 Expression: distance("bnz",8,2)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.081
 Sigma: 0.05
 ---
 Expression: distance("bnz",9,3)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.081
 Sigma: 0.05
 ---
 Expression: distance("bnz",10,4)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.081
 Sigma: 0.05
 ---
 Expression: distance("bnz",11,5)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.081
 Sigma: 0.05
 ---
@@ -632,139 +586,116 @@ Sigma: 3.0
 ---
 Expression: distance("dpds",1,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.391
 Sigma: 0.02
 ---
 Expression: distance("dpds",2,1)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.396
 Sigma: 0.02
 ---
 Expression: distance("dpds",3,2)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.393
 Sigma: 0.02
 ---
 Expression: distance("dpds",4,3)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.394
 Sigma: 0.02
 ---
 Expression: distance("dpds",5,4)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.398
 Sigma: 0.02
 ---
 Expression: distance("dpds",6,5)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.773
 Sigma: 0.02
 ---
 Expression: distance("dpds",7,6)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 2.087
 Sigma: 0.01
 ---
 Expression: distance("dpds",8,7)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.773
 Sigma: 0.02
 ---
 Expression: distance("dpds",9,8)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.399
 Sigma: 0.02
 ---
 Expression: distance("dpds",10,9)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.391
 Sigma: 0.02
 ---
 Expression: distance("dpds",11,10)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.396
 Sigma: 0.02
 ---
 Expression: distance("dpds",12,11)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.393
 Sigma: 0.02
 ---
 Expression: distance("dpds",13,12)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.394
 Sigma: 0.02
 ---
 Expression: distance("dpds",14,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.082
 Sigma: 0.05
 ---
 Expression: distance("dpds",15,1)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.082
 Sigma: 0.05
 ---
 Expression: distance("dpds",16,2)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.081
 Sigma: 0.05
 ---
 Expression: distance("dpds",17,3)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.082
 Sigma: 0.05
 ---
 Expression: distance("dpds",18,4)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.082
 Sigma: 0.05
 ---
 Expression: distance("dpds",19,9)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.082
 Sigma: 0.05
 ---
 Expression: distance("dpds",20,10)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.082
 Sigma: 0.05
 ---
 Expression: distance("dpds",21,11)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.081
 Sigma: 0.05
 ---
 Expression: distance("dpds",22,12)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.082
 Sigma: 0.05
 ---
 Expression: distance("dpds",23,13)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.082
 Sigma: 0.05
 ---
@@ -985,151 +916,126 @@ Sigma: 3.0
 ---
 Expression: distance("dpods",1,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.389
 Sigma: 0.02
 ---
 Expression: distance("dpods",2,1)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.396
 Sigma: 0.02
 ---
 Expression: distance("dpods",3,2)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.39
 Sigma: 0.02
 ---
 Expression: distance("dpods",4,3)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.397
 Sigma: 0.02
 ---
 Expression: distance("dpods",5,4)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.358
 Sigma: 0.02
 ---
 Expression: distance("dpods",6,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.399
 Sigma: 0.02
 ---
 Expression: distance("dpods",7,6)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.767
 Sigma: 0.02
 ---
 Expression: distance("dpods",8,7)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 2.103
 Sigma: 0.01
 ---
 Expression: distance("dpods",9,8)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.765
 Sigma: 0.02
 ---
 Expression: distance("dpods",10,9)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.406
 Sigma: 0.02
 ---
 Expression: distance("dpods",11,10)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.351
 Sigma: 0.02
 ---
 Expression: distance("dpods",12,10)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.393
 Sigma: 0.02
 ---
 Expression: distance("dpods",13,12)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.392
 Sigma: 0.02
 ---
 Expression: distance("dpods",14,13)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.396
 Sigma: 0.02
 ---
 Expression: distance("dpods",15,14)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.391
 Sigma: 0.02
 ---
 Expression: distance("dpods",16,0)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.082
 Sigma: 0.05
 ---
 Expression: distance("dpods",17,1)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.081
 Sigma: 0.05
 ---
 Expression: distance("dpods",18,2)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.081
 Sigma: 0.05
 ---
 Expression: distance("dpods",19,3)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.084
 Sigma: 0.05
 ---
 Expression: distance("dpods",20,5)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 0.965
 Sigma: 0.04
 ---
 Expression: distance("dpods",21,11)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 0.972
 Sigma: 0.04
 ---
 Expression: distance("dpods",22,12)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.081
 Sigma: 0.05
 ---
 Expression: distance("dpods",23,13)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.082
 Sigma: 0.05
 ---
 Expression: distance("dpods",24,14)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.081
 Sigma: 0.05
 ---
 Expression: distance("dpods",25,15)
 Weight: 1
-Unit: angstrom, 0.52918
 ReferenceValue: 1.082
 Sigma: 0.05
 ---
@@ -29088,4 +28994,4 @@ Unit: kcal/mol, 627.5096
 ReferenceValue: 33.42632
 Sigma: 1.0
 ...
-# 0.4.1
+# 0.5.0
