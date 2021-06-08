@@ -1,6 +1,5 @@
 # noinspection PyTypeChecker
-from pathlib import Path
-from typing import Callable, Sequence, Tuple, Union
+from typing import Callable, Sequence, Tuple
 
 import numpy as np
 import pytest
@@ -61,11 +60,12 @@ class FakeLog(BaseLogger):
     def n_optimizers(self):
         return len(self.path)
 
-    def best_iter(self, opt_id=None):
-        return {'opt_id': opt_id, 'x': None, 'fx': min(self.path[opt_id - 1])}
-
-    def __len__(self):
-        return sum(len(i) for i in self.path)
+    def get_best_iter(self, opt_id=None):
+        return {'opt_id': opt_id,
+                'x': [],
+                'fx': min(self.path[opt_id - 1]),
+                'type': '',
+                'call_id': 0}
 
     def len(self, opt_id):
         return len(self.path[opt_id - 1])
@@ -73,27 +73,16 @@ class FakeLog(BaseLogger):
     def get_history(self, opt_id, track):
         return self.path[opt_id - 1]
 
-    @staticmethod
-    def get_metadata(*args):
+    def get_metadata(self, *args):
         return {2: "FakeOpt", 8: "XXXOpt"}[args[0]]
 
 
 class FakeOpt(BaseOptimizer):
-
-    def checkpoint_load(self, path: Union[Path, str]):
-        pass
-
     def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],
                  bounds: Sequence[Tuple[float, float]], callbacks: Callable = None, **kwargs) -> MinimizeResult:
         pass
 
-    def push_iter_result(self, *args):
-        pass
-
     def callstop(self, *args):
-        pass
-
-    def checkpoint_save(self, *args):
         pass
 
 
