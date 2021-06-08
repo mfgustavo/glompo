@@ -9,7 +9,8 @@ import pytest
 from dill import dill
 
 from glompo.common.namedtuples import IterationResult
-from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
+from glompo.core.function import BaseFunction
+from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult, _MessagingWrapper
 from glompo.optimizers.random import RandomOptimizer
 
 # Append new optimizer classes to this list to run tests for GloMPO compatibility
@@ -54,9 +55,6 @@ class PlainOptimizer(BaseOptimizer):
             self.i += 1
             self.check_messages()
 
-    def push_iter_result(self, *args):
-        self._results_queue.put("item")
-
     def callstop(self, code=0):
         """
         Signal to terminate the :meth:`minimize` loop while still returning a result
@@ -95,16 +93,42 @@ class MaxIter:
         return None
 
 
-class TestBase:
+class TestMessagingWrapper:
+    @pytest.fixture()
+    def task(self):
+        class Task:
+            def __call__(self, x):
+                return sum(x)
 
+            def detailed_call(self, x):
+                return sum(x), False, x
+
+        return Task()
+
+    @pytest.mark.parametrize('log_detailed', [True, False])
+    def test_calculate(self, task, mp_package, log_detailed):
+        func = _MessagingWrapper(task, mp_package.queue, 0, log_detailed)
+        res = func._calculate([1, 2], 'call')
+        q_res = mp_package.queue.get()
+
+        assert q_res.fx == res
+        assert q_res.opt_id == 0
+        assert q_res.x == [1, 2]
+        if log_detailed:
+            assert q_res.extras == (False, [1, 2])
+        else:
+            assert q_res.extras == ()
+
+
+class TestBase:
     @pytest.fixture(scope='function')
     def intercept_logging(self):
         """ pytest does not support capturing logs from child processes. This fixture intercepts and turns them into
             print statements.
         """
 
-        def print_log(mess):
-            print(mess)
+        def print_log(*args):
+            print(args[0] % args[1:])
 
         logger = logging.getLogger('glompo.optimizers.opt1')
         orig_methods = (logger.debug, logger.info, logger.warning, logger.error, logger.critical)
@@ -152,28 +176,6 @@ class TestBase:
         mp_package.p_pipe.send(1)
         process.join(timeout=1.5)
 
-    def test_push_result(self, mp_package, capfd):
-        def minimize(self, *args, **kwargs):
-            for i in range(1, 12):
-                self.push_iter_result(self, IterationResult(1, i, 1, [i], i ** 2, False))
-                print(i)
-
-        opti = PlainOptimizer(1, mp_package.c_pipe, mp_package.queue, mp_package.event)
-        opti.minimize = minimize
-        opti.push_iter_result = BaseOptimizer.push_iter_result
-        process = mp.Process(target=opti.minimize, args=(opti,))
-        process.start()
-
-        sleep(0.5)
-        assert capfd.readouterr().out == "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n"
-        sleep(1.5)
-        assert capfd.readouterr().out == ""
-
-        mp_package.queue.get_nowait()
-        sleep(0.1)
-        assert capfd.readouterr().out == "11\n"
-        process.join()
-
     def test_event(self, mp_package):
         opti = PlainOptimizer(1, mp_package.c_pipe, mp_package.queue, mp_package.event)
         process = mp.Process(target=opti.minimize, args=(None, None, None))
@@ -189,31 +191,22 @@ class TestBase:
 
         assert process.exitcode == 0 and 0.5 < time() - t_start < 1.5
 
-    def test_queue(self, mp_package):
-        opti = PlainOptimizer(1, mp_package.c_pipe, mp_package.queue, mp_package.event)
-        process = mp.Process(target=opti.push_iter_result)
-        process.start()
-        process.join()
-        assert mp_package.queue.get() == "item"
-
     def test_checkpointsave(self, mp_package, tmp_path, capfd):
         opti = PlainOptimizer(1, mp_package.c_pipe, mp_package.queue, mp_package.event)
         opti.workers = 685
         process = mp.Process(target=opti.minimize, args=(None, None, None))
         process.start()
 
-        mp_package.p_pipe.send((0, tmp_path / '0001'))
-        mp_package.p_pipe.send(1)
+        mp_package.p_pipe.send((0, tmp_path / '0001'))  # checkpoint_save
+        mp_package.p_pipe.send(1)  # callstop
         process.join()
 
         assert not capfd.readouterr().err
         with (tmp_path / "0001").open("rb") as file:
             data = dill.load(file)
 
-            assert len(data) == 3
-            assert data['terminate'] is False
-            assert data['i'] > 0
-            assert data['workers'] == 685
+            assert data == {'i': 1, 'incumbent': {'x': None, 'fx': None}, 'is_log_detailed': False, 'terminate': False,
+                            'workers': 685}
 
             loaded_opt = PlainOptimizer.checkpoint_load(tmp_path / '0001', 1)
             assert loaded_opt.i == data['i']
@@ -243,7 +236,6 @@ class TestBase:
             print("SAVED")
 
         opti = PlainOptimizer(1, mp_package.c_pipe, mp_package.queue, mp_package.event)
-        opti._result_cache = IterationResult(1, 3, 1, [5], 700, False)
         opti._FROM_MANAGER_SIGNAL_DICT[0] = checkpoint_save
 
         process = mp.Process(target=opti._prepare_checkpoint, daemon=True)
@@ -253,17 +245,18 @@ class TestBase:
         captured = capfd.readouterr()
         assert captured.err == ''
         assert captured.out == "Preparing for Checkpoint\n" \
-                               "Outstanding result found. Pushing to queue...\n" \
-                               "Oustanding result (iter=3) pushed\n" \
                                "Wait signal messaged to manager, waiting for reply...\n"
 
-        assert mp_package.queue.get_nowait() == IterationResult(1, 3, 1, [5], 700, False)
         assert mp_package.p_pipe.recv() == (1, None)
 
-        mp_package.p_pipe.send((0, None))
+        mp_package.p_pipe.send((4, None, None))  # inject
+        mp_package.p_pipe.send((0, None))  # checkpoint_save
         sleep(0.3)
         captured = capfd.readouterr()
+        assert not captured.err
         assert captured.out == "Instruction received. Executing...\n" \
+                               "Received signal: (4, None, None)\n" \
+                               "Executing: inject\n" \
                                "Received signal: (0, None)\n" \
                                "Executing: checkpoint_save\n" \
                                "SAVED\n" \
@@ -282,56 +275,24 @@ class TestSubclassesGlompoCompatible:
 
     @pytest.fixture
     def task(self):
-        class Task:
-            def __call__(self, x):
-                return x[0] ** 2 + 3 * x[1] ** 4 - x[2] ** 0.5
+        class Task(BaseFunction):
+            def __init__(self):
+                self.queue = None
+                self.n_calls = 0
 
-            def resids(self, pars, noise=True):
-                return pars
+            def __call__(self, x):
+                res, _ = self.detailed_call(x)
+                return res
+
+            def detailed_call(self, x):
+                self.n_calls += 1
+                resids = [x[0] ** 2, 3 * x[1] ** 4, - x[2] ** 0.5]
+                res = sum(resids)
+                if self.queue:
+                    self.queue.put(IterationResult(0, x, res, [self.n_calls]))
+                return res, resids
 
         return Task()
-
-    def test_result_in_queue(self, opti, init_kwargs, call_kwargs, mp_package, task):
-        opti = opti(results_queue=mp_package.queue,
-                    signal_pipe=mp_package.p_pipe,
-                    pause_flag=mp_package.event,
-                    **init_kwargs)
-
-        opti.minimize(function=task,
-                      x0=(0.5, 0.5, 0.5),
-                      bounds=((0, 1), (0, 1), (0, 1)),
-                      callbacks=MaxIter(10),
-                      **call_kwargs)
-
-        assert not mp_package.queue.empty()
-        assert isinstance(mp_package.queue.get_nowait(), IterationResult)
-
-    def test_final(self, opti, init_kwargs, call_kwargs, mp_package, task):
-        opti = opti(results_queue=mp_package.queue,
-                    signal_pipe=mp_package.c_pipe,
-                    pause_flag=mp_package.event,
-                    **init_kwargs)
-
-        opti.minimize(function=task,
-                      x0=(0.5, 0.5, 0.5),
-                      bounds=((0, 1), (0, 1), (0, 1)),
-                      callbacks=MaxIter(10),
-                      **call_kwargs)
-
-        res = False
-
-        i = 0
-        while not mp_package.queue.empty():
-            i += 1
-            res = mp_package.queue.get_nowait()
-            assert res.n_iter == i  # Ensure sequential and no double sending at end
-
-        # Make sure the final iteration is flagged as such
-        assert res.final
-
-        # Make sure a signal is sent that the optimizer is done
-        assert mp_package.p_pipe.poll()
-        assert mp_package.p_pipe.recv()[0] == 0
 
     def test_callstop(self, opti, init_kwargs, call_kwargs, mp_package, task):
         opti = opti(results_queue=mp_package.queue,
@@ -340,6 +301,7 @@ class TestSubclassesGlompoCompatible:
                     **init_kwargs)
 
         mp_package.p_pipe.send(1)
+        task.queue = mp_package.queue
         opti.minimize(function=task,
                       x0=(0.5, 0.5, 0.5),
                       bounds=((0, 1), (0, 1), (0, 1)),
@@ -347,7 +309,7 @@ class TestSubclassesGlompoCompatible:
                       **call_kwargs)
 
         while not mp_package.queue.empty():
-            assert mp_package.queue.get_nowait().n_iter < 10
+            assert mp_package.queue.get_nowait().extras[0] < 10
 
     @pytest.mark.parametrize("task", [10], indirect=["task"])
     def test_pause(self, opti, init_kwargs, call_kwargs, mp_package, task):
