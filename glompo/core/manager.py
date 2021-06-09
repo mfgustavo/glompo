@@ -1103,7 +1103,7 @@ class GloMPOManager:
             self.logger.debug("Saving summary file results")
             self._save_log(self.result, reason, caught_exception, self.working_dir, self.summary_files)
 
-            self.result = Result(list(self.result.x),
+            self.result = Result(list(self.result.x) if self.result.x else None,
                                  self.result.fx,
                                  {**self.result.stats, 'end_cond': reason} if self.result.stats else {
                                      'end_cond': reason},
@@ -1487,7 +1487,7 @@ class GloMPOManager:
 
             for res in chunk:
                 if isinstance(res, int):
-                    if self.result.origin['opt_id'] != res:
+                    if self.result.origin and self.result.origin['opt_id'] != res:
                         # Optimizers automatically send just an opt_id to indicated no more iterations.
                         self.opt_log.clear_cache(res)
                         closed.add(res)
@@ -1520,8 +1520,10 @@ class GloMPOManager:
                 # Start hunt if required
                 best_id = -1
                 self.result = self._update_best_result()
-                if self.result.origin and 'opt_id' in self.result.origin:
+                try:
                     best_id = self.result.origin['opt_id']
+                except (AttributeError, KeyError):
+                    pass
 
                 if best_id > 0 and self.killing_conditions and self.f_counter - self.last_hunt >= self.hunt_frequency:
                     [victims.add(vic) for vic in self._start_hunt(best_id)]
@@ -1561,9 +1563,8 @@ class GloMPOManager:
     def _is_manual_shutdowns(self):
         """ If a file titled STOP_x is found in the working directory then the manager will shutdown optimizer x. """
 
-        stop_files = self.working_dir.glob('STOP_')
+        stop_files = self.working_dir.glob('STOP_*')
         for file in stop_files:
-            file.unlink()
             try:
                 _, opt_id = file.name.split('_')
                 opt_id = int(opt_id)
@@ -1571,10 +1572,11 @@ class GloMPOManager:
                     self.logger.info("Matching living optimizer not found for '%s'", file)
                     continue
 
+                file.unlink()
                 self._shutdown_job(opt_id, None, "User STOP file intervention.")
                 self.logger.info("STOP file found for Optimizer %d", opt_id)
-            except ValueError as e:
-                self.logger.debug("Error encountered trying to process STOP file '%s'.", file, exc_info=e)
+            except ValueError:
+                self.logger.info("Error encountered trying to process STOP file '%s'", file)
                 continue
 
     def _is_manual_checkpoints(self):
@@ -1754,7 +1756,7 @@ class GloMPOManager:
             data["Solution"] = {"fx": result.fx,
                                 "origin": result.origin,
                                 "exit cond.": LiteralWrapper(nested_string_formatting(reason)),
-                                "x": FlowList(result.x) if len(result.x) > 0 else result.x}
+                                "x": FlowList(result.x) if result.x is not None else result.x}
 
             with (dump_dir / "glompo_manager_log.yml").open("w") as file:
                 self.logger.debug("Saving manager summary file.")

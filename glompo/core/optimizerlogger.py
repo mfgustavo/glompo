@@ -80,7 +80,8 @@ class BaseLogger:
     def add_optimizer(self, opt_id: int, opt_type: str, t_start: datetime.datetime):
         """ Creates a space in memory for a new optimizer. """
         self._best_iters[opt_id] = {'opt_id': opt_id, 'x': [], 'fx': float('inf'), 'type': opt_type, 'call_id': 0}
-        self._storage[opt_id] = {'metadata': {'opt_id': opt_id, 'opt_type': opt_type, 't_start': t_start}}
+        self._storage[opt_id] = {'metadata': {'opt_id': opt_id, 'opt_type': opt_type, 't_start': t_start},
+                                 'messages': []}
 
     def add_iter_history(self, opt_id: int, extra_headers: Optional[Dict[str, tb.Col]] = None):
         """ Extends iteration history with all the columns required, including possible detailed calls. """
@@ -114,7 +115,7 @@ class BaseLogger:
         pass
 
     def put_message(self, opt_id: int, message: str):
-        pass
+        self._storage[opt_id]['messages'].append(message)
 
     def put_iteration(self, iter_res: IterationResult):
         """ Records function evaluation in memory. """
