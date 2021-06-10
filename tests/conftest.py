@@ -20,10 +20,10 @@ def pytest_runtest_setup(item):
 @pytest.fixture(scope='function')
 def save_outputs(request, pytestconfig):
     """ Fixture which will save contents of a test's tmp_path to tests/_saved_outputs"""
+    src_path = request.getfixturevalue('tmp_path')
     yield
     if pytestconfig.getoption('--save-outs'):
         dest_path = Path(__file__).parent / '_saved_outputs' / request.node.name
-        src_path = request.getfixturevalue('tmp_path')
         shutil.rmtree(dest_path, ignore_errors=True)
         shutil.copytree(src_path, dest_path)
 

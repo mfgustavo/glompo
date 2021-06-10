@@ -1042,6 +1042,7 @@ class GloMPOManager:
                 checker_condition = self.convergence_checker(self)
 
                 if checker_condition:
+                    self.t_end = time()
                     reason = self.convergence_checker.str_with_result()
 
                 self.converged = checker_condition or (all_dead and not self.spawning_opts)
@@ -1087,7 +1088,8 @@ class GloMPOManager:
 
             self.logger.info("Cleaning up and closing GloMPO")
 
-            self.t_end = time()
+            if not self.t_end:  # If grabbing t_end immediately after optimization failed, get an approximate one here.
+                self.t_end = time()
             dt_end = datetime.fromtimestamp(self.t_end)
             if len(self.dt_starts) == len(self.dt_ends):
                 self.dt_ends[-1] = dt_end

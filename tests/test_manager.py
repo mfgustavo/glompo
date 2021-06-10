@@ -177,6 +177,9 @@ class LogBlocker:
     def removeHandler(self, *args, **kwargs):
         pass
 
+    def isEnabledFor(self, *args, **kwargs):
+        return True
+
     @property
     def handlers(self):
         return []
@@ -505,7 +508,7 @@ class TestManagement:
             opt_type = mp.Process
             opt_backend = 'threads'
             is_daemon = True
-        elif backend == 'processes_forced':
+        else:  # 'processes_forced'
             opt_type = mp.Process
             opt_backend = 'processes'
             is_daemon = False
@@ -678,12 +681,46 @@ class TestManagement:
     @pytest.mark.mini
     @pytest.mark.parametrize('backend', ['processes', 'threads'])
     def test_mwe(self, backend, manager, save_outputs, tmp_path):
+        class Task:
+            def __call__(self, x):
+                return self.f(x)
+
+            def detailed_call(self, x):
+                return self.f(x), self.df_dx(x), self.df_dy(x)
+
+            def f(self, pt, delay=0.1):
+                x, y = pt
+                calc = -np.cos(0.2 * x)
+                calc *= np.exp(-x ** 2 / 5000)
+                calc /= 50 * np.sqrt(2 * np.pi)
+                calc += 1e-6 * y ** 2
+                sleep(delay)
+                return calc
+
+            def df_dx(self, pt):
+                x, _ = pt
+                calc = np.exp(-x ** 2 / 5000)
+                calc *= x * np.cos(0.2 * x)
+                calc /= 125000 * np.sqrt(2 * np.pi)
+                calc += 0.00159577 * np.exp(-x ** 2 / 5000) * np.sin(0.2 * x)
+                return calc
+
+            def df_dy(self, pt):
+                _, y = pt
+                calc = 2e-6 * y
+                return calc
+
         class SteepestGradient(BaseOptimizer):
 
-            def __init__(self, max_iters, gamma, precision, opt_id: int = None, signal_pipe=None,
-                         results_queue=None, pause_flag=None, workers: int = 1,
-                         backend: str = 'threads'):
-                super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend)
+            def __init__(self, max_iters, gamma, precision,
+                         opt_id=None,
+                         signal_pipe=None,
+                         results_queue=None,
+                         pause_flag=None,
+                         workers=1,
+                         backend='threads',
+                         is_log_detailed=False):
+                super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend, is_log_detailed)
                 self.max_iters = max_iters
                 self.gamma = np.array(gamma)
                 self.precision = precision
@@ -692,7 +729,7 @@ class TestManagement:
                 self.current_x = None
                 self.result = MinimizeResult()
 
-            def minimize(self, function: Callable, x0: Sequence[float], bounds: Sequence[Tuple[float, float]],
+            def minimize(self, function: Task, x0: Sequence[float], bounds: Sequence[Tuple[float, float]],
                          callbacks: Callable = None, **kwargs) -> MinimizeResult:
 
                 next_x = np.array(x0)
@@ -704,14 +741,7 @@ class TestManagement:
                     if self._signal_pipe:
                         self.check_messages()
                     self.current_x = next_x
-                    fx, dx, dy = function(self.current_x)
-                    if self._results_queue:
-                        self.push_iter_result(IterationResult(self._opt_id,
-                                                              it,
-                                                              1,
-                                                              self.current_x,
-                                                              fx,
-                                                              it > self.max_iters))
+                    fx, dx, dy = function.detailed_call(self.current_x)
                     print(f"Iter {it}: x = {self.current_x}, fx = {fx}")
                     grad = np.array([dx, dy])
                     next_x = self.current_x - self.gamma * grad
@@ -724,36 +754,13 @@ class TestManagement:
                         self.reason = "imax condition"
                         break
                 if self._signal_pipe:
-                    self.message_manager((0, self.reason))
+                    self.message_manager(0, self.reason)
                 print(f"Stopping due to {self.reason}")
                 return self.result
 
             def callstop(self, *args):
                 self.terminate = True
                 self.reason = "manager termination"
-
-        # Task
-        def f(pt, delay=0.1):
-            x, y = pt
-            calc = -np.cos(0.2 * x)
-            calc *= np.exp(-x ** 2 / 5000)
-            calc /= 50 * np.sqrt(2 * np.pi)
-            calc += 1e-6 * y ** 2
-            sleep(delay)
-            return calc, df_dx(pt), df_dy(pt)
-
-        def df_dx(pt):
-            x, _ = pt
-            calc = np.exp(-x ** 2 / 5000)
-            calc *= x * np.cos(0.2 * x)
-            calc /= 125000 * np.sqrt(2 * np.pi)
-            calc += 0.00159577 * np.exp(-x ** 2 / 5000) * np.sin(0.2 * x)
-            return calc
-
-        def df_dy(pt):
-            _, y = pt
-            calc = 2e-6 * y
-            return calc
 
         # x0_generator
         class IntervalGenerator(BaseGenerator):
@@ -767,7 +774,7 @@ class TestManagement:
                 y = np.random.uniform(-100, 100)
                 return x, y
 
-        manager.setup(task=f, bounds=((-100, 100), (-100, 100)),
+        manager.setup(task=Task(), bounds=((-100, 100), (-100, 100)),
                       opt_selector=CycleSelector((SteepestGradient, {'max_iters': 10000,
                                                                      'precision': 1e-8,
                                                                      'gamma': [100, 100000]}, None)),
@@ -775,7 +782,7 @@ class TestManagement:
                       convergence_checker=KillsAfterConvergence(2, 1) | MaxFuncCalls(10000) | MaxSeconds(
                           session_max=60),
                       x0_generator=IntervalGenerator(), killing_conditions=MinFuncCalls(1000),
-                      summary_files=5, visualisation=False, visualisation_args=None)
+                      summary_files=3, visualisation=False, visualisation_args=None)
         result = manager.start_manager()
         assert np.all(np.isclose(result.x, 0, atol=1e-6))
         assert np.isclose(result.fx, -0.00797884560802864)

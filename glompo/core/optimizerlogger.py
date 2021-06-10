@@ -100,7 +100,7 @@ class BaseLogger:
         """ Removes all data associated with opt_id form memory. The data is NOT cleared if a summary trajectory plot
             has been configured.
         """
-        if self.build_traj_plot:  # Data not cleared in a summary trajectory image has been requested.
+        if self.build_traj_plot:  # Data not cleared if a summary trajectory image has been requested.
             return
 
         to_del = [opt_id] if opt_id else [*self._storage.keys()]
@@ -129,12 +129,12 @@ class BaseLogger:
             if iter_res.fx < self._best_iter['fx']:
                 self._best_iter = self._best_iters[iter_res.opt_id]
 
-        elif iter_res.fx > self._max_eval and np.isfinite(iter_res.fx):
+        if iter_res.fx > self._max_eval and np.isfinite(iter_res.fx):
             self._max_eval = iter_res.fx
 
         for k, v in zip(self._storage[iter_res.opt_id],
-                        (None, self._f_counter, iter_res.x, iter_res.fx, *iter_res.extras)):
-            if k == 'metadata':
+                        (None, None, self._f_counter, iter_res.x, iter_res.fx, *iter_res.extras)):
+            if k == 'metadata' or k == 'messages':
                 continue
             self._storage[iter_res.opt_id][k].append(v)
 
