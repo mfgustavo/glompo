@@ -809,6 +809,7 @@ class TestCheckpointing:
                           opt_selector=CycleSelector((RandomOptimizer, {'iters': 1000}, None)),
                           working_dir=tmp_path,
                           max_jobs=2,
+                          summary_files=2,
                           backend='processes',
                           convergence_checker=None,
                           x0_generator=None,
@@ -873,10 +874,11 @@ class TestCheckpointing:
                       working_dir=tmp_path,
                       max_jobs=2,
                       backend=backend,
+                      summary_files=1,
                       convergence_checker=MaxSeconds(session_max=3),
                       x0_generator=None,
                       killing_conditions=None,
-                      checkpoint_control=CheckpointingControl(checkpoint_time_frequency=2,
+                      checkpoint_control=CheckpointingControl(checkpoint_time_frequency=2.5,
                                                               naming_format='chkpt_%(count)',
                                                               checkpointing_dir=tmp_path),
                       visualisation=True,
@@ -886,7 +888,7 @@ class TestCheckpointing:
 
         assert manager.f_counter > 0
         assert manager.o_counter > 0
-        assert manager.t_end - manager.t_start - 3 < 1
+        assert manager.t_end - manager.t_start > 3
         assert manager.result.fx
 
         assert (tmp_path / 'chkpt_000.tar.gz').exists()
@@ -910,8 +912,7 @@ class TestCheckpointing:
                                              working_dir=tmp_path,
                                              backend=backend,
                                              convergence_checker=MaxSeconds(overall_max=5),
-                                             checkpointing_control=None,
-                                             summary_files=1)
+                                             checkpointing_control=None)
 
         init_f_count = manager.f_counter
         assert manager.task([0.2, 4, 6.1]) == 0.2 ** 2 + 3 * 4 ** 4 - 6.1 ** 0.5
@@ -920,17 +921,16 @@ class TestCheckpointing:
         assert init_f_count > 0
         assert manager.o_counter == 2
         assert manager.visualisation
-        assert 2 < manager.t_used < 2.6
-        assert manager.summary_files == 1
+        assert 2.5 < manager.t_used < 3.5
         assert manager.t_start is None
         assert manager.opt_crashed is False
         assert manager.last_opt_spawn == (0, 0)
 
-        with pytest.warns(RuntimeWarning, match="Movie saving is not supported"):
+        with pytest.warns(RuntimeWarning):
             manager.start_manager()
         assert (tmp_path / 'glompo_manager_log.yml').exists()
         assert manager.f_counter > init_f_count
-        assert manager.t_end - manager.t_start - 3 < 1
+        assert manager.t_end - manager.t_start < 3
 
     @pytest.mark.parametrize("delete, raises, warns",
                              [(['scope'], does_not_raise(), pytest.warns(RuntimeWarning, match="Could not load scope")),
@@ -984,7 +984,7 @@ class TestCheckpointing:
                                                               naming_format='chkpt_%(count)',
                                                               checkpointing_dir=tmp_path),
                       visualisation=False,
-                      summary_files=4)
+                      summary_files=1)
         manager.start_manager()
 
         assert manager.f_counter > 0
@@ -1024,8 +1024,7 @@ class TestCheckpointing:
         assert init_f_count > 0
         assert manager.o_counter == 2
         assert not manager.visualisation
-        assert 3 < manager.t_used < 3.5
-        assert manager.summary_files == 1
+        assert 3 < manager.t_used < 5
         assert manager.t_start is None
         assert manager.opt_crashed is False
         assert manager.last_opt_spawn == (0, 0)
@@ -1101,12 +1100,10 @@ class TestCheckpointing:
     def test_sync(self, backend, manager, tmp_path, caplog):
         """ Ensure checkpointing syncs optimizers correctly. The five optimizers used in this test represent the five
             conditions below:
-                Optimizer 1 - Optimizing Normally
-                Optimizer 2 - Dead before checkpoint starts but in optimizer packs
-                Optimizer 3 - Pushed final iteration and messaged it at point is is captured for checkpoint
-                Optimizer 4 - Pushed final iteration and not messaged it at point it is captured for checkpoint
-                Optimizer 5 - Kill during results processing during checkpoint
-                Optimizer 6 - Checkpointed with result in cache
+                Optimizer 1 - Optimizing Normally.
+                Optimizer 2 - Dead before checkpoint starts but in optimizer packs.
+                Optimizer 3 - Pushed final iteration and messaged it at point is is captured for checkpoint.
+                Optimizer 4 - Kill during results processing during checkpoint.
         """
 
         caplog.set_level(logging.DEBUG, logger='glompo')
@@ -1127,18 +1124,12 @@ class TestCheckpointing:
                     i += 1
                     if i > 10:
                         sleep(0.1)
-                    fx = np.random.random() if self._opt_id == 1 else 2
-                    self.push_iter_result(
-                        IterationResult(self._opt_id, i, 1, np.random.random(10), fx, False))
-                    self.logger.debug("Pushed Iter %d", i)
+                    function([0])
                     self.check_messages()
                     self.logger.debug("Checked messages")
                 self.logger.debug("Exited manager loop")
                 self.message_manager(0)
                 self.logger.debug("Messaged termination")
-                self.push_iter_result(
-                    IterationResult(self._opt_id, i + 1, 1, np.random.random(10), self._opt_id, True))
-                self.logger.debug("Pushed final result. Exiting.")
 
             def callstop(self, *args):
                 self.logger.debug("Callstop called.")
@@ -1166,9 +1157,6 @@ class TestCheckpointing:
 
             def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],
                          bounds: Sequence[Tuple[float, float]], callbacks: Callable = None, **kwargs) -> MinimizeResult:
-                self.push_iter_result(
-                    IterationResult(self._opt_id, 1, 1, np.random.random(10), np.random.random(), True))
-                self.logger.debug("Pushed final result")
                 self.message_manager(0)
                 self.logger.debug("Messaged termination")
                 self.logger.debug("Waiting on manager signal")
@@ -1180,57 +1168,19 @@ class TestCheckpointing:
             def callstop(self, *args):
                 pass
 
-        class Optimizer4(BaseOptimizer):
-            """ Pushed final iteration but not messaged it before capture for checkpoint.
-                (Must NOT be accepted into checkpoint)
-            """
-
-            def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],
-                         bounds: Sequence[Tuple[float, float]], callbacks: Callable = None, **kwargs) -> MinimizeResult:
-                self.push_iter_result(
-                    IterationResult(self._opt_id, 1, 1, np.random.random(10), np.random.random(), True))
-                self.logger.debug("Pushed final result")
-                self.logger.debug("Waiting on manager signal")
-                self._signal_pipe.poll(timeout=None)
-                self.logger.debug("Signal detected")
-                self.check_messages()
-                self.message_manager(0)
-                self.logger.debug("Messaged termination")
-                self.logger.debug("Exiting")
-
-            def callstop(self, *args):
-                pass
-
-        class Optimizer5(Optimizer1):
+        class Optimizer4(Optimizer1):
             """ Killed by hunt during results processing within checkpoint.
                 (Must NOT be accepted into checkpoint)
             """
 
-        class Optimizer6(BaseOptimizer):
-            """ Result in cache (timeout on put) at moment of checkpoint call.
-                (Must be accepted into checkpoint)
-            """
-
-            def minimize(self, function: Callable[[Sequence[float]], float], x0: Sequence[float],
-                         bounds: Sequence[Tuple[float, float]], callbacks: Callable = None, **kwargs) -> MinimizeResult:
-                self._result_cache = IterationResult(self._opt_id, 1, 1, np.random.random(10), np.random.random(),
-                                                     False)
-                self.logger.debug("Cache loaded. Waiting on manager signal")
-                self._signal_pipe.poll(timeout=None)
-                self.check_messages()
-                self.logger.debug("Optimizer exiting.")
-
-            def callstop(self, *args):
-                pass
-
         manager.setup(task=lambda x: sum(x),
                       bounds=[(0, 1)] * 10,
-                      opt_selector=CycleSelector(Optimizer1, Optimizer2, Optimizer3,
-                                                 Optimizer4, Optimizer5, Optimizer6),
+                      opt_selector=CycleSelector(Optimizer1, Optimizer2, Optimizer3, Optimizer4),
                       working_dir=tmp_path,
-                      max_jobs=6,
+                      max_jobs=4,
                       backend=backend,
-                      killing_conditions=TypeHunter(Optimizer5),
+                      summary_files=2,
+                      killing_conditions=TypeHunter(Optimizer4),
                       hunt_frequency=1,
                       checkpoint_control=CheckpointingControl(checkpointing_dir=tmp_path,
                                                               raise_checkpoint_fail=True,
@@ -1242,7 +1192,7 @@ class TestCheckpointing:
         manager._stop_all_children()
 
         if backend == 'threads':  # pytest cannot capture logs from child processes
-            for opt_id in range(1, 7):
+            for opt_id in range(1, 5):
                 if opt_id == 2:
                     continue
 
@@ -1251,6 +1201,9 @@ class TestCheckpointing:
 
                 assert (f'glompo.optimizers.opt{opt_id}', 10, "Wait signal messaged to manager, "
                                                               "waiting for reply...") in caplog.record_tuples
+
+                assert (f'glompo.optimizers.opt{opt_id}', 10, "Instruction received. "
+                                                              "Executing...") in caplog.record_tuples
 
                 assert (f'glompo.optimizers.opt{opt_id}', 10, "Instructions processed. "
                                                               "Pausing until release...") in caplog.record_tuples
@@ -1265,4 +1218,4 @@ class TestCheckpointing:
                     assert (f'glompo.optimizers.opt{opt_id}', 10, "Executing: _checkpoint_pass") \
                            in caplog.record_tuples
 
-        assert [(tmp_path / f'optimizers/000{i}').exists() for i in range(1, 7)] == [True] + [False] * 4 + [True]
+        assert [(tmp_path / f'optimizers/000{i}').exists() for i in range(1, 5)] == [True] + [False] * 3

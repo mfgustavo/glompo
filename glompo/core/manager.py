@@ -1864,6 +1864,7 @@ class GloMPOManager:
                     if self.visualisation:
                         self.scope.update_checkpoint(opt_id)
                     pack.signal_pipe.send((0, (path / 'optimizers' / f'{opt_id:04}').absolute()))
+                    self.logger.debug('Checkpoint save sent to Optimizer %d', opt_id)
                 else:
                     pack.signal_pipe.send(3)  # Causes waiting optimizers will pass and not checkpoint
 
