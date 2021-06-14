@@ -110,6 +110,42 @@ the Shubert function will be used.
 For a more detailed explanation of GloMPO's use, please consult the ``examples`` folders
 and the documentation in ``core/manager.py``
 
+Results
+=======
+
+GloMPO produces various types of results files which can be configured via the manager;
+all or none of the following can be produced. A summary human-readable YAML file is the
+most basic record of the optimization. It includes all GloMPO settings, the final result,
+computational resources used, checkpoints created, as well as time and date information.
+
+Image files of the optimizer trajectories can also produced, this requires the `matplotlib`
+package and is a helpful way to analyze the optimization performance at a glance.
+
+Finally, all iteration and metadata information from the optimizers themselves is now
+saved in a compressed HDF5 format. This is more flexible and user-friendly than the
+previous YAML files created by v2 GloMPO. This file also contains all the manager metadata;
+in this way all information from an optimization can be accessed from one location. To work
+with these files within a Python environment, we recommend loading it with the
+`Pytables` module. To explore the file in a user-friendly GUI, we recommend using
+the `vitables` package.
+
+Optimization Tasks
+=====================
+
+GloMPO is very flexible in terms of the tasks it will accept to minimize.
+The task may be a function or an object method and, at the absolute minimum, must
+support the following API:
+
+.. code-block:: python
+
+   def __call__(parameter_vector: Sequence[float]) -> float:
+       ...
+
+The are some scenarios where the function must return extra information. Either for logging
+and later analysis, or for use by the optimizer itself. In that case GloMPO also supports
+a more extended task API. The user is directed to the `BaseFunction` class for details.
+Note, actual tasks do not need to sub-class this method, it serves only as a template.
+
 Logging
 =======
 
