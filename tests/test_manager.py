@@ -932,8 +932,7 @@ class TestCheckpointing:
         assert manager.opt_crashed is False
         assert manager.last_opt_spawn == (0, 0)
 
-        with pytest.warns(RuntimeWarning):
-            manager.start_manager()
+        manager.start_manager()
         assert (tmp_path / 'glompo_manager_log.yml').exists()
         assert manager.f_counter > init_f_count
         assert manager.t_end - manager.t_start < 3
