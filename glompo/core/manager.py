@@ -258,7 +258,6 @@ class GloMPOManager:
 
         self.logger = logging.getLogger('glompo.manager')
         self.working_dir: Path = None
-        self.log_file: Path = None
 
         SyncManager.register('ChunkingQueue', ChunkingQueue)
         self._mp_manager = mp.Manager()
@@ -519,7 +518,6 @@ class GloMPOManager:
                           f"work directory.", UserWarning)
             working_dir = "."
         self.working_dir = Path(working_dir).resolve()
-        self.log_file = self.working_dir / 'glompo_log.h5'
 
         # Save and wrap task
         if not callable(task):
@@ -684,6 +682,10 @@ class GloMPOManager:
                         there is no guarantee that the optimizers will actually respond to this change.
                     visualisation_args: Due to the semantics of constructions these arguments will not be accepted by
                         the loaded scope object.
+                    working_dir: This can be changed, however, if a log file exists and you would like to append into
+                        this file, make sure to copy/move it to the new working_dir and name it `glompo_log.h5` before
+                        loading the checkpoint otherwise GloMPO will create a new log file (see README for more
+                        details).
 
             Notes
             -----
@@ -928,57 +930,41 @@ class GloMPOManager:
         self.working_dir.mkdir(parents=True, exist_ok=True)
         self._purge_old_results()
         mode = 'w'
-        if self._is_restart:
-            # Loaded checkpoint points to missing logfile
-            if not self.log_file.exists():
-                warnings.warn("glompo_log.h5 not found in working_dir, checkpoint iteration information "
-                              "missing. Starting new log file.", RuntimeWarning)
-                self.logger.warning("glompo_log.h5 not found in working_dir, checkpoint iteration "
-                                    "information missing. Starting new log file.")
+        log_file = self.working_dir / 'glompo_log.h5'
+        if self._is_restart and log_file.exists():
+            with tb.open_file(str(log_file), 'a') as peek:
+                # Confirm checksum match
+                if peek.root._v_attrs.checksum != self._checksum:
+                    self.logger.critical("Checkpoint points to log file (%s, Checksum: %s) which is for an "
+                                         "optimization which does not match this one (Checksum: %s)! "
+                                         "Aborting optimization.",
+                                         log_file, peek.root._v_attrs.checksum, self._checksum)
+                    raise KeyError(f"Checkpoint points to log file ({log_file}, Checksum: "
+                                   f"{peek.root._v_attrs.checksum}) which is for an optimization which does not match "
+                                   f"this one (Checksum: {self._checksum})! Aborting optimization.")
 
-            else:
-                # Loaded checkpoint points to incorrect logfile
-                with tb.open_file(str(self.log_file), 'a') as peek:
-                    if peek.root._v_attrs.checksum != self._checksum:
-                        self.logger.critical("Checkpoint points to log file (%s) which is for an "
-                                             "optimization which does not match this one! Aborting optimization.",
-                                             self.log_file)
-                        raise RuntimeError(f"Checkpoint points to log file ({self.log_file}) which is for an "
-                                           f"optimization which does not match this one! Aborting optimization.")
+                # Overwrite excess iterations
+                file_f_count = peek.root._v_attrs.f_counter
+                if file_f_count > self.f_counter:
+                    self.logger.warning("The log file (%d evaluations) has iterated past the checkpoint "
+                                        "(%d evaluations). Rolling back the log file to the checkpoint.",
+                                        file_f_count, self.f_counter)
+                    warnings.warn(f"The log file ({file_f_count} evaluations) has iterated past "
+                                  f"the checkpoint ({self.f_counter} evaluations). Rolling back the log file to "
+                                  f"the checkpoint.")
+                    for tab in peek.walk_nodes('/', 'Table'):
+                        tab: tb.Table
+                        call_ids = tab.col('call_id')
+                        crit_i = np.searchsorted(call_ids, self.f_counter, 'right')
+                        tab.remove_rows(crit_i)
 
-                    # Loaded checkpoint points to logfile NOT in working_dir
-                    if not self.working_dir.samefile(self.log_file.parent):
-                        warnings.warn(
-                            f"Checkpoint points to log file ({self.log_file}) which is not in the selected "
-                            f"working_dir ({self.working_dir}). Copying logfile to working_dir.", RuntimeWarning)
-                        self.logger.warning("Checkpoint points to log file (%s) which is not in the selected "
-                                            "working_dir (%s). Copying logfile to working_dir.",
-                                            self.log_file, self.working_dir)
-                        shutil.copy(self.log_file, self.working_dir)
-                        self.log_file = self.working_dir / 'glompo_log.h5'
+                    for group in peek.iter_nodes('/', 'Group'):
+                        if int(group._v_name.split('_')[1]) > self.o_counter:
+                            peek.remove_node('/', group._v_name, recursive=True)
+            mode = 'a'
 
-                    # Truncate the log back in time
-                    file_f_count = peek.root._v_attrs.f_counter
-                    if file_f_count > self.f_counter:
-                        self.logger.warning("The log file (%d evaluations) has iterated past the checkpoint "
-                                            "(%d evaluations). Rolling back the log file to the iteration point.",
-                                            file_f_count, self.f_counter)
-                        warnings.warn(f"The log file ({file_f_count} evaluations) has iterated past "
-                                      f"the checkpoint ({self.f_counter} evaluations). Rolling back the log file to "
-                                      f"the iteration point.")
-                        for tab in peek.walk_nodes('/', 'Table'):
-                            tab: tb.Table
-                            call_ids = tab.col('call_id')
-                            crit_i = np.searchsorted(call_ids, self.f_counter, 'right')
-                            tab.remove_rows(crit_i)
-
-                        for group in peek.iter_nodes('/', 'Group'):
-                            if int(group._v_name.split('_')[1]) > self.o_counter:
-                                peek.remove_node('/', group._v_name, recursive=True)
-
-                mode = 'a'
         self._checksum = ''.join([random.choice(string.ascii_letters + string.digits) for _ in range(20)])
-        self.opt_log.open(self.log_file, mode, self._checksum)
+        self.opt_log.open(log_file, mode, self._checksum)
 
         if self.visualisation and self.scope.record_movie:
             self.scope.setup_moviemaker(self.working_dir)

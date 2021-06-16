@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict, Sequence, Tuple, Type, Union
 
 import numpy as np
 import pytest
+import tables as tb
 import yaml
 
 try:
@@ -1095,6 +1096,42 @@ class TestCheckpointing:
                                                                   naming_format='chkpt_%(count)',
                                                                   checkpointing_dir=tmp_path,
                                                                   raise_checkpoint_fail=raises_bool))
+
+    @pytest.mark.parametrize('f_count, o_count', [(50, 2), (50, 1)])
+    def test_restart_log_truncate(self, f_count, o_count, manager, input_files, tmp_path):
+        log_file = tmp_path / 'glompo_log.h5'
+
+        shutil.copy(input_files / 'mock_log.h5', log_file)
+
+        manager.f_counter = f_count
+        manager.o_counter = o_count
+        manager._is_restart = True
+        manager.working_dir = tmp_path
+        manager._checksum = 'correctchecksum'
+        manager.opt_log = None
+
+        with pytest.raises(AttributeError):
+            with pytest.warns(RuntimeWarning, match="The log file (100 evaluations) has iterated past the checkpoint"):
+                manager.start_manager()
+
+        with tb.open_file(str(log_file.resolve()), 'r') as file:
+            assert [n._v_name for n in file.iter_nodes('/')] == [f'optimizer_{i}' for i in range(1, o_count + 1)]
+            for i in range(1, o_count + 1):
+                table = file.get_node(f'/optimizer_{i}/iter_hist')
+                assert max(table.col('call_id')) <= f_count
+
+    def test_restart_log_checksum(self, manager, tmp_path, input_files):
+        log_file = tmp_path / 'glompo_log.h5'
+
+        shutil.copy(input_files / 'mock_log.h5', log_file)
+
+        manager._is_restart = True
+        manager.working_dir = tmp_path
+        manager._checksum = 'WRONGchecksum'
+        manager.opt_log = None
+
+        with pytest.raises(KeyError, match="Checkpoint points to log file"):
+            manager.start_manager()
 
     @pytest.mark.parametrize('backend', ['threads', 'processes'])
     def test_sync(self, backend, manager, tmp_path, caplog):
