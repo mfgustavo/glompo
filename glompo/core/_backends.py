@@ -3,6 +3,7 @@ import logging
 import queue
 import sys
 import threading
+import traceback
 import warnings
 from pathlib import Path
 from typing import TextIO
@@ -10,8 +11,6 @@ from typing import TextIO
 __all__ = ("CustomThread",
            "ThreadPrintRedirect",
            "ChunkingQueue")
-
-from ..common.namedtuples import IterationResult
 
 
 class CustomThread(threading.Thread):
@@ -36,15 +35,17 @@ class CustomThread(threading.Thread):
                     warnings.warn("Prinstream redirect failed. Print stream will only redirect if ThreadPrintRedirect "
                                   "is setup beforehand.", RuntimeWarning)
             super().run()
+        except Exception as e:
+            sys.stderr.write("".join(traceback.TracebackException.from_exception(e).format()))
+            self.exitcode = -1
+            raise e
+        finally:
             if self.redirect:
                 try:
                     sys.stdout.close(threading.currentThread().ident)
                     sys.stderr.close(threading.currentThread().ident)
                 except Exception as e:
                     warnings.warn(f"Closing printstream files failed. Caught exception: {e}", RuntimeWarning)
-        except Exception as e:
-            self.exitcode = -1
-            raise e
 
 
 # Adapted from https://stackoverflow.com/questions/14890997/redirect-stdout-to-a-file-only-for-a-specific-thread
@@ -138,7 +139,6 @@ class ChunkingQueue(queue.Queue):
             From then on all items are appended to the cache and put in the queue in chunks of size chunk_size. When the
             cache is full the put will block until the cache has been put on the queue.
         """
-        assert isinstance(item, IterationResult), type(item)
         if not self.fast_func:
             try:
                 super().put([item], False)

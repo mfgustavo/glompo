@@ -1099,10 +1099,6 @@ class GloMPOManager:
 
             self.opt_log.close()
 
-            if not self.proc_backend and self.split_printstreams:
-                sys.stdout.close()
-                sys.stderr.close()
-
             self.logger.info("GloMPO Optimization Routine Done")
 
             return self.result
