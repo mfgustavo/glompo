@@ -7,6 +7,7 @@ import pytest
 from glompo.common.corebase import _CombiCore
 from glompo.core.optimizerlogger import BaseLogger
 from glompo.hunters.basehunter import BaseHunter, _AndHunter, _OrHunter
+from glompo.hunters.bestunmoving import BestUnmoving
 from glompo.hunters.evalsunmoving import EvaluationsUnmoving
 from glompo.hunters.lastptsinvalid import LastPointsInvalid
 from glompo.hunters.min_fcalls import MinFuncCalls
@@ -14,7 +15,6 @@ from glompo.hunters.parameterdistance import ParameterDistance
 from glompo.hunters.stepsize import StepSize
 from glompo.hunters.timeannealing import TimeAnnealing
 from glompo.hunters.type import TypeHunter
-from glompo.hunters.unmovingbest import BestUnmoving
 from glompo.hunters.valueannealing import ValueAnnealing
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 
