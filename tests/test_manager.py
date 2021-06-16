@@ -18,7 +18,7 @@ except ImportError:
     from yaml import Loader as Loader
 
 from glompo.common.helpers import CheckpointingError
-from glompo.common.namedtuples import IterationResult, ProcessPackage, Result
+from glompo.common.namedtuples import Bound, IterationResult, ProcessPackage, Result
 from glompo.convergence import BaseChecker, KillsAfterConvergence, MaxFuncCalls, MaxOptsStarted, MaxSeconds
 from glompo.core._backends import CustomThread
 from glompo.core.checkpointing import CheckpointingControl
@@ -678,6 +678,11 @@ class TestManagement:
         assert not (tmp_path / 'CHKPT').exists()
         assert mock_ck_logger.called
         assert manager.checkpoint_control is None
+
+    def test_write_summary(self, manager, tmp_path):
+        manager.bounds = [Bound(0, 1)]
+        manager.write_summary_file(tmp_path)
+        assert (tmp_path / 'glompo_manager_log.yml').exists()
 
     @pytest.mark.mini
     @pytest.mark.parametrize('backend', ['processes', 'threads'])
