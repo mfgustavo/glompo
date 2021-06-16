@@ -1211,7 +1211,7 @@ class GloMPOManager:
 
     def write_summary_file(self, dump_dir: Optional[Path] = None):
         """ Writes a manager summary YAML file detailing the state of the optimization. Useful to extract output from a
-            checkpoints.
+            checkpoint.
 
             Parameters
             ----------
