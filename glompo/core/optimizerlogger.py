@@ -12,10 +12,6 @@ from ..common.helpers import deepsizeof, glompo_colors, rolling_best
 from ..common.namedtuples import IterationResult
 
 try:
-    from yaml import CDumper as Dumper
-except ImportError:
-    from yaml import Dumper
-try:
     import matplotlib.pyplot as plt
     import matplotlib.lines as lines
 
@@ -74,8 +70,7 @@ class BaseLogger:
         """ Returns the number of function evaluations associated with optimizer opt_id. """
         if self.has_iter_history(opt_id):
             return len(self._storage[opt_id]['fx'])
-        else:
-            return 0
+        return 0
 
     def add_optimizer(self, opt_id: int, opt_type: str, t_start: datetime.datetime):
         """ Creates a space in memory for a new optimizer. """
@@ -134,7 +129,7 @@ class BaseLogger:
 
         for k, v in zip(self._storage[iter_res.opt_id],
                         (None, None, self._f_counter, iter_res.x, iter_res.fx, *iter_res.extras)):
-            if k == 'metadata' or k == 'messages':
+            if k in ('metadata', 'messages'):
                 continue
             self._storage[iter_res.opt_id][k].append(v)
 

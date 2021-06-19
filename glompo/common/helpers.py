@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Iterator, Optional, Sequence, Tuple, Union, overload
 
-import matplotlib
 import numpy as np
 import tables as tb
 import yaml

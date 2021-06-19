@@ -128,7 +128,7 @@ class GFLSOptimizer(BaseOptimizer):
         self.logger.debug("Entering optimization loop")
 
         while not self.stopcond:
-            x, is_constrained, fx, resids = self.get_evaluation()
+            x, is_constrained, _, resids = self.get_evaluation()
             self.gfls.tell(np.array(x), is_constrained, np.array(resids))
 
             for hook in self.hooks:
@@ -178,9 +178,8 @@ class GFLSOptimizer(BaseOptimizer):
 
             return result
 
-        else:
-            self.gfls.state["ncall"] += 1
-            return self._wrapped_func(self.gfls.ask())
+        self.gfls.state["ncall"] += 1
+        return self._wrapped_func(self.gfls.ask())
 
     def callstop(self, reason: str = "Manager termination signal"):
         self.logger.debug("Calling stop. Reason = %s", reason)
