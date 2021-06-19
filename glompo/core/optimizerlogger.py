@@ -336,7 +336,7 @@ class FileLogger(BaseLogger):
 
     def __contains__(self, opt_id: int) -> bool:
         """ Returns True if a group exists in the HDF5 file for the optimizer with ID opt_id """
-        return f'optimizer_{opt_id}' in self.pytab_file
+        return f'/optimizer_{opt_id}' in self.pytab_file
 
     @property
     def n_optimizers(self):
@@ -426,6 +426,7 @@ class FileLogger(BaseLogger):
         """ Optimizers can signal special messages to the optimizer during the optimization which can be saved to
             the log.
         """
+        super().put_message(opt_id, message)
         table = self._get_group(opt_id)['messages']
         table.append(message)
         table.flush()
