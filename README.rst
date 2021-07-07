@@ -53,7 +53,7 @@ Installation
         cd /path/to/glompo
         conda install .
 
-2. Both ``pip`` and ``conda`` will only install core GloMPO dependencies,
+2. Both ``pip`` and ``conda`` will only install core GloMPO dependencies.
    Packages required for optional features must be installed manually. These
    features and their dependencies can be consulted in the ``extra_requires``
    option of ``setup.py``.
@@ -61,9 +61,6 @@ Installation
 3. You should confirm that everything is working correctly by running the tests in the
    ``tests`` folder. Running the tests requires ``pytest`` be installed to your Python
    environment. This is not installed automatically with GloMPO.
-
-   Depending on the abilities of the system core and scope tests can be run together
-   or independently:
 
    .. code-block:: bash
 
@@ -151,9 +148,9 @@ Logging
 
 Logging is built into GloMPO and users may optionally configure its logging capability
 before running the manager in order to track its progress. Without this manual
-configuration the opt_log will not print anywhere! This is mainly used to debug the
-code and track execution through the program but it is helpful to send INFO level
-messages to the stdout to follow the execution process.
+configuration no progress or status message will print at all! The logging system can be
+used to debug the code, but is most helpful in tracking execution through the program by
+sending INFO level messages and above to stdout.
 
 The logging provided in this way is distinct from the summary files provided
 at the end of the GloMPO run which are regulated by the summary_files parameter in
@@ -289,7 +286,7 @@ Checkpointing & Logging
 -----------------------
 
 .. caution::
-    Please pay close attention to how GloMPO handles log files and loading checkpoints.
+   Please pay close attention to how GloMPO handles log files and loading checkpoints.
 
 The HDF5 log file is not included inside the checkpoints since they can become extremely
 large if they are being used to gather lots of data. GloMPO always aims to continue an
@@ -307,12 +304,12 @@ It is the user's responsibility to ensure that log files are located and named c
 in the working directory when loading checkpoints.
 
 .. caution::
-    GloMPO will overwrite existing data in if a matching log is found in the working
-    directory, but it contains more iteration information that the checkpoint. For
-    example, a checkpoint was created after 1 hour of optimization but the manager
-    continued until convergence at a later point. If the checkpoint is loaded, it will
-    expect a the log file to only have 1 hour worth of data. The only way to load this
-    checkpoint (and ensure duplicate iterations are not included in the log) is to remove
-    any values in the log which were generated after the checkpoint. To avoid data being
-    overwritten, the user can manually copy/rename the log file they wish to retain
-    before loading a checkpoint.
+   GloMPO will overwrite existing data in if a matching log is found in the working
+   directory, but it contains more iteration information that the checkpoint. For
+   example, a checkpoint was created after 1 hour of optimization but the manager
+   continued until convergence at a later point. If the checkpoint is loaded, it will
+   expect a the log file to only have 1 hour worth of data. The only way to load this
+   checkpoint (and ensure duplicate iterations are not included in the log) is to remove
+   any values in the log which were generated after the checkpoint. To avoid data being
+   overwritten, the user can manually copy/rename the log file they wish to retain
+   before loading a checkpoint.
