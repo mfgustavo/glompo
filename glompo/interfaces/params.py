@@ -58,12 +58,12 @@ class GlompoParamsWrapper(BaseOptimizer):
         where the ParAMS Optimization class interface is preferred.
     """
 
-    def __init__(self, optimizer_selector: BaseSelector, **manager_kwargs):
+    def __init__(self, opt_selector: BaseSelector, **manager_kwargs):
         """ Accepts GloMPO configuration information.
 
             Parameters
             ----------
-            optimizer_selector: BaseSelector
+            opt_selector: BaseSelector
                 Initialised BaseSelector object which specifies how optimizers are selected and initialised. See
                 glompo.opt_selectors.BaseSelector for detailed documentation.
             **manager_kwargs
@@ -77,7 +77,7 @@ class GlompoParamsWrapper(BaseOptimizer):
             if kw in self.manager_kwargs:
                 del self.manager_kwargs[kw]
 
-        self.selector = optimizer_selector
+        self.selector = opt_selector
 
     def minimize(self,
                  function: _Step,
