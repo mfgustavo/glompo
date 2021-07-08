@@ -139,6 +139,10 @@ class CMAOptimizer(BaseOptimizer):
         """
         task_settings = copy.deepcopy(self.cmasettings)
 
+        if sigma0 <= 0:
+            self.logger.critical('sigma0 value invalid. Please select a positive value.')
+            raise ValueError('sigma0 value invalid. Please select a positive value.')
+
         if not self.popsize:
             if self.workers > 1:
                 task_settings['popsize'] = self.workers
