@@ -9,7 +9,7 @@ from ._base import BaseTestCase
 class Deceptive(BaseTestCase):
     """ When called returns evaluations of the Deceptive function. """
 
-    def __init__(self, dims: int = 2, delay: int = 0, b: float = 2, shift_positive: bool = False):
+    def __init__(self, dims: int = 2, delay: float = 0, b: float = 2, shift_positive: bool = False):
         """
         Implementation of the Deceptive optimization test function.
         Recommended bounds: [0, 1] * dims

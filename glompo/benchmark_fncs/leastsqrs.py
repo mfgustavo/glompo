@@ -8,7 +8,7 @@ from ._base import BaseTestCase
 class ExpLeastSquaresCost(BaseTestCase):
     """ Bespoke test function which takes the form of least squares cost function. Compatible with the GFLS solver. """
 
-    def __init__(self, dims: int = 2, delay: int = 0, n_train: int = 10, sigma_eval: float = 0,
+    def __init__(self, dims: int = 2, delay: float = 0, n_train: int = 10, sigma_eval: float = 0,
                  sigma_fixed: float = 0, u_train: Union[int, Tuple[float, float], Sequence[float]] = 10,
                  p_range: Tuple[float, float] = (-2, 2)):
         """
@@ -29,7 +29,7 @@ class ExpLeastSquaresCost(BaseTestCase):
         ----------
         dims: int = 2
             Number of dimensions of the problem
-        delay: int = 0
+        delay: float = 0
             Delay in seconds after the function is called before results are returned.
             Useful to simulate harder problems.
         n_train: int = 10

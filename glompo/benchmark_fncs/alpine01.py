@@ -8,7 +8,7 @@ from ._base import BaseTestCase
 class Alpine01(BaseTestCase):
     """ When called returns evaluations of the Alpine01 function. """
 
-    def __init__(self, dims: int = 2, delay: int = 0):
+    def __init__(self, dims: int = 2, delay: float = 0):
         """
         Implementation of the Alpine01 optimization test function.
         Recommended bounds: [-10, 10] * dims
@@ -19,7 +19,7 @@ class Alpine01(BaseTestCase):
         ----------
         dims: int = 2
             Number of dimensions of the problem
-        delay: int = 0
+        delay: float = 0
             Delay in seconds after the function is called before results are returned.
             Useful to simulate harder problems.
         """

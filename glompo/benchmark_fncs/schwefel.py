@@ -9,7 +9,7 @@ from ._base import BaseTestCase
 class Schwefel(BaseTestCase):
     """ When called returns evaluations of the Schwefel function. """
 
-    def __init__(self, dims: int = 2, delay: int = 0, shift_positive: bool = False):
+    def __init__(self, dims: int = 2, delay: float = 0, shift_positive: bool = False):
         """
         Implementation of the Schwefel optimization test function.
         Recommended bounds: [-500, 500] * dims

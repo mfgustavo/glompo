@@ -1630,7 +1630,7 @@ class GloMPOManager:
                     "Working Dir": str(Path.cwd()),
                     "Username": getpass.getuser(),
                     "Hostname": socket.gethostname(),
-                    "Time": {"optimization Periods": t_periods,
+                    "Time": {"Optimization Periods": t_periods,
                              "Total": t_total,
                              "Session": t_session}},
                 "Settings": {"x0 Generator": self.x0_generator,
@@ -1893,7 +1893,7 @@ class GloMPOManager:
         f_best = f'{self.result.fx:.3E}' if self.result.fx is not None else None
         live_opts_status = ""
 
-        for opt_id, pack in self._optimizer_packs.items():
+        for opt_id, pack in sorted(self._optimizer_packs.items()):
             if pack.process.is_alive():
                 processes.append(pack.slots)
                 hist = self.opt_log.get_history(opt_id, 'fx')

@@ -5,8 +5,8 @@ from pathlib import Path
 from time import sleep, time
 from typing import Callable, NamedTuple, Sequence, Tuple
 
+import dill
 import pytest
-from dill import dill
 
 from glompo.common.namedtuples import IterationResult
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
