@@ -33,10 +33,6 @@ class _FunctionWrapper:
     """ Wraps function produced by ParAMS internals (instance of scm.params.core.opt_components._Step) to match the API
         required by the 'task' parameter of GloMPOManager. Can be modified to achieve compatibility with
         other optimizers.
-
-        Currently:
-        1) Returns a float from the __call__ function;
-        2) Add a resids parameter for compatibility with optsam GFLS algorithm.
     """
 
     def __init__(self, func: _Step):
@@ -180,6 +176,10 @@ class BaseParamsError:
     def n_parms(self) -> int:
         """ Returns the number of active parameters. """
         return len(self.par_eng.active.x)
+
+    @property
+    def bounds(self) -> Sequence[Tuple[float, float]]:
+        return [(0, 1)] * self.n_parms
 
     def __call__(self, x: Sequence[float]) -> float:
         """ Returns the error value between the the force field with the given parameters and the training values. """

@@ -15,6 +15,19 @@ except ModuleNotFoundError:
     raise ModuleNotFoundError("To run this example the cma package is required.")
 
 if __name__ == '__main__':
+    """ GloMPO contains built-in logging statements throughout the library. These will not show up by default but can be
+        accessed if desired. In fact intercepting the INFO level statements from the manager creates a nice progress
+        stream from the optimization; we will set this up here. Consult the README for more information.
+    """
+    formatter = logging.Formatter("%(asctime)s : %(levelname)s : %(lineno)d : %(name)s :: %(message)s")
+
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(formatter)
+
+    logger = logging.getLogger('glompo.manager')
+    logger.addHandler(handler)
+    logger.setLevel('INFO')
+
     """ In this example GloMPO will be run on a well known global optimization test function but each configuration
         option will be individually set and explained.
     
@@ -164,19 +177,6 @@ if __name__ == '__main__':
                                         visualisation_args=visualisation_args,
                                         force_terminations_after=-1,
                                         split_printstreams=True)  # Autosend print statements from opts to files
-
-    """ GloMPO contains built-in logging statements throughout the library. These will not show up by default but can be
-        accessed if desired. In fact intercepting the INFO level statements from the manager creates a nice progress
-        stream from the optimization; we will set this up here. Consult the README for more information.
-    """
-    formatter = logging.Formatter("%(asctime)s : %(levelname)s : %(lineno)d : %(name)s :: %(message)s")
-
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(formatter)
-
-    logger = logging.getLogger('glompo.manager')
-    logger.addHandler(handler)
-    logger.setLevel('INFO')
 
     """ To execute the minimization we simply run start_manager(). """
     result = manager.start_manager()

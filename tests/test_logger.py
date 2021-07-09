@@ -4,7 +4,6 @@ from pathlib import Path
 import pytest
 import tables as tb
 
-import glompo.core.optimizerlogger
 from glompo.common.namedtuples import IterationResult
 from glompo.core.optimizerlogger import BaseLogger, FileLogger
 
@@ -83,6 +82,7 @@ class TestLogger:
         assert filled_log.get_metadata(3, "end_cond") == "fmax condition met"
 
     def test_checkpoint_save(self, request, filled_log, tmp_path):
+        pytest.importorskip('dill', "dill package needed to test and use checkpointing")
         filled_log.checkpoint_save(tmp_path)
         assert (tmp_path / 'opt_log').exists()
         request.config.cache.set('log_checkpoint', str(tmp_path / 'opt_log'))
@@ -99,27 +99,15 @@ class TestLogger:
         assert log.largest_eval == 50
         assert log.get_best_iter() == {'opt_id': 1, 'x': [0], 'fx': 1, 'type': 'Optimizer', 'call_id': 1}
 
-    @pytest.mark.skipif(not glompo.core.optimizerlogger.HAS_MATPLOTLIB,
-                        reason="Matplotlib package needed to use these features.")
-    def test_plot_no_matplotlib(self, filled_log, monkeypatch):
-        monkeypatch.setattr(glompo.core.optimizerlogger, "HAS_MATPLOTLIB", False)
-        with pytest.warns(ImportWarning, match="Matplotlib not present cannot create plots."):
-            filled_log.plot_trajectory("")
-
-        with pytest.warns(ImportWarning, match="Matplotlib not present cannot create plots."):
-            filled_log.plot_optimizer_trials()
-
-    @pytest.mark.skipif(not glompo.core.optimizerlogger.HAS_MATPLOTLIB,
-                        reason="Matplotlib package needed to use these features.")
     @pytest.mark.parametrize("log_scale", [True, False])
     @pytest.mark.parametrize("best_fx", [True, False])
     def test_plot_traj(self, filled_log, log_scale, best_fx, tmp_path, save_outputs):
+        pytest.importorskip('matplotlib.pyplot', "Matplotlib package needed to use these features.")
         filled_log.plot_trajectory(Path(tmp_path, 'traj.png'), log_scale, best_fx)
         assert Path(tmp_path, 'traj.png').exists()
 
-    @pytest.mark.skipif(not glompo.core.optimizerlogger.HAS_MATPLOTLIB,
-                        reason="Matplotlib package needed to use these features.")
     def test_plot_opts(self, tmp_path, filled_log, save_outputs):
+        pytest.importorskip('matplotlib.pyplot', "Matplotlib package needed to use these features.")
         filled_log.plot_optimizer_trials(tmp_path)
         for i in range(1, 4):
             assert Path(tmp_path, f"opt{i}_parms.png").exists()

@@ -13,6 +13,13 @@ import tables as tb
 import yaml
 
 try:
+    import dill
+
+    HAS_DILL = True
+except (ModuleNotFoundError, ImportError):
+    HAS_DILL = False
+
+try:
     from yaml import CLoader as Loader
 except ImportError:
     from yaml import Loader as Loader
@@ -305,7 +312,8 @@ class TestManagement:
                           opt_selector=DummySelector(OptimizerTest1), working_dir=5, overwrite_existing=True)
 
     def test_init_block_checkpointing(self, manager, mask_dill):
-        with pytest.warns(UserWarning, match="Checkpointing controls ignored. Cannot setup infrastructure without "):
+        with pytest.warns(ResourceWarning,
+                          match="Checkpointing controls ignored. Cannot setup infrastructure without "):
             manager.setup(task=lambda x, y: x / 0, bounds=((0, 1), (0, 1)),
                           opt_selector=DummySelector(OptimizerTest1), checkpoint_control=CheckpointingControl())
         assert manager.checkpoint_control is None
@@ -661,6 +669,7 @@ class TestManagement:
                        "STOP file found for Optimizer 2"]) == sorted(caplog.messages)
         assert mock_shutdown_logger.calls == [2]
 
+    @pytest.mark.skipif(not HAS_DILL, reason="dill package needed to test and use checkpointing.")
     def test_manual_checkpoint(self, manager, monkeypatch, tmp_path):
         class CheckpointCallLogger:
             def __init__(self):
@@ -796,6 +805,7 @@ class TestManagement:
         assert result.origin['type'] == 'SteepestGradient'
 
 
+@pytest.mark.skipif(not HAS_DILL, reason="dill package needed to test and use checkpointing.")
 class TestCheckpointing:
     """ Tests related to checkpointing and resuming GloMPO optimizations. These tests rely on a single shared directory.
         The first tests produce checkpoints (at init, midway and convergence) and subsequent tests attempt to resume

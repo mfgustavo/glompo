@@ -58,6 +58,7 @@ from ..hunters import BaseHunter
 from ..opt_selectors.baseselector import BaseSelector
 from ..optimizers.baseoptimizer import BaseOptimizer
 from .checkpointing import CheckpointingControl
+from .. import __version__, __version_info__
 
 __all__ = ("GloMPOManager",)
 
@@ -586,7 +587,6 @@ class GloMPOManager:
         self.is_log_detailed = is_log_detailed
         self.split_printstreams = bool(split_printstreams)
         self.overwrite_existing = bool(overwrite_existing)
-        self.visualisation = visualisation
         self.hunt_frequency = hunt_frequency
         self.spawning_opts = True
         self.incumbent_sharing = share_best_solutions
@@ -599,16 +599,24 @@ class GloMPOManager:
             else:
                 self.logger.warning("Checkpointing controls ignored. Cannot setup infrastructure without dill package.")
                 warnings.warn("Checkpointing controls ignored. Cannot setup infrastructure without dill package.",
-                              UserWarning)
+                              ResourceWarning)
                 self.checkpoint_control = None
         else:
             self.checkpoint_control = None
 
         # Initialise support classes
         if visualisation:
-            from .scope import GloMPOScope  # Only imported if needed to avoid matplotlib compatibility issues
-            self.visualisation_args = visualisation_args if visualisation_args else {}
-            self.scope = GloMPOScope(**visualisation_args) if visualisation_args else GloMPOScope()
+            try:
+                from .scope import GloMPOScope  # Only imported if needed to avoid matplotlib compatibility issues
+                self.visualisation = visualisation
+                self.visualisation_args = visualisation_args if visualisation_args else {}
+                self.scope = GloMPOScope(**visualisation_args) if visualisation_args else GloMPOScope()
+            except (ModuleNotFoundError, ImportError):
+                self.visualisation = False
+                self.logger.warning("Visualisation controls ignored. Cannot setup infrastructure without matplotlib "
+                                    "package.")
+                warnings.warn("Visualisation controls ignored. Cannot setup infrastructure without matplotlib package.",
+                              ResourceWarning)
 
         self.opt_log = FileLogger if self.summary_files > 2 else BaseLogger
         self.opt_log = self.opt_log(n_parms=self.n_parms,
@@ -1708,6 +1716,7 @@ class GloMPOManager:
             t_periods = [{"Start": str(t0), "End": str(t)} for t0, t in zip(self.dt_starts, self.dt_ends)]
             data = {
                 "Assignment": {
+                    "GloMPO Version": __version__,
                     "Task": type(self.task).__name__ if isinstance(type(self.task), object) else self.task.__name__,
                     "Working Dir": str(Path.cwd()),
                     "Username": getpass.getuser(),
@@ -1759,6 +1768,7 @@ class GloMPOManager:
 
         if summary_files > 2:
             self.opt_log.put_manager_metadata('task', data['Assignment']['Task'])
+            self.opt_log.put_manager_metadata('glompo_version', __version_info__)
             self.opt_log.put_manager_metadata('working_dir', data['Assignment']['Working Dir'])
             self.opt_log.put_manager_metadata('username', data['Assignment']['Username'])
             self.opt_log.put_manager_metadata('hostname', data['Assignment']['Hostname'])

@@ -4,23 +4,15 @@ from time import sleep
 import numpy as np
 import pytest
 
-try:
-    from glompo.core.scope import GloMPOScope
+pytest.importorskip('matplotlib.pyplot', "Matplotlib package needed to use these features.")
 
-    import matplotlib
+import matplotlib.pyplot as plt
 
-    import matplotlib.pyplot as plt
+from glompo.core.scope import GloMPOScope
 
-    plt.ion()
-    if matplotlib.pyplot.isinteractive() and int(matplotlib.__version__.split('.')[0]) >= 3:
-        HAS_MATPLOTLIB = True
-    else:
-        HAS_MATPLOTLIB = False
-except (ModuleNotFoundError, ImportError):
-    HAS_MATPLOTLIB = False
+plt.ion()
 
 
-@pytest.mark.skipif(not HAS_MATPLOTLIB, reason="Interactive-enabled matplotlib>=3.0 required to test the scope.")
 class TestScope:
 
     @pytest.fixture()
@@ -107,6 +99,8 @@ class TestScope:
 
     @pytest.mark.parametrize("record", [True, False])
     def test_checkpointing(self, record, tmp_path):
+        pytest.importorskip('dill', "dill package needed to test and use checkpointing")
+
         scope = GloMPOScope(log_scale=False,
                             record_movie=record,
                             movie_kwargs={'outfile': Path(tmp_path, "test_gen_movie.mp4")})

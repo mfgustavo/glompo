@@ -10,21 +10,15 @@ from typing import Any, Dict, Tuple, Type, Union
 import numpy as np
 import pytest
 
-try:
-    from scm.params.core.opt_components import _Step, _LossEvaluator, EvaluatorReturn
-    from scm.params.common.parallellevels import ParallelLevels
-    from scm.params.common.reaxff_converter import geo_to_params, trainset_to_params
-    from scm.params.core.dataset import DataSet, Loss, SSE
-    from scm.params.core.jobcollection import JobCollection
-    from scm.params.core.opt_components import LinearParameterScaler, _Step
-    from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
-    from scm.params.parameterinterfaces.reaxff import ReaxParams
-    from scm.plams.core.errors import ResultsError
-    from scm.plams.interfaces.adfsuite.reaxff import reaxff_control_to_settings
+pytest.importorskip('scm', reason="SCM ParAMS needed to test and use the ParAMS interface.")
 
-    HAS_PARAMS = True
-except (ModuleNotFoundError, ImportError):
-    HAS_PARAMS = False
+from scm.params.core.opt_components import _LossEvaluator, EvaluatorReturn
+from scm.params.common.parallellevels import ParallelLevels
+from scm.params.core.dataset import DataSet, Loss
+from scm.params.core.jobcollection import JobCollection
+from scm.params.core.opt_components import LinearParameterScaler, _Step
+from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
+from scm.params.parameterinterfaces.reaxff import ReaxParams
 
 from glompo.interfaces.params import _FunctionWrapper, ReaxFFError, GlompoParamsWrapper
 from glompo.opt_selectors.baseselector import BaseSelector
@@ -64,7 +58,6 @@ class FakeSelector(BaseSelector):
             Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]], None, bool]: ...
 
 
-@pytest.mark.skipif(not HAS_PARAMS, reason="SCM ParAMS needed to test and use the ParAMS interface.")
 class TestParamsStep:
     """ This class of tests ensures that the scm.params._Step instance given to the GloMPOManager has the attributes
         expected.
@@ -112,7 +105,6 @@ class TestParamsStep:
             _FunctionWrapper(params_func)
 
 
-@pytest.mark.skipif(not HAS_PARAMS, reason="SCM ParAMS needed to test and use the ParAMS interface.")
 def test_wrapper_run(monkeypatch):
     def mock_start_manager():
         return Result([0] * 5, 0, {}, {})
@@ -131,7 +123,6 @@ def test_wrapper_run(monkeypatch):
     assert res.success
 
 
-@pytest.mark.skipif(not HAS_PARAMS, reason="SCM ParAMS needed to test and use the ParAMS interface.")
 class TestReaxFFError:
     built_tasks: Dict[str, ReaxFFError] = {}
 

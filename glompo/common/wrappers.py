@@ -2,6 +2,8 @@
 
 import inspect
 import sys
+import importlib
+import warnings
 from functools import wraps
 from pathlib import Path
 
@@ -43,3 +45,22 @@ def decorate_all_methods(decorator):
         return cls
 
     return apply_decorator
+
+
+def needs_optional_package(package: str):
+    """ Will warn and not allow a function to execute if the package it requires is not available to the system.
+        Applied to functions which provide optional GloMPO functionality.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                importlib.import_module(package)
+                return func(*args, **kwargs)
+            except (ModuleNotFoundError, ImportError):
+                warnings.warn(f"Unable to construct checkpoint without {package} package installed.", ResourceWarning)
+                return
+
+        return wrapper
+
+    return decorator
