@@ -213,6 +213,10 @@ class ReaxFFError:
         """ Returns the number of active parameters. """
         return len(self.rxf_eng.active.x)
 
+    @property
+    def bounds(self) -> Sequence[Tuple[float, float]]:
+        return [(0, 1)] * self.n_parms
+
     def __call__(self, x: Sequence[float]) -> float:
         """ Returns the error value between the the force field with the given parameters and the training values. """
         return self._calculate(x)[0]
