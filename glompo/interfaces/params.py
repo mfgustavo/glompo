@@ -22,7 +22,6 @@ from scm.plams.interfaces.adfsuite.reaxff import reaxff_control_to_settings
 
 from ..core.manager import GloMPOManager
 from ..opt_selectors.baseselector import BaseSelector
-from ..optimizers.gflswrapper import GFLSOptimizer
 
 __all__ = ("GlompoParamsWrapper",
            "ReaxFFError")
@@ -91,9 +90,6 @@ class GlompoParamsWrapper(BaseOptimizer):
                 del self.manager_kwargs[kw]
 
         self.selector = optimizer_selector
-
-        if GFLSOptimizer in optimizer_selector:
-            self._loss = SSE()
 
     def minimize(self,
                  function: _Step,
