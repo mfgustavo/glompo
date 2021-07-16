@@ -1,5 +1,3 @@
-
-
 """ GloMPO (Globally Managed Parallel Optimization)
     Author: Michael Freitas Gustavo
 
@@ -10,10 +8,7 @@
 
 import logging
 
-from glompo.core.manager import GloMPOManager
-
-
-__all__ = ("GloMPOManager",)
-
+# noinspection PyUnresolvedReferences
+from ._version import __version__, __version_info__
 
 logging.getLogger('glompo').addHandler(logging.NullHandler())

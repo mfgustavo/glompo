@@ -1,5 +1,3 @@
-
-
 from setuptools import find_packages, setup
 
 
@@ -9,15 +7,20 @@ def get_readme():
         return fhandle.read()
 
 
+with open('glompo/_version.py', 'r') as file:
+    exec(file.read())
+
 setup(
     name="glompo",
-    version="2.0.8",
+    version=__version__,
     description="Globally managed parallel optimization",
     long_description=get_readme(),
     author="Michael Freitas Gustavo",
     author_email="michael.freitasgustavo@ugent.be",
     url="https://github.com/mfgustavo/glompo",
+    download_url="https://github.com/mfgustavo/glompo",
     packages=find_packages(),
+    license_file='LICENSE',
     include_package_data=True,
     package_dir={"glompo": "glompo"},
     install_requires=['numpy', 'PyYAML'],
@@ -30,7 +33,7 @@ setup(
         'GFLSOptimizer': ['optsam'],
         'Nevergrad': ['nevergrad'],
         'ParAMSWrapper': ['scm'],
-        'Checkpointing': ['dill~=0.2.7'],
-        'ResourceUsageStatusPrinting': ['psutil>=5.0'],
+        'Checkpointing': ['dill>=0.2.7'],
+        'ResourceUsageStatusPrinting': ['psutil>=5.6.2']
     }
 )
