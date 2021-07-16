@@ -10,6 +10,13 @@ from glompo.core.optimizerlogger import OptimizerLogger
 from glompo.optimizers.baseoptimizer import BaseOptimizer
 from glompo.optimizers.random import RandomOptimizer
 
+try:
+    import matplotlib
+
+    HAS_MATPLOTLIB = True
+except (ModuleNotFoundError, ImportError):
+    HAS_MATPLOTLIB = False
+
 
 class TestLogger:
 
@@ -96,7 +103,7 @@ class TestLogger:
     def test_metadata(self, filled_log):
         assert filled_log.get_metadata(0, "End Condition") == "GloMPO Termination"
 
-    @pytest.mark.skipif(not glompo.core.optimizerlogger.HAS_MATPLOTLIB,
+    @pytest.mark.skipif(not HAS_MATPLOTLIB,
                         reason="Matplotlib package needed to use these features.")
     def test_plot_no_matplotlib(self, filled_log, monkeypatch):
         monkeypatch.setattr(glompo.core.optimizerlogger, "HAS_MATPLOTLIB", False)
@@ -106,7 +113,7 @@ class TestLogger:
         with pytest.warns(ImportWarning, match="Matplotlib not present cannot create plots."):
             filled_log.plot_optimizer_trials()
 
-    @pytest.mark.skipif(not glompo.core.optimizerlogger.HAS_MATPLOTLIB,
+    @pytest.mark.skipif(not HAS_MATPLOTLIB,
                         reason="Matplotlib package needed to use these features.")
     @pytest.mark.parametrize("log_scale", [True, False])
     @pytest.mark.parametrize("best_fx", [True, False])
