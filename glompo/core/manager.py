@@ -586,7 +586,6 @@ class GloMPOManager:
         self.is_log_detailed = is_log_detailed
         self.split_printstreams = bool(split_printstreams)
         self.overwrite_existing = bool(overwrite_existing)
-        self.visualisation = visualisation
         self.hunt_frequency = hunt_frequency
         self.spawning_opts = True
         self.incumbent_sharing = share_best_solutions
@@ -599,16 +598,24 @@ class GloMPOManager:
             else:
                 self.logger.warning("Checkpointing controls ignored. Cannot setup infrastructure without dill package.")
                 warnings.warn("Checkpointing controls ignored. Cannot setup infrastructure without dill package.",
-                              UserWarning)
+                              ResourceWarning)
                 self.checkpoint_control = None
         else:
             self.checkpoint_control = None
 
         # Initialise support classes
         if visualisation:
-            from .scope import GloMPOScope  # Only imported if needed to avoid matplotlib compatibility issues
-            self.visualisation_args = visualisation_args if visualisation_args else {}
-            self.scope = GloMPOScope(**visualisation_args) if visualisation_args else GloMPOScope()
+            try:
+                from .scope import GloMPOScope  # Only imported if needed to avoid matplotlib compatibility issues
+                self.visualisation = visualisation
+                self.visualisation_args = visualisation_args if visualisation_args else {}
+                self.scope = GloMPOScope(**visualisation_args) if visualisation_args else GloMPOScope()
+            except (ModuleNotFoundError, ImportError):
+                self.visualisation = False
+                self.logger.warning("Visualisation controls ignored. Cannot setup infrastructure without matplotlib "
+                                    "package.")
+                warnings.warn("Visualisation controls ignored. Cannot setup infrastructure without matplotlib package.",
+                              ResourceWarning)
 
         self.opt_log = FileLogger if self.summary_files > 2 else BaseLogger
         self.opt_log = self.opt_log(n_parms=self.n_parms,

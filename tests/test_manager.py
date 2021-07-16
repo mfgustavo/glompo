@@ -305,7 +305,8 @@ class TestManagement:
                           opt_selector=DummySelector(OptimizerTest1), working_dir=5, overwrite_existing=True)
 
     def test_init_block_checkpointing(self, manager, mask_dill):
-        with pytest.warns(UserWarning, match="Checkpointing controls ignored. Cannot setup infrastructure without "):
+        with pytest.warns(ResourceWarning,
+                          match="Checkpointing controls ignored. Cannot setup infrastructure without "):
             manager.setup(task=lambda x, y: x / 0, bounds=((0, 1), (0, 1)),
                           opt_selector=DummySelector(OptimizerTest1), checkpoint_control=CheckpointingControl())
         assert manager.checkpoint_control is None
