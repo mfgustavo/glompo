@@ -19,6 +19,15 @@ if __name__ == '__main__':
         the same configuration, but in this case good iteration will be shared between optimizers. The optimizers, 
         in turn, will use this information to accelerate their convergence.
     """
+    formatter = logging.Formatter("%(asctime)s : %(levelname)s : %(lineno)d : %(name)s :: %(message)s")
+
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(formatter)
+
+    logger = logging.getLogger('glompo.manager')
+    logger.addHandler(handler)
+    logger.setLevel('INFO')
+
     task = Schwefel(dims=20)
     max_calls = 100000
     checker = MaxFuncCalls(max_calls) | TargetCost(task.min_fx)
@@ -75,15 +84,6 @@ if __name__ == '__main__':
                                         visualisation_args=visualisation_args,
                                         force_terminations_after=-1,
                                         split_printstreams=True)
-
-    formatter = logging.Formatter("%(asctime)s : %(levelname)s : %(lineno)d : %(name)s :: %(message)s")
-
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(formatter)
-
-    logger = logging.getLogger('glompo.manager')
-    logger.addHandler(handler)
-    logger.setLevel('INFO')
 
     result = manager.start_manager()
 
