@@ -31,7 +31,6 @@ setup(
         'Nevergrad': ['nevergrad'],
         'ParAMSWrapper': ['scm'],
         'Checkpointing': ['dill>=0.2.7'],
-        'ResourceUsageStatusPrinting': ['psutil>=5.6.2'],
-        'OptimizationAnalysis': ['dask', 'pandas'],
+        'ResourceUsageStatusPrinting': ['psutil>=5.6.2']
     }
 )
