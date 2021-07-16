@@ -1,7 +1,10 @@
 import multiprocessing as mp
 from pathlib import Path
 
-from glompo.common.wrappers import catch_user_interrupt, decorate_all_methods, process_print_redirect
+import pytest
+
+from glompo.common.wrappers import catch_user_interrupt, decorate_all_methods, process_print_redirect, \
+    needs_optional_package
 
 
 def test_redirect(tmp_path):
@@ -62,3 +65,17 @@ def test_decorate_all(capsys):
     captured = capsys.readouterr()
     assert captured.out == "dummy1\ndummy2\ndummy3\n"
     assert captured.err == ""
+
+
+@pytest.mark.parametrize('package, warns, ret', [('thispackagedefinitelydoesnotexist1048717812', ResourceWarning, None),
+                                                 ('yaml', None, 765)])
+def test_needs_package(package, warns, ret):
+    @needs_optional_package(package)
+    def wrapped_method():
+        return 765
+
+    with pytest.warns(warns, match="Unable to construct checkpoint without"):
+        ans = wrapped_method()
+
+    assert ans == ret
+

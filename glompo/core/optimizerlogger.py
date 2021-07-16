@@ -4,20 +4,19 @@ import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Union
 
-import dill
 import numpy as np
 import tables as tb
 
 from ..common.helpers import deepsizeof, glompo_colors, rolling_best
 from ..common.namedtuples import IterationResult
+from ..common.wrappers import needs_optional_package
 
 try:
     import matplotlib.pyplot as plt
     import matplotlib.lines as lines
-
-    HAS_MATPLOTLIB = True
+    import dill
 except (ModuleNotFoundError, ImportError):
-    HAS_MATPLOTLIB = False
+    pass
 
 __all__ = ("BaseLogger",
            "FileLogger")
@@ -27,6 +26,7 @@ class BaseLogger:
     """ Holds iteration results in memory for faster access. """
 
     @classmethod
+    @needs_optional_package('dill')
     def checkpoint_load(cls, path: Union[Path, str]):
         """ Construct a new BaseLogger from the attributes saved in the checkpoint file located at path. """
         opt_log = cls.__new__(cls)
@@ -153,15 +153,11 @@ class BaseLogger:
         """ Returns a piece of metadata in memory. """
         return self._storage[opt_id]['metadata'][key]
 
+    @needs_optional_package('matplotlib')
     def plot_optimizer_trials(self, path: Optional[Path] = None, opt_id: Optional[int] = None):
         """ Generates plots for each optimizer in the log of each trialed parameter value as a function of optimizer
             iterations.
         """
-
-        if not HAS_MATPLOTLIB:
-            warnings.warn("Matplotlib not present cannot create plots.", ImportWarning)
-            return
-
         is_interactive = plt.isinteractive()
         if is_interactive:
             plt.ioff()
@@ -187,6 +183,7 @@ class BaseLogger:
         if is_interactive:
             plt.ion()
 
+    @needs_optional_package('matplotlib')
     def plot_trajectory(self, title: Union[Path, str], log_scale: bool = False, best_fx: bool = False):
         """ Generates a plot of each optimizer function values versus the overall function evaluation number.
 
@@ -200,11 +197,6 @@ class BaseLogger:
                 If True the best function evaluation see thus far of each optimizer will be plotted rather than the
                 function evaluation at the matching evaluation number.
         """
-
-        if not HAS_MATPLOTLIB:
-            warnings.warn("Matplotlib not present cannot create plots.", ImportWarning)
-            return
-
         is_interactive = plt.isinteractive()
         if is_interactive:
             plt.ioff()
@@ -274,6 +266,7 @@ class BaseLogger:
         """ Remove all records from memory. """
         self.clear_cache()
 
+    @needs_optional_package('dill')
     def checkpoint_save(self, path: Union[Path, str] = '', block: Optional[Sequence[str]] = None):
         """ Saves the state of the logger, suitable for resumption, during a checkpoint.
 

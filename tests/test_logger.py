@@ -8,6 +8,12 @@ import glompo.core.optimizerlogger
 from glompo.common.namedtuples import IterationResult
 from glompo.core.optimizerlogger import BaseLogger, FileLogger
 
+try:
+    import matplotlib
+    HAS_MATPLOTLIB = True
+except (ModuleNotFoundError, ImportError):
+    HAS_MATPLOTLIB = False
+
 
 @pytest.fixture(scope='class')
 def filled_log(tmp_path_factory, request):
@@ -99,17 +105,7 @@ class TestLogger:
         assert log.largest_eval == 50
         assert log.get_best_iter() == {'opt_id': 1, 'x': [0], 'fx': 1, 'type': 'Optimizer', 'call_id': 1}
 
-    @pytest.mark.skipif(not glompo.core.optimizerlogger.HAS_MATPLOTLIB,
-                        reason="Matplotlib package needed to use these features.")
-    def test_plot_no_matplotlib(self, filled_log, monkeypatch):
-        monkeypatch.setattr(glompo.core.optimizerlogger, "HAS_MATPLOTLIB", False)
-        with pytest.warns(ImportWarning, match="Matplotlib not present cannot create plots."):
-            filled_log.plot_trajectory("")
-
-        with pytest.warns(ImportWarning, match="Matplotlib not present cannot create plots."):
-            filled_log.plot_optimizer_trials()
-
-    @pytest.mark.skipif(not glompo.core.optimizerlogger.HAS_MATPLOTLIB,
+    @pytest.mark.skipif(not HAS_MATPLOTLIB,
                         reason="Matplotlib package needed to use these features.")
     @pytest.mark.parametrize("log_scale", [True, False])
     @pytest.mark.parametrize("best_fx", [True, False])
@@ -117,7 +113,7 @@ class TestLogger:
         filled_log.plot_trajectory(Path(tmp_path, 'traj.png'), log_scale, best_fx)
         assert Path(tmp_path, 'traj.png').exists()
 
-    @pytest.mark.skipif(not glompo.core.optimizerlogger.HAS_MATPLOTLIB,
+    @pytest.mark.skipif(not HAS_MATPLOTLIB,
                         reason="Matplotlib package needed to use these features.")
     def test_plot_opts(self, tmp_path, filled_log, save_outputs):
         filled_log.plot_optimizer_trials(tmp_path)

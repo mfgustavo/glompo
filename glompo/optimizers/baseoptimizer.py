@@ -12,11 +12,15 @@ from queue import Queue
 from threading import Event
 from typing import Any, Callable, List, Optional, Sequence, Set, Tuple, Type, Union
 
-import dill
-
 from ..common.helpers import LiteralWrapper
 from ..common.namedtuples import IterationResult
 from ..core._backends import ChunkingQueue
+from ..common.wrappers import needs_optional_package
+
+try:
+    import dill
+except ModuleNotFoundError:
+    pass
 
 __all__ = ('BaseOptimizer', 'MinimizeResult')
 
@@ -104,6 +108,7 @@ class BaseOptimizer(ABC):
     """ Base class of parameter optimizers in GloMPO """
 
     @classmethod
+    @needs_optional_package('dill')
     def checkpoint_load(cls: Type['BaseOptimizer'],
                         path: Union[Path, str],
                         opt_id: Optional[int] = None,
@@ -294,6 +299,7 @@ class BaseOptimizer(ABC):
     def callstop(self, reason: str):
         """ Signal to terminate the minimize loop while still returning a result. """
 
+    @needs_optional_package('dill')
     def checkpoint_save(self, path: Union[Path, str], force: Optional[Set[str]] = None):
         """ Save current state, suitable for restarting. Path is the location for the file or folder to be constructed.
             Note that only the absolutely critical aspects of the state of the optimizer need to be saved. The manager
