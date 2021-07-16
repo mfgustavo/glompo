@@ -1,5 +1,3 @@
-
-
 from setuptools import find_packages, setup
 
 
@@ -17,10 +15,13 @@ setup(
     author="Michael Freitas Gustavo",
     author_email="michael.freitasgustavo@ugent.be",
     url="https://github.com/mfgustavo/glompo",
+    download_url="https://github.com/mfgustavo/glompo",
     packages=find_packages(),
+    license_file='LICENSE',
     include_package_data=True,
     package_dir={"glompo": "glompo"},
     install_requires=['numpy', 'PyYAML', 'tables'],
+    python_requires='>=3.6',
     extras_require={
         'Plotting': ['matplotlib'],
         'Video': ['matplotlib>=3.0', 'ffmpeg', 'PySide2'],
