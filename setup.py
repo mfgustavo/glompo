@@ -7,9 +7,12 @@ def get_readme():
         return fhandle.read()
 
 
+with open('glompo/_version.py', 'r') as file:
+    exec(file.read())
+
 setup(
     name="glompo",
-    version="3.0.1",
+    version=__version__,
     description="Globally managed parallel optimization",
     long_description=get_readme(),
     author="Michael Freitas Gustavo",
