@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 from typing import Optional, Sequence, Tuple, Union, overload
 
-import matplotlib
 import numpy as np
 import yaml
 
