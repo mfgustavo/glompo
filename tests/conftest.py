@@ -1,10 +1,7 @@
-import inspect
 import shutil
 from pathlib import Path
 
 import pytest
-
-import glompo
 
 
 def pytest_addoption(parser):
@@ -33,5 +30,5 @@ def save_outputs(request, pytestconfig):
 
 @pytest.fixture(scope='session')
 def input_files():
-    inputs_path = Path(inspect.getabsfile(glompo.tests)).parent / '_test_inputs'
+    inputs_path = Path(__file__).parent / '_test_inputs'
     yield inputs_path

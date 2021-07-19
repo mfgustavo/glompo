@@ -1,14 +1,14 @@
 import datetime
 from pathlib import Path
 
-import glompo.core.optimizerlogger
 import numpy as np
 import pytest
 import yaml
+
+import glompo.core.optimizerlogger
 from glompo.core.optimizerlogger import OptimizerLogger
 from glompo.optimizers.baseoptimizer import BaseOptimizer
-from glompo.optimizers.cmawrapper import CMAOptimizer
-from glompo.optimizers.gflswrapper import GFLSOptimizer
+from glompo.optimizers.random import RandomOptimizer
 
 
 class TestLogger:
@@ -17,8 +17,8 @@ class TestLogger:
     def filled_log(self):
         log = OptimizerLogger()
 
-        opt0 = GFLSOptimizer(0)
-        opt1 = CMAOptimizer(1)
+        opt0 = RandomOptimizer(0)
+        opt1 = RandomOptimizer(1)
         opt2 = BaseOptimizer
 
         log.add_optimizer(0, type(opt0).__name__, datetime.datetime.now())
@@ -47,8 +47,8 @@ class TestLogger:
         filled_log.save_optimizer(Path(tmp_path, "success"), 1)
         filled_log.save_optimizer(Path(tmp_path, "all"))
 
-        Path(tmp_path, "all", "0_GFLSOptimizer.yml").exists()
-        Path(tmp_path, "all", "1_CMAOptimizer.yml").exists()
+        Path(tmp_path, "all", "0_RandomOptimizer.yml").exists()
+        Path(tmp_path, "all", "1_RandomOptimizer.yml").exists()
         Path(tmp_path, "all", "2_ABCMeta.yml").exists()
         Path(tmp_path, "success.yml").exists()
 
