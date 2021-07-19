@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 
 import pytest
+
 from glompo.common.logging import SplitOptimizerLogs
 
 

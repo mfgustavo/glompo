@@ -4,6 +4,7 @@ from typing import Callable, Sequence, Tuple, Union
 
 import numpy as np
 import pytest
+
 from glompo.common.corebase import _CombiCore
 from glompo.core.optimizerlogger import OptimizerLogger
 from glompo.hunters.basehunter import BaseHunter, _AndHunter, _OrHunter

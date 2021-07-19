@@ -1,14 +1,14 @@
 import datetime
 from pathlib import Path
 
-import glompo.core.optimizerlogger
 import numpy as np
 import pytest
 import yaml
+
+import glompo.core.optimizerlogger
 from glompo.core.optimizerlogger import OptimizerLogger
 from glompo.optimizers.baseoptimizer import BaseOptimizer
-from glompo.optimizers.cmawrapper import CMAOptimizer
-from glompo.optimizers.gflswrapper import GFLSOptimizer
+from glompo.optimizers.random import RandomOptimizer
 
 
 class TestLogger:
