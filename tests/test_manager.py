@@ -13,6 +13,13 @@ import tables as tb
 import yaml
 
 try:
+    import dill
+
+    HAS_DILL = True
+except (ModuleNotFoundError, ImportError):
+    HAS_DILL = False
+
+try:
     from yaml import CLoader as Loader
 except ImportError:
     from yaml import Loader as Loader
@@ -662,6 +669,7 @@ class TestManagement:
                        "STOP file found for Optimizer 2"]) == sorted(caplog.messages)
         assert mock_shutdown_logger.calls == [2]
 
+    @pytest.mark.skipif(not HAS_DILL, reason="dill package needed to test and use checkpointing.")
     def test_manual_checkpoint(self, manager, monkeypatch, tmp_path):
         class CheckpointCallLogger:
             def __init__(self):
@@ -797,6 +805,7 @@ class TestManagement:
         assert result.origin['type'] == 'SteepestGradient'
 
 
+@pytest.mark.skipif(not HAS_DILL, reason="dill package needed to test and use checkpointing.")
 class TestCheckpointing:
     """ Tests related to checkpointing and resuming GloMPO optimizations. These tests rely on a single shared directory.
         The first tests produce checkpoints (at init, midway and convergence) and subsequent tests attempt to resume
