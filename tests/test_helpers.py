@@ -26,7 +26,7 @@ from glompo.common.helpers import WorkInDirectory, LiteralWrapper, literal_prese
 from glompo.opt_selectors import BaseSelector, CycleSelector, IterSpawnStop
 from glompo.generators import RandomGenerator, BaseGenerator
 from glompo.common.namedtuples import Bound
-from glompo.optimizers.cmawrapper import CMAOptimizer
+from glompo.optimizers.random import RandomOptimizer
 
 yaml.add_representer(LiteralWrapper, literal_presenter, Dumper=Dumper)
 yaml.add_representer(FlowList, flow_presenter, Dumper=Dumper)
@@ -167,10 +167,10 @@ class MaxCallsCallback:
                           (BoundGroup([Bound(0, 1)] * 5 + [Bound(3, 6)] * 4),
                            '(0, 1): [0, 1, 2, 3, 4]\n(3, 6): [5, 6, 7, 8]\n'),
 
-                          (CycleSelector([(CMAOptimizer, {'sigma': 0.5, 'workers': 1, 'popsize': 10},
+                          (CycleSelector([(RandomOptimizer, {'workers': 1, 'popsize': 10},
                                            {'callbacks': MaxCallsCallback(100, 1)})], allow_spawn=IterSpawnStop(300)),
                            'Selector: CycleSelector\nAllow Spawn:\n  IterSpawnStop:\n    max_calls: 300\n'
-                           'Available Optimizers:\n  0:\n    type: CMAOptimizer\n    init_kwargs:\n      sigma: 0.5\n'
+                           'Available Optimizers:\n  0:\n    type: RandomOptimizer\n    init_kwargs:\n'
                            '      workers: 1\n      popsize: 10\n    call_kwargs:\n      callbacks:\n        '
                            'MaxCallsCallback:\n          calls_per_iter: 1\n          iters_used: 0\n          '
                            'max_iter: 100\n'),
