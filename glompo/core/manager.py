@@ -55,6 +55,7 @@ from ..hunters import BaseHunter
 from ..opt_selectors.baseselector import BaseSelector
 from ..optimizers.baseoptimizer import BaseOptimizer
 from .checkpointing import CheckpointingControl
+from .. import __version__
 
 __all__ = ("GloMPOManager",)
 
@@ -581,7 +582,6 @@ class GloMPOManager:
             self.logger.warning(f"summary_files argument given as {summary_files} clipped to {self.summary_files}")
         self.split_printstreams = bool(split_printstreams)
         self.overwrite_existing = bool(overwrite_existing)
-        self.visualisation = visualisation
         self.hunt_frequency = hunt_frequency
         self.spawning_opts = True
         self.incumbent_sharing = share_best_solutions
@@ -601,9 +601,17 @@ class GloMPOManager:
 
         # Initialise support classes
         if visualisation:
-            from .scope import GloMPOScope  # Only imported if needed to avoid matplotlib compatibility issues
-            self.visualisation_args = visualisation_args if visualisation_args else {}
-            self.scope = GloMPOScope(**visualisation_args) if visualisation_args else GloMPOScope()
+            try:
+                from .scope import GloMPOScope  # Only imported if needed to avoid matplotlib compatibility issues
+                self.visualisation = visualisation
+                self.visualisation_args = visualisation_args if visualisation_args else {}
+                self.scope = GloMPOScope(**visualisation_args) if visualisation_args else GloMPOScope()
+            except (ModuleNotFoundError, ImportError):
+                self.visualisation = False
+                self.logger.warning("Visualisation controls ignored. Cannot setup infrastructure without matplotlib "
+                                    "package.")
+                warnings.warn("Visualisation controls ignored. Cannot setup infrastructure without matplotlib package.",
+                              ResourceWarning)
 
         # Setup backend
         if any([backend == valid_opt for valid_opt in ('processes', 'threads', 'processes_forced')]):
@@ -1626,6 +1634,7 @@ class GloMPOManager:
             t_periods = [{"Start": str(t0), "End": str(t)} for t0, t in zip(self.dt_starts, self.dt_ends)]
             data = {
                 "Assignment": {
+                    "GloMPO Version": __version__,
                     "Task": type(self.task).__name__ if isinstance(type(self.task), object) else self.task.__name__,
                     "Working Dir": str(Path.cwd()),
                     "Username": getpass.getuser(),
