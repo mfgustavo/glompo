@@ -11,14 +11,6 @@ except (ModuleNotFoundError, ImportError):
     from yaml import Dumper
     from yaml import Loader
 
-try:
-    import matplotlib.pyplot as plt
-    import matplotlib.colors as cols
-
-    HAS_MATPLOTLIB = True
-except (ModuleNotFoundError, ImportError):
-    HAS_MATPLOTLIB = False
-
 from glompo.common.helpers import WorkInDirectory, LiteralWrapper, literal_presenter, nested_string_formatting, \
     unknown_object_presenter, generator_presenter, optimizer_selector_presenter, present_memory, FlowList, \
     flow_presenter, numpy_array_presenter, numpy_dtype_presenter, BoundGroup, bound_group_presenter, is_bounds_valid, \
@@ -109,9 +101,10 @@ def test_work_in_directory(tmp_path):
     assert Path.cwd().samefile(start_direc)
 
 
-@pytest.mark.skipif(not HAS_MATPLOTLIB, reason="Requires matplotlib to use this function.")
 @pytest.mark.parametrize("opt_id", [10, 35, 53, 67, 73, 88, 200, None])
 def test_colors(opt_id):
+    plt = pytest.importorskip('maptplotlib.pyplot', "Matplotlib package needed to use these features.")
+    cols = pytest.importorskip('maptplotlib.colors', "Matplotlib package needed to use these features.")
     if opt_id:
         if opt_id < 20:
             colors = plt.get_cmap("tab20")

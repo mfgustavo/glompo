@@ -202,8 +202,8 @@ class TestBase:
         process.join()
         assert mp_package.queue.get() == "item"
 
-    @pytest.mark.skipif(not HAS_DILL, reason="dill package needed to test and use checkpointing")
     def test_checkpointsave(self, mp_package, tmp_path, capfd):
+        pytest.importorskip('dill', "dill package needed to test and use checkpointing.")
         opti = PlainOptimizer(1, mp_package.c_pipe, mp_package.queue, mp_package.event)
         opti.workers = 685
         process = mp.Process(target=opti.minimize, args=(None, None, None))

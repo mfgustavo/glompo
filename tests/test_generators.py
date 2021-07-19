@@ -9,9 +9,9 @@ from glompo.generators.single import SinglePointGenerator
 
 try:
     from glompo.generators.peterbation import PerturbationGenerator
-    has_scipy = True
+    HAS_SCIPY = True
 except ModuleNotFoundError:
-    has_scipy = False
+    HAS_SCIPY = False
 
 
 class TestRandom:
@@ -35,7 +35,7 @@ class TestRandom:
                 assert x <= bounds[j][1]
 
 
-@pytest.mark.skipif(not has_scipy, reason="Requires scipy to test PerturbationGenerator")
+@pytest.mark.skipif(not HAS_SCIPY, reason="Requires scipy to test PerturbationGenerator")
 class TestPerturbation:
 
     def test_call(self):
