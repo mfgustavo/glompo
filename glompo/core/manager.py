@@ -55,6 +55,7 @@ from ..hunters import BaseHunter
 from ..opt_selectors.baseselector import BaseSelector
 from ..optimizers.baseoptimizer import BaseOptimizer
 from .checkpointing import CheckpointingControl
+from .. import __version__
 
 __all__ = ("GloMPOManager",)
 
@@ -1619,6 +1620,7 @@ class GloMPOManager:
             t_periods = [{"Start": str(t0), "End": str(t)} for t0, t in zip(self.dt_starts, self.dt_ends)]
             data = {
                 "Assignment": {
+                    "GloMPO Version": __version__,
                     "Task": type(self.task).__name__ if isinstance(type(self.task), object) else self.task.__name__,
                     "Working Dir": str(Path.cwd()),
                     "Username": getpass.getuser(),
