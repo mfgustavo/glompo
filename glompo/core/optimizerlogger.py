@@ -1,6 +1,5 @@
 """ Contains classes which save log information for GloMPO and its optimizers. """
 import datetime
-import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Union
 
