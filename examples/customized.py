@@ -1,10 +1,10 @@
 import logging
 import sys
 
-from glompo import GloMPOManager
 from glompo.benchmark_fncs import Michalewicz
 from glompo.convergence import MaxFuncCalls, TargetCost
 from glompo.core.checkpointing import CheckpointingControl
+from glompo.core.manager import GloMPOManager
 from glompo.generators import RandomGenerator
 from glompo.hunters import BestUnmoving, EvaluationsUnmoving, ParameterDistance, ValueAnnealing
 from glompo.opt_selectors import CycleSelector
