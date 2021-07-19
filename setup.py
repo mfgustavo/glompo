@@ -26,7 +26,7 @@ setup(
     install_requires=['numpy', 'PyYAML'],
     extras_require={
         'Plotting': ['matplotlib'],
-        'Video': ['matplotlib>=3.0', 'ffmpeg', 'PySide2'],
+        'Video': ['matplotlib>=3.0, <3.4', 'ffmpeg', 'PySide2'],
         'PerturbationGenerator': ['scipy'],
         'UnitTesting': ['pytest>=4.4'],
         'CMAOptimizer': ['cma>=2.7, <3'],
