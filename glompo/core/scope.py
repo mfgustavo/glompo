@@ -4,14 +4,18 @@ import warnings
 from pathlib import Path
 from typing import Any, Dict, Optional, Set, Tuple, Union
 
-import dill
 import matplotlib.animation as ani
 import matplotlib.lines as lines
 import matplotlib.pyplot as plt
 import numpy as np
 
 from ..common.helpers import glompo_colors
-from ..common.wrappers import catch_user_interrupt, decorate_all_methods
+from ..common.wrappers import catch_user_interrupt, decorate_all_methods, needs_optional_package
+
+try:
+    import dill
+except ModuleNotFoundError:
+    pass
 
 __all__ = ("GloMPOScope",)
 
@@ -367,6 +371,7 @@ class GloMPOScope:
             self._writer.cleanup()
         plt.close(self.fig)
 
+    @needs_optional_package('dill')
     def checkpoint_save(self, path: Union[Path, str] = ''):
         """ Saves the state of the scope, suitable for resumption, during a checkpoint. Path is a directory in which to
             dump the generated files.
@@ -387,6 +392,7 @@ class GloMPOScope:
             warnings.warn("Movie saving is not supported with checkpointing", RuntimeWarning)
             self.logger.warning("Movie saving is not supported with checkpointing")
 
+    @needs_optional_package('dill')
     def load_state(self, path: Union[Path, str]):
         """ Loads a saved scope state. Path is a directory containing the checkpoint files. """
 

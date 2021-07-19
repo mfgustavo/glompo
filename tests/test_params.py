@@ -10,21 +10,14 @@ from typing import Dict
 import numpy as np
 import pytest
 
-try:
-    from scm.params.core.opt_components import _Step, _LossEvaluator, EvaluatorReturn
-    from scm.params.common.parallellevels import ParallelLevels
-    from scm.params.common.reaxff_converter import geo_to_params, trainset_to_params
-    from scm.params.core.dataset import DataSet, Loss, SSE
-    from scm.params.core.jobcollection import JobCollection
-    from scm.params.core.opt_components import LinearParameterScaler, _Step
-    from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
-    from scm.params.parameterinterfaces.reaxff import ReaxParams
-    from scm.plams.core.errors import ResultsError
-    from scm.plams.interfaces.adfsuite.reaxff import reaxff_control_to_settings
+pytest.importorskip('scm', reason="SCM ParAMS needed to test and use the ParAMS interface.")
 
-    HAS_PARAMS = True
-except (ModuleNotFoundError, ImportError):
-    HAS_PARAMS = False
+from scm.params.core.opt_components import _LossEvaluator, EvaluatorReturn
+from scm.params.common.parallellevels import ParallelLevels
+from scm.params.core.dataset import DataSet, Loss
+from scm.params.core.jobcollection import JobCollection
+from scm.params.core.opt_components import LinearParameterScaler, _Step
+from scm.params.parameterinterfaces.reaxff import ReaxParams
 
 from glompo.interfaces.params import _FunctionWrapper, ReaxFFError
 
@@ -38,7 +31,6 @@ class FakeLossEvaluator(_LossEvaluator):
                                None, [5, 2, -1, -9], [0.10, 0.25, 0.30, 0.35], 0)
 
 
-@pytest.mark.skipif(not HAS_PARAMS, reason="SCM ParAMS needed to test and use the ParAMS interface.")
 class TestParamsStep:
     """ This class of tests ensures that the scm.params._Step instance given to the GloMPOManager has the attributes
         expected.

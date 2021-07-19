@@ -96,9 +96,8 @@ class TestLogger:
     def test_metadata(self, filled_log):
         assert filled_log.get_metadata(0, "End Condition") == "GloMPO Termination"
 
-    @pytest.mark.skipif(not glompo.core.optimizerlogger.HAS_MATPLOTLIB,
-                        reason="Matplotlib package needed to use these features.")
     def test_plot_no_matplotlib(self, filled_log, monkeypatch):
+        pytest.importorskip('maptplotlib.pyplot', "Matplotlib package needed to use these features.")
         monkeypatch.setattr(glompo.core.optimizerlogger, "HAS_MATPLOTLIB", False)
         with pytest.warns(ImportWarning, match="Matplotlib not present cannot create plots."):
             filled_log.plot_trajectory("")
@@ -106,17 +105,15 @@ class TestLogger:
         with pytest.warns(ImportWarning, match="Matplotlib not present cannot create plots."):
             filled_log.plot_optimizer_trials()
 
-    @pytest.mark.skipif(not glompo.core.optimizerlogger.HAS_MATPLOTLIB,
-                        reason="Matplotlib package needed to use these features.")
     @pytest.mark.parametrize("log_scale", [True, False])
     @pytest.mark.parametrize("best_fx", [True, False])
     def test_plot_traj(self, filled_log, log_scale, best_fx, tmp_path):
+        pytest.importorskip('maptplotlib.pyplot', "Matplotlib package needed to use these features.")
         filled_log.plot_trajectory(Path(tmp_path, 'traj.png'), log_scale, best_fx)
         assert Path(tmp_path, 'traj.png').exists()
 
-    @pytest.mark.skipif(not glompo.core.optimizerlogger.HAS_MATPLOTLIB,
-                        reason="Matplotlib package needed to use these features.")
     def test_plot_opts(self, tmp_path, filled_log):
+        pytest.importorskip('maptplotlib.pyplot', "Matplotlib package needed to use these features.")
         filled_log.plot_optimizer_trials(tmp_path)
         for i in range(3):
             assert Path(tmp_path, f"opt{i}_parms.png").exists()

@@ -12,7 +12,10 @@ from queue import Full, Queue
 from threading import Event
 from typing import Any, Callable, Optional, Sequence, Set, Tuple, Type, Union
 
-import dill
+try:
+    import dill
+except ModuleNotFoundError:
+    pass
 
 from ..common.helpers import LiteralWrapper
 
