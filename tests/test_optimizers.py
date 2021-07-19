@@ -5,12 +5,18 @@ from pathlib import Path
 from time import sleep, time
 from typing import Callable, NamedTuple, Sequence, Tuple
 
-import dill
 import pytest
 
 from glompo.common.namedtuples import IterationResult
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from glompo.optimizers.random import RandomOptimizer
+
+try:
+    import dill
+
+    HAS_DILL = True
+except ModuleNotFoundError:
+    HAS_DILL = False
 
 # Append new optimizer classes to this list to run tests for GloMPO compatibility
 # Expected: Tuple[Type[BaseOptimizer], Dict[str, Any] (init arguments), Dict[str, Any] (minimize arguments)]
@@ -196,6 +202,7 @@ class TestBase:
         process.join()
         assert mp_package.queue.get() == "item"
 
+    @pytest.mark.skipif(not HAS_DILL, reason="dill package needed to test and use checkpointing")
     def test_checkpointsave(self, mp_package, tmp_path, capfd):
         opti = PlainOptimizer(1, mp_package.c_pipe, mp_package.queue, mp_package.event)
         opti.workers = 685
