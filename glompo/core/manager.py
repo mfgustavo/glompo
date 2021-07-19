@@ -573,7 +573,6 @@ class GloMPOManager:
             self.logger.warning(f"summary_files argument given as {summary_files} clipped to {self.summary_files}")
         self.split_printstreams = bool(split_printstreams)
         self.overwrite_existing = bool(overwrite_existing)
-        self.visualisation = visualisation
         self.hunt_frequency = hunt_frequency
         self.spawning_opts = True
         self.status_frequency = int(status_frequency)
@@ -592,9 +591,17 @@ class GloMPOManager:
 
         # Initialise support classes
         if visualisation:
-            from .scope import GloMPOScope  # Only imported if needed to avoid matplotlib compatibility issues
-            self.visualisation_args = visualisation_args if visualisation_args else {}
-            self.scope = GloMPOScope(**visualisation_args) if visualisation_args else GloMPOScope()
+            try:
+                from .scope import GloMPOScope  # Only imported if needed to avoid matplotlib compatibility issues
+                self.visualisation = visualisation
+                self.visualisation_args = visualisation_args if visualisation_args else {}
+                self.scope = GloMPOScope(**visualisation_args) if visualisation_args else GloMPOScope()
+            except (ModuleNotFoundError, ImportError):
+                self.visualisation = False
+                self.logger.warning("Visualisation controls ignored. Cannot setup infrastructure without matplotlib "
+                                    "package.")
+                warnings.warn("Visualisation controls ignored. Cannot setup infrastructure without matplotlib package.",
+                              ResourceWarning)
 
         # Setup backend
         if any([backend == valid_opt for valid_opt in ('processes', 'threads', 'processes_forced')]):
