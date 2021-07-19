@@ -30,7 +30,7 @@ setup(
         'Video': ['matplotlib>=3.0', 'ffmpeg', 'PySide2'],
         'PerturbationGenerator': ['scipy'],
         'UnitTesting': ['pytest>=4.4'],
-        'CMAOptimizer': ['cma'],
+        'CMAOptimizer': ['cma>=2.7, <3'],
         'GFLSOptimizer': ['optsam'],
         'Nevergrad': ['nevergrad'],
         'ParAMSWrapper': ['scm'],
