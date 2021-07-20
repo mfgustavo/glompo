@@ -137,7 +137,7 @@ if __name__ == '__main__':
                           'events_per_flush': 500,
                           'interactive_mode': True,
                           'writer_kwargs': {'fps': 8},
-                          'movie_kwargs': {'outfile': 'distance_demo.mp4',
+                          'movie_kwargs': {'outfile': 'demo.mp4',
                                            'dpi': 200}}
 
     """ For buggy tasks which are liable to fail or produce extreme results, it is possible that optimizers can get 
