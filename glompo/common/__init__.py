@@ -1,1 +1,1 @@
-""" Small unit classes used in multiple subdirectories. """
+""" Small classes and ststic methods used throughout the package. """

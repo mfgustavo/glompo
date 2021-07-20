@@ -178,13 +178,6 @@ class TestReaxFFError:
                      'reax_params.pkl' if suffix == 'pkl' else 'ffield'):
             assert Path(tmp_path, file).exists()
 
-    def test_detailed_call_header(self):
-        if 'classic' not in self.built_tasks:
-            pytest.xfail("Classic constructed task missing.")
-
-        header = self.built_tasks['classic'].detailed_call_header()
-        assert header == ['fx'] + [f'r{i:04}' for i in range(4875)]
-
     @pytest.mark.parametrize("name", ['classic', 'params_pkl', 'params_yml'])
     def test_calculate(self, name, check_result):
         if name not in self.built_tasks:
@@ -216,7 +209,7 @@ class TestReaxFFError:
                 return loaded_eng.x
 
         def mock_evaluate(ff_results, *args, **kwargs):
-            return (None, ff_results, None)
+            return None, ff_results, None
 
         monkeypatch.setattr(self.built_tasks['classic'].job_col, 'run', mock_run)
         monkeypatch.setattr(self.built_tasks['classic'].dat_set, 'evaluate', mock_evaluate)

@@ -7,13 +7,26 @@ __all__ = ("EvaluationsUnmoving",)
 
 
 class EvaluationsUnmoving(BaseHunter):
+    """ Considers function values the optimizers are currently exploring.
+    Used to terminate an optimizer when its function evaluations are unchanging, usually indicating that it is
+    approaching some convergence. Best used with a hunter which monitors step size to ensure a widely exploring
+    optimizer is not killed.
+
+    Parameters
+    ----------
+    calls
+        Number of function evaluations between comparison points.
+    tol
+        Tolerance fraction between 0 and 1.
+
+    Returns
+    -------
+    bool
+        Returns :obj:`True` if the standard deviation of the last `calls` function evaluations is below
+        :code:`tol * abs(latest_f_eval)`.
+    """
 
     def __init__(self, calls: int, tol: float = 0):
-        """ Returns True if the standard deviation of the last 'calls' function evaluations is below tol * last_f_eval.
-            Used to terminate an optimizer when its function evaluations are unchanging, usually indicating that it is
-            approaching some convergence. Best used with a hunter which monitors step size to ensure a widely exploring
-            optimizer is not killed.
-        """
         super().__init__()
         self.calls = calls
         self.tol = tol
@@ -27,8 +40,8 @@ class EvaluationsUnmoving(BaseHunter):
 
         if n_calls < self.calls:
             # If there are insufficient iterations the hunter will return False
-            self._last_result = False
-            return self._last_result
+            self.last_result = False
+            return self.last_result
 
         try:
             st_dev = np.std(vals[-self.calls:])
@@ -36,5 +49,5 @@ class EvaluationsUnmoving(BaseHunter):
             vals = np.array(vals)[np.isfinite(vals)]
             st_dev = np.std(vals[-self.calls:])
 
-        self._last_result = st_dev <= np.abs(vals[-1] * self.tol)
-        return self._last_result
+        self.last_result = st_dev <= np.abs(vals[-1] * self.tol)
+        return self.last_result

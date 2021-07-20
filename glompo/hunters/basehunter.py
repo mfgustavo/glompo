@@ -10,7 +10,13 @@ __all__ = ("BaseHunter",)
 
 
 class BaseHunter(_CoreBase):
-    """ Base hunter from which all hunters must inherit to be compatible with GloMPO. """
+    """ Base hunter from which all hunters must inherit to be compatible with GloMPO.
+
+    Attributes
+    ----------
+    logger : logging.Logger
+        :class:`logging.Logger` instance into which status messages may be added.
+    """
 
     def __init__(self):
         super().__init__()
@@ -21,21 +27,27 @@ class BaseHunter(_CoreBase):
                  log: BaseLogger,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
-        """ When called, this method may check any values within the logs or GPRs of both hunter or the victim
-            and return a bool if the desired condition is met.
+        """ Compares two optimizers and returns if one should be terminated according to some condition.
+        When called, this method may check any values within the logs of both the hunter or the victim.
 
-            Note: For proper functionality, the result of __call__ must be saved to self._last_result
-                  before returning.
+        Parameters
+        ----------
+        log
+            Instance of :class:`.BaseLogger` that contains the iteration history of every optimizer.
+        hunter_opt_id
+            ID number of the 'hunter'; defined as the optimizer which has found the lowest function value.
+        victim_opt_id
+            ID number of the 'victim'; defined as any optimizer which is not the hunter.
 
-            Parameters
-            ----------
-            log: BaseLogger
-                Instance of Logger class that contains the iteration history of every optimizer.
-            hunter_opt_id: int
-                ID number of the 'hunter' optimizer currently identified as the best performer.
-            victim_opt_id: int
-                ID number of the 'victim' optimizer, aspects of which will be compared to the 'hunter' in this class to
-                ascertain whether it should be shutdown.
+        Returns
+        -------
+        bool
+            :obj:`True` if the condition in the method is met, :obj:`False` otherwise.
+
+        Notes
+        -----
+        For proper functionality, the result of this method must be saved to :attr:`last_result` before
+        returning.
         """
 
     def __or__(self, other: 'BaseHunter') -> '_OrHunter':

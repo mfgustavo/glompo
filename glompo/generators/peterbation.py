@@ -10,24 +10,23 @@ __all__ = ("PerturbationGenerator",)
 
 
 class PerturbationGenerator(BaseGenerator):
-    """ Randomly generates parameter vectors by drawing from truncated normally distributed numbers centered around a
-        provided vector and bound by given bounds. Good for parametrisation efforts where a good candidate is already
-        available, however, this may drastically limit the exploratory nature of GloMPO.
+    """ Randomly generates parameter vectors near a given point.
+    Draws samples from a truncated multivariate normal distributed centered around a provided vector and bound by given
+    bounds. Good for parametrisation efforts where a good candidate is already available, however, this may drastically
+    limit the exploratory nature of GloMPO.
+
+    Parameters
+    ----------
+    x0
+        Center point for each parameter
+    bounds
+        Min and max bounds for each parameter
+    scale
+        Standard deviation of each parameter. Used here to control how wide the generator should explore around the
+        mean.
     """
 
     def __init__(self, x0: Sequence[float], bounds: Sequence[Tuple[float, float]], scale: Sequence[float]):
-        """
-
-        Parameters
-        ----------
-        x0 : Sequence[float]
-            Center point for each parameter
-        bounds : Sequence[Tuple[float, float]]
-            Min and max bounds for each parameter
-        scale : Sequence[float]
-            Standard deviation of each parameter. Used here to control how wide the generator should explore around the
-            mean.
-        """
         super().__init__()
         self.n_params = len(x0)
         self.loc = np.array(x0)

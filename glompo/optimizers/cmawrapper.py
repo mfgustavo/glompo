@@ -20,59 +20,59 @@ __all__ = ('CMAOptimizer',)
 
 
 class CMAOptimizer(BaseOptimizer):
-    """
-    Implementation of the Covariance Matrix Adaptation Evolution Strategy
-        * Home:   http://cma.gforge.inria.fr/
-        * Module: https://github.com/CMA-ES/pycma
+    """ Wrapper around a CMA-ES python implementation [c]_.
+    Note that this class is also *stand-alone*, this means it can be used independently of the GloMPO framework.
+    It is also built in such a way that it :meth:`minimize` can be called multiple times on different functions.
+
+    Parameters
+    ----------
+    Optional, _opt_id _signal_pipe _results_queue _pause_flag workers backend is_log_detailed
+        See :class:`.BaseOptimizer`.
+    sampler
+        Allows the use of :code:`'GaussVDSampler'` and :code:`'GaussVkDSampler'` settings.
+    verbose
+        If :obj:`True`, print status messages during the optimization, else no output will be printed.
+    keep_files
+        If :obj:`True` the files produced by CMA are retained otherwise they are not produced.
+    force_injects
+        If :obj:`True`, injections of parameter vectors into the solver will be exact, guaranteeing that that
+        solution will be in the next iteration's population. If :obj:`False`, the injection will result in a direction
+        relative nudge towards the vector. Forcing the injecting can limit global exploration but non-forced
+        injections may have little effect.
+    injection_frequency
+        If :obj:`None`, injections are ignored by the optimizer. If an :obj:`int` is provided then injection are only
+        accepted if at least `injection_frequency` iterations have passed since the last injection.
+    **cmasettings
+        `CMA-ES <http://cma.gforge.inria.fr/apidocs-pycma/>`_ package-specific settings. See
+        :code:`cma.s.pprint(cma.CMAOptions())` for a list of available options. Most useful keys are: :code:`'timeout'`,
+        :code:`'tolstagnation'`, :code:`'popsize'`.
+
+    Notes
+    -----
+    #. Although not the default, by adjusting the injection settings above, the optimizer will inject the saved incumbent
+       solution into the solver influencing the points sampled by the following iteration. The incumbent begins at
+       :code:`x0` and is updated by the inject method called by the GloMPO manager.
+
+    #. If :code:`'popsize'` is not provided during optimizer initialisation, it will be set to the number of
+       :attr:`~.BaseOptimizer.workers` if this is larger than 1, else it will be set to the default:
+       :code:`4 + int(3 * log(d))`.
     """
 
     def __init__(self,
+                 _opt_id: Optional[int] = None,
+                 _signal_pipe: Optional[Connection] = None,
+                 _results_queue: Optional[Queue] = None,
+                 _pause_flag: Optional[Event] = None,
+                 workers: int = 1,
+                 backend: str = 'threads',
+                 is_log_detailed: bool = False,
                  sampler: str = 'full',
                  verbose: bool = True,
                  keep_files: bool = False,
                  force_injects: Optional[bool] = None,
                  injection_frequency: Optional[int] = None,
-                 opt_id: Optional[int] = None,
-                 signal_pipe: Optional[Connection] = None,
-                 results_queue: Optional[Queue] = None,
-                 pause_flag: Optional[Event] = None,
-                 workers: int = 1,
-                 backend: str = 'threads',
-                 is_log_detailed: bool = False,
                  **cmasettings):
-        """ Initialises the optimizer. It is built in such a way that it minimize can be called multiple times on
-            different functions.
-
-            Parameters
-            ----------
-            sampler: Literal['full', 'vkd', 'vd'] = 'full'
-                Allows the use of `GaussVDSampler` and `GaussVkDSampler` settings.
-            verbose: bool = True
-                Be talkative (1) or not (0)
-            workers: int = 1
-                The number of parallel evaluators used by this instance of CMA.
-            keep_files: bool = False
-                If True the files produced by CMA are retained otherwise they are not produced.
-            force_injects: Optional[bool] = None
-                If True, injections of parameter vectors into the solver will be exact, guaranteeing that that
-                solution will be in the next iteration's population. If False, the injection will result in a direction
-                relative nudge towards the vector. Forcing the injecting can limit global exploration but non-forced
-                injections may have little effect.
-            injection_frequency: Optional[int] = None
-                If None, injections are ignored by the optimizer. If an int is provided then injection are only accepted
-                if at least injection_frequency iterations have passed since the last injection.
-            cmasettings: Optional[Dict[str, Any]]
-                cma module-specific settings as ``k,v`` pairs. See ``cma.s.pprint(cma.CMAOptions())`` for a list of
-                available options. Most useful keys are: `timeout`, `tolstagnation`, `popsize`.
-
-            Notes
-            -----
-            Although not the default, by adjusting the injection settings above, the optimizer will inject the saved
-            incumbent solution into the solver influencing the points sampled by the following iteration. The incumbent
-            begins at x0 and is updated by the inject method called by the GloMPO manager.
-        """
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag,
-                         workers, backend, is_log_detailed)
+        super().__init__(_opt_id, _signal_pipe, _results_queue, _pause_flag, workers, backend, is_log_detailed)
 
         self.verbose = verbose
         self.es = None
@@ -110,32 +110,29 @@ class CMAOptimizer(BaseOptimizer):
                  bounds: Sequence[Tuple[float, float]],
                  callbacks: Callable[[], Optional[Any]] = None,
                  sigma0: float = 0, **kwargs) -> MinimizeResult:
-        """ Minimize function with a starting distribution defined by mean x0 and standard deviation sigma0. Parameters
-            are bounded by bounds. Callbacks are executed once per iteration.
+        """ Begin CMA-ES minimization loop.
 
-            Parameters
-            ----------
-            function: Callable[[Sequence[float]], float]
-                Task to be minimised accepting a sequence of unknown parameters and returning a float result.
-            x0: Sequence[float]
-                Initial mean of the distribution from with trial parameter sets are sampled. Force injected into the
-                solver to guarantee it is evaluated.
-            bounds: Sequence[Tuple[float, float]]
-                Bounds on the sampling limits of each dimension. CMA supports handling bounds as non-linear
-                transformations so that they are never exceeded (but bounds are likely to be over sampled) or with a
-                penalty function. See cma documentation for more on this.
-            callbacks: Callable[[], Optional[Any]]
-                Callbacks are called once per iteration. They receive no arguments. If they return anything other than
-                None the minimization will terminate early.
-            sigma0: float = 0
-                Standard deviation for all parameters (all parameters must be scaled accordingly).
-                Defines the search space as the std dev from an initial x0. Larger values will sample a wider
-                Gaussian. Default is zero which will not accepted by the optimizer, thus this argument must be provided.
+        Parameters
+        ----------
+        Optional, function bounds callbacks
+            See :meth:`.BaseOptimizer.minimize`
+        x0
+            Initial mean of the multivariate normal distribution from which trials are drawn. Force injected into the
+            solver to guarantee it is evaluated.
+        sigma0
+            Initial standard deviation of the multivariate normal distribution from which trials are drawn. One value
+            for all parameters which means that all parameters must be scaled accordingly. Default is zero which will
+            not accepted by the optimizer, thus this argument must be provided.
 
-            Notes
-            -----
-            If 'popsize' is not provided in the cmasettings directory at init, it will be set to the number of workers
-            (if this is larger than 1) or failing that it will be set to the default 4 + int(3 * log(d)).
+        Returns
+        -------
+        MinimizeResult
+            Location, function value and other optimization information about the lowest value found by the optimizer.
+
+        Raises
+        ------
+        ValueError
+            If `sigma0` is not changed from the default value of zero.
         """
         task_settings = copy.deepcopy(self.cmasettings)
 
@@ -243,8 +240,7 @@ class CMAOptimizer(BaseOptimizer):
     def _parallel_map(self, function: Callable[[Sequence[float]], float],
                       x: Sequence[Sequence[float]]) -> Sequence[float]:
         """ Returns the function evaluations for a given set of trial parameters, x.
-            Calculations are distributed over threads or processes depending on the number of workers and backend
-            selected.
+        Calculations are distributed over threads or processes depending on the number of workers and backend selected.
         """
         if self.workers > 1:
             pool_executor = ProcessPoolExecutor if self._backend == 'processes' else ThreadPoolExecutor

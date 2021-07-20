@@ -7,7 +7,7 @@ from ..optimizers.baseoptimizer import BaseOptimizer
 
 
 class RandomSelector(BaseSelector):
-    """ Given a set of optimizers, returns a random one when called. """
+    """ Randomly selects an optimizer from the available options. """
 
     def select_optimizer(self,
                          manager: 'GloMPOManager',

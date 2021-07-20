@@ -7,25 +7,26 @@ __all__ = ("MaxSeconds",)
 
 
 class MaxSeconds(BaseChecker):
+    """ Time based convergence criteria.
+    Differentiates between session time and overall optimisation time, the difference is only relevant in the case where
+    checkpointing is being used.
+
+    Parameters
+    ----------
+    session_max
+        Maximum time in seconds which may elapse from the time GloMPOManager.start_manager() is called.
+    overall_max
+        Maximum time in seconds which may elapse in total over all optimisation sessions. In other words the
+        total time used previously is loaded from the checkpoint. In the case where checkpoint is not used, both
+        quantities are equivalent.
+
+    Notes
+    -----
+    For the avoidance of doubt, both times cannot be used simultaneously. If required rather initialise two
+    instances with one condition each.
+    """
 
     def __init__(self, *, session_max: Optional[float] = None, overall_max: Optional[float] = None):
-        """ Time based convergence criteria. Differentiates between session time and overall optimisation time, the
-            difference is only relevant in the case where checkpointing is being used.
-
-            Parameters
-            ----------
-            session_max: Optional[float] = None
-                Maximum time in seconds which may elapse from the time GloMPOManager.start_manager() is called.
-            overall_max: Optional[float] = None
-                Maximum time in seconds which may elapse in total over all optimisation sessions. In other words the
-                total time used previously is loaded from the checkpoint. In the case where checkpoint is not used, both
-                quantities are equivalent.
-
-            Notes
-            -----
-            For the avoidance of doubt, both times cannot be used simultaneously. If required rather initialise two
-            instances with one condition each.
-        """
         assert bool(session_max) ^ bool(overall_max)
         super().__init__()
         self.session_max = session_max
@@ -39,5 +40,5 @@ class MaxSeconds(BaseChecker):
             t_total += manager.t_used
             cond = self.overall_max
 
-        self._last_result = t_total >= cond
-        return self._last_result
+        self.last_result = t_total >= cond
+        return self.last_result

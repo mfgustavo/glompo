@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -15,8 +16,9 @@ except (ModuleNotFoundError, ImportError):
 from glompo.common.helpers import WorkInDirectory, LiteralWrapper, literal_presenter, nested_string_formatting, \
     unknown_object_presenter, generator_presenter, optimizer_selector_presenter, present_memory, FlowList, \
     flow_presenter, numpy_array_presenter, numpy_dtype_presenter, BoundGroup, bound_group_presenter, is_bounds_valid, \
-    distance, glompo_colors, rolling_best, unravel, deepsizeof, infer_headers
-from glompo.opt_selectors import BaseSelector, CycleSelector, IterSpawnStop
+    distance, glompo_colors, rolling_min, unravel, infer_headers, SplitOptimizerLogs
+from glompo.opt_selectors import BaseSelector, CycleSelector
+from glompo.opt_selectors.spawncontrol import IterSpawnStop
 from glompo.generators import RandomGenerator, BaseGenerator
 from glompo.common.namedtuples import Bound
 from glompo.optimizers.random import RandomOptimizer
@@ -31,15 +33,65 @@ yaml.add_multi_representer(BaseGenerator, generator_presenter, Dumper=Dumper)
 yaml.add_multi_representer(object, unknown_object_presenter, Dumper=Dumper)
 
 
+class TestSplitLogging:
+
+    def run_log(self, directory, propogate, formatter=logging.Formatter()):
+        opt_filter = SplitOptimizerLogs(directory, propagate=propogate, formatter=formatter)
+        opt_handler = logging.FileHandler(Path(directory, "propogate.txt"), "w")
+        opt_handler.addFilter(opt_filter)
+
+        opt_handler.setLevel('DEBUG')
+
+        logging.getLogger("glompo.optimizers").addHandler(opt_handler)
+        logging.getLogger("glompo.optimizers").setLevel('DEBUG')
+
+        logging.getLogger("glompo.optimizers.opt1").debug('8452')
+        logging.getLogger("glompo.optimizers.opt2").debug('9216')
+
+    def test_split(self, tmp_path):
+        self.run_log(tmp_path, False)
+        with Path(tmp_path, "optimizer_1.log").open('r') as file:
+            key = file.readline()
+            assert key == '8452\n'
+
+        with Path(tmp_path, "optimizer_2.log").open('r') as file:
+            key = file.readline()
+            assert key == '9216\n'
+
+    def test_formatting(self, tmp_path):
+        formatter = logging.Formatter("OPT :: %(message)s :: DONE")
+        self.run_log(tmp_path, False, formatter)
+        with Path(tmp_path, "optimizer_1.log").open('r') as file:
+            key = file.readline()
+            assert key == "OPT :: 8452 :: DONE\n"
+
+        with Path(tmp_path, "optimizer_2.log").open('r') as file:
+            key = file.readline()
+            assert key == "OPT :: 9216 :: DONE\n"
+
+    @pytest.mark.parametrize("propogate", [True, False])
+    def test_propogate(self, propogate, tmp_path):
+        self.run_log(tmp_path, propogate)
+        with Path(tmp_path, "propogate.txt").open("r") as file:
+            lines = file.readlines()
+
+        if propogate:
+            assert lines[0] == '8452\n'
+            assert lines[1] == '9216\n'
+            assert len(lines) == 2
+        else:
+            assert len(lines) == 0
+
+
 @pytest.mark.parametrize('arr, output', [([0, 1, 2, 3, float('inf'), -1, 0, 1, -2, -4, -4],
                                           [0, 0, 0, 0, 0, -1, -1, -1, -2, -4, -4]),
                                          ([0, 1, 2, 3, float('nan'), -1, 0, 1, -4], [])])
 def test_rolling_best(arr, output):
     if np.isnan(arr).any():
         with pytest.raises(AssertionError):
-            rolling_best(arr)
+            rolling_min(arr)
     else:
-        assert rolling_best(arr) == output
+        assert rolling_min(arr) == output
 
 
 @pytest.mark.parametrize('obj, ret', [([0, [1, [2, [3, 4, 5], 6, [7, [8]]], 9], 10, [11, 12, 13],
@@ -47,15 +99,6 @@ def test_rolling_best(arr, output):
                                       ('averylongstring', ['averylongstring'])])
 def test_unravel(obj, ret):
     assert [*unravel(obj)] == ret
-
-
-@pytest.mark.parametrize('obj, size', [([1, 2, 3, 4, [1, 2, 3, 4]], 200),
-                                       (11231, 28),
-                                       (1123131231, 32),
-                                       ([121, {'ag': [1, 2, 3], 'b': [4, 5, 6]}, ('4', None), [3, 3, 3]],
-                                        96 + 240 + 51 + 50 + 88 + 88 + 64 + 88)])
-def test_deepsizeof(obj, size):
-    assert deepsizeof(obj) == size
 
 
 @pytest.mark.parametrize('obj, ret', [(123.4, {'result_0': tb.Float64Col(pos=0)}),
@@ -149,8 +192,8 @@ def test_work_in_directory(tmp_path):
 
 @pytest.mark.parametrize("opt_id", [10, 35, 53, 67, 73, 88, 200, None])
 def test_colors(opt_id):
-    plt = pytest.importorskip('matplotlib.pyplot', "Matplotlib package needed to use these features.")
-    cols = pytest.importorskip('matplotlib.colors', "Matplotlib package needed to use these features.")
+    plt = pytest.importorskip('matplotlib.pyplot', reason="Matplotlib package needed to use these features.")
+    cols = pytest.importorskip('matplotlib.colors', reason="Matplotlib package needed to use these features.")
     if opt_id:
         if opt_id < 20:
             colors = plt.get_cmap("tab20")

@@ -14,8 +14,8 @@ __all__ = ("CustomThread",
 
 
 class CustomThread(threading.Thread):
-    """ Adds an exitcode property to the Thread base class as well as code to redirect the thread printstream to a
-        file if this has been setup before hand.
+    """ Adds an exitcode property to the :class:`threading.Thread` base class as well as code to redirect the thread
+    printstream to a file if this has been setup before hand.
     """
 
     def __init__(self, working_directory: Path, *args, redirect_print: bool = False, **kwargs):
@@ -53,16 +53,19 @@ class CustomThread(threading.Thread):
 class ThreadPrintRedirect:
     """ Redirects individual threads to their own print stream.
 
-        Notes
-        -----
-        To implement use the following statements before threads are created:
-            sys.stdout = ThreadPrintRedirect(sys.stdout)
-            sys.stderr = ThreadPrintRedirect(sys.stderr)
+    Notes
+    -----
+    To implement use the following statements before threads are created:
 
-        By default all threads will continue to print to sys.stdout.
+    .. code-block::
 
-        To redirect a thread make it run register as its first command when it is started. This is done automatically
-        if CustomThread is used.
+        sys.stdout = ThreadPrintRedirect(sys.stdout)
+        sys.stderr = ThreadPrintRedirect(sys.stderr)
+
+    By default all threads will continue to print to :obj:`sys.stdout`.
+
+    To redirect a thread make it run register as its first command when it is started. This is done automatically
+    if :class:`CustomThread` is used.
     """
 
     def __init__(self, intercept: TextIO):
@@ -96,20 +99,35 @@ class ThreadPrintRedirect:
 
 
 class ChunkingQueue(queue.Queue):
-    """ queue.get calls by the manager can become the performance bottleneck when managing the optimization of very fast
-        functions. ChunkedQueue detects when this is the case and begins pushing the results in chunks of several items
-        rather than individually.
+    """ Queue with memory that only puts iterations in chunks.
+    :meth:`queue.Queue.get` calls by the manager can become the performance bottleneck when managing the optimization of
+    very fast functions. This class detects when this is the case and begins pushing the results in chunks of several
+    items rather than individually.
+
+    Attributes
+    ----------
+    cache
+        Holds the items in memory to pushed.
+    cache_lock
+        Multiprocessing/threading :class:`Lock` to ensure multiple streams do not access the cache simultaneously.
+    chunk_size
+        Number of items grouped into single chunk.
+    fast_func
+        If :obj:`True` the queue will 'put' in chunks, otherwise it will 'put' normally like a standard
+        :class:`~queue.Queue`.
+    logger : logging.Logger
+        :class:`logging.Logger` instance into which status messages may be added.
     """
 
     def __init__(self, max_queue_size: int = 0, max_chunk_size: int = 1):
-        """ Extends functionality of queue.Queue with a chunking system.
+        """ Extends functionality of :class:`queue.Queue` with a chunking system.
 
-            Parameters
-            ----------
-            max_queue_size: int
-                Maximum number of items allowed in the queue at one time.
-            max_chunk_size: int
-                Number of items grouped together into the cache before being put in the queue.
+        Parameters
+        ----------
+        max_queue_size
+            Maximum number of items allowed in the queue at one time.
+        max_chunk_size
+            Number of items grouped together into the cache before being put in the queue.
         """
         super().__init__(max_queue_size)
         self.chunk_size = max_chunk_size
@@ -123,8 +141,9 @@ class ChunkingQueue(queue.Queue):
             return bool(self.cache)
 
     def put(self, item, block=True, timeout=None):
-        """ A put is attempted according to block and timeout. If the cache is being used the item is first added to the
-            cache and then the entire cache is put on the queue in accordance with block and timeout.
+        """ A put is attempted according to `block` and `timeout`.
+        If the cache is being used the item is first added to the cache and then the entire cache is put on the queue in
+        accordance with `block` and `timeout`.
         """
         if self.fast_func:
             with self.cache_lock:
@@ -135,9 +154,10 @@ class ChunkingQueue(queue.Queue):
             super().put([item], block, timeout)
 
     def put_nowait(self, item):
-        """ A put is attempted but if the queue is Full, instead of raising an exception the item is saved to a cache.
-            From then on all items are appended to the cache and put in the queue in chunks of size chunk_size. When the
-            cache is full the put will block until the cache has been put on the queue.
+        """ A put is attempted but if the queue is :class:`~queue.Full`, instead of raising an exception the item is
+        saved to a cache. From then on all items are appended to the cache and put in the queue in chunks of size
+        :attr:`chunk_size`. When the :attr:`cache` is full the :meth:`put_nowait` will block until the :attr:`cache`
+        has been put on the queue.
         """
         if not self.fast_func:
             try:
@@ -156,8 +176,8 @@ class ChunkingQueue(queue.Queue):
                     self.cache = []
 
     def put_incache(self, item):
-        """ Item is explicitly placed in the cache rather than the queue. If the cache is not yet in use it is
-            opened.
+        """ Item is explicitly placed in the cache rather than the queue.
+        If the cache is not yet in use it is opened.
         """
         self.logger.info("Queue caching activated.")
         self.fast_func = True

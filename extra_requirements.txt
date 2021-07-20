@@ -1,0 +1,31 @@
+.. tab-start
+======================  =====
+Install Key             Description
+======================  =====
+all                     Installs all (publicly available) optional requirements.
+checkpointing           Build checkpoints from which to resume runs.
+cma                     Add CMA-ES optimizer.
+docs                    Build documentation locally.
+gfls                    Add GFLS optimizer.
+nevergrad               Add Nevergrad optimizer.
+params                  Add ReaxFF interface.
+perturbation_generator  Access localized sampling generator.
+system_stats            Track and print system loads.
+testing                 Run test suite locally.
+plotting                Produce plots from optimization results.
+video                   Produce a MPEG-4 file of the optimization.
+======================  =====
+
+.. tab-end
+PySide2~=5.15.2:         video
+cma~=2.7:                cma
+dill~=0.3:               checkpointing
+matplotlib~=3.3.2:       plotting, video
+nevergrad~=0.3.2:        nevergrad
+optsam:                  gfls
+psutil~=5.6.2:           system_stats
+pytest~=4.4.0:           testing
+scipy~=1.2.1:            perturbation_generator
+scm~=1.3.0:              params
+sphinx==1.8.5:           docs
+sphinx-rtd-theme~=0.2.4: docs

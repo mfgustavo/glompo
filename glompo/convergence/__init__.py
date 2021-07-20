@@ -1,5 +1,3 @@
-""" Subpackage containing the BaseChecker and several subclasses which are used to determine GloMPO convergence. """
-
 from .basechecker import BaseChecker
 from .fmax import MaxFuncCalls
 from .ftarget import TargetCost
@@ -12,8 +10,8 @@ from .tmax import MaxSeconds
 __all__ = ("BaseChecker",
            "KillsAfterConvergence",
            "MaxFuncCalls",
-           "MaxSeconds",
            "MaxKills",
            "MaxOptsStarted",
+           "MaxSeconds",
            "NOptConverged",
            "TargetCost",)

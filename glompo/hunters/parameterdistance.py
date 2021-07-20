@@ -10,30 +10,39 @@ __all__ = ("ParameterDistance",)
 
 
 class ParameterDistance(BaseHunter):
-    """ Calculates the maximum Euclidean distance in parameter space between the point of lower bounds and the point
-        of upper bounds (parameter space length). Calculates the Euclidean distance between the final
-        iterations of the hunter and victim (inter-optimizer distance).
+    """ Terminates optimizers which are too close in parameter space.
 
-        If the fraction between the inter-optimizer distance and parameter space length is less than the provided
-        tolerance the optimizers are deemed to be near one another and the condition returns True.
+    Parameters
+    ----------
+    bounds
+        Bounds of each parameter.
+    relative_distance
+        Fraction (between 0 and 1) of the maximum distance in the space (from the point at all lower bounds to the point
+        at all upper bounds) below which the optimizers are deemed too close and the victim will be killed.
+    test_all
+        If :obj:`True` the distance between victim and all other optimizers is tested, else only the hunter and victim
+        are compared.
 
-        Note: Use this hunter with caution and only in problems where the parameters have been standardised so that
-        every parameter is dimensionless and on the same order of magnitude.
+    Returns
+    -------
+    bool
+        Returns :obj:`True` if optimizers are calculated to be too close together.
+
+    Notes
+    -----
+    Calculates the maximum Euclidean distance in parameter space between the point of lower bounds and the point of
+    upper bounds (:code:`max_distance`). Calculates the Euclidean distance between the final iterations of the hunter
+    and victim (:code:`inter_optimizer_distance`). Returns :obj:`True` if::
+
+        inter_optimizer_distance <= max_distance * relative_distance
+
+    .. caution::
+
+        Use this hunter with care and only in problems where the parameters have been standardised so that every
+        parameter is dimensionless and on the same order of magnitude.
     """
 
     def __init__(self, bounds: Sequence[Tuple[float, float]], relative_distance: float, test_all: bool = False):
-        """
-        Parameters
-        ----------
-        bounds: Sequence[Tuple[float, float]]
-            Bounds of each parameter.
-        relative_distance: float
-            The fraction of the maximum distance in the space (from the point at all lower bounds to the point at all
-            upper bounds) below which the optimizers are deemed too close and the victim will be killed.
-        test_all: bool = False
-            If True the distance between victim and all other optimizers is tested, else only the hunter and victim are
-            compared.
-        """
         super().__init__()
         if isinstance(relative_distance, (float, int)) and relative_distance > 0:
             self.relative_distance = relative_distance
@@ -66,8 +75,8 @@ class ParameterDistance(BaseHunter):
                 opt_dist = distance(h1, v1)
                 ratio = opt_dist / self.trans_space_dist
 
-                self._last_result = ratio <= self.relative_distance
-                if self._last_result:
+                self.last_result = ratio <= self.relative_distance
+                if self.last_result:
                     self.logger.debug("ParameterDistance: Hunter=%d, Victim=%d, "
                                       "Result=%.2f / %.2f <= %.2f} = "
                                       "%s.",
@@ -76,8 +85,8 @@ class ParameterDistance(BaseHunter):
                                       opt_dist,
                                       self.trans_space_dist,
                                       self.relative_distance,
-                                      self._last_result)
-                    return self._last_result
+                                      self.last_result)
+                    return self.last_result
 
-        self._last_result = False
-        return self._last_result
+        self.last_result = False
+        return self.last_result

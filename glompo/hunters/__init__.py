@@ -1,7 +1,3 @@
-""" Subpackage containing the BaseHunter and several subclasses which are used to determine how optimizers are
-    stopped.
-"""
-
 from .basehunter import BaseHunter
 from .bestunmoving import BestUnmoving
 from .evalsunmoving import EvaluationsUnmoving
@@ -15,11 +11,12 @@ from .valueannealing import ValueAnnealing
 
 __all__ = ("BaseHunter",
            "BestUnmoving",
-           "ValueAnnealing",
-           "TimeAnnealing",
-           "ParameterDistance",
-           "MinFuncCalls",
+           "EvaluationsUnmoving",
            "LastPointsInvalid",
-           "TypeHunter",
+           "MinFuncCalls",
+           "ParameterDistance",
            "StepSize",
-           "EvaluationsUnmoving")
+           "TimeAnnealing",
+           "TypeHunter",
+           "ValueAnnealing",
+           )

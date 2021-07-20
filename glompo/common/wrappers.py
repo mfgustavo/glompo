@@ -1,15 +1,15 @@
 """ Decorators and wrappers used throughout GloMPO. """
 
+import importlib
 import inspect
 import sys
-import importlib
 import warnings
 from functools import wraps
 from pathlib import Path
 
 
 def process_print_redirect(opt_id, working_dir, func):
-    """ Wrapper to redirect a process' output to a designated text file. """
+    """ Redirects a process' output to a text file in a designated directory. """
 
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -23,7 +23,7 @@ def process_print_redirect(opt_id, working_dir, func):
 
 
 def catch_user_interrupt(func):
-    """ Catches a user interrupt signal and exits gracefully. """
+    """ Catches a :exc:`KeyboardInterrupt` signal and exits gracefully. """
 
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -36,7 +36,7 @@ def catch_user_interrupt(func):
 
 
 def decorate_all_methods(decorator):
-    """ Applies a decorator to every method in a class. """
+    """ Applies `decorator` to every method in a class. """
 
     def apply_decorator(cls):
         for key, func in cls.__dict__.items():
@@ -48,9 +48,11 @@ def decorate_all_methods(decorator):
 
 
 def needs_optional_package(package: str):
-    """ Will warn and not allow a function to execute if the package it requires is not available to the system.
-        Applied to functions which provide optional GloMPO functionality.
+    """ Checks `package` requirement before running a function.
+    Will warn and not allow a function to execute if the `package` it requires is not available to the system. Applied
+    to functions which provide optional GloMPO functionality.
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -59,7 +61,7 @@ def needs_optional_package(package: str):
                 return func(*args, **kwargs)
             except (ModuleNotFoundError, ImportError):
                 warnings.warn(f"Unable to construct checkpoint without {package} package installed.", ResourceWarning)
-                return
+                return None
 
         return wrapper
 

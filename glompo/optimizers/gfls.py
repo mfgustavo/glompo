@@ -18,49 +18,61 @@ def _function_pack(ask, func):
 
 
 class GFLSOptimizer(BaseOptimizer):
+    """ Wrapper around the :class:`!optsam.GFLS` algorithm [d]_.
+    Note that this class is also *stand-alone*, this means it can be used independently of the GloMPO framework.
 
-    @property
-    def is_restart(self):
-        return self._is_restart
+    Parameters
+    ----------
+    Optional, _opt_id _signal_pipe _results_queue _pause_flag workers backend is_log_detailed
+        See :class:`.BaseOptimizer`.
+    logger
+        If :obj:`True` a :class:`!optsam.Logger` will be run along with the optimization and saved after the
+        minimization.
+    verbose
+        If :obj:`True` an :class:`!optsam.Reporter` will be run along with the optimisation to print progress in
+        realtime.
+    other_hooks
+        Any extra :class:`!optsam.Hook` instances which should be included.
+    **gfls_algo_kwargs
+        Keyword arguments for the optsam GFLS class. If :obj:`None`, the default arguments are used:
+
+        ====================  ===============
+        Setting               Default
+        ====================  ===============
+        :code:`tr_max`        :code:`0.5`
+        :code:`xtol`          :code:`1e-3`
+        :code:`ftol`          :code:`1e-7`
+        :code:`constraints`   :code:`()`
+        :code:`tr_min`        :code:`None`
+        :code:`tr_scale`      :code:`0.9`
+        :code:`noise_scale`   :code:`0.1`
+        :code:`pop_size`      :code:`None`
+        :code:`diis_mode`     :code:`"qrsvd"`
+        :code:`seed`          :code:`None`
+        ====================  ===============
+
+    Notes
+    -----
+    :class:`GFLSOptimizer` requires residuals (differences between a training set and evaluated values) to work. Thus,
+    it cannot be used on all global optimization cases. To ensure compatibility and allow simultaneous use of multiple
+    optimizer types, :class:`GFLSOptimizer` will automatically use :meth:`~.BaseFunction.detailed_call` when evaluating
+    the function. It is assumed that the first element of the return is the total error and the second element is the
+    list of residuals. Other returns are ignored.
+    """
 
     def __init__(self,
-                 opt_id: Optional[int] = None,
-                 signal_pipe: Optional[Connection] = None,
-                 results_queue: Optional[Queue] = None,
-                 pause_flag: Optional[Event] = None,
+                 _opt_id: Optional[int] = None,
+                 _signal_pipe: Optional[Connection] = None,
+                 _results_queue: Optional[Queue] = None,
+                 _pause_flag: Optional[Event] = None,
                  workers: int = 1,
                  backend: str = 'threads',
                  is_log_detailed: bool = False,
-                 logger: bool = False, verbose: bool = False,
+                 logger: bool = False,
+                 verbose: bool = False,
                  other_hooks: Optional[Sequence[Hook]] = None,
                  **gfls_algo_kwargs):
-        """
-        Initialisation of the GFLS optimizer wrapper for interface with GloMPO.
-
-        Parameters
-        ----------
-        logger: bool = False
-            If True an optsam Logger Hook will be run along with the optimisation and saved when the class is ended.
-        verbose: bool = False
-            If True an optsam Reporter Hook will be run along with the optimisation to print progress in realtime.
-        other_hooks: Optional[Sequence[Hook]] = None
-            Any extra optsam Hook instances which should be manually configured.
-        gfls_algo_kwargs
-            Keyword arguments for the optsam GFLS class. If None, the default arguments are used:
-            Valid settings and defaults:
-                tr_max      : 0.5
-                xtol        : 1e-3
-                ftol        : 1e-7
-                constraints : ()
-                tr_min      : None
-                tr_scale    : 0.9
-                noise_scale : 0.1
-                pop_size    : None
-                diis_mode   : "qrsvd"
-                seed        : None
-        """
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag,
-                         workers, backend, is_log_detailed)
+        super().__init__(_opt_id, _signal_pipe, _results_queue, _pause_flag, workers, backend, is_log_detailed)
         self.gfls = None
         self.result = None
         self.stopcond = None
@@ -85,28 +97,6 @@ class GFLSOptimizer(BaseOptimizer):
                  x0: Sequence[float],
                  bounds: Sequence[Tuple[float, float]],
                  callbacks: Callable = None, **kwargs) -> MinimizeResult:
-        """ Minimizes a function, given an initial list of variable values `x0`, and a list of `bounds` on the
-            variable values. The `callbacks` argument allows for specific callbacks such as early stopping.
-
-            Parameters
-            ----------
-            function
-                GFLSOptimizer requires residuals (differences between a training set and evaluated values) to work. Thus
-                it cannot be used on all global optimization cases. To ensure compatibility and allow simultaneous use
-                of multiple optimizer types, GFLSOptimizer will automatically use function.detailed_call(x) when
-                evaluating the function. It is assumed that the first element of the return is the total error and the
-                second element is the list of residuals. Other returns are ignored.
-                The API is:
-                    function.detailed_call(x: Sequence[float]) -> Tuple[fx: float, residuals: Sequence[float], ...]
-            x0: Sequence[float]
-                Initial guess from where to begin searching.
-            bounds: Sequence[Tuple[float, float]]
-                Sequence of min, max tuples of the same length as x0.
-            callbacks: Callable = None
-                Callbacks are called once per iteration. They receive no arguments. If they return anything other than
-                None the minimization will terminate early.
-        """
-
         self._wrapped_func = partial(_function_pack, func=function)
 
         if not self.is_restart:
@@ -160,9 +150,9 @@ class GFLSOptimizer(BaseOptimizer):
         return self.result
 
     def get_evaluation(self) -> Tuple[Sequence[float], bool, float, Sequence[float]]:
-        """ When called returns a parameter vector and its evaluation. Depending on the configuration of the optimizer
-            this can be a simple serial evaluation or retrieving from a list of completed evaluations from a pool of
-            asynchronous parallel evaluations.
+        """ Returns a parameter vector and its evaluation.
+        Depending on the configuration of the optimizer this can be a simple serial evaluation or retrieving from a list
+        of completed evaluations from a pool of asynchronous parallel evaluations.
         """
 
         if self.workers > 1:

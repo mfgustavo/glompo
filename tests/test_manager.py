@@ -33,7 +33,8 @@ from glompo.core.manager import GloMPOManager
 from glompo.core.optimizerlogger import BaseLogger
 from glompo.generators import BaseGenerator, RandomGenerator
 from glompo.hunters import BaseHunter, MinFuncCalls, TypeHunter
-from glompo.opt_selectors import BaseSelector, CycleSelector, IterSpawnStop
+from glompo.opt_selectors import BaseSelector, CycleSelector
+from glompo.opt_selectors.spawncontrol import IterSpawnStop
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from glompo.optimizers.random import RandomOptimizer
 
@@ -728,14 +729,14 @@ class TestManagement:
         class SteepestGradient(BaseOptimizer):
 
             def __init__(self, max_iters, gamma, precision,
-                         opt_id=None,
-                         signal_pipe=None,
-                         results_queue=None,
-                         pause_flag=None,
+                         _opt_id=None,
+                         _signal_pipe=None,
+                         _results_queue=None,
+                         _pause_flag=None,
                          workers=1,
                          backend='threads',
                          is_log_detailed=False):
-                super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend, is_log_detailed)
+                super().__init__(_opt_id, _signal_pipe, _results_queue, _pause_flag, workers, backend, is_log_detailed)
                 self.max_iters = max_iters
                 self.gamma = np.array(gamma)
                 self.precision = precision

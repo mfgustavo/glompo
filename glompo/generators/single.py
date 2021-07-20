@@ -9,7 +9,9 @@ __all__ = ("SinglePointGenerator",)
 
 
 class SinglePointGenerator(BaseGenerator):
-    """ Always returns the same point. Either provided during initialisation or otherwise randomly generated. """
+    """ Always returns the same point.
+    Either provided during initialisation or otherwise randomly generated.
+    """
 
     def __init__(self, bounds: Sequence[Tuple[float, float]], x: Optional[Sequence[float]] = None):
         super().__init__()

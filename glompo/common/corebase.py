@@ -1,4 +1,4 @@
-""" Abstract classes used to construct the hunter and convergence bases. """
+""" Abstract classes used to construct the :class:`BaseHunter` and :class:`BaseChecker` classes. """
 
 import inspect
 from abc import ABC, abstractmethod
@@ -9,7 +9,16 @@ from typing import Generator, Iterable
 
 
 class _CoreBase(ABC):
-    """ Base on which BaseHunter and BaseChecker are built """
+    """ Base on which :class:`.BaseHunter` and :class:`.BaseChecker` are built. """
+
+    @property
+    def last_result(self):
+        """ The result of the last :meth:`__call__`. """
+        return self._last_result
+
+    @last_result.setter
+    def last_result(self, val: bool):
+        self._last_result = val
 
     def __init__(self):
         self._last_result = None
@@ -19,9 +28,11 @@ class _CoreBase(ABC):
         """ Main evaluation method to determine the result of the hunt / convergence. """
 
     def __iter__(self) -> Iterable['_CoreBase']:
+        """ Provides a (flattened) iteration through all the bases which comprise the combined hunter/checker. """
         return iter([self])
 
     def __str__(self) -> str:
+        """ Produces a string of the hunter/checker's name and configuration. """
         lst = ""
         signature = inspect.signature(self.__init__)
         for parm in signature.parameters:
@@ -39,11 +50,16 @@ class _CoreBase(ABC):
         return mess
 
     def reset(self):
-        """ Clears previous evaluation result to avoid misleading printing. """
+        """ Clears previous evaluation result to avoid misleading printing.
+        Resets :attr:`last_result` to :obj:`None`. Given that hunters and checkers are evaluated lazily, it is possible
+        for misleading results to be returned by :meth:`str_with_result` indicating a hunt/check has been evaluated when
+        it has not. Bases are thus reset before :meth:`__call__` to prevent this.
+        """
         self._last_result = None
 
 
 class _CombiCore(_CoreBase):
+    """ Class to handle the AND/OR combination of two :class:`_CoreBase`\\s. """
 
     def __init__(self, base1: _CoreBase, base2: _CoreBase):
         super().__init__()
@@ -65,10 +81,6 @@ class _CombiCore(_CoreBase):
                f"{self._base2.str_with_result()}]"
 
     def reset(self):
-        """ Resets _last_result to None. Given that hunter and checkers are evaluated lazily, it is possible for
-            misleading results to be returned by str_with_result indicating a hunt has been evaluated when it has not.
-            Bases are thus reset before calls to prevent this.
-        """
         self._base1._last_result = None
         self._base1.reset()
 
@@ -91,6 +103,7 @@ class _CombiCore(_CoreBase):
 
 
 class _OrCore(_CombiCore):
+    """ :class:`_CombiCore` which specifically handles OR combinations of :class:`._CoreBase`\\s. """
 
     def __call__(self, *args, **kwargs):
         super().__call__(*args, **kwargs)
@@ -105,6 +118,7 @@ class _OrCore(_CombiCore):
 
 
 class _AndCore(_CombiCore):
+    """ :class:`_CombiCore` which specifically handles AND combinations of :class:`._CoreBase`\\s. """
 
     def __call__(self, *args, **kwargs):
         super().__call__(*args, **kwargs)

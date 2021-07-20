@@ -4,40 +4,67 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, Optional, Tuple, Type, Union
 
+from .spawncontrol import _AlwaysSpawn
 from ..core.optimizerlogger import BaseLogger
 from ..optimizers.baseoptimizer import BaseOptimizer
 
-__all__ = ("BaseSelector",
-           "IterSpawnStop")
+__all__ = ("BaseSelector",)
 
 
 class BaseSelector(ABC):
-    """ Selectors are classes which return an optimizer and its configuration when asked by
-        the manager. This selection will then be used to start a new optimizer. The full manager
-        is supplied to the selector allowing sophisticated decisions to be designed.
+    """ Base selector from which all selectors must inherit to be compatible with GloMPO.
+    Selectors are classes which return an optimizer and its configuration when asked by the manager. This selection will
+    then be used to start a new optimizer. The full manager is supplied to the selector allowing sophisticated decisions
+    to be designed.
+
+    Parameters
+    ----------
+    *avail_opts
+        A set of optimizers available to the minimization. Elements may be:
+
+        #. Subclasses (not instances) of :class:`.BaseOptimizer`.
+
+        #. Tuples of:
+
+           #. :class:`.BaseOptimizer` subclasses (not instances);
+
+           #. Dictionary of kwargs sent to :class:`BaseOptimizer.__init__ <.BaseOptimizer>`, or :obj:`None`;
+
+           #. Dictionary of kwargs sent to :meth:`.BaseOptimizer.minimize`, or :obj:`None`.
+
+    allow_spawn
+        Optional function sent to the selector which is called with the manager object as argument. If it returns
+        :obj:`False` the manager will no longer spawn optimizers. See :ref:`Spawn Control`.
+
+    Examples
+    --------
+    >>> DummySelector(OptimizerA, (OptimizerB, {'setting_a': 7}, None))
+
+    The :code:`DummySelector` above may choose from two optimizers (:code:`OptimizerA` or :code:`OptimizerB`).
+    :code:`OptimizerA` has no special configuration settings. :code:`OptimizerB` is configured with
+    :code:`setting_a = 7` at initialisation, but no special arguments are needed for
+    :meth:`OptimizerB.minimize() <.BaseOptimizer.minimize>` and thus :obj:`None` is sent in the last place of the
+    tuple.
+
+    >>> DummySelector(OptimizerA, allow_spawn=IterSpawnStop(50_000))
+
+    In this case the selector will only spawn :code:`OptimizerA` optimizers but not allow any spawning after 50000
+    function evaluations.
+
+    Attributes
+    ----------
+    allow_spawn : Callable[[GloMPOManager], bool]
+        Function used to control if a new optimizer should be allowed to be created.
+    avail_opts : Union[Type[BaseOptimizer], Tuple[Type[BaseOptimizer], Optional[Dict[str, Any]], Optional[Dict[str, Any]]]]
+        Set of optimizers and configuration settings available to the optimizer.
+    logger : logging.Logger
+        :class:`logging.Logger` instance into which status messages may be added.
     """
 
     def __init__(self,
                  *avail_opts: Union[Type[BaseOptimizer],
                                     Tuple[Type[BaseOptimizer], Optional[Dict[str, Any]], Optional[Dict[str, Any]]]],
                  allow_spawn: Optional[Callable[['GloMPOManager'], bool]] = None):
-        """ Parameters
-            ----------
-            avail_opts: Set[Union[Type[BaseOptimizer], Tuple[BaseOptimizer, Dict[str, Any], Dict[str, Any]]]]
-                A set of optimizers available to the minimization, these must be subclasses of the BaseOptimizer
-                abstract class in order to be compatible with GloMPO.
-
-                Elements in the set may be:
-                1) Subclasses (not instances) of BaseOptimizer.
-                2) Tuples of:
-                    a) BaseOptimizer subclasses as above;
-                    b) Dictionary of kwargs used to initialise a BaseOptimizer instance;
-                    c) Dictionary of kwargs for calling the BaseOptimizer().minimize() method.
-
-            allow_spawn: Optional[Callable[['GloMPOManager'], bool]]
-                Optional function sent to the selector which is called with the manager object as argument. If it
-                returns False the manager will no longer spawn optimizers.
-        """
         self.logger = logging.getLogger('glompo.selector')
 
         self.avail_opts = []
@@ -80,52 +107,35 @@ class BaseSelector(ABC):
                          log: BaseLogger,
                          slots_available: int) -> Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]],
                                                         None, bool]:
-        """ Provided with the manager object and opt_log file of all optimizers, returns a optimizer class
-            followed by a dictionary of initialisation keyword arguments and then a dictionary of call kwargs for the
-            BaseOptimizer().minimize() method.
+        """ Selects an optimizer to start from the available options.
 
-            Parameters
-            ----------
-            manager: GloMPOManager
-                Running manager instance, can be used to read certain counters and state variables.
-            log: BaseLogger
-                Contains the details and iteration history of ever optimizer started thus far.
-            slots_available: int
-                Number of threads the manager is allowed to start according to its max_jobs attribute and the number of
-                existing threads.
-                GloMPO API assumes that the selector will attempt to this parameter and return an optimizer which
-                requires less threads than slots_available. If this is not possible then None is returned
+        Parameters
+        ----------
+        manager
+            :class:`.GloMPOManager` instance managing the optimization from which various attributes can be read.
+        log
+            :class:`.BaseLogger` instance containing the details and iteration history of every optimizer started thus
+            far.
+        slots_available
+            Number of processes/threads the manager is allowed to start according to :attr:`.GloMPOManager.max_jobs` and
+            the number of existing threads. GloMPO assumes that the selector will use this parameter to return an
+            optimizer which requires fewer processes/threads than `slots_available`. If this is not possible then
+            :obj:`None` is returned.
 
-            Returns
-            -------
-            Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]] / None / False
-                Optimizer class and configuration parameters. Manager will use this to initialise and start a new
-                optimizer.
+        Returns
+        -------
+        Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]], None, bool]
+            Optimizer class and configuration parameters: Tuple of optimizer class, dictionary of initialisation
+            parameters, and dictionary of minimization parameters (see :class:`__init__ <.BaseSelector>`). Manager will
+            use this to initialise and start a new optimizer.
 
-                None is returned in the case that no available optimizer configurations can satisfy the number of worker
-                slots available.
+            :obj:`None` is returned in the case that no available optimizer configurations can satisfy the number of
+            worker slots available.
 
-                False is a special return which flags the optimizer to never try and start another optimizer for the
-                remainder of the optimization.
+            :obj:`False` is a special return which flags that the manager must never try and start another optimizer for
+            the remainder of the optimization.
         """
 
     def __contains__(self, item):
         opts = (opt[0] for opt in self.avail_opts)
         return item in opts
-
-
-class IterSpawnStop:
-    """ A useful stub which controls spawning based on the number of function calls used thus far. """
-
-    def __init__(self, max_calls: int):
-        self.max_calls = max_calls
-
-    def __call__(self, mng: 'GloMPOManager'):
-        if mng.f_counter >= self.max_calls:
-            return False
-        return True
-
-
-class _AlwaysSpawn:
-    def __call__(self, *args, **kwargs):
-        return True

@@ -5,7 +5,16 @@ from .random import RandomGenerator
 from .single import SinglePointGenerator
 
 __all__ = ("BaseGenerator",
-           "RandomGenerator",
+           "ExploitExploreGenerator",
            "IncumbentGenerator",
+           "RandomGenerator",
            "SinglePointGenerator",
-           "ExploitExploreGenerator")
+           )
+
+try:
+    from .peterbation import PerturbationGenerator
+
+    __all__ = tuple(sorted((*__all__, "PerturbationGenerator")))
+
+except ModuleNotFoundError:
+    pass

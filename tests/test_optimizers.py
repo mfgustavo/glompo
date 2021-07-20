@@ -39,9 +39,12 @@ except ModuleNotFoundError:
 
 class PlainOptimizer(BaseOptimizer):
 
-    def __init__(self, opt_id: int = None, signal_pipe: mp.connection.Connection = None, results_queue: mp.Queue = None,
-                 pause_flag: mp.Event = None):
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag)
+    def __init__(self,
+                 _opt_id: int = None,
+                 _signal_pipe: mp.connection.Connection = None,
+                 _results_queue: mp.Queue = None,
+                 _pause_flag: mp.Event = None):
+        super().__init__(_opt_id, _signal_pipe, _results_queue, _pause_flag)
         self.terminate = False
         self.i = 0
 
@@ -191,7 +194,7 @@ class TestBase:
         assert process.exitcode == 0 and 0.5 < time() - t_start < 1.5
 
     def test_checkpointsave(self, mp_package, tmp_path, capfd):
-        dill = pytest.importorskip('dill', "dill package needed to test and use checkpointing")
+        dill = pytest.importorskip('dill', reason="dill package needed to test and use checkpointing")
         opti = PlainOptimizer(1, mp_package.c_pipe, mp_package.queue, mp_package.event)
         opti.workers = 685
         process = mp.Process(target=opti.minimize, args=(None, None, None))
@@ -208,7 +211,7 @@ class TestBase:
             assert data == {'i': 1, 'incumbent': {'x': None, 'fx': None}, 'is_log_detailed': False, 'terminate': False,
                             'workers': 685}
 
-            loaded_opt = PlainOptimizer.checkpoint_load(tmp_path / '0001', 1)
+            loaded_opt = PlainOptimizer.checkpoint_load(tmp_path / '0001', _opt_id=1)
             assert loaded_opt.i == data['i']
             assert loaded_opt.terminate is False
             assert loaded_opt.workers == 685
@@ -236,7 +239,7 @@ class TestBase:
             print("SAVED")
 
         opti = PlainOptimizer(1, mp_package.c_pipe, mp_package.queue, mp_package.event)
-        opti._FROM_MANAGER_SIGNAL_DICT[0] = checkpoint_save
+        opti._from_manager_signal_dict[0] = checkpoint_save
 
         process = mp.Process(target=opti._prepare_checkpoint, daemon=True)
         process.start()
@@ -295,9 +298,9 @@ class TestSubclassesGlompoCompatible:
         return Task()
 
     def test_callstop(self, opti, init_kwargs, call_kwargs, mp_package, task):
-        opti = opti(results_queue=mp_package.queue,
-                    signal_pipe=mp_package.c_pipe,
-                    pause_flag=mp_package.event,
+        opti = opti(_results_queue=mp_package.queue,
+                    _signal_pipe=mp_package.c_pipe,
+                    _pause_flag=mp_package.event,
                     **init_kwargs)
 
         mp_package.p_pipe.send(1)
@@ -313,9 +316,9 @@ class TestSubclassesGlompoCompatible:
 
     @pytest.mark.parametrize("task", [10], indirect=["task"])
     def test_pause(self, opti, init_kwargs, call_kwargs, mp_package, task):
-        opti = opti(results_queue=mp_package.queue,
-                    signal_pipe=mp_package.c_pipe,
-                    pause_flag=mp_package.event,
+        opti = opti(_results_queue=mp_package.queue,
+                    _signal_pipe=mp_package.c_pipe,
+                    _pause_flag=mp_package.event,
                     **init_kwargs)
 
         p = mp.Process(target=opti.minimize,
@@ -334,9 +337,9 @@ class TestSubclassesGlompoCompatible:
         assert not p.is_alive()
 
     def test_haslogger(self, opti, init_kwargs, call_kwargs, mp_package):
-        opti = opti(results_queue=mp_package.queue,
-                    signal_pipe=mp_package.c_pipe,
-                    pause_flag=mp_package.event,
+        opti = opti(_results_queue=mp_package.queue,
+                    _signal_pipe=mp_package.c_pipe,
+                    _pause_flag=mp_package.event,
                     **init_kwargs)
 
         assert hasattr(opti, 'logger')
@@ -344,11 +347,11 @@ class TestSubclassesGlompoCompatible:
         assert "glompo.optimizers.opt" in opti.logger.name
 
     def test_checkpointing(self, opti, init_kwargs, call_kwargs, mp_package, task, tmp_path):
-        pytest.importorskip('dill', "dill package needed to test and use checkpointing")
+        pytest.importorskip('dill', reason="dill package needed to test and use checkpointing")
 
-        opti = opti(results_queue=mp_package.queue,
-                    signal_pipe=mp_package.c_pipe,
-                    pause_flag=mp_package.event,
+        opti = opti(_results_queue=mp_package.queue,
+                    _signal_pipe=mp_package.c_pipe,
+                    _pause_flag=mp_package.event,
                     **init_kwargs)
 
         opti.added_to_check = 555
@@ -395,10 +398,10 @@ class TestCMA:
 
     @pytest.fixture()
     def optimizer(self, mp_package):
-        return CMAOptimizer(opt_id=1,
-                            signal_pipe=mp_package.c_pipe,
-                            results_queue=mp_package.queue,
-                            pause_flag=mp_package.event,
+        return CMAOptimizer(_opt_id=1,
+                            _signal_pipe=mp_package.c_pipe,
+                            _results_queue=mp_package.queue,
+                            _pause_flag=mp_package.event,
                             workers=1,
                             backend='threads',
                             popsize=3)

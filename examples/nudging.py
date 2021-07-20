@@ -15,10 +15,6 @@ except ModuleNotFoundError:
     raise ModuleNotFoundError("To run this example the cma package is required.")
 
 if __name__ == '__main__':
-    """ This example is a variation of the one in 'customized.py'. GloMPO will be run on the same task with virtually 
-        the same configuration, but in this case good iteration will be shared between optimizers. The optimizers, 
-        in turn, will use this information to accelerate their convergence.
-    """
     formatter = logging.Formatter("%(asctime)s : %(levelname)s : %(lineno)d : %(name)s :: %(message)s")
 
     handler = logging.StreamHandler(sys.stdout)
@@ -34,15 +30,14 @@ if __name__ == '__main__':
 
     sigma = (task.bounds[0][1] - task.bounds[0][0]) / 2
     call_args = {'sigma0': sigma}
-    """ In this case we tell CMA to accept suggestions from the manager and sample these points once every 10 
-        iterations.
-    """
+
     init_args = {'workers': 1, 'popsize': 12, 'force_injects': True, 'injection_frequency': 10}
 
     selector = CycleSelector((CMAOptimizer, init_args, call_args))
     max_jobs = 10
-    """ The hunting must be reconfigured slightly to better suit the new optimization behavior. """
+
     hunters = EvaluationsUnmoving(100, 0.01) | BestUnmoving(int(max_calls / 15), 0.2)
+
     generator = RandomGenerator(task.bounds)
 
     backend = 'processes'

@@ -1,15 +1,9 @@
-""" Provides support to use GloMPO with ParAMS.
-    There are two ways to do this depending on your preferred workflow or interface.
-    1) ParAMS is primary, setup an Optimization instance as normal.
-       GloMPO is wrapped using the GlompoParamsWrapper below to look like a scm.params.optimizers.BaseOptimizer
-    2) GloMPI is primary, setup a GloMPOManager instance as normal.
-       The ReaxFFError class below will create the error function to be used as the manager 'task' parameter.
-"""
 import warnings
 from pathlib import Path
 from typing import Dict, Optional, Sequence, Tuple, Union
 
 import numpy as np
+import tables as tb
 from scm.params.common.parallellevels import ParallelLevels
 from scm.params.common.reaxff_converter import geo_to_params, trainset_to_params
 from scm.params.core.dataset import DataSet, SSE
@@ -26,13 +20,17 @@ from ..core.manager import GloMPOManager
 from ..opt_selectors.baseselector import BaseSelector
 
 __all__ = ("GlompoParamsWrapper",
-           "ReaxFFError")
+           "ReaxFFError",
+           "XTBError",
+           "setup_reax_from_classic",
+           "setup_reax_from_params",
+           "setup_xtb_from_params",)
 
 
 class _FunctionWrapper:
-    """ Wraps function produced by ParAMS internals (instance of scm.params.core.opt_components._Step) to match the API
-        required by the 'task' parameter of GloMPOManager. Can be modified to achieve compatibility with
-        other optimizers.
+    """ Wraps function produced by ParAMS internals (instance of :class:`!scm.params.core.opt_components._Step`) to
+    match the API required by the 'task' parameter of GloMPOManager. Can be modified to achieve compatibility with
+    other optimizers.
     """
 
     def __init__(self, func: _Step):
@@ -49,9 +47,10 @@ class _FunctionWrapper:
 
 
 class GlompoParamsWrapper(BaseOptimizer):
-    """ Wraps the GloMPO manager into a ParAMS optimizer. This is not the recommended way to make use of the GloMPO
-        interface, it is preferable to make use of the BaseParamsError classes. This class is only applicable in cases
-        where the ParAMS Optimization class interface is preferred.
+    """ Wraps the GloMPO manager into a ParAMS :class:`!params.BaseOptimizer`.
+    This is not the recommended way to make use of the GloMPO interface, it is preferable to make use of the
+    :class:`.BaseParamsError` classes. This class is only applicable in cases where the ParAMS :class:`!Optimization`
+    class interface is preferred.
     """
 
     def __init__(self, opt_selector: BaseSelector, **manager_kwargs):
@@ -59,13 +58,16 @@ class GlompoParamsWrapper(BaseOptimizer):
 
             Parameters
             ----------
-            opt_selector: BaseSelector
-                Initialised BaseSelector object which specifies how optimizers are selected and initialised. See
-                glompo.opt_selectors.BaseSelector for detailed documentation.
+            opt_selector
+                Initialised :class:`.BaseSelector` object which specifies how optimizers are selected and initialised.
             **manager_kwargs
-                Optional arguments to the GloMPOManager initialisation function.
-                Note that all arguments are accepted but required GloMPO arguments 'task' and 'bounds'
-                will be overwritten as they are passed by the 'minimize' function in accordance with ParAMS API.
+                Optional arguments to the :class:`.GloMPOManager` initialisation function.
+
+                .. note::
+
+                   All arguments are accepted but required GloMPO arguments :attr:`~.GloMPOManager.task` and
+                   :attr:`~.GloMPOManager.bounds` will be overwritten as they are passed by the :meth:`minimize`
+                   function in accordance with ParAMS API.
         """
         self.manager = GloMPOManager()
         self.manager_kwargs = manager_kwargs
@@ -81,34 +83,34 @@ class GlompoParamsWrapper(BaseOptimizer):
                  bounds: Sequence[Tuple[float, float]],
                  workers: int = 1) -> MinimizeResult:
         """
-        Passes 'function' to GloMPO to be minimized. Returns and instance of MinimizeResult.
+        Passes 'function' to GloMPO to be minimized. Returns an instance of MinimizeResult.
 
         Parameters
         ----------
-        function: Callable
-            Function to be minimized, this is passed as GloMPO's 'task' parameter.
-        x0: Sequence[float]
-            The length of this vector is taken to be the number of parameters in the optimization. It is not, however,
-            used as the starting point for any optimizer the correct way to control this is by using GloMPO
-            'BaseGenerator' objects.
-        bounds: Sequence[Tuple[float, float]]
-            Sequence of (min, max) pairs used to bound the search area for every parameter.
-            The 'bounds' parameter is passed to GloMPO as its 'bounds' parameter.
+        function
+            Function to be minimized, this is passed as GloMPO's :attr:`~.GloMPOManager.task` parameter.
+        x0
+            Ignored by GloMPO, the correct way to control the optimizer starting points is by using GloMPO
+            :class:`.BaseGenerator` objects.
+        bounds
+            Sequence of (min, max) pairs used to bound the search area for every parameter. The 'bounds' parameter is
+            passed to GloMPO as its :attr:`~.GloMPOManager.bounds` parameter.
 
-            Note that by default ParAMS shifts and scales all parameters to the interval (0, 1). GloMPO will work in
-            this space and be blind to the true bounds, thus results from the GloMPO logs cannot be applied directly
-            to the function.
-        workers: int
-            Represents the maximum number of optimizers run in parallel. Passed to GloMPO as its 'max_jobs' parameter
-            if 'max_jobs' has not been sent during initialisation via manager_kwargs otherwise ignored. If allowed to
-            default this will usually result in the number of optimizers as there are cores available.
+            .. note::
+
+               By default ParAMS shifts and scales all parameters to the interval (0, 1). GloMPO will work in this space
+               and be blind to the true bounds, thus results from the GloMPO logs cannot be applied directly to the
+               function.
+
+        workers
+            Represents the maximum number of optimizers run in parallel. Passed to GloMPO as its
+            :attr:`~.GloMPOManager.max_jobs` parameter if it has not been sent during initialisation via
+            `manager_kwargs` otherwise ignored. If allowed to default this will usually result in the number of
+            optimizers as there are cores available.
 
         Notes
         -----
         GloMPO is not currently compatible with using multiple DataSets and only the first one will be considered.
-
-        Beware of using batching with GFLS as it requires all contributions to be evaluated every iteration.
-
         """
 
         warnings.warn("The x0 parameter is ignored by GloMPO. To control the starting locations of optimizers within "
@@ -136,31 +138,50 @@ class GlompoParamsWrapper(BaseOptimizer):
 
 class BaseParamsError:
     """ Base error function instance from which other classes derive depending on the engine used e.g. ReaxFF, xTB etc.
+    Primarily initialized from ParAMS objects. To initialize from files see the class methods
+    :meth:`~.ReaxFFError.from_classic_files` or :meth:`~.ReaxFFError.from_params_files`.
+
+    Parameters
+    ----------
+    data_set
+        Reference data used to compare against force field results.
+    job_collection
+        AMS jobs from which the data can be extracted for comparison to the :class:`!DataSet`
+    parameters
+        :class:`!BaseParameters` object which holds the force field values, ranges, engine and which
+        parameters are active or not.
+    validation_dataset
+        If a validation set is being used and evaluated along with the training set, it may be added here.
+        Jobs for the validation set are expected to be included in `job_collection`.
+    scale_residuals
+        See :attr:`scale_residuals`.
+
+    Attributes
+    ----------
+    dat_set : DataSet
+        Represents the training set.
+    job_col : JobCollection
+        Represents the jobs from which model results will be extracted and compared to the training set.
+    loss : Union[str, Loss]
+        Method by which individual errors are grouped into a single error function value.
+    par_eng : BaseParameters
+        Parameter engine interface representing the model and its parameters to tune.
+    par_levels : ParallelLevels
+        The layers of parallelism possible within the evaluation of the jobs.
+    scale_residuals : bool
+        If :obj:`True` then the raw residuals (i.e. the differences between engine evaluation and training data)
+        will be scaled by the weight and sigma values in the datasets i.e. :code:`r_scaled = weight * r / sigma`.
+        Otherwise the raw residual is returned. This setting effects :meth:`resids` and :meth:`detailed_call`.
+    scaler : LinearParameterScaler
+        Objects which can transform parameters from their actual values to between the values of 0 and 1 (the space in
+        which the optimization is done) and back again.
+    val_set : DataSet
+        Optional validation set to evaluate in parallel to the training set.
     """
 
     def __init__(self, data_set: DataSet, job_collection: JobCollection, parameters: BaseParameters,
                  validation_dataset: Optional[DataSet] = None,
                  scale_residuals: bool = True):
-        """ Initialisation of the error function. To initialise the object from files use the class factory
-            methods from_classic_files or from_params_files.
-
-            Parameters
-            ----------
-            data_set: DataSet
-                Reference data used to compare against force field results.
-            job_collection: JobCollection
-                AMS jobs from which the data can be extracted for comparison to the DataSet
-            parameters: BaseParameters
-                BaseParameters object which holds the force field values, ranges, engine and which parameters are active
-                or not.
-            validation_dataset: Optional[DataSet]
-                If a validation set is being used and evaluated along with the training set, it may be added here.
-                Jobs for the validation set are expected to be included in job_collection
-            scale_residuals: bool = True
-                If True then the raw residuals (i.e. the differences between engine evaluation and training data) will
-                be scaled by the weight and sigma values in the datasets i.e. r_scaled = weight * r / sigma. Otherwise
-                the raw residual is returned. This setting effects both the resids and detailed_call methods.
-        """
         self.dat_set = data_set
         self.job_col = job_collection
         self.par_eng = parameters
@@ -179,6 +200,7 @@ class BaseParamsError:
 
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
+        """ Returns the min, max bounds in each dimension. """
         return [(0, 1)] * self.n_parms
 
     def __call__(self, x: Sequence[float]) -> float:
@@ -188,10 +210,16 @@ class BaseParamsError:
     def detailed_call(self, x: Sequence[float]) -> Union[Tuple[float, np.ndarray],
                                                          Tuple[float, np.ndarray, float, np.ndarray]]:
         """ A full return of the error results. Returns a tuple of:
-                training_set_error, [training_set_residual_1, ..., training_set_residual_N]
+
+                :code:`training_set_error, [training_set_residual_1, ..., training_set_residual_N]`
+
             If a validation set is included then returned tuple is:
-                training_set_error, [training_set_residual_1, ..., training_set_residual_N],
-                validation_set_error, [validation_set_residual_1, ..., validation_set_residual_N]
+
+            .. code-block:: python
+
+               training_set_error, [training_set_residual_1, ..., training_set_residual_N],
+               validation_set_error, [validation_set_residual_1, ..., validation_set_residual_N]
+
         """
         calc = self._calculate(x)
         ts_fx = calc[0][0]
@@ -206,25 +234,23 @@ class BaseParamsError:
 
         return ts_fx, ts_resids
 
-    def detailed_call_header(self) -> Sequence[str]:
-        """ Returns a sequence of strings which represent the column headers for the detailed_call return.
-            GloMPO optimizers will attached this sequence to the head of their CSV log files.
+    def headers(self) -> Dict[str, tb.Col]:
+        """ Returns a the column headers for the :meth:`detailed_call` return.
+        See :meth:`.BaseFunction.headers`.
         """
-        n_ts = len(self.dat_set)
-        n_vs = len(self.val_set) if self.val_set is not None else 0
+        heads = {'fx': tb.Float64Col(pos=0),
+                 'resids_ts': tb.Float64Col((1, len(self.dat_set)), pos=1)}
 
-        ts_digits = len(str(n_ts))
-        vs_digits = len(str(n_vs))
+        if self.val_set:
+            heads['fx_vs'] = tb.Float64Col(pos=2)
+            heads['resids_vs'] = tb.Float64Col((1, len(self.val_set)), pos=3)
 
-        ts_heads = ['fx', *[f"r{i:0{ts_digits}}" for i in range(n_ts)]]
-        vs_heads = ['fx_vs', *[f"r{i:0{vs_digits}}_vs" for i in range(n_vs)]] if self.val_set is not None else []
-
-        return ts_heads + vs_heads
+        return heads
 
     def resids(self, x: Sequence[float]) -> np.ndarray:
-        """ Method for compatibility with GFLS optimizer. Returns the signed differences between the force field and
-            training set residuals. Will be scaled by sigma and weight if ReaxFFError.scale_residuals is True, otherwise
-            not.
+        """ Method for compatibility with GFLS optimizer.
+        Returns the signed differences between the force field and training set residuals. Will be scaled by sigma and
+        weight if :attr:`scale_residuals` is :obj:`True`, otherwise not.
         """
         residuals = self._calculate(x)[0][1]
         if self.scale_residuals:
@@ -234,20 +260,22 @@ class BaseParamsError:
 
     def save(self, path: Union[Path, str], filenames: Optional[Dict[str, str]] = None,
              parameters: Optional[Sequence[float]] = None):
-        """ Writes the data set and job collection to YAML files. Writes the engine object to an appropriate parameter
-            file.
+        """ Writes the :attr:`dat_set` and :attr:`job_col` to YAML files.
+        Writes the engine object to an appropriate parameter file.
 
-            Parameters
-            ----------
-            path: Union[Path, str]
-                Path to directory in which files will be saved.
-            filenames: Optional[Dict[str, str]] = None
-                Custom filenames for the written files. The dictionary may include any/all of the keys in the example
-                below. This example contains the default names used if not given:
-                    {'ds': 'data_set.yml', 'jc': 'job_collection.yml', 'ff': 'ffield'}
-            parameters: Optional[Sequence[float]] = None
-                Optional parameters to be written into the force field file. If not given, the parameters currently
-                therein will be used.
+        Parameters
+        ----------
+        path
+            Path to directory in which files will be saved.
+        filenames
+            Custom filenames for the written files. The dictionary may include any/all of the keys in the example
+            below. This example contains the default names used if not given::
+
+                {'ds': 'data_set.yml', 'jc': 'job_collection.yml', 'ff': 'ffield'}
+
+        parameters
+            Optional parameters to be written into the force field file. If not given, the parameters currently
+            therein will be used.
         """
         if not filenames:
             filenames = {}
@@ -280,19 +308,16 @@ class BaseParamsError:
 
 
 class ReaxFFError(BaseParamsError):
-    """ Setups a function which when called returns the error value of a parameterised ReaxFF force field as compared to
-        a provided training set of data.
-    """
+    """ ReaxFF error function. """
 
     @classmethod
     def from_classic_files(cls, path: Union[Path, str], **kwargs) -> 'ReaxFFError':
         """ Initializes the error function from classic ReaxFF files.
 
-            Parameters
-            ----------
-            path: Union[Path, str]
-                Path to classic ReaxFF files, passed to setup_reax_from_classic (see its docs for what files are
-                expected).
+        Parameters
+        ----------
+        path
+            Path to classic ReaxFF files, passed to :func:`.setup_reax_from_classic`.
         """
         dat_set, job_col, rxf_eng = setup_reax_from_classic(path)
         return cls(dat_set, job_col, rxf_eng, **kwargs)
@@ -301,18 +326,18 @@ class ReaxFFError(BaseParamsError):
     def from_params_files(cls, path: Union[Path, str], **kwargs) -> 'ReaxFFError':
         """ Initializes the error function from ParAMS data files.
 
-            Parameters
-            ----------
-            path: Union[Path, str]
-                Path to directory containing ParAMS data set, job collection and ReaxFF engine files.
-                (see setup_reax_from_params for what files are expected).
+        Parameters
+        ----------
+        path
+            Path to directory containing ParAMS data set, job collection and ReaxFF engine files (see
+            :func:`.setup_reax_from_params`).
         """
         dat_set, job_col, rxf_eng = setup_reax_from_params(path)
         return cls(dat_set, job_col, rxf_eng, **kwargs)
 
     def checkpoint_save(self, path: Union[Path, str]):
         """ Used to store files into a GloMPO checkpoint (at path) suitable to reconstruct the task when the checkpoint
-            is loaded.
+        is loaded.
         """
         self.dat_set.pickle_dump(Path(path, 'data_set.pkl'))
         self.job_col.pickle_dump(Path(path, 'job_collection.pkl'))
@@ -320,26 +345,24 @@ class ReaxFFError(BaseParamsError):
 
 
 class XTBError(BaseParamsError):
-    """ Setups a function which when called returns the error value of a parameterised xTB force field as compared to
-        a provided training set of data.
-    """
+    """ GFN-xTB error function. """
 
     @classmethod
     def from_params_files(cls, path: Union[Path, str], **kwargs) -> 'XTBError':
         """ Initializes the error function from ParAMS data files.
 
-            Parameters
-            ----------
-            path: Union[Path, str]
-                Path to directory containing ParAMS data set, job collection and ReaxFF engine files.
-                (see setup_reax_from_params for what files are expected).
+        Parameters
+        ----------
+        path
+            Path to directory containing ParAMS data set, job collection and ReaxFF engine files (see
+            :func:`setup_reax_from_params`).
         """
         dat_set, job_col, rxf_eng = setup_xtb_from_params(path)
         return cls(dat_set, job_col, rxf_eng, **kwargs)
 
     def checkpoint_save(self, path: Union[Path, str]):
         """ Used to store files into a GloMPO checkpoint (at path) suitable to reconstruct the task when the checkpoint
-            is loaded.
+        is loaded.
         """
         self.dat_set.pickle_dump(Path(path, 'data_set.pkl'))
         self.job_col.pickle_dump(Path(path, 'job_collection.pkl'))
@@ -347,24 +370,31 @@ class XTBError(BaseParamsError):
 
 
 def setup_reax_from_classic(path: Union[Path, str]) -> Tuple[DataSet, JobCollection, ReaxParams]:
-    """
-    Parses classic ReaxFF force field and configuration files into instances which can be evaluated by AMS.
+    """ Parses classic ReaxFF force field and configuration files into instances which can be evaluated by AMS.
 
     Parameters
     ----------
-    path: Union[Path, str]
+    path
         Path to folder containing:
-        - trainset.in: Contains the description of the items in the training set
-        - control:     Contains ReaxFF settings
-        - ffield_init: A force field file which contains values for all the parameters
-        - ffield_bool: A force field file with all parameters set to 0 or 1.
-                       1 indicates it will be adjusted during optimisation.
-                       0 indicates it will not be changed during optimisation.
-        - ffield_max:  A force field file where the active parameters are set to their maximum value (value of other
-                       parameters is ignored).
-        - ffield_min:  A force field file where the active parameters are set to their maximum value (value of other
-                       parameters is ignored).
-        - geo:         Contains the geometries of the items used in the training set.
+
+            trainset.in
+                Contains the description of the items in the training set
+            control
+                Contains ReaxFF settings
+            ffield_init
+                A force field file which contains values for all the parameters
+            ffield_bool
+                A force field file with all parameters set to 0 or 1.
+                1 indicates it will be adjusted during optimisation.
+                0 indicates it will not be changed during optimisation.
+            ffield_max
+                A force field file where the active parameters are set to their maximum value (value of other parameters
+                is ignored).
+            ffield_min
+                A force field file where the active parameters are set to their maximum value (value of other parameters
+                is ignored).
+            geo
+                Contains the geometries of the items used in the training set.
     """
 
     dat_set = trainset_to_params(Path(path, 'trainset.in'))
@@ -410,19 +440,18 @@ def setup_reax_from_classic(path: Union[Path, str]) -> Tuple[DataSet, JobCollect
 def _setup_collections_from_params(path: Union[Path, str]) -> Tuple[DataSet, JobCollection]:
     """ Loads ParAMS produced ReaxFF files into ParAMS objects.
 
-        Parameters
-        ----------
-        path: Union[Path, str]
-            Path to folder containing:
-            - data_set.yml OR data_set.pkl
+    Parameters
+    ----------
+    path
+        Path to folder containing:
+            ``data_set.yml`` OR ``data_set.pkl``
                 Contains the description of the items in the training set. A YAML file must be of the form produced by
-                scm.params.core.dataset.DataSet.store, a pickle file must be of the form produced by
-                scm.params.core.dataset.DataSet.pickle_dump. If both files are present, the pickle is given priority.
-            - job_collection.yml OR job_collection.pkl
+                :meth:`!DataSet.store`, a pickle file must be of the form produced by :meth:`!DataSet.pickle_dump`. If
+                both files are present, the pickle is given priority.
+            ``job_collection.yml`` OR ``job_collection.pkl``
                 Contains descriptions of the AMS jobs to evaluate. A YAML file must be of the form produced by
-                scm.params.core.jobcollection.JobCollection.store, a pickle file must be of the form produced by
-                scm.params.core.jobcollection.JobCollection.pickle_dump.  If both files are present, the pickle is given
-                priority.
+                :meth:`!JobCollection.store`, a pickle file must be of the form produced by
+                :meth:`!JobCollection.pickle_dump`.  If both files are present, the pickle is given priority.
     """
     dat_set = DataSet()
     job_col = JobCollection()
@@ -443,22 +472,21 @@ def _setup_collections_from_params(path: Union[Path, str]) -> Tuple[DataSet, Job
 def setup_reax_from_params(path: Union[Path, str]) -> Tuple[DataSet, JobCollection, ReaxParams]:
     """ Loads ParAMS produced ReaxFF files into ParAMS objects.
 
-        Parameters
-        ----------
-        path: Union[Path, str]
-            Path to folder containing:
-            - data_set.yml OR data_set.pkl
+    Parameters
+    ----------
+    path
+        Path to folder containing:
+            ``data_set.yml`` OR ``data_set.pkl``
                 Contains the description of the items in the training set. A YAML file must be of the form produced by
-                scm.params.core.dataset.DataSet.store, a pickle file must be of the form produced by
-                scm.params.core.dataset.DataSet.pickle_dump. If both files are present, the pickle is given priority.
-            - job_collection.yml OR job_collection.pkl
+                :meth:`!DataSet.store`, a pickle file must be of the form produced by :meth:`!DataSet.pickle_dump`. If
+                both files are present, the pickle is given priority.
+            ``job_collection.yml`` OR ``job_collection.pkl``
                 Contains descriptions of the AMS jobs to evaluate. A YAML file must be of the form produced by
-                scm.params.core.jobcollection.JobCollection.store, a pickle file must be of the form produced by
-                scm.params.core.jobcollection.JobCollection.pickle_dump.  If both files are present, the pickle is given
-                priority.
-            - reax_params.pkl:
-                Pickle produced by scm.params.parameterinterfaces.reaxff.ReaxParams.pickle_dump, representing the force
-                field, active parameters and their ranges.
+                :meth:`!JobCollection.store`, a pickle file must be of the form produced by
+                :meth:`!JobCollection.pickle_dump`.  If both files are present, the pickle is given priority.
+            ``reax_params.pkl``
+                Pickle produced by :meth:`!ReaxParams.pickle_dump`, representing the force field, active parameters and
+                their ranges.
     """
     dat_set, job_col = _setup_collections_from_params(path)
     rxf_eng = ReaxParams.pickle_load(Path(path, 'reax_params.pkl'))
@@ -469,22 +497,21 @@ def setup_reax_from_params(path: Union[Path, str]) -> Tuple[DataSet, JobCollecti
 def setup_xtb_from_params(path: Union[Path, str]) -> Tuple[DataSet, JobCollection, XTBParams]:
     """ Loads ParAMS produced ReaxFF files into ParAMS objects.
 
-        Parameters
-        ----------
-        path: Union[Path, str]
-            Path to folder containing:
-            - data_set.yml OR data_set.pkl
+    Parameters
+    ----------
+    path
+        Path to folder containing:
+            ``data_set.yml`` OR ``data_set.pkl``
                 Contains the description of the items in the training set. A YAML file must be of the form produced by
-                scm.params.core.dataset.DataSet.store, a pickle file must be of the form produced by
-                scm.params.core.dataset.DataSet.pickle_dump. If both files are present, the pickle is given priority.
-            - job_collection.yml OR job_collection.pkl
+                :meth:`!DataSet.store`, a pickle file must be of the form produced by :meth:`!DataSet.pickle_dump`.
+                If both files are present, the pickle is given priority.
+            ``job_collection.yml`` OR ``job_collection.pkl``
                 Contains descriptions of the AMS jobs to evaluate. A YAML file must be of the form produced by
-                scm.params.core.jobcollection.JobCollection.store, a pickle file must be of the form produced by
-                scm.params.core.jobcollection.JobCollection.pickle_dump.  If both files are present, the pickle is given
-                priority.
-            - elements.xtbpar, basis.xtbpar, globals.xtbpar, additional_parameters.yaml, metainfo.yaml,
-              atomic_configurations.xtbpar, metals.xtbpar
+                :meth:`!JobCollection.store`, a pickle file must be of the form produced by
+                :meth:`!JobCollection.pickle_dump`.  If both files are present, the pickle is given priority.
+            ``elements.xtbpar``, ``basis.xtbpar``, ``globals.xtbpar``, ``additional_parameters.yaml``, ``metainfo.yaml``, ``atomic_configurations.xtbpar``, ``metals.xtbpar``
                 Classic xTB parameter files.
+
     """
     dat_set, job_col = _setup_collections_from_params(path)
     xtb_eng = XTBParams(path)

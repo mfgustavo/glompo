@@ -9,7 +9,9 @@ __all__ = ("RandomGenerator",)
 
 
 class RandomGenerator(BaseGenerator):
-    """ Generates random starting points within given bounds. """
+    """ Generates random points.
+    Points are drawn from a uniform distribution within given `bounds`.
+    """
 
     def __init__(self, bounds: Sequence[Tuple[float, float]]):
         super().__init__()
