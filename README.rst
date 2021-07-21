@@ -29,14 +29,14 @@ The three main advantages to optimization in this way:
 3. The use of multiple optimizers allows multiple competitive/equivalent solutions to be found.
 
 .. image:: docs/_figs/demo.gif
-    :width: 500
-    :align: center
+   :width: 500
+   :align: center
 
 .. _Back to Top:
 
 .. contents:: Table of Contents
-    :local:
-    :depth: 2
+   :local:
+   :depth: 2
 
 ############
 Installation
@@ -44,59 +44,59 @@ Installation
 
 [`Back to Top`_]
 
-#.  The source code may be downloaded directly from `GitHub <https://github.com/mfgustavo/glompo>`_, or it may be cloned
-    into a target directory using:
+#. The source code may be downloaded directly from `GitHub <https://github.com/mfgustavo/glompo>`_, or it may be cloned
+   into a target directory using:
 
-    .. code-block:: bash
+   .. code-block:: bash
 
-        git clone https://github.com/mfgustavo/glompo.git
+       git clone https://github.com/mfgustavo/glompo.git
 
 
 
-#.  Installation is easy after download:
+#. Installation is easy after download:
 
-    .. code-block:: bash
+   .. code-block:: bash
 
-        cd /path/to/glompo
-        pip install .
+       cd /path/to/glompo
+       pip install .
 
-    This will copy the GloMPO source code into your Python environment. If you are developing for GloMPO, you may prefer
-    to install in developer mode:
+   This will copy the GloMPO source code into your Python environment. If you are developing for GloMPO, you may prefer
+   to install in developer mode:
 
-    .. code-block:: bash
+   .. code-block:: bash
 
-        cd /path/to/glompo
-        pip install -e .
+       cd /path/to/glompo
+       pip install -e .
 
-    This will not copy the source code and GloMPO will be read directly from the directory into which it was downloaded
-    or extracted.
+   This will not copy the source code and GloMPO will be read directly from the directory into which it was downloaded
+   or extracted.
 
-#.  The installation will only install core GloMPO dependencies.
-    Packages required for optional features must be installed manually. These
-    features and their dependencies can be consulted in the ``extra_requires``
-    option of ``setup.py``.
+#. The installation will only install core GloMPO dependencies.
+   Packages required for optional features must be installed manually. These
+   features and their dependencies can be consulted in the ``extra_requires``
+   option of ``setup.py``.
 
-    Alternatively, you may select, during installation, the optional features you would like to use:
+   Alternatively, you may select, during installation, the optional features you would like to use:
 
-    .. code-block:: bash
+   .. code-block:: bash
 
-        pip install .[CMAOptimizer,Video,Plotting,Checkpointing,...]
+       pip install .[CMAOptimizer,Video,Plotting,Checkpointing,...]
 
-#.  You should confirm that everything is working correctly by running the tests in the
-    ``tests`` folder. Running the tests requires ``pytest`` be installed to your Python
-    environment. This is not installed automatically with GloMPO.
+#. You should confirm that everything is working correctly by running the tests in the
+   ``tests`` folder. Running the tests requires ``pytest`` be installed to your Python
+   environment. This is not installed automatically with GloMPO.
 
-    .. code-block:: bash
+   .. code-block:: bash
 
-        cd /path/to/glompo
-        pytest
+       cd /path/to/glompo
+       pytest
 
-    .. note::
-        Tests which require optional components will be automatically skipped if the
-        required packages are not installed.
+   .. note::
+       Tests which require optional components will be automatically skipped if the
+       required packages are not installed.
 
-    .. note::
-        If your tests fail, please raise an issue as detailed in the `Issues`_ section.
+   .. note::
+       If your tests fail, please raise an issue as detailed in the `Issues`_ section.
 
 #####
 Usage
@@ -145,51 +145,51 @@ Below is a brief introduction to the most important components of the code to or
 implemented in a modular way such that all decision criteria is customizable.
 
 ``core``
-    This package contains the most important GloMPO components:
+   This package contains the most important GloMPO components:
 
-    ``manager.py``
-         Contains ``GloMPOManager`` the primary point of entry into the code. The manager performs the actual
-         optimzation, accepts all settings, and produces all the output.
+   ``manager.py``
+        Contains ``GloMPOManager`` the primary point of entry into the code. The manager performs the actual
+        optimzation, accepts all settings, and produces all the output.
 
-    ``checkpointing.py``
-         Contains ``CheckpointingControl`` which configures GloMPO's ability to save a snapshot of itself during an
-         optimization from which it can resume later.
+   ``checkpointing.py``
+        Contains ``CheckpointingControl`` which configures GloMPO's ability to save a snapshot of itself during an
+        optimization from which it can resume later.
 
-    ``function.py``
-         An API template for the optimization task from which it *may*, but *need not*, inherit.
+   ``function.py``
+        An API template for the optimization task from which it *may*, but *need not*, inherit.
 
-    ``scope.py``
-         GloMPO infrastructure to produce real-time video recordings of optimizations.
+   ``scope.py``
+        GloMPO infrastructure to produce real-time video recordings of optimizations.
 
 ``opt_selectors``
-    Each file contains a different ``BaseSelector`` child-class. These objects decide which optimizer configuration to
-    start from a list of options.
+   Each file contains a different ``BaseSelector`` child-class. These objects decide which optimizer configuration to
+   start from a list of options.
 
 ``optimizers``
-    Each file contains a different ``BaseOptimizer`` child-class. These are implementations or wrappers around actual
-    optimization algorithms.
+   Each file contains a different ``BaseOptimizer`` child-class. These are implementations or wrappers around actual
+   optimization algorithms.
 
 ``generators``
-    Each file contains a different ``BaseGenerator`` child-class. These are algorithms which decide where optimizers are
-    started within the search domain.
+   Each file contains a different ``BaseGenerator`` child-class. These are algorithms which decide where optimizers are
+   started within the search domain.
 
 ``convergence``
-    Each file contains a different ``BaseChecker`` child-class. These are simple conditions which control GloMPO's
-    overall termination conditions. These classes/conditions can be combined into more sophisticated ones, for example:
+   Each file contains a different ``BaseChecker`` child-class. These are simple conditions which control GloMPO's
+   overall termination conditions. These classes/conditions can be combined into more sophisticated ones, for example:
 
-    .. code-block:: python
+   .. code-block:: python
 
-       MaxSeconds(6000) | MaxFuncCalls(30_000) & MaxOptStarted(5)
+      MaxSeconds(6000) | MaxFuncCalls(30_000) & MaxOptStarted(5)
 
 ``hunters``
-    Each file contains a different ``BaseHunter`` child-class. These are termination conditions which, if satisfied,
-    will get GloMPO to trigger an early termination of a particular optimizer. These classes/conditions can be combined
-    similarly to ``BaseChecker`` s:
+   Each file contains a different ``BaseHunter`` child-class. These are termination conditions which, if satisfied,
+   will get GloMPO to trigger an early termination of a particular optimizer. These classes/conditions can be combined
+   similarly to ``BaseChecker`` s:
 
 ``benchmark_fncs``
-    A collection of well-known global optimization test functions. These are often faster to evaluate than the actual
-    function one wishes to minimize. Using these can be helpful to quickly configure GloMPO before applying it to more
-    time-consuming tasks.
+   A collection of well-known global optimization test functions. These are often faster to evaluate than the actual
+   function one wishes to minimize. Using these can be helpful to quickly configure GloMPO before applying it to more
+   time-consuming tasks.
 
 ######
 Issues
