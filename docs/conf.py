@@ -30,6 +30,11 @@ release = 'v3.0.2'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = ['sphinx.ext.autodoc',
+              'sphinx.ext.napoleon',
+              'sphinx.ext.autosummary',
+              'sphinx.ext.viewcode',
+              'sphinx.ext.coverage',
+              'sphinx_rtd_theme',
               ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -45,9 +50,42 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'alabaster'
+html_theme = 'sphinx_rtd_theme'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+
+# Other Sphinx settings -----------------------------------------------------
+modindex_common_prefix = ['glompo.']
+master_doc = 'index'
+needs_sphinx = '1.8.5'
+
+# Autodoc settings ----------------------------------------------------------
+autodoc_mock_imports = ['matplotlib',
+                        'ffmpeg',
+                        'PySide2',
+                        'scipy',
+                        'pytest',
+                        'cma',
+                        'optsam',
+                        'nevergrad',
+                        'scm',
+                        'dill',
+                        'psutil',
+                        ]
+
+autodoc_typehints = 'description'
+autoclass_content = 'both'
+
+# Napoleon settings ----------------------------------------------------------
+napoleon_numpy_docstring = True
+napoleon_include_init_with_doc = False
+napoleon_include_special_with_doc = True
+napoleon_use_admonition_for_notes = True
+
+# Autosummary settings -------------------------------------------------------
+autosummary_generate = True
+autosummary_generate_overwrite = True
+autosummary_generate_autosummary_docs = True

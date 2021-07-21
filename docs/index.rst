@@ -8,10 +8,13 @@ Globally Managed Parallel Optimization
 
     intro
     examples/examples
+    tasks/tasks
     logging
     parallelism
     components/components
+    userinterventions
     results
+    tests
 
 ******************
 Indices and tables

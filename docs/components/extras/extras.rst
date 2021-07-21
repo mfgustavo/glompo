@@ -8,4 +8,4 @@ This chapter contains a descriptions of sundry GloMPO components.
 
     scope
     checkpointing
-    userinterventions
+    namedtuples
