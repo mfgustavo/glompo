@@ -6,26 +6,22 @@ from ._base import BaseTestCase
 
 
 class ZeroSum(BaseTestCase):
-    """ When called returns evaluations of the Zero Sum function. """
+    """ Implementation of the ZeroSum optimization test function [a]_.
 
-    def __init__(self, dims: int = 2, delay: float = 0):
-        """
-        Implementation of the Zero Sum optimization test function.
-        Recommended bounds: [-10, 10] * dims
-        Global minimum: f(x1 + x2 + x3 ... + xn = 0 ) = 0
+        .. math::
+           f(x) = \\begin{cases}
+                        0 & \text{if} \\sum^n_{i=1} x_i = 0 \\\\
+                        1 + (10000|\\sum^n_{i=1} x_i = 0|)^{0.5} & \text{otherwise}
+                  \\end{cases}
 
-        Single valley of degenerate global minimum results that is not axi-parallel
+        Recommended bounds: :math:`x_i \\in [-10, 10]`
 
-        Parameters
-        ----------
-        dims: int = 2
-            Number of dimensions of the problem
-        delay: float = 0
-            Delay in seconds after the function is called before results are returned.
-            Useful to simulate harder problems.
-        """
-        self._dims = dims
-        self._delay = delay
+        Global minimum: :math:`f(x) = 0 \text{where} \\sum^n_{i=1} x_i = 0`
+
+        .. image:: /_figs/zerosum.png
+           :align: center
+           :alt: Single valley of degenerate global minimum results that is not axi-parallel.
+    """
 
     def __call__(self, x) -> float:
         super().__call__(x)
@@ -43,10 +39,6 @@ class ZeroSum(BaseTestCase):
         return calc
 
     @property
-    def dims(self) -> int:
-        return self._dims
-
-    @property
     def min_x(self) -> Sequence[float]:
         return [7.70628098] * self.dims
 
@@ -56,8 +48,4 @@ class ZeroSum(BaseTestCase):
 
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
-        return [[0.25, 10]] * self.dims
-
-    @property
-    def delay(self) -> float:
-        return self._delay
+        return [[-10, 10]] * self.dims

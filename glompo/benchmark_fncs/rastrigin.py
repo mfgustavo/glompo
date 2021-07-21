@@ -7,26 +7,19 @@ from ._base import BaseTestCase
 
 
 class Rastrigin(BaseTestCase):
-    """ When called returns evaluations of the Rastrigin function. """
+    """ Implementation of the Rastrigin optimization test function [b]_.
 
-    def __init__(self, dims: int = 2, delay: float = 0):
-        """
-        Implementation of the Rastrigin optimization test function.
-        Recommended bounds: [-5.12, 5.12] * dims
-        Global minimum: f(0, 0, ..., 0) = 0
+        .. math::
+           f(x) = 10d + \\sum^d_{i=1} \\left[x_i^2-10\\cos(2\\pi x_i)\\right]
 
-        Modulation of a unimodal paraboloid with multiple regular local minima.
+        Recommended bounds: :math:`x_i \\in [-5.12, 5.12]`
 
-        Parameters
-        ----------
-        dims : int
-            Number of dimensions of the function.
-        delay : int
-            Delay in seconds after the function is called before results are returned.
-            Useful to simulate harder problems.
-        """
-        self._dims = dims
-        self._delay = delay
+        Global minimum: :math:`f(0, 0, ..., 0) = 0`
+
+        .. image:: /_figs/rastrigin.png
+           :align: center
+           :alt: Modulation of a unimodal paraboloid with multiple regular local minima.
+    """
 
     def __call__(self, x):
         x = np.array(x)
@@ -36,10 +29,6 @@ class Rastrigin(BaseTestCase):
 
         sleep(self.delay)
         return calc
-
-    @property
-    def dims(self) -> int:
-        return self._dims
 
     @property
     def min_x(self) -> Sequence[float]:
@@ -52,7 +41,3 @@ class Rastrigin(BaseTestCase):
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
         return [[-5.12, 5.12]] * self.dims
-
-    @property
-    def delay(self) -> float:
-        return self._delay

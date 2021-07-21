@@ -6,26 +6,19 @@ from ._base import BaseTestCase
 
 
 class Vincent(BaseTestCase):
-    """ When called returns evaluations of the Vincent function. """
+    """ Implementation of the Vincent optimization test function [a]_.
 
-    def __init__(self, dims: int = 2, delay: float = 0):
-        """
-        Implementation of the Vincent optimization test function.
-        Recommended bounds: [0.25, 10] * dims
-        Global minimum: f(7.706, 7.706, ..., 7.706) = -dims
+        .. math::
+           f(x) = - \\sum^d_{i=1} \\sin\\left(10\\log(x)\\right)
 
-        'Flat' surface made of period peaks and trough of various sizes.
+        Recommended bounds: :math:`x_i \\in [0.25, 10]`
 
-        Parameters
-        ----------
-        dims: int = 2
-            Number of dimensions of the problem
-        delay: float = 0
-            Delay in seconds after the function is called before results are returned.
-            Useful to simulate harder problems.
-        """
-        self._dims = dims
-        self._delay = delay
+        Global minimum: :math:`f(7.706, 7.706, ..., 7.706) = -d`
+
+        .. image:: /_figs/vincent.png
+           :align: center
+           :alt: 'Flat' surface made of period peaks and trough of various sizes.
+    """
 
     def __call__(self, x) -> float:
         super().__call__(x)
@@ -35,10 +28,6 @@ class Vincent(BaseTestCase):
         calc = -np.sum(calc)
 
         return calc
-
-    @property
-    def dims(self) -> int:
-        return self._dims
 
     @property
     def min_x(self) -> Sequence[float]:
@@ -51,7 +40,3 @@ class Vincent(BaseTestCase):
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
         return [[0.25, 10]] * self.dims
-
-    @property
-    def delay(self) -> float:
-        return self._delay

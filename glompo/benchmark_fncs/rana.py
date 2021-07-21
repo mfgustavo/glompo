@@ -6,25 +6,23 @@ from ._base import BaseTestCase
 
 
 class Rana(BaseTestCase):
-    """ When called returns evaluations of the Rana function. """
+    """ Implementation of the Rana optimization test function [a]_.
 
-    def __init__(self, dims: int = 2, delay: float = 0):
-        """
-        Implementation of the Rana optimization test function.
-        Recommended bounds: [-500.000001, 500.000001] * dims
-        Global minimum: f(-500, -500, ..., -500) = -928.5478
-        Highly multimodal and chaotic, optimum is on the lower bound
+        .. math::
+           f(x) = \\sum^d_{i=1}\\left[x_i\\sin\\left(\\sqrt{\\left|x_1-x_i+1\\right|}\\right)
+                                      \\cos\\left(\\sqrt{\\left|x_1+x_i+1\\right|}\\right)\\\\
+                                 + (x_1+1)\\sin\\left(\\sqrt{\\left|x_1+x_i+1\\right|}\\right)
+                                      \\cos\\left(\\sqrt{\\left|x_1-x_i+1\\right|}\\right)
+                              \\right]
 
-        Parameters
-        ----------
-        dims: int = 2
-            Number of dimensions of the problem
-        delay: float = 0
-            Delay in seconds after the function is called before results are returned.
-            Useful to simulate harder problems.
-        """
-        self._dims = dims
-        self._delay = delay
+        Recommended bounds: :math:`x_i \\in [-500.000001, 500.000001]`
+
+        Global minimum: :math:`f(-500, -500, ..., -500) = -928.5478`
+
+        .. image:: /_figs/rana.png
+           :align: center
+           :alt: Highly multimodal and chaotic, optimum is on the lower bound
+    """
 
     def __call__(self, x) -> float:
         super().__call__(x)
@@ -41,10 +39,6 @@ class Rana(BaseTestCase):
         return np.sum(term1 + term2)
 
     @property
-    def dims(self) -> int:
-        return self._dims
-
-    @property
     def min_x(self) -> Sequence[float]:
         return [-500] * self.dims
 
@@ -55,7 +49,3 @@ class Rana(BaseTestCase):
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
         return [[-500.000001, 500.000001]] * self.dims
-
-    @property
-    def delay(self) -> float:
-        return self._delay

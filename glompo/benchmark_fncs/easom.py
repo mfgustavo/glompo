@@ -7,25 +7,27 @@ from ._base import BaseTestCase
 
 
 class Easom(BaseTestCase):
-    """ When called returns evaluations of the Easom function. """
+    """ Implementation of the Easom optimization test function [a]_.
 
-    def __init__(self, delay: float = 0, shift_positive: bool = False):
+        .. math::
+           f(x) = - \\cos\\left(x_1\\right)\\cos\\left(x_2\\right)\\exp\\left(-(x_1-\\pi)^2-(x_2-\\pi)^2\\right)
+
+        Recommended bounds: :math:`x_1,x _2 \\in [-100, 100]`
+
+        Global minimum: :math:`f(\\pi, \\pi) = -1`
+
+        .. image:: /_figs/easom.png
+           :align: center
+           :alt: Totally flat surface with a single very small bullet hole type minimum.
+    """
+
+    def __init__(self, *args, shift_positive: bool = False, delay: float = 0):
+        """ Parameters
+            ----------
+            shift_positive : bool, default=False
+                Shifts the entire function such that the global minimum falls at 0.
         """
-        Implementation of the Easom optimization test function.
-        Recommended bounds: [-100, 100] * 2
-        Global minimum: f(pi, pi) = -1
-
-        Totally flat surface with a single very small bullet hole type minimum.
-
-        Parameters
-        ----------
-        delay : int
-            Delay in seconds after the function is called before results are returned.
-            Useful to simulate harder problems.
-        shift_positive: bool = False
-            Shifts the entire function such that the global minimum falls at 0.
-        """
-        self._delay = delay
+        super().__init__(2, delay=delay)
         self.shift = shift_positive
 
     def __call__(self, x):
@@ -41,10 +43,6 @@ class Easom(BaseTestCase):
         return calc
 
     @property
-    def dims(self) -> int:
-        return 2
-
-    @property
     def min_x(self) -> Sequence[float]:
         return [np.pi, np.pi]
 
@@ -55,7 +53,3 @@ class Easom(BaseTestCase):
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
         return [[-100, 100]] * 2
-
-    @property
-    def delay(self) -> float:
-        return self._delay

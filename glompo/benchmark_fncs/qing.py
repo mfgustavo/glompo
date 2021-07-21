@@ -7,25 +7,19 @@ from ._base import BaseTestCase
 
 
 class Qing(BaseTestCase):
-    """ When called returns evaluations of the Qing function. """
+    """ Implementation of the Qing optimization test function [a]_.
 
-    def __init__(self, dims: int = 2, delay: float = 0):
-        """
-        Implementation of the Qing optimization test function.
-        Recommended bounds: [-500, 500] * dims
-        Global minimum: f(sqrt(1), sqrt(2), ..., sqrt(n)) = 0
-        Globally flat with parabolic walls but has 2^dims degenerate global minima.
+        .. math::
+           f(x) = \\sum^d_{i=1} (x_i^2-i)^2
 
-        Parameters
-        ----------
-        dims: int = 2
-            Number of dimensions of the problem
-        delay: float = 0
-            Delay in seconds after the function is called before results are returned.
-            Useful to simulate harder problems.
-        """
-        self._dims = dims
-        self._delay = delay
+        Recommended bounds: :math:`x_i \\in [-500, 500]`
+
+        Global minimum: :math:`f(\\sqrt{1}, \\sqrt{2}, ..., \\sqrt{n}) = 0`
+
+        .. image:: /_figs/qing.png
+           :align: center
+           :alt: Globally flat with parabolic walls but has :math:`2^d` degenerate global minima.
+    """
 
     def __call__(self, x) -> float:
         super().__call__(x)
@@ -35,10 +29,6 @@ class Qing(BaseTestCase):
         calc = (x ** 2 - i) ** 2
 
         return np.sum(calc)
-
-    @property
-    def dims(self) -> int:
-        return self._dims
 
     @property
     def min_x(self) -> Sequence[float]:
@@ -53,7 +43,3 @@ class Qing(BaseTestCase):
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
         return [[-500, 500]] * self.dims
-
-    @property
-    def delay(self) -> float:
-        return self._delay

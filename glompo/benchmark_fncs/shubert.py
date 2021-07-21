@@ -7,34 +7,29 @@ from ._base import BaseTestCase
 
 
 class Shubert(BaseTestCase):
-    """ When called returns evaluations of the Shubert01, Shubert03 or Shubert04 functions. """
+    """ Implementation of the Shubert Type-I, Type-III and Type-IV optimization test functions [a]_.
 
-    def __init__(self, dims: int = 2, delay: float = 0, style: int = 1, shift_positive: bool = False):
+        .. math::
+           f_I(x) & = & \\sum^2_{i=1}\\sum^5_{j=1} j \\cos\\left[(j+1)x_i+j\\right]\\\\
+           f_{III}(x) & = & \\sum^5_{i=1}\\sum^5_{j=1} j \\sin\\left[(j+1)x_i+j\\right]\\\\
+           f_{IV}(x) & = & \\sum^5_{i=1}\\sum^5_{j=1} j \\cos\\left[(j+1)x_i+j\\right]\\\\
+
+        Recommended bounds: :math:`x_i \\in [-10, 10]`
+
+        .. image:: /_figs/shubert.png
+           :align: center
+           :alt: Highly oscillatory, periodic surface. Many degenerate global minima regularly placed.
+    """
+
+    def __init__(self, dims: int = 2, style: int = 1, *, shift_positive: bool = False, delay: float = 0):
+        """ Parameters
+            ----------
+            style: int = 1
+                Selection between the Shubert01, Shubert03 & Shubert04 functions. Each more oscillatory than the previous.
+            shift_positive: bool = False
+                Shifts the entire function such that the global minimum falls at 0.
         """
-        Implementation of the Shubert optimization test functions.
-        Recommended bounds: [-10, 10] * dims
-        Global minimum is degenerate in all styles:
-         - Shubert01 f_min = -186.7309
-         - Shubert03 f_min = -24.062499
-         - Shubert04 f_min = -29.016015
-
-        Highly oscillatory and periodic surface with high peaks and deep narrow troughs. The global minima is
-        degenerate at many locations but each is tightly surrounded by similar local minima.
-
-        Parameters
-        ----------
-        dims: int = 2
-            Number of dimensions of the problem
-        delay: float = 0
-            Delay in seconds after the function is called before results are returned.
-            Useful to simulate harder problems.
-        style: int = 1
-            Selection between the Shubert01, Shubert03 & Shubert04 functions. Each more oscillatory than the previous.
-        shift_positive: bool = False
-            Shifts the entire function such that the global minimum falls at 0.
-        """
-        self._dims = dims
-        self._delay = delay
+        super().__init__(dims, delay=delay)
         self.style = style
         self.shift_positive = shift_positive
 
@@ -81,10 +76,6 @@ class Shubert(BaseTestCase):
         return calc
 
     @property
-    def dims(self) -> int:
-        return self._dims
-
-    @property
     def min_x(self) -> Sequence[float]:
         warnings.warn("Degenerate global minima")
         return
@@ -107,7 +98,3 @@ class Shubert(BaseTestCase):
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
         return [[-10, 10]] * self._dims
-
-    @property
-    def delay(self) -> float:
-        return self._delay

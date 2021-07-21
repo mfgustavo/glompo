@@ -6,25 +6,19 @@ from ._base import BaseTestCase
 
 
 class StyblinskiTang(BaseTestCase):
-    """ When called returns evaluations of the Styblinski-Tang function. """
+    """ Implementation of the Styblinski-Tang optimization test function [b]_.
 
-    def __init__(self, dims: int = 2, delay: float = 0):
-        """
-        Implementation of the Qing optimization test function.
-        Recommended bounds: [-500, 500] * dims
-        Global minimum: f(-2.90, -2.90, ..., -2.90) = -39.16616570377 * dims
-        Similar to Qing function but minima are deceptively similar but not actually degenerate
+        .. math::
+           f(x) = \\frac{1}{2}\\sum^d_{i=1}\\left(x_i^4-16x_i^2+5x_i\\right)
 
-        Parameters
-        ----------
-        dims: int = 2
-            Number of dimensions of the problem
-        delay: float = 0
-            Delay in seconds after the function is called before results are returned.
-            Useful to simulate harder problems.
-        """
-        self._dims = dims
-        self._delay = delay
+        Recommended bounds: :math:`x_i \\in [-500, 500]`
+
+        Global minimum: :math:`f(-2.90, -2.90, ..., -2.90) = -39.16616570377 d`
+
+        .. image:: /_figs/styblinskitang.png
+           :align: center
+           :alt: Similar to Qing function but minima are deceptively similar but not actually degenerate.
+    """
 
     def __call__(self, x) -> float:
         super().__call__(x)
@@ -33,10 +27,6 @@ class StyblinskiTang(BaseTestCase):
         calc = x ** 4 - 16 * x ** 2 + 5 * x
 
         return 0.5 * np.sum(calc)
-
-    @property
-    def dims(self) -> int:
-        return self._dims
 
     @property
     def min_x(self) -> Sequence[float]:
@@ -49,7 +39,3 @@ class StyblinskiTang(BaseTestCase):
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
         return [[-500, 500]] * self.dims
-
-    @property
-    def delay(self) -> float:
-        return self._delay

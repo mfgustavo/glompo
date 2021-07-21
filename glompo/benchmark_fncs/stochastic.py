@@ -6,26 +6,20 @@ from ._base import BaseTestCase
 
 
 class Stochastic(BaseTestCase):
-    """ When called returns evaluations of the Stochastic function. """
+    """ Implementation of the Stochastic optimization test function [a]_.
 
-    def __init__(self, dims: int = 2, delay: float = 0):
-        """
-        Implementation of the Stochastic optimization test function.
-        Recommended bounds: [-5, 5] * dims
-        Global minimum: f(1/dims, 1/dims, ..., 1/dims) = 0
-        Function with random evaluation noise making a substantial contribution to the function value.
-        Generally parabolic in shape.
+        .. math::
+           f(x) & = & \\sum^d_{i=1} \\epsilon_i\\left|x_i-\\frac{1}{i}\\right| \\\\
+           \\epsilon_i & = & \\mathcal{U}_{[0, 1]}
 
-        Parameters
-        ----------
-        dims: int = 2
-            Number of dimensions of the problem
-        delay: float = 0
-            Delay in seconds after the function is called before results are returned.
-            Useful to simulate harder problems.
-        """
-        self._dims = dims
-        self._delay = delay
+        Recommended bounds: :math:`x_i \\in [-5, 5]`
+
+        Global minimum: :math:`f(1/d, 1/d, ..., 1/d) = 0`
+
+        .. image:: /_figs/stochastic.png
+           :align: center
+           :alt: Parabolic function with random evaluation noise making a substantial contribution.
+    """
 
     def __call__(self, x) -> float:
         super().__call__(x)
@@ -38,10 +32,6 @@ class Stochastic(BaseTestCase):
         return np.sum(calc)
 
     @property
-    def dims(self) -> int:
-        return self._dims
-
-    @property
     def min_x(self) -> Sequence[float]:
         return 1 / np.arange(1, self.dims + 1)
 
@@ -52,7 +42,3 @@ class Stochastic(BaseTestCase):
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
         return [[-5, 5]] * self.dims
-
-    @property
-    def delay(self) -> float:
-        return self._delay

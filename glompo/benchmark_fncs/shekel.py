@@ -8,31 +8,32 @@ from ._base import BaseTestCase
 
 
 class Shekel(BaseTestCase):
-    """ When called returns evaluations of the Shekel function. """
+    """ Implementation of the Shekel optimization test function [b]_.
 
-    def __init__(self, dims: int = 2, delay: float = 0, m: int = 10, shift_positive: bool = False):
-        """
-        Implementation of the Shekel optimization test function.
-        Recommended bounds: [-32.768, 32.768] * dims
-        Global minimum: f(4, 4, 4, 4) =~ -10
+        .. math::
+           f(x) = - \\sum^m_{i=1}\\left(\\sum^d_{j=1} (x_j - C_{ji})^2 + \\beta_i\\right)^{-1}
 
-        Parameters
-        ----------
-        dims: int = 2
-            Number of dimensions [1, 4] allowed.
-        delay: float = 0
-            Delay in seconds after the function is called before results are returned.
-            Useful to simulate harder problems.
-        m: int = 10
-            Number of minima. Global minimum certified for m=5,7 and 10.
-        shift_positive: bool
-            Shifts the entire function such that the global minimum falls at 0.
-            Since this is variable for this function the adjustment is +12 and thus the global minimum will not
-            necessarily fall at zero.
+        Recommended bounds: :math:`x_i \\in [-32.768, 32.768]`
+
+        Global minimum: :math:`f(4, 4, 4, 4) =~ -10`
+
+        .. image:: /_figs/shekel.png
+           :align: center
+           :alt: Multiple minima of different depths clustered together on a mostly-flat surface.
+    """
+
+    def __init__(self, dims: int = 2, m: int = 10, *, shift_positive: bool = False, delay: float = 0):
+        """ Parameters
+            ----------
+            m: int = 10
+                Number of minima. Global minimum certified for m=5,7 and 10.
+            shift_positive: bool
+                Shifts the entire function such that the function is strictly positive.
+                Since this is variable for this function the adjustment is +12 and thus the global minimum will not
+                necessarily fall at zero.
         """
         assert 0 < dims < 5
-        self._dims = dims
-        self._delay = delay
+        super().__init__(dims, delay=delay)
         self.shift = shift_positive
 
         if any([m == i for i in (5, 7, 10)]):
@@ -77,10 +78,6 @@ class Shekel(BaseTestCase):
         return calc
 
     @property
-    def dims(self) -> int:
-        return self._dims
-
-    @property
     def min_x(self) -> Sequence[float]:
         return [4] * self.dims
 
@@ -93,7 +90,3 @@ class Shekel(BaseTestCase):
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
         return [[-32.768, 32.768]] * self.dims
-
-    @property
-    def delay(self) -> float:
-        return self._delay

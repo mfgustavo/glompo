@@ -7,24 +7,21 @@ from ._base import BaseTestCase
 
 
 class Levy(BaseTestCase):
-    """ When called returns evaluations of the Levy function. """
+    """ Implementation of the Levy optimization test function [b]_.
 
-    def __init__(self, dims: int = 2, delay: float = 0):
-        """
-        Implementation of the Levy optimization test function.
-        Recommended bounds: [-10, 10] * dims
-        Global minimum: f(1, 1, ..., 1) = 0
+        .. math::
+            f(x) & = & \\sin^2(\\pi w_1) + \\sum^{d-1}_{i=1}\\left(w_i-1\\right)^2\\left[1+10\\sin^2\\left(\\pi w_i +1
+            \\right)\\right] + \\left(w_d-1\\right)^2\\left[1+\\sin^2\\left(2\\pi w_d\\right)\\right] \\\\
+            w_i & = & 1 + \\frac{x_i - 1}{4}
 
-        Parameters
-        ----------
-        dims: int = 2
-            Number of dimensions of the problem
-        delay: float = 0
-            Delay in seconds after the function is called before results are returned.
-            Useful to simulate harder problems.
-        """
-        self._dims = dims
-        self._delay = delay
+        Recommended bounds: :math:`x_i \\in [-10, 10]`
+
+        Global minimum: :math:`f(1, 1, ..., 1) = 0`
+
+        .. image:: /_figs/levy.png
+           :align: center
+           :alt: Moderately oscillatory periodic surface.
+    """
 
     def __call__(self, x: np.ndarray) -> float:
         x = np.array(x)
@@ -47,10 +44,6 @@ class Levy(BaseTestCase):
         return 1 + (x - 1) / 4
 
     @property
-    def dims(self) -> int:
-        return self._dims
-
-    @property
     def min_x(self) -> Sequence[float]:
         return [1] * self.dims
 
@@ -61,7 +54,3 @@ class Levy(BaseTestCase):
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
         return [[-10, 10]] * self.dims
-
-    @property
-    def delay(self) -> float:
-        return self._delay

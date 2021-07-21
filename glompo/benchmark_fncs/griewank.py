@@ -6,25 +6,19 @@ from ._base import BaseTestCase
 
 
 class Griewank(BaseTestCase):
-    """ When called returns evaluations of the Griewank function. """
+    """ Implementation of the Griewank optimization test function [b]_.
 
-    def __init__(self, dims: int = 2, delay: float = 0):
-        """
-        Implementation of the Griewank optimization test function.
-        Recommended bounds: [-600, 600] * dims
-        Global minimum: f(0, 0, ..., 0) = 0
-        Highly oscillatory totally-periodic surface on a general parabolic surface. Similar to Rastrigin.
+        .. math::
+           f(x) = \\sum_{i=1}^d \\frac{x_i^2}{4000} - \\prod_{i=1}^d \\cos\\left(\\frac{x_i}{\\sqrt{i}}\\right) + 1
 
-        Parameters
-        ----------
-        dims: int = 2
-            Number of dimensions of the problem
-        delay: float = 0
-            Delay in seconds after the function is called before results are returned.
-            Useful to simulate harder problems.
-        """
-        self._dims = dims
-        self._delay = delay
+        Recommended bounds: :math:`x_i \\in [-600, 600]`
+
+        Global minimum: :math:`f(0, 0, ..., 0) = 0`
+
+        .. image:: /_figs/griewank.png
+           :align: center
+           :alt: Highly oscillatory totally-periodic surface on a general parabolic surface. Similar to Rastrigin.
+    """
 
     def __call__(self, x) -> float:
         super().__call__(x)
@@ -38,10 +32,6 @@ class Griewank(BaseTestCase):
         return 1 + term1 - term2
 
     @property
-    def dims(self) -> int:
-        return self._dims
-
-    @property
     def min_x(self) -> Sequence[float]:
         return [0] * self.dims
 
@@ -52,7 +42,3 @@ class Griewank(BaseTestCase):
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
         return [[-600, 600]] * self.dims
-
-    @property
-    def delay(self) -> float:
-        return self._delay

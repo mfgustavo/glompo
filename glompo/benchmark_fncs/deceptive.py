@@ -7,28 +7,29 @@ from ._base import BaseTestCase
 
 
 class Deceptive(BaseTestCase):
-    """ When called returns evaluations of the Deceptive function. """
+    """ Implementation of the Deceptive optimization test function [a]_.
 
-    def __init__(self, dims: int = 2, delay: float = 0, b: float = 2, shift_positive: bool = False):
-        """
-        Implementation of the Deceptive optimization test function.
-        Recommended bounds: [0, 1] * dims
-        Global minimum: f(a) = -1
+        .. math:
+           f(x) = - \\left[\\frac{1}{n}\\sum^n_{i=1}g_i\\left(x_i\\right)\\right]
 
-        Parameters
-        ----------
-        dims : int
-            Number of dimensions of the function.
-        delay : int
-            Delay in seconds after the function is called before results are returned.
-            Useful to simulate harder problems.
-        b: float = 2
-            Non-linearity parameter.
-        shift_positive: bool = False
-            Shifts the entire function such that the global minimum falls at 0.
+        Recommended bounds: :math:`x_i \\in [0, 1]`
+
+        Global minimum: :math:`f(a) = -1`
+
+        .. image:: /_figs/deceptive.png
+           :align: center
+           :alt: Small global minimum surrounded by areas which slope away from it.
+    """
+
+    def __init__(self, dims: int = 2, b: float = 2, *, shift_positive: bool = False, delay: float = 0):
+        """ Parameters
+            ----------
+            b : float, default=2
+                Non-linearity parameter.
+            shift_positive : bool, default=False
+                Shifts the entire function such that the global minimum falls at 0.
         """
-        self._dims = dims
-        self._delay = delay
+        super().__init__(dims, delay=delay)
         self.shift = shift_positive
         self.b = b
         self._min_x = np.random.uniform(0, 1, dims)
@@ -37,14 +38,15 @@ class Deceptive(BaseTestCase):
         sleep(self.delay)
         x = np.array(x)
 
-        calc = - (1 / self.dims * np.sum(self.g(x))) ** self.b
+        calc = - (1 / self.dims * np.sum(self._g(x))) ** self.b
 
         if self.shift:
             return calc + 1
 
         return calc
 
-    def g(self, vec: np.ndarray):
+    def _g(self, vec: np.ndarray):
+        """ Sub-calculation of the `__call__` method which returns :math:`g(x)`. """
         gx = np.zeros(len(vec))
 
         for i, x in enumerate(vec):
@@ -61,10 +63,6 @@ class Deceptive(BaseTestCase):
         return gx
 
     @property
-    def dims(self) -> int:
-        return self._dims
-
-    @property
     def min_x(self) -> Sequence[float]:
         return self._min_x
 
@@ -75,7 +73,3 @@ class Deceptive(BaseTestCase):
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
         return [[0, 1]] * self.dims
-
-    @property
-    def delay(self) -> float:
-        return self._delay

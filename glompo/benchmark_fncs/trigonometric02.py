@@ -6,26 +6,20 @@ from ._base import BaseTestCase
 
 
 class Trigonometric(BaseTestCase):
-    """ When called returns evaluations of the Trigonometric02 function. """
+    """ Implementation of the Trigonometric Type-II optimization test function [a]_.
 
-    def __init__(self, dims: int = 2, delay: float = 0):
-        """
-        Implementation of the Trigonometric02 optimization test function.
-        Recommended bounds: [-500, 500] * dims
-        Global minimum: f(0.9, 0.9, ..., 0.9) = 1
+        .. math::
+           f(x) = 1 + \\sum_{i=1}^d 8 \\sin^2 \\left[7(x_i-0.9)^2\\right]
+           + 6 \\sin^2 \\left[14(x_i-0.9)^2\\right]+(x_i-0.9)^2
 
-        Looks like a paraboloid but becomes a multimodal flat surface with many peaks and troughs near the minimum.
+        Recommended bounds: :math:`x_i \\in [-500, 500]`
 
-        Parameters
-        ----------
-        dims: int = 2
-            Number of dimensions of the problem
-        delay: float = 0
-            Delay in seconds after the function is called before results are returned.
-            Useful to simulate harder problems.
-        """
-        self._dims = dims
-        self._delay = delay
+        Global minimum: :math:`f(0.9, 0.9, ..., 0.9) = 1`
+
+        .. image:: /_figs/trigonometric.png
+           :align: center
+           :alt: Parabolic but becomes a multimodal flat surface with many peaks and troughs near the minimum.
+    """
 
     def __call__(self, x) -> float:
         super().__call__(x)
@@ -38,10 +32,6 @@ class Trigonometric(BaseTestCase):
         return 1 + np.sum(total)
 
     @property
-    def dims(self) -> int:
-        return self._dims
-
-    @property
     def min_x(self) -> Sequence[float]:
         return [0.9] * self.dims
 
@@ -52,7 +42,3 @@ class Trigonometric(BaseTestCase):
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
         return [[-500, 500]] * self.dims
-
-    @property
-    def delay(self) -> float:
-        return self._delay

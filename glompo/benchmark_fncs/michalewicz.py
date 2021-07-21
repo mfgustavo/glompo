@@ -8,33 +8,38 @@ from ._base import BaseTestCase
 
 
 class Michalewicz(BaseTestCase):
-    """ When called returns evaluations of the Michalewicz function. """
+    """ Implementation of the Michalewicz optimization test function [b]_.
 
-    def __init__(self, dims: int = 2, delay: float = 0, m: float = 10):
-        """
-        Implementation of the Michalewicz optimization test function.
-        Recommended bounds: [0, pi] * dims
+        .. math::
+            f(x) = - \\sum^d_{i=1}\\sin(x_i)\\sin^{2m}\\left(\\frac{ix_i^2}{\\pi}\\right)
+
+        Recommended bounds: :math:`x_i \\in [0, \\pi]`
+
         Global minimum:
-            f(x) = -1.8013 for d=2
-            f(x) = -4.687 for d=5
-            f(x) = -9.66 for d=10
 
-        Flat surface with many valleys and a single global minimum.
+        .. math::
 
-        Parameters
-        ----------
-        dims : int
-            Number of dimensions of the function.
-        delay : int
-            Delay in seconds after the function is called before results are returned.
-            Useful to simulate harder problems.
-        m: float
-            Parametrization of the function. Lower values make the valleys more informative at pointing to the minimum.
-            High values (+-10) create a needle-in-a-haystack function where there is no information pointing to the
-            minimum.
+            f(x) = \\begin{cases}
+                        -1.8013 & \\text{if} & d=2 \\\\
+                        -4.687 & \\text{if} & d=5 \\\\
+                        -9.66 & \\text{if} & d=10 \\\\
+                   \\end{cases}
+
+        .. image:: /_figs/michalewicz.png
+           :align: center
+           :alt: Flat surface with many valleys and a single global minimum.
+
+    """
+
+    def __init__(self, dims: int = 2, m: float = 10, *, delay: float = 0):
+        """ Parameters
+            ----------
+            m : float
+                Parametrization of the function. Lower values make the valleys more informative at pointing to the
+                minimum. High values (:math:`\\pm10`) create a needle-in-a-haystack function where there is no
+                information pointing to the minimum.
         """
-        self._dims = dims
-        self._delay = delay
+        super().__init__(dims, delay=delay)
         self.m = m
 
     def __call__(self, x):
@@ -47,10 +52,6 @@ class Michalewicz(BaseTestCase):
         calc *= np.sin(i * x ** 2 / np.pi) ** (2 * self.m)
 
         return -np.sum(calc)
-
-    @property
-    def dims(self) -> int:
-        return self._dims
 
     @property
     def min_x(self) -> Sequence[float]:
@@ -70,8 +71,4 @@ class Michalewicz(BaseTestCase):
 
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
-        return [[0, np.pi]] * self.dims
-
-    @property
-    def delay(self) -> float:
-        return self._delay
+        return [(0, np.pi)] * self.dims

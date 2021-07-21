@@ -7,32 +7,34 @@ from ._base import BaseTestCase
 
 
 class Ackley(BaseTestCase):
-    """ When called returns evaluations of the Ackley function. """
+    """ Implementation of the Ackley optimization test function [b]_.
 
-    def __init__(self, dims: int = 2, delay: float = 0, a: float = 20, b: float = 0.2, c: float = 2 * np.pi):
+        .. math::
+           f(x) = - a \\exp\\left(-b \\sqrt{\\frac{1}{d}\\sum^d_{i=1}x_i^2}\\right)
+                  - \\exp\\left(\\frac{1}{d}\\sum^d_{i=1}\\cos\\left(cx_i\\right)\\right)
+                  + a
+                  + \\exp(1)
+
+        Recommended bounds: :math:`x_i \\in [-32.768, 32.768]`
+
+        Global minimum: :math:`f(0, 0, ..., 0) = 0`
+
+        .. image:: /_figs/ackley.png
+           :align: center
+           :alt: Multimodal flat surface with a single deep global minima. Multimodal version of the Easom function.
+    """
+
+    def __init__(self, dims: int = 2, a: float = 20, b: float = 0.2, c: float = 2 * np.pi, *, delay: float = 0):
+        """ Parameters
+            ----------
+            a : float=20
+                Ackley function parameter
+            b : float=0.2
+                Ackley function parameter
+            c : float=2*np.pi
+                Ackley function parameter
         """
-        Implementation of the Ackley optimization test function.
-        Recommended bounds: [-32.768, 32.768] * dims
-        Global minimum: f(0, 0, ..., 0) = 0
-
-        Multimodal flat surface with a single deep global minima. Multimodal version of the Easom function.
-
-        Parameters
-        ----------
-        dims: int = 2
-            Number of dimensions of the problem
-        delay: float = 0
-            Delay in seconds after the function is called before results are returned.
-            Useful to simulate harder problems.
-        a: float = 20
-            Ackley function parameter
-        b: float = 0.2
-            Ackley function parameter
-        c: float = 2*np.pi
-            Ackley function parameter
-        """
-        self._dims = dims
-        self._delay = delay
+        super().__init__(dims, delay=delay)
         self.a, self.b, self.c = a, b, c
 
     def __call__(self, x) -> float:
@@ -50,10 +52,6 @@ class Ackley(BaseTestCase):
         return term1 + term2 + term34
 
     @property
-    def dims(self) -> int:
-        return self._dims
-
-    @property
     def min_x(self) -> Sequence[float]:
         return [0] * self.dims
 
@@ -63,8 +61,4 @@ class Ackley(BaseTestCase):
 
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
-        return [[-32.768, 32.768]] * self.dims
-
-    @property
-    def delay(self) -> float:
-        return self._delay
+        return [(-32.768, 32.768)] * self.dims

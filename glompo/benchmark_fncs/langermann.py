@@ -7,25 +7,31 @@ from ._base import BaseTestCase
 
 
 class Langermann(BaseTestCase):
-    """ When called returns evaluations of the Langermann function. """
+    """ When called returns evaluations of the Langermann function [a]_ [b]_.
 
-    def __init__(self, delay: float = 0, shift_positive: bool = False):
+        .. math::
+          f(x) & = & - \\sum_{i=1}^5 \\frac{c_i\\cos\\left(\\pi\\left[(x_1-a_i)^2 + (x_2-b_i)^2\\right]\\right)}
+                                           {\\exp\\left(\\frac{(x_1-a_i)^2 + (x_2-b_i)^2}{\\pi}\\right)}\\\\
+          \\mathbf{a} & = & \\{3, 5, 2, 1, 7\\}\\\\
+          \\mathbf{b} & = & \\{5, 2, 1, 4, 9\\}\\\\
+          \\mathbf{c} & = & \\{1, 2, 5, 2, 3\\}\\\\
+
+        Recommended bounds: :math:`x_1, x_2 \\in [0, 10]`
+
+        Global minimum: :math:`f(2.00299219, 1.006096) = -5.1621259`
+
+        .. image:: /_figs/langermann.png
+           :align: center
+           :alt: Analogous to ripples on a water surface after three drops have hit it.
+    """
+
+    def __init__(self, *args, shift_positive: bool = False, delay: float = 0):
+        """ Parameters
+            ----------
+            shift_positive : bool, default=False
+                Shifts the entire function such that the global minimum falls at ~0.
         """
-        Implementation of the Levy optimization test function.
-        Recommended bounds: [0, 10] * 2
-        Global minimum: f(2.00299219, 1.006096) = -5.1621259
-
-        Analogous to ripples on a water surface after three drops have hit it.
-
-        Parameters
-        ----------
-        delay: float = 0
-            Delay in seconds after the function is called before results are returned.
-            Useful to simulate harder problems.
-        shift_positive: bool = False
-            Shifts the entire function such that the global minimum falls at ~0.
-        """
-        self._delay = delay
+        super().__init__(2, delay=delay)
         self.shift = shift_positive
 
     def __call__(self, x: np.ndarray) -> float:
@@ -46,10 +52,6 @@ class Langermann(BaseTestCase):
         return calc
 
     @property
-    def dims(self) -> int:
-        return 2
-
-    @property
     def min_x(self) -> Sequence[float]:
         return [2.00299219, 1.006096]
 
@@ -60,7 +62,3 @@ class Langermann(BaseTestCase):
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
         return [[0, 10]] * 2
-
-    @property
-    def delay(self) -> float:
-        return self._delay

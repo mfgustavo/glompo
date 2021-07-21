@@ -7,29 +7,27 @@ from ._base import BaseTestCase
 
 
 class Schwefel(BaseTestCase):
-    """ When called returns evaluations of the Schwefel function. """
+    """ Implementation of the Schwefel optimization test function [b]_.
 
-    def __init__(self, dims: int = 2, delay: float = 0, shift_positive: bool = False):
+        .. math::
+           f(x) = 418.9829d - \\sum^d_{i=1} x_i\\sin\\left(\\sqrt{|x_i|}\\right)
+
+        Recommended bounds: :math:`x_i \\in [-500, 500]`
+
+        Global minimum: :math:`f(420.9687, 420.9687, ..., 420.9687) = -418.9829d`
+
+        .. image:: /_figs/schwefel.png
+           :align: center
+           :alt: Multimodal and deceptive in that the global minimum is very far from the next best local minimum.
+    """
+
+    def __init__(self, dims: int = 2, *, shift_positive: bool = False, delay: float = 0):
+        """ Parameters
+            ----------
+            shift_positive : bool, default=False
+                Shifts the entire function such that the global minimum falls at ~0.
         """
-        Implementation of the Schwefel optimization test function.
-        Recommended bounds: [-500, 500] * dims
-        Global minimum: f(420.9687, 420.9687, ..., 420.9687) = -418.9829d
-
-        Multimodal and deceptive in that the global minimum is very far from the next best local
-        minimum
-
-        Parameters
-        ----------
-        dims : int
-            Number of dimensions of the function.
-        delay : int
-            Delay in seconds after the function is called before results are returned.
-            Useful to simulate harder problems.
-        shift_positive: bool = False
-            Shifts the entire function such that the global minimum falls at ~0.
-        """
-        self._dims = dims
-        self._delay = delay
+        super().__init__(dims, delay=delay)
         self.shift = shift_positive
 
     def __call__(self, x):
@@ -43,10 +41,6 @@ class Schwefel(BaseTestCase):
         return calc
 
     @property
-    def dims(self) -> int:
-        return self._dims
-
-    @property
     def min_x(self) -> Sequence[float]:
         return [420.9687] * self.dims
 
@@ -57,7 +51,3 @@ class Schwefel(BaseTestCase):
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
         return [[-500, 500]] * self.dims
-
-    @property
-    def delay(self) -> float:
-        return self._delay

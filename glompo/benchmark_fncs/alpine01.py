@@ -6,25 +6,19 @@ from ._base import BaseTestCase
 
 
 class Alpine01(BaseTestCase):
-    """ When called returns evaluations of the Alpine01 function. """
+    """ Implementation of the Alpine Type-I optimization test function [a]_.
 
-    def __init__(self, dims: int = 2, delay: float = 0):
-        """
-        Implementation of the Alpine01 optimization test function.
-        Recommended bounds: [-10, 10] * dims
-        Global minimum: f(0, 0, ..., 0) = 0
-        Highly oscillatory non-periodic surface.
+        .. math::
+           f(x) = \\sum^n_{i=1}\\left|x_i\\sin\\left(x_i\\right)+0.1x_i\\right|
 
-        Parameters
-        ----------
-        dims: int = 2
-            Number of dimensions of the problem
-        delay: float = 0
-            Delay in seconds after the function is called before results are returned.
-            Useful to simulate harder problems.
-        """
-        self._dims = dims
-        self._delay = delay
+        Recommended bounds: :math:`x_i \\in [-10, 10]`
+
+        Global minimum: :math:`f(0, 0, ..., 0) = 0`
+
+        .. image:: /_figs/alpine01.png
+           :align: center
+           :alt: Highly oscillatory non-periodic surface.
+    """
 
     def __call__(self, x) -> float:
         super().__call__(x)
@@ -38,10 +32,6 @@ class Alpine01(BaseTestCase):
         return np.sum(calc)
 
     @property
-    def dims(self) -> int:
-        return self._dims
-
-    @property
     def min_x(self) -> Sequence[float]:
         return [0] * self.dims
 
@@ -51,8 +41,4 @@ class Alpine01(BaseTestCase):
 
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
-        return [[-10, 10]] * self.dims
-
-    @property
-    def delay(self) -> float:
-        return self._delay
+        return [(-10, 10)] * self.dims
