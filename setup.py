@@ -26,6 +26,7 @@ setup(
     install_requires=['numpy', 'PyYAML', 'tables'],
     python_requires='>=3.6',
     extras_require={
+        'Docs': ['sphinx==1.8.5', 'sphinx-rtd-theme==0.2.4'],
         'Plotting': ['matplotlib'],
         'Video': ['matplotlib>=3.0, <3.4', 'ffmpeg', 'PySide2'],
         'PerturbationGenerator': ['scipy'],
