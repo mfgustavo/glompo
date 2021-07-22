@@ -1,5 +1,6 @@
-""" Collection of benchmark functions which are helpful for testing purposes. Can be used to experiment with different
-    configurations and ensure a script is functional before being applied to a more expensive test case.
+""" For convenience, a collection of benchmark functions is bundled with GloMPO. These may be helpful for testing
+    purposes and may be used to experiment with different configurations and ensure a script is functional before being
+    applied to a more expensive test case.
 """
 
 from ._base import BaseTestCase
