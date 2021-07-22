@@ -7,7 +7,7 @@ Globally Managed Parallel Optimization
     :caption: Table of Contents
 
     intro
-    examples/examples
+    examples
     tasks/tasks
     logging
     parallelism
