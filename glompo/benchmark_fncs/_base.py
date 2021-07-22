@@ -58,7 +58,7 @@ class BaseTestCase(ABC):
             Returns
             -------
             float
-                Function value at ``x``.
+                Function value at `x`.
 
         """
         sleep(self.delay)

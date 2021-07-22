@@ -46,7 +46,7 @@ class Deceptive(BaseTestCase):
         return calc
 
     def _g(self, vec: np.ndarray):
-        """ Sub-calculation of the `__call__` method which returns :math:`g(x)`. """
+        """ Sub-calculation of the :meth:`__call__` method which returns :math:`g(x)`. """
         gx = np.zeros(len(vec))
 
         for i, x in enumerate(vec):
