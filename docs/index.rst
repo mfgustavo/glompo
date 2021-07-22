@@ -15,6 +15,7 @@ Globally Managed Parallel Optimization
     userinterventions
     results
     tests
+    references
 
 ******************
 Indices and tables
