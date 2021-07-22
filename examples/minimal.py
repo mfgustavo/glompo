@@ -6,29 +6,35 @@ from glompo.optimizers.cmawrapper import CMAOptimizer
 if __name__ == '__main__':
     """ In this example GloMPO will be run on a well known global optimization test function using all defaults.
      
-        The Michaelewicz global optimization test function is a good example of where GloMPO can outperform normal 
-        optimization. 
+        The :class:`Michaelewicz` global optimization test function is a good example of 
+        where GloMPO can outperform normal optimization. 
     """
     task = Michalewicz(dims=5)
 
-    """ For this task we will use CMA-ES (see glompo.optimizers.cmawrapper.CMAOptimizer) which has good optimization 
-        properties for many function classes. Optimizers are sent to GloMPO via BaseSelector objects. These are code 
+    """ For this task we will use :class:`CMA-ES <CMAOptimizer>` which has good optimization properties for many 
+        function classes. Optimizers are sent to GloMPO via :class:`BaseSelector <Selectors>` objects. These are code 
         stubs which propose an optimizer type and configuration to start when asked by the manager.
     
-        A very basic selector is CycleSelector which returns a rotating list of optimizers when asked but can be used 
-        for just a single optimizer type.
+        A very basic selector is :class:`CycleSelector` which returns a rotating list of optimizers when asked but can
+        be used for just a single optimizer type.
     
         Setting up any selector requires that a list of available optimizers be given to it during initialisation.
         The elements in this list can take two forms:
-           1. Uninitiated optimizer class (see glompo.optimizers.BaseOptimizer)
-           2. Tuple of:
-              a. Uninitiated optimizer class (see glompo.optimizers.BaseOptimizer)
-              b. Dictionary of optional initialisation arguments
-              c. Dictionary of optional arguments passed to the optimizer.minimize argument
+        
+        #. Uninitiated `optimizer <Optimizers>`_ class.
+        
+        #. Tuple of:
+        
+           #. Uninitiated `optimizer <Optimizers>`_ class;
+           
+           #. Dictionary of optional initialisation arguments;
+           
+           #. Dictionary of optional arguments passed to :meth:~`BaseOptimizer.minimize`
     
         In this case we need to setup:
-          1. The initial sigma value. We choose this to be half the range of the bounds in each direction (in this case
-             the bounds are equal in all directions). This value must be sent to optimizer.minimize
+        
+        #. The initial sigma value. We choose this to be half the range of the bounds in each direction (in this case
+           the bounds are equal in all directions). This value must be sent to optimizer.minimize
     """
     sigma = (task.bounds[0][1] - task.bounds[0][0]) / 2
     call_args = {'sigma0': sigma}
