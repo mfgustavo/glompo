@@ -6,6 +6,6 @@ This chapter contains a descriptions of sundry GloMPO components.
 
 .. toctree::
 
-    scope
-    checkpointing
     namedtuples
+    helpers
+    wrappers
