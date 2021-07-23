@@ -427,7 +427,7 @@ class GloMPOManager:
 
         split_printstreams
             If :obj:`True`, optimizer print messages will be intercepted and saved to separate files.
-            See :class:`glompo.common.logging.SplitOptimizerLogs`
+            See :class:`glompo.common.helpers.SplitOptimizerLogs`
             
         Notes
         -----
