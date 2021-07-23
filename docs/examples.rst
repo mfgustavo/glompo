@@ -11,43 +11,49 @@ Minimal
 The :download:`minimal <../examples/minimal.py>` example configures the minimum number of GloMPO options (i.e. uses all
 of its defaults) and demonstrates that very simple configurations are possible.
 
-The :class:`Michalewicz <glompo.benchmark_fncs.michalewicz.Michalewicz>` global optimization test function is a good example of where GloMPO can outperform normal
-optimization.
+.. literalinclude:: ../examples/minimal.py
+   :linenos:
 
-.. code-block:: python
+The :class:`Michalewicz <glompo.benchmark_fncs.Michalewicz>` global optimization test function is a good
+example of where GloMPO can outperform normal optimization.
 
-   task = Michalewicz(dims=5)
+.. literalinclude:: ../examples/minimal.py
+   :linenos:
+   :lineno-match:
+   :lines: 7
 
-For this task we will use :class:`CMA-ES <glompo.optimizers.cmawrapper.CMAOptimizer>` which has good optimization properties for many
-function classes. Optimizers are sent to GloMPO via :class:`BaseSelector <Selectors>` objects. These are code
-stubs which propose an optimizer type and configuration to start when asked by the manager.
+For this task we will use :class:`CMA-ES <glompo.optimizers.cmawrapper.CMAOptimizer>` which has good optimization
+properties for many function classes. Optimizers are sent to GloMPO via
+:class:`~glompo.opt_selectors.baseselector.BaseSelector` objects. These are code stubs which propose an optimizer type
+and configuration to start when asked by the manager.
 
-A very basic selector is :class:`CycleSelector <glompo.opt_selectors.cycle.CycleSelector>` which returns a rotating list of optimizers when asked but can
-be used for just a single optimizer type.
+A very basic selector is :class:`CycleSelector <glompo.opt_selectors.cycle.CycleSelector>` which returns a rotating list
+of optimizers when asked but can be used for just a single optimizer type.
 
-Setting up any selector requires that a list of available optimizers be given to it during initialisation.
+Setting up any selector requires that a sequence of available optimizers be given to it during initialisation.
 The elements in this list can take two forms:
 
-#. Uninitiated `optimizer <Optimizers>`_ class.
+#. Uninitiated :ref:`optimizer <Optimizers>` class.
 
 #. Tuple of:
 
-   #. Uninitiated `optimizer <Optimizers>`_ class;
+   #. Uninitiated :ref:`optimizer <Optimizers>` class;
 
    #. Dictionary of optional initialisation arguments;
 
-   #. Dictionary of optional arguments passed to :meth:~`BaseOptimizer.minimize`.
+   #. Dictionary of optional arguments passed to :meth:`~glompo.optimizers.baseoptimizer.BaseOptimizer.minimize`.
 
 In this case we need to setup:
 
 The initial :math:`\sigma` value:
    We choose this to be half the range of the bounds in each direction (in this case
-   the bounds are equal in all directions). This value must be sent to :meth:~`BaseOptimizer.minimize`.
+   the bounds are equal in all directions). This value must be sent to
+   :meth:`~glompo.optimizers.baseoptimizer.BaseOptimizer.minimize`.
 
-.. code-block:: python
-
-   sigma = (task.bounds[0][1] - task.bounds[0][0]) / 2
-   call_args = {'sigma0': sigma}
+.. literalinclude:: ../examples/minimal.py
+   :linenos:
+   :lineno-match:
+   :lines: 9-10
 
 The number of parallel workers:
    CMA is a population based solver and uses multiple function evaluations per iteration; this is the population size.
@@ -57,15 +63,17 @@ The number of parallel workers:
    in this toy example is too fast to justify the overhead of multithreading or multiprocessing). These are arguments
    required at CMA initialisation.
 
-.. code-block:: python
-
-   init_args = {'workers': 1, 'popsize': 6}
+.. literalinclude:: ../examples/minimal.py
+   :linenos:
+   :lineno-match:
+   :lines: 11
 
 We can now setup the selector.
 
-.. code-block:: python
-
-   selector = CycleSelector((CMAOptimizer, init_args, call_args))
+.. literalinclude:: ../examples/minimal.py
+   :linenos:
+   :lineno-match:
+   :lines: 12
 
 Note the load balancing here. GloMPO will allow a fixed number of threads to be run. By default this is one less than
 the number of CPUs available. If your machine has 32 cores for example than the manager will use 1 and allow 31 to be
@@ -75,30 +83,31 @@ Alternatively, if we had parallelized the function evaluations (by setting :attr
 would be started taking 6 slots each. In such a configuration one core of the 32 core machine would remain unused:
 :math:`5\times6=30\text{optimizers} + 1\text{manager} = 31`.
 
-If you want to fix the number of threads used regardless of the system resources, pass the optional :attr:`max_jobs`
-argument during the manager initialisation.
+If you want to fix the number of threads used regardless of the system resources, pass the optional
+:attr:`~glompo.core.manager.GloMPOManager.max_jobs` argument during the manager initialisation.
 
 The manager is setup using all GloMPO defaults in this case. Only the task, its box bounds and local optimizers need be
 provided.
 
-.. code-block:: python
+.. literalinclude:: ../examples/minimal.py
+   :linenos:
+   :lineno-match:
+   :lines: 14
 
-   manager = GloMPOManager.new_manager(task=task, bounds=task.bounds, opt_selector=selector)
+To execute the minimization we simply run :meth:`~glompo.core.manager.GloMPOManager.start_manager`. Note: by default
+GloMPO will not save any files but this is available.
 
-To execute the minimization we simply run :meth:~`GloMPOManager.start_manager`. Note: by default GloMPO will not save
-any files but this is available.
-
-.. code-block:: python
-
-   result = manager.start_manager()
+.. literalinclude:: ../examples/minimal.py
+   :linenos:
+   :lineno-match:
+   :lines: 15
 
 Finally we print the selected minimum
 
-.. code-block:: python
-
-   print(f"Global min for Michalewicz Function: {task.min_fx:.3E}")
-   print("GloMPO minimum found:")
-   print(result)
+.. literalinclude:: ../examples/minimal.py
+   :linenos:
+   :lineno-match:
+   :lines: 17-19
 
 Customized
 **********
