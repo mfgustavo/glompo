@@ -96,5 +96,5 @@ intersphinx_mapping = {
     'python': ('https://docs.python.org/3.6', None),
     'tables': ('https://www.pytables.org/', None),
     'dill': ('https://dill.readthedocs.io/en/latest/', None),
-    'psutil': ('https://psutil.readthedocs.io/en/latest/', None)
+    'psutil': ('https://psutil.readthedocs.io/en/latest/', None),
 }

@@ -1,3 +1,5 @@
+.. _Other Hunters:
+
 Simple Included Hunters
 =======================
 

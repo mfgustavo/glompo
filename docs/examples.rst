@@ -3,7 +3,10 @@ Examples
 ********
 
 GloMPO comes bundled with several examples to get you started. They can all be found in the ``examples``
-directory of the package.
+directory of the package. After working through the examples, the user is encouraged to read further in the
+documentation to get a proper understanding of all of GloMPO's components.
+
+.. _Minimal:
 
 Minimal
 *******
@@ -109,18 +112,181 @@ Finally we print the selected minimum
    :lineno-match:
    :lines: 17-19
 
+.. _Customized:
+
 Customized
 **********
 
 The :download:`customized <../examples/customized.py>` example guides users through each of the options available to
 configure the manager and will give the user a good overview of what is possible.
 
+.. literalinclude:: ../examples/customized.py
+   :linenos:
+
+GloMPO contains built-in logging statements throughout the library. These will not show up by default but can be
+accessed if desired. In fact intercepting the :attr:`logging.INFO` level statements from the manager creates a nice
+progress stream from the optimization; we will set this up here. See :ref:`Logging` for more information.
+
+.. literalinclude:: ../examples/customized.py
+   :linenos:
+   :lineno-match:
+   :lines: 18-25
+
+In this example GloMPO will be run on a well known global optimization test function but each configuration option will
+be individually set and explained.
+
+The :class:`~glompo.benchmark_fncs.Schwefel` global optimization test function is a good example of where GloMPO can
+outperform normal optimization.
+
+.. literalinclude:: ../examples/customized.py
+   :linenos:
+   :lineno-match:
+   :lines: 27
+
+Convergence of the GloMPO manager is controlled by :class:`~glompo.convergence.basechecker.BaseChecker` objects. These
+are small classes which define a single termination condition. These classes can then be easily combined to create
+sophisticated termination conditions using :obj:`&` and :obj:`|` symbolics.
+
+In this case we would like the optimizer to run for a fixed number of iterations or stop if the global minimum is found.
+Of course we would not know the global minimum in typical problems but we do in this case.
+
+.. literalinclude:: ../examples/customized.py
+   :linenos:
+   :lineno-match:
+   :lines: 29-30
+
+We will configure the optimizers as was done in the :ref:`Minimal` example:
+
+.. literalinclude:: ../examples/customized.py
+   :linenos:
+   :lineno-match:
+   :lines: 32-35
+
+The :ref:`Minimal` example discussed the importance of load balancing. In this example we will override the default
+number of slots and limit the manager to 10:
+
+.. literalinclude:: ../examples/customized.py
+   :linenos:
+   :lineno-match:
+   :lines: 37
+
+:class:`~glompo.hunters.basehunter.BaseHunter` objects are setup in a similar way to
+:class:`~glompo.convergence.basechecker.BaseChecker` objects and control the conditions in which optimizers are shutdown
+by the manager. Each hunter is individually documented :ref:`here <Other Hunters>`.
+
+In this example we will use a hunting set which has proven effective on several problems:
+
+.. literalinclude:: ../examples/customized.py
+   :linenos:
+   :lineno-match:
+   :lines: 39-42
+
+.. note::
+
+   :class:`~glompo.hunters.basehunter.BaseHunter` and :class:`~glompo.convergence.basechecker.BaseChecker` are evaluated
+   lazily this means that in :obj:`x | y`, :obj:`y` will not be evaluated if :obj:`x` is :obj:`True` and in :obj:`x & y`,
+   :obj:`y` will not be evaluated if :obj:`x` is :obj:`False`.
+
+:class:`~glompo.opt_selectors.baseselector.BaseSelector` objects select which optimizers to start but
+:class:`~glompo.generators.basegenerator.BaseGenerator` objects select a point in parameter space where to start them.
+
+In this example we will use the :class:`~glompo.generators.random.RandomGenerator` which starts optimizers at random
+locations.
+
+.. literalinclude:: ../examples/customized.py
+   :linenos:
+   :lineno-match:
+   :lines: 44
+
+GloMPO supports running the optimizers both as threads and processes. Processes are preferred and the default
+since they circumvent the
+`Python Global Interpreter Lock <https://docs.python.org/3.6/glossary.html#term-global-interpreter-lock>`_ but threads
+can also be used for tasks that are not multiprocessing safe. In this example we will use processes.
+
+.. attention::
+
+   It is highly recommended that the user familiarize themselves with Python's behavior in this regard! If all
+   computations are performed within Python than multithreading will NOT result in the distribution of calculations
+   over more than one core.
+
+.. literalinclude:: ../examples/customized.py
+   :linenos:
+   :lineno-match:
+   :lines: 46
+
+GloMPO includes a dynamic scope allowing one to watch the optimization progress in real-time using a graphic.
+This can be very helpful when configuring GloMPO and the results can be saved as movie files. This functionality
+requires an interactive version of :mod:`matplotlib` and :mod:`ffmpeg` installed on the system.
+
+This is turned on for this example but if the script fails simply set :obj:`visualisation` to :obj:`False` to
+bypass it. Note also that the scope is very helpful for preliminary configuration but is slow due to :mod:`matplotlib`
+limitations and should not be used during production runs.
+
+.. literalinclude:: ../examples/customized.py
+   :linenos:
+   :lineno-match:
+   :lines: 48-57
+
+For buggy tasks which are liable to fail or produce extreme results, it is possible that optimizers can get stuck and
+simply never return. If this is a risk that we can send a timeout condition after which the manager will force them to
+crash. Note that this will not work on threaded backends. In this example this is not needed so we leave the default as
+-1.
+
+.. literalinclude:: ../examples/customized.py
+   :linenos:
+   :lineno-match:
+   :lines: 59
+
+GloMPO supports checkpointing. This means that its state can be persisted to file during an optimization and this
+checkpoint file can be loaded by another GloMPO instance to resume the optimization from that point. Checkpointing
+options are configured through a :class:`~glompo.core.checkpointing.CheckpointingControl` instance. In this case we will
+produce a checkpoint called :obj:`'customized_completed_<DATE>_<TIME>.tar.gz'` once the task has converged.
+
+.. literalinclude:: ../examples/customized.py
+   :linenos:
+   :lineno-match:
+   :lines: 61-63
+
+All arguments are now fed to the manager initialisation. Other settings which did not warrant detailed discussion above
+are commented upon below:
+
+.. literalinclude:: ../examples/customized.py
+   :linenos:
+   :lineno-match:
+   :lines: 65-84
+
+To execute the minimization we simply run :meth:`~glompo.core.manager.GloMPOManager.start_manager`.
+
+.. literalinclude:: ../examples/customized.py
+   :linenos:
+   :lineno-match:
+   :lines: 86
+
+Finally we print the selected minimum.
+
+.. literalinclude:: ../examples/customized.py
+   :linenos:
+   :lineno-match:
+   :lines: 88-90
+
 Nudging
 *******
 
-The :download:`nudging <../examples/customized.py>` example is broadly equivalent to the customized one, but
-includes configuration settings for GloMPO to share information between optimizers in real-time. One should observe
-a dramatic improvement in GloMPO's performance.
+The :download:`nudging <../examples/nudging.py>` example is a variation of the :ref:`Customized` one. GloMPO will be
+run on the same task with virtually the same configuration, but in this case good iterations will be shared between
+optimizers. The optimizers, in turn, will use this information to accelerate their convergence. The user should see a
+marked improvement in GloMPO's performance. Only two modifications to the :ref:`Customized` example are necessary:
 
-After working through the examples, the user is encouraged to read further in the documentation to get a proper
-understanding of all of GloMPO's components.
+In this case we tell CMA-ES to accept suggestions from the manager and sample these points once every 10 iterations.
+
+.. literalinclude:: ../examples/nudging.py
+   :linenos:
+   :lineno-match:
+   :lines: 34
+
+The hunting must be reconfigured slightly to better suit the new optimization behavior:
+
+.. literalinclude:: ../examples/nudging.py
+   :linenos:
+   :lineno-match:
+   :lines: 39
