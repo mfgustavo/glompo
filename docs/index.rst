@@ -8,7 +8,7 @@ Globally Managed Parallel Optimization
 
     intro
     examples
-    tasks/tasks
+    tasks
     logging
     parallelism
     components/components
