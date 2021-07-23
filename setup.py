@@ -28,7 +28,7 @@ setup(
     extras_require={
         'Docs': ['sphinx==1.8.5', 'sphinx-rtd-theme==0.5.2'],
         'Plotting': ['matplotlib'],
-        'Video': ['matplotlib>=3.0, <3.4', 'ffmpeg', 'PySide2'],
+        'Video': ['matplotlib>=3.0, <3.4', 'PySide2'],
         'PerturbationGenerator': ['scipy'],
         'UnitTesting': ['pytest>=4.4'],
         'CMAOptimizer': ['cma>=2.7, <3'],
