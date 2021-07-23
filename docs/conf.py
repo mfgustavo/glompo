@@ -34,6 +34,7 @@ extensions = ['sphinx.ext.autodoc',
               'sphinx.ext.autosummary',
               'sphinx.ext.viewcode',
               'sphinx.ext.coverage',
+              'sphinx.ext.intersphinx',
               'sphinx_rtd_theme',
               ]
 
@@ -76,8 +77,8 @@ autodoc_mock_imports = ['matplotlib',
                         'psutil',
                         ]
 
-autodoc_typehints = 'description'
-autoclass_content = 'both'
+autodoc_typehints = 'both'
+autoclass_content = 'class'
 
 # Napoleon settings ----------------------------------------------------------
 napoleon_numpy_docstring = True
@@ -86,6 +87,14 @@ napoleon_include_special_with_doc = True
 napoleon_use_admonition_for_notes = True
 
 # Autosummary settings -------------------------------------------------------
-autosummary_generate = True
+autosummary_generate = False
 autosummary_generate_overwrite = True
 autosummary_generate_autosummary_docs = True
+
+# Intersphinx settings -------------------------------------------------------
+intersphinx_mapping = {
+    'python': ('https://docs.python.org/3.6', None),
+    'tables': ('https://www.pytables.org/', None),
+    'dill': ('https://dill.readthedocs.io/en/latest/', None),
+    'psutil': ('https://psutil.readthedocs.io/en/latest/', None)
+}

@@ -3,7 +3,8 @@
 __all__ = ('BaseFunction',)
 
 from abc import abstractmethod
-from typing import Any, Dict, Sequence
+from pathlib import Path
+from typing import Any, Dict, Sequence, Union
 
 import tables as tb
 
@@ -20,7 +21,7 @@ class BaseFunction:
 
             Parameters
             ----------
-            x : list of float
+            x
                 Vector in parameter space at which to evaluate the function.
 
             Returns
@@ -37,14 +38,14 @@ class BaseFunction:
 
             Parameters
             ----------
-            x : list of float
+            x
                 Vector in parameter space at which to evaluate the function.
 
             Returns
             -------
             float
                 Result of the function evaluation which is trying to be minimized.
-            ...
+            *args
                 Additional returns of any type and length.
         """
         raise NotImplementedError
@@ -63,9 +64,9 @@ class BaseFunction:
 
             Returns
             -------
-            dict of str to :class:`tables.Col`
-                Mapping of heading names to the :class:`tables.Col` type which indicates the type of data the column of
-                information will store.
+            Dict[str, :class:`tables:tables.description.Col`]
+                Mapping of heading names to the :class:`tables:tables.description.Col` type which indicates the type of
+                data the column of information will store.
 
             Examples
             --------
@@ -75,5 +76,37 @@ class BaseFunction:
                          'training_set_residuals': tables.Float64Col(shape=100),
                          'validation_set_fx': tables.Float64Col(),
                          'errors': tables.StringCol(itemsize=280, dflt=b'None')}
+        """
+        raise NotImplementedError
+
+    def checkpoint_save(self, path: Union[str, Path]):
+        """ Persists the function into a file or files from which it can be reconstructed.
+
+        This method is used when a checkpoint of the manager is made and the function cannot be persisted directly.
+        A checkpoint is a compressed directory of files which persists all aspects of an in-progress optimization.
+        These checkpoints can be loaded by :class:`~glompo.core.manager.GloMPOManager` and the optimization resumed.
+
+        Implementing this function is optional and only required if directly pickling the function is not possible.
+        In order to load a checkpoint in which :meth:`checkpoint_save` was used, see
+        :meth:`load_checkpoint`).
+
+        Parameters
+        ----------
+        path
+            :obj:`str` or :class:`Path` to a directory into which files will be saved.
+        """
+        raise NotImplementedError
+
+    @classmethod
+    def checkpoint_load(cls, path: Union[str, Path]):
+        """ Creates an instance of the :class:`BaseFunction` from sources.
+
+        These source are the products of :meth:`checkpoint_save`. In order to use this method, it should be sent to the
+        :obj:`task_loader` argument of :meth:`~glompo.core.manager.GloMPOManager.load_checkpoint`.
+
+        Parameters
+        ----------
+        path
+            :obj:`str` or :class:`Path` to a directory which contains the files which will be loaded.
         """
         raise NotImplementedError

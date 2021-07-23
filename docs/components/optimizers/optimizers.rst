@@ -1,3 +1,5 @@
+.. _Optimizers:
+
 ==========
 Optimizers
 ==========
