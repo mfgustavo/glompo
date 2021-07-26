@@ -53,19 +53,18 @@ class BaseFunction:
     def headers(self) -> Dict[str, tb.Col]:
         """ Optional implementation. If detailed_call is being used, this method returns a dictionary descriptor for
             each column of the return. Keys represent the name of each element of the return, values represent the
-            corresponding :class:`tables.Col` data type. See :mod:`PyTables` documentation on how to define this
-            dictionary.
+            corresponding :class:`tables.Col` data type.
 
             If headers is not defined, GloMPO will attempt to infer types from a function evaluation return. Be warned
             that this is a risky approach as incorrect inferences could be made. Numerical data types are also set to
-            the largest possible type (i.e. :attr:`float64`) and strings are limited to 280 characters. This may lead to
-            inefficient use of space or data being truncated. If :meth:`detailed_call` is being used, implementation
-            of headers is strongly recommended.
+            the largest possible type (i.e. :code:`float64`) and strings are limited to 280 characters. This may lead to
+            inefficient use of space or data being truncated. If :meth:`detailed_call` is being used, implementation of
+            headers is strongly recommended.
 
             Returns
             -------
-            Dict[str, :class:`tables:tables.description.Col`]
-                Mapping of heading names to the :class:`tables:tables.description.Col` type which indicates the type of
+            Dict[str, :class:`tables.Col`]
+                Mapping of heading names to the :class:`tables.Col` type which indicates the type of
                 data the column of information will store.
 
             Examples
@@ -88,12 +87,12 @@ class BaseFunction:
 
         Implementing this function is optional and only required if directly pickling the function is not possible.
         In order to load a checkpoint in which :meth:`checkpoint_save` was used, see
-        :meth:`load_checkpoint`).
+        :meth:`~glompo.core.manager.GloMPOManager.load_checkpoint`).
 
         Parameters
         ----------
         path
-            :obj:`str` or :class:`Path` to a directory into which files will be saved.
+            :obj:`str` or :class:`python:pathlib.Path` to a directory into which files will be saved.
         """
         raise NotImplementedError
 
@@ -102,11 +101,11 @@ class BaseFunction:
         """ Creates an instance of the :class:`BaseFunction` from sources.
 
         These source are the products of :meth:`checkpoint_save`. In order to use this method, it should be sent to the
-        :obj:`task_loader` argument of :meth:`~glompo.core.manager.GloMPOManager.load_checkpoint`.
+        :code:`task_loader` argument of :meth:`~glompo.core.manager.GloMPOManager.load_checkpoint`.
 
         Parameters
         ----------
         path
-            :obj:`str` or :class:`Path` to a directory which contains the files which will be loaded.
+            :obj:`str` or :class:`~python:pathlib.Path` to a directory which contains the files which will be loaded.
         """
         raise NotImplementedError

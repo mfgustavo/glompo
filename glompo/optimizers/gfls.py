@@ -59,8 +59,7 @@ class GFLSOptimizer(BaseOptimizer):
                 diis_mode   : "qrsvd"
                 seed        : None
         """
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag,
-                         workers, backend, is_log_detailed)
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend, is_log_detailed)
         self.gfls = None
         self.result = None
         self.stopcond = None

@@ -45,23 +45,23 @@ class CMAOptimizer(BaseOptimizer):
 
             Parameters
             ----------
-            sampler: Literal['full', 'vkd', 'vd'] = 'full'
+            sampler
                 Allows the use of `GaussVDSampler` and `GaussVkDSampler` settings.
-            verbose: bool = True
+            verbose
                 Be talkative (1) or not (0)
-            workers: int = 1
+            workers
                 The number of parallel evaluators used by this instance of CMA.
-            keep_files: bool = False
+            keep_files
                 If True the files produced by CMA are retained otherwise they are not produced.
-            force_injects: Optional[bool] = None
+            force_injects
                 If True, injections of parameter vectors into the solver will be exact, guaranteeing that that
                 solution will be in the next iteration's population. If False, the injection will result in a direction
                 relative nudge towards the vector. Forcing the injecting can limit global exploration but non-forced
                 injections may have little effect.
-            injection_frequency: Optional[int] = None
+            injection_frequency
                 If None, injections are ignored by the optimizer. If an int is provided then injection are only accepted
                 if at least injection_frequency iterations have passed since the last injection.
-            cmasettings: Optional[Dict[str, Any]]
+            cmasettings
                 cma module-specific settings as ``k,v`` pairs. See ``cma.s.pprint(cma.CMAOptions())`` for a list of
                 available options. Most useful keys are: `timeout`, `tolstagnation`, `popsize`.
 
@@ -71,8 +71,7 @@ class CMAOptimizer(BaseOptimizer):
             incumbent solution into the solver influencing the points sampled by the following iteration. The incumbent
             begins at x0 and is updated by the inject method called by the GloMPO manager.
         """
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag,
-                         workers, backend, is_log_detailed)
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend, is_log_detailed)
 
         self.verbose = verbose
         self.es = None
@@ -115,19 +114,19 @@ class CMAOptimizer(BaseOptimizer):
 
             Parameters
             ----------
-            function: Callable[[Sequence[float]], float]
+            function
                 Task to be minimised accepting a sequence of unknown parameters and returning a float result.
-            x0: Sequence[float]
+            x0
                 Initial mean of the distribution from with trial parameter sets are sampled. Force injected into the
                 solver to guarantee it is evaluated.
-            bounds: Sequence[Tuple[float, float]]
+            bounds
                 Bounds on the sampling limits of each dimension. CMA supports handling bounds as non-linear
                 transformations so that they are never exceeded (but bounds are likely to be over sampled) or with a
                 penalty function. See cma documentation for more on this.
-            callbacks: Callable[[], Optional[Any]]
+            callbacks
                 Callbacks are called once per iteration. They receive no arguments. If they return anything other than
                 None the minimization will terminate early.
-            sigma0: float = 0
+            sigma0
                 Standard deviation for all parameters (all parameters must be scaled accordingly).
                 Defines the search space as the std dev from an initial x0. Larger values will sample a wider
                 Gaussian. Default is zero which will not accepted by the optimizer, thus this argument must be provided.

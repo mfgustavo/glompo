@@ -62,6 +62,17 @@ html_static_path = ['_static']
 modindex_common_prefix = ['glompo.']
 master_doc = 'index'
 needs_sphinx = '1.8.5'
+nitpicky = True
+nitpick_ignore = [('py:class', 'List'),
+                  ('py:class', 'Dict'),
+                  ('py:class', 'Set'),
+                  ('py:class', 'Sequence'),
+                  ('py:class', 'Tuple'),
+                  ('py:class', 'Any'),
+                  ('py:class', 'Callable'),
+                  ('py:class', 'Type'),
+                  ('py:class', 'Union'),
+                  ]
 
 # Autodoc settings ----------------------------------------------------------
 autodoc_mock_imports = ['matplotlib',
@@ -94,7 +105,8 @@ autosummary_generate_autosummary_docs = True
 # Intersphinx settings -------------------------------------------------------
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3.6', None),
-    'tables': ('https://www.pytables.org/', None),
+    'tables': ('https://www.pytables.org', None),
     'dill': ('https://dill.readthedocs.io/en/latest/', None),
     'psutil': ('https://psutil.readthedocs.io/en/latest/', None),
+    'matplotlib': ('http://matplotlib.sourceforge.net/', None),
 }

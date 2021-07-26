@@ -213,7 +213,7 @@ a new feature is introduced.
 
 Pull request checklist:
 
-#. Please ensure that your contributions follow general PEP-8 style guidelines;
+#. Please ensure that your contributions follow general :pep:`8` style guidelines;
 
 #. Only submit documented code;
 

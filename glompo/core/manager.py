@@ -128,8 +128,8 @@ class GloMPOManager:
         History of system load snapshots (taken every :attr:`status_frequency` seconds). This is is a system wide value,
         not tied to the specific process.
     logger : :class:`python:logging.Logger`
-        GloMPO has built-in logging to allow tracking during an optimization (see :ref:`Logging`). This attribute
-        accesses the manager logger object.
+        GloMPO has built-in logging to allow tracking during an optimization (see :ref:`Logging Messages`). This
+        attribute accesses the manager logger object.
     max_jobs : int
         Maximum number of calculation 'slots' used by all the child optimizers. This generally equates to the number of
         processing cores available which the child optimizers may fill with threads or processes depending on their
@@ -165,7 +165,7 @@ class GloMPOManager:
         :obj:`True` if the manager is allowed to create new children. The manager will shutdown if all children
         terminate and this is :obj:`False`.
     split_printstreams : bool
-        :obj:`True` if the printstreams for children are redirected to individual files (see :ref:`Logging`).
+        :obj:`True` if the printstreams for children are redirected to individual files (see :ref:`Logging Messages`).
     status_frequency : float
         Frequency (in seconds) with which a status message is produced for the logger.
     summary_files : int
@@ -359,11 +359,11 @@ class GloMPOManager:
             
             Accepts:
 
-            :obj:`'processes'`: Optimizers spawned as :class:`multiprocessing.Process`
+            :code:`'processes'`: Optimizers spawned as :class:`multiprocessing.Process`
 
-            :obj:`'threads'`: Optimizers spawned as :class:`threading.Thread`
+            :code:`'threads'`: Optimizers spawned as :class:`threading.Thread`
 
-            :obj:`'processes_forced'`: **Strongly discouraged**, optimizers spawned as :class:`multiprocessing.Process`
+            :code:`'processes_forced'`: **Strongly discouraged**, optimizers spawned as :class:`multiprocessing.Process`
             and are themselves allowed to spawn :class:`multiprocessing.Process` for function evaluations. See
             :ref:`Parallelism` for more details on this topic.
 
@@ -436,7 +436,7 @@ class GloMPOManager:
            If this is not the case it is likely you would need to use a threaded `backend`.
 
         #. Do not use :attr:`bounds` to fix a parameter value as this will raise an error. Rather supply fixed parameter
-           values through :attr:`task_args` or :attr:`task_kwargs`.
+           values through :code:`task_args` or :code:`task_kwargs`.
 
         #. An optimizer will not be started if the number of 'slots' it requires (i.e. its
            :attr:`~glompo.optimizers.baseoptimizer.BaseOptimizer.workers` attribute) will cause the total number of
@@ -445,18 +445,18 @@ class GloMPOManager:
            not start an optimizer that requires 3 or more slots.
            
         #. Checkpointing requires the use of the :mod:`dill` package for serialisation. If you attempt to checkpoint or
-           supply :attr:`checkpointing_controls` without this package present, a warning will be raised and no
+           supply :code:`checkpointing_controls` without this package present, a warning will be raised and no
            checkpointing will occur.
            
         #. .. caution::
 
-              Use :obj:`force_terminations_after` with caution as it runs the risk of corrupting the results queue, but
+              Use :code:`force_terminations_after` with caution as it runs the risk of corrupting the results queue, but
               ensures resources are not wasted on hanging processes.
               
         #. After :obj:`end_timeout`, if the optimizer is still alive and a process, GloMPO will send a terminate signal
            to force it to close. However, threads cannot be terminated in this way and the manager can leave dangling
            threads at the end of its routine. If the script ends after a GloMPO routine then all its children
-           will be automatically garbage collected (provided :attr:`'processes_forced'` backend has not been used).
+           will be automatically garbage collected (provided :code:`'processes_forced'` backend has not been used).
 
            By default, this timeout is 10s if a process backend is used and infinite of a threaded backend is used.
            This is the cleanest approach for threads but can cause very long wait times or deadlocks if the optimizer
@@ -634,14 +634,15 @@ class GloMPOManager:
 
         #. When making a checkpoint, GloMPO attempts to persist the :obj:`task` directly. If this is not possible
            it will attempt to call :meth:`checkpoint_save <glompo.core.function.BaseFunction.checkpoint_save>` to
-           produce some files into the checkpoint. The :obj:`task_loader` parameter is the function or method which
-           can return a :obj:`task` from files within the checkpoint (see :meth:`.BaseFunction.checkpoint_load`).
+           produce some files into the checkpoint. `task_loader` is the function or method which can return a
+           :attr:`~glompo.core.manager.GloMPOManager.task` from files within the checkpoint
+           (see :meth:`.BaseFunction.checkpoint_load`).
 
            `task_loader` must accept a path to a directory containing the checkpoint files and return a callable
            which is the task itself.
 
-           If both task_loader and task are provided, the manager will first attempt to use the task_loader and
-           then only use task if that fails otherwise task is ignored.
+           If both `task_loader` and `task` are provided, the manager will first attempt to use the `task_loader` and
+           then only use `task` if that fails otherwise task is ignored.
 
         #. .. caution::
 
@@ -656,26 +657,26 @@ class GloMPOManager:
            resumed at some point. However, at the end of each section a movie file is made and these can be stitched
            together to make a continuous recording.
            
-        #. The following arguments cannot/should not be sent to :obj:`glompo_kwargs`:
+        #. The following arguments cannot/should not be sent to `glompo_kwargs`:
 
-           :attr:`bounds`
+           :attr:`~glompo.core.manager.GloMPOManager.bounds`
               Many optimizers save the :attr:`bounds` during checkpointing. If changed here old optimizers will retain
               the old bounds but new optimizers will start in new bounds.
 
-           :attr:`max_jobs`
+           :attr:`~glompo.core.manager.GloMPOManager.max_jobs`
               If this is decreased and falls below the number required by the optimizers in the checkpoint, the manager
               will attempt to adjust the workers for each optimizer to fit the new limit. Slots are apportioned equally
               (regardless of the distribution in the checkpoint) and there is no guarantee that the optimizers will
               actually respond to this change.
 
-           :attr:`visualisation_args`
+           :attr:`~glompo.core.manager.GloMPOManager.visualisation_args`
               Due to the semantics of :class:`~glompo.core.scope.GloMPOScope` construction, these arguments will not be
               accepted by the loaded scope object.
 
-           :obj:`working_dir`
+           :attr:`~glompo.core.manager.GloMPOManager.working_dir`
               This can be changed, however, if a log file exists and you would like to append into this file, make sure
-              to copy/move it to the new :attr:`working_dir` and name it :obj:`'glompo_log.h5'` before loading the
-              checkpoint otherwise GloMPO will create a new log file (see :ref:`Logging`).
+              to copy/move it to the new :attr:`working_dir` and name it :code:`'glompo_log.h5'` before loading the
+              checkpoint otherwise GloMPO will create a new log file (see :ref:`Logging Messages`).
         """
 
         if self.is_initialised:
@@ -1093,7 +1094,7 @@ class GloMPOManager:
         #. If the above fails, the manager will attempt to call
            :meth:`task.checkpoint_save <glompo.core.function.BaseFunction>` if it is present. This is expected to create
            file/s which is/are suitable for reconstruction during :meth:`load_checkpoint`. When resuming a run the
-           manager will attempt to reconstruct the task by calling the method passed to :obj:`task_loader` in
+           manager will attempt to reconstruct the task by calling the method passed to `task_loader` in
            :meth:`load_checkpoint`.
 
         #. If the manager cannot perform either of the above methods the checkpoint will be constructed without a task.
@@ -1190,7 +1191,7 @@ class GloMPOManager:
 
         Parameters
         ----------
-        dump_dir: Optional[Path] = None
+        dump_dir
             If provided, this will overwrite the manager :attr:`working_dir` allowing the output to be redirected to a
             different folder so as to not interfere with files in the working directory.
         """
@@ -1935,7 +1936,7 @@ class GloMPOManager:
                     pack.allow_run_event.clear()
 
     def _setup_system_monitoring(self):
-        """ Configures :mod:`psutil` monitoring of the optimization and sends a :attr:`logging.INFO` message to
+        """ Configures :mod:`psutil` monitoring of the optimization and sends a :attr:`python:logging.INFO` message to
             :attr:`logger`.produces a system info log message.
         """
 

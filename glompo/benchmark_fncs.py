@@ -483,9 +483,9 @@ class ExpLeastSquaresCost(BaseTestCase):
 
             Notes
             -----
-            The properties :attr:`min_fx` and :attr:`min_x` are only guaranteed for `sigma_fixed` = 0; otherwise they
-            are only estimates. This is because the added random noise may create a better fit of the data an unknown
-            vector.
+            The properties :attr:`~BaseTestCase.min_fx` and :attr:`~BaseTestCase.min_x` are only guaranteed for
+            `sigma_fixed` = 0; otherwise they are only estimates. This is because the added random noise may create a
+            better fit of the data an unknown vector.
 
         """
         super().__init__(dims, delay=delay)

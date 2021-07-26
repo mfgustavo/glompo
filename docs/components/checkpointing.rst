@@ -2,7 +2,7 @@ Checkpointing
 =============
 
 This saves its state to disk,
-these files can be used by a new :class:`GloMPOManager` instance to resume. Checkpointing options are
+these files can be used by a new :class:`~glompo.core.manager.GloMPOManager` instance to resume. Checkpointing options are
 provided through a :class:`~glompo.core.checkpointing.CheckpointingControl` instance.
 
 Checkpointing tries to create an entire image of the GloMPO state, it is the user's
@@ -52,3 +52,6 @@ in the working directory when loading checkpoints.
    any values in the log which were generated after the checkpoint. To avoid data being
    overwritten, the user can manually copy/rename the log file they wish to retain
    before loading a checkpoint.
+
+.. autoclass:: glompo.core.checkpointing.CheckpointingControl
+   :members:

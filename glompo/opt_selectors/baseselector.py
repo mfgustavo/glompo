@@ -23,7 +23,7 @@ class BaseSelector(ABC):
                  allow_spawn: Optional[Callable[['GloMPOManager'], bool]] = None):
         """ Parameters
             ----------
-            avail_opts: Set[Union[Type[BaseOptimizer], Tuple[BaseOptimizer, Dict[str, Any], Dict[str, Any]]]]
+            avail_opts
                 A set of optimizers available to the minimization, these must be subclasses of the BaseOptimizer
                 abstract class in order to be compatible with GloMPO.
 
@@ -34,7 +34,7 @@ class BaseSelector(ABC):
                     b) Dictionary of kwargs used to initialise a BaseOptimizer instance;
                     c) Dictionary of kwargs for calling the BaseOptimizer().minimize() method.
 
-            allow_spawn: Optional[Callable[['GloMPOManager'], bool]]
+            allow_spawn
                 Optional function sent to the selector which is called with the manager object as argument. If it
                 returns False the manager will no longer spawn optimizers.
         """
@@ -86,11 +86,11 @@ class BaseSelector(ABC):
 
             Parameters
             ----------
-            manager: GloMPOManager
+            manager
                 Running manager instance, can be used to read certain counters and state variables.
-            log: BaseLogger
+            log
                 Contains the details and iteration history of ever optimizer started thus far.
-            slots_available: int
+            slots_available
                 Number of threads the manager is allowed to start according to its max_jobs attribute and the number of
                 existing threads.
                 GloMPO API assumes that the selector will attempt to this parameter and return an optimizer which
@@ -98,15 +98,15 @@ class BaseSelector(ABC):
 
             Returns
             -------
-            Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]] / None / False
+            Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]], None, :obj:`False`]
                 Optimizer class and configuration parameters. Manager will use this to initialise and start a new
                 optimizer.
 
-                None is returned in the case that no available optimizer configurations can satisfy the number of worker
-                slots available.
+                :obj:`None` is returned in the case that no available optimizer configurations can satisfy the number of
+                worker slots available.
 
-                False is a special return which flags the optimizer to never try and start another optimizer for the
-                remainder of the optimization.
+                :obj:`False` is a special return which flags the optimizer to never try and start another optimizer for
+                the remainder of the optimization.
         """
 
     def __contains__(self, item):

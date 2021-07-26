@@ -7,7 +7,7 @@ Parallelism
 Resource balancing is critical to GloMPO's success. The typical GloMPO execution
 hierarchy takes the following form:
 
-.. image:: _png/hierarchy.png
+.. image:: /_figs/hierarchy.png
 
 The first level of parallelization is done at the manager level and controls how the
 optimizer routines are spun-off from the manager. This can be done using multiprocessing
@@ -59,7 +59,7 @@ advantages but becomes resource expensive as the task is duplicated between proc
 I/O collisions if the task relies on external files during its calculation.
 
 If threads are used, make sure the task is thread-safe! Also note that forced terminations are not
-possible in this case and hanging optimizers will not be killed. The :attr:`force_terminations_after`
+possible in this case and hanging optimizers will not be killed. The :code:`force_terminations_after`
 parameter is ignored.
 
 in cases where two levels of parallelism exist (i.e. the optimizers and multiple parallel function

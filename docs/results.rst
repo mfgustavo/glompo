@@ -17,3 +17,6 @@ in this way all information from an optimization can be accessed from one locati
 with these files within a Python environment, we recommend loading it with the
 `Pytables` module. To explore the file in a user-friendly GUI, we recommend using
 the `vitables` package.
+
+.. automodule:: glompo.core.optimizerlogger
+   :members:

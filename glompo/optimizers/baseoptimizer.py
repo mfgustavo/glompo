@@ -10,12 +10,12 @@ from multiprocessing.connection import Connection
 from pathlib import Path
 from queue import Queue
 from threading import Event
-from typing import Any, Callable, List, Optional, Sequence, Set, Tuple, Type, Union
+from typing import Callable, List, Optional, Sequence, Set, Tuple, Type, Union
 
 from ..common.helpers import LiteralWrapper
 from ..common.namedtuples import IterationResult
-from ..core._backends import ChunkingQueue
 from ..common.wrappers import needs_optional_package
+from ..core._backends import ChunkingQueue
 
 try:
     import dill
@@ -26,18 +26,21 @@ __all__ = ('BaseOptimizer', 'MinimizeResult')
 
 
 class MinimizeResult:
-    """
-    This class is the return value of BaseOptimizer classes.
+    """ The return value of :class:`BaseOptimizer` classes.
     The results of an optimization can be accessed by:
 
-    Attributes:
-
+    Attributes
+    ----------
     success : bool
-        Whether the optimization was successful or not
+        Whether the optimization was successful or not.
     x : numpy.array
-        The optimized parameters
+        The optimized parameters.
     fx : float
-        The corresponding |Fitfunc| value of `x`
+        The corresponding function value of :obj:`x`.
+    stats : Dict[str, Any]
+        Dictionary of various statistics related to the optimization.
+    origin : Dict[str, Any]
+        Dictionary with configurations details of the optimizer which produced the result.
     """
 
     def __init__(self):
@@ -49,8 +52,8 @@ class MinimizeResult:
 
 
 class _MessagingWrapper:
-    """ Core functionality which messages evaluations to the manager from the children.
-        Automatically wrapped around the optimization task by each optimizer.
+    """ Messages results to the manager whenever the optimization task is evaluated.
+    Automatically wrapped around the optimization task by the GloMPO manager for each optimizer it starts.
     """
 
     def __init__(self,
@@ -58,19 +61,17 @@ class _MessagingWrapper:
                  results_queue: ChunkingQueue,
                  opt_id: int,
                  is_log_detailed: bool):
-        """ Initialises the wrapper class.
-
-            Parameters
+        """ Parameters
             ----------
-            func: Callable[[Sequence[float]], float]
+            func
                 Function to be minimized.
-            results_queue: ChunkingQueue
+            results_queue
                 Results queue into which results are put.
-            opt_id: int
+            opt_id
                 Optimizer to which this wrapper is associated.
-            is_log_detailed: bool
-                If True, using __call__ will log the return of detailed_call in the log.
-                If False, using __call__ will log the return of call in the log.
+            is_log_detailed
+                If :obj:`True`, using :meth:`__call__` will log the return of :meth:`detailed_call` in the log.
+                If :obj:`False`, using :meth:`__call__` will log the return of :meth:`__call__` in the log.
         """
         self.func = func
         self.results_queue = results_queue
@@ -105,7 +106,68 @@ class _MessagingWrapper:
 
 
 class BaseOptimizer(ABC):
-    """ Base class of parameter optimizers in GloMPO """
+    """ Abstract base class for optimizers used within the GloMPO framework.
+    Cannot be used directly, must be inherited from by child classes which implement a specific optimization algorithm.
+
+    .. attention::
+
+       To Ensure GloMPO Functionality:
+
+       #. Messages to the GloMPO manager must be sent via :meth:`message_manager`.
+
+       #. Messages from the manager can be read by :meth:`check_messages`. See :attr:`FROM_MANAGER_SIGNAL_DICT`
+          for all the methods which must be implemented to interpret GloMPO signals correctly. The defaults are
+          generally suitable, however, and should not need to be overwritten! The only absolute requirement is the
+          implementation of :meth:`callstop` which interrupts the optimization loop.
+
+       #. The statement :code:`self._pause_signal.wait()` must appear somewhere in the body of the iterative loop to
+          allow the optimizer to be paused by the manager as needed.
+
+       #. Optional: the class should be able to handle resuming an optimization from any point using
+          :meth:`checkpoint_save` and :meth:`checkpoint_load`.
+
+    .. tip::
+
+       The :code:`TestSubclassGlompoCompatible` test in ``test_optimizers.py`` can be used to test that an optimizer
+       meets these criteria and is GloMPO compatible. Simply add your optimizer to :code:`AVAILABLE_CLASSES` there.
+
+    Attributes
+    ----------
+    FROM_MANAGER_SIGNAL_DICT : Dict[int, Callable]
+        Maps manager control messages (in the form of :obj:`int`\\s) to methods within the :class:`BaseOptimizer`
+    incumbent : Dict[str, Any]
+        Dictionary with keys :code:`'x'` and :code:`'fx'` which contain the lowest function value and associated
+        parameter vector seen thus far by the optimizer.
+    is_log_detailed : bool
+        If :obj:`True`:
+
+           #. When the task's :meth:`~glompo.core.function.BaseFunction.__call__` method is called, its
+              :meth:`~glompo.core.function.BaseFunction.detailed_call` method will actually be evaluated.
+
+           #. All the return values from :meth:`~glompo.core.function.BaseFunction.detailed_call` will be added to the
+              log history of the optimizer.
+
+           #. The function itself will only return the function value (as if the
+              :meth:`~glompo.core.function.BaseFunction.__call__` method had been used).
+
+        Note that this will *not* result in a doubling of the computational time as the original call will be
+        intercepted. This setting is useful for cases where optimizers do not need/cannot handle the extra information
+        generated by a detailed call but one would still like the iteration details logged for analysis.
+    logger : logging.Logger
+        :class:`python:logging.Logger` instance into which status message of the optimizer may be added.
+    workers : int
+        Maximum number of threads/processes the optimizer may use for evaluating the objective function.
+    """
+
+    @property
+    def is_restart(self):
+        """ :obj:`True` if the optimizer is loaded from a checkpoint. """
+        return self._is_restart
+
+    @property
+    def opt_id(self):
+        """ The unique GloMPO generated identification number of the optimizer. """
+        return self._opt_id
 
     @classmethod
     @needs_optional_package('dill')
@@ -118,17 +180,21 @@ class BaseOptimizer(ABC):
                         workers: int = 1,
                         backend: str = 'threads',
                         is_log_detailed: bool = False) -> 'BaseOptimizer':
-        """ Recreates a previous instance of the optimizer suitable to continue a optimization from its previous
-            state. Below is a basic implementation which should suit most optimizers, may need to be overwritten.
+        """ Recreates an optimizer from a saved snapshot.
 
-            Parameters
-            ----------
-            path: Union[Path, str]
-                Path to checkpoint file from which to build from. It must be a file produced by the corresponding
-                BaseOptimizer().checkpoint_save method.
-            opt_id, signal_pipe, results_queue, pause_flag, workers, backend
-                These parameters are the same as the corresponding ones in BaseOptimizer.__init__. These will be
-                regenerated and supplied by the manager during reconstruction.
+        .. note::
+
+           This is a basic implementation which should suit most optimizers; may need to be overwritten.
+
+        Parameters
+        ----------
+        path
+            Path to checkpoint file from which to build from. It must be a file produced by the corresponding
+            :meth:`checkpoint_save` method.
+        is_log_detailed
+            See :attr:`is_log_detailed`
+        **kwargs
+            See :meth:`__init__`. All other parameters will be supplied by the manager during reconstruction.
         """
         opt = cls.__new__(cls)
         super(cls, opt).__init__(opt_id, signal_pipe, results_queue, pause_flag,
@@ -144,76 +210,65 @@ class BaseOptimizer(ABC):
         opt.logger.info("Successfully loaded from restart file.")
         return opt
 
-    @property
-    def is_restart(self):
-        return self._is_restart
-
-    @property
-    def opt_id(self):
-        return self._opt_id
-
     def __init__(self,
-                 opt_id: Optional[int] = None,
-                 signal_pipe: Optional[Connection] = None,
-                 results_queue: Optional[ChunkingQueue] = None,
-                 pause_flag: Optional[Event] = None,
+                 _opt_id: Optional[int] = None,
+                 _signal_pipe: Optional[Connection] = None,
+                 _results_queue: Optional[ChunkingQueue] = None,
+                 _pause_flag: Optional[Event] = None,
                  workers: int = 1,
                  backend: str = 'threads',
                  is_log_detailed: bool = False, **kwargs):
-        """
-        Initialisation of the base optimizer. Must be called by any child classes.
+        """ Initialisation of the :class:`BaseOptimizer`.
+        Must be called by any child classes.
+
+        .. note::
+
+           The user need not concern themselves with the particulars of the `_opt_id`, `_signal_pipe`, `_results_queue`
+           and `_pause_flag` parameters. These are automatically generated by the manager.
 
         Parameters
         ----------
-        opt_id: Optional[int] = None
-            Unique identifier automatically assigned within the GloMPO manager framework.
+        _opt_id
+            Unique optimizer identifier.
 
-        signal_pipe: Optional[multiprocessing.connection.Connection] = None
+        _signal_pipe
             Bidirectional pipe used to message management behaviour between the manager and optimizer.
 
-        results_queue: Optional[ChunkingQueue] = None
+        _results_queue
             Threading queue into which optimizer iteration results are centralised across all optimizers and sent to
             the manager.
 
-        pause_flag: Optional[threading.Event] = None
+        _pause_flag
             Event flag which can be used to pause the optimizer between iterations.
 
-        workers: int = 1
+        workers
             The number of concurrent calculations used by the optimizer. Defaults to one. The manager will only start
-            the optimizer if there are sufficient slots available for it:
-                workers <= manager.max_jobs - manager.n_slots_occupied.
+            the optimizer if there are sufficient slots available for it.
 
-        backend: str = 'threads'
+        backend
             The type of concurrency used by the optimizers (processes or threads). This is not necessarily applicable to
-            all optimizers. This will default to threads unless forced to used processes (see GloMPOManger backend
-            argument for details).
+            all optimizers. This will default to :code:`'threads'` unless forced to use :code:`'processes'` (see
+            :attr:`~glompo.core.manager.GloMPOManager.proc_backend`).
 
-        is_log_detailed: bool = False
-            If True, a detailed_call will be run and logged everytime a normal function call is made. Note that this
-            will NOT result in a doubling of the computational time as the original call will be intercepted. This
-            setting is useful for cases where optimizers do not need/cannot handle the extra information generated by a
-            detailed call but one would still like the iteration details logged for analysis.
-            See BaseOptimizer.minimize docstring for more information on detailed calls.
+        is_log_detailed
+            See :attr:`is_log_detailed`.
 
-        kwargs
+        **kwargs
             Optimizer specific initialization arguments.
         """
-        self.logger = logging.getLogger(f'glompo.optimizers.opt{opt_id}')
-        self._opt_id = opt_id
-        self._signal_pipe = signal_pipe
-        self._results_queue = results_queue
-        self._pause_signal = pause_flag  # If set allow run, if cleared wait.
+        self.logger = logging.getLogger(f'glompo.optimizers.opt{_opt_id}')
+        self._opt_id = _opt_id
+        self._signal_pipe = _signal_pipe
+        self._results_queue = _results_queue
+        self._pause_signal = _pause_flag  # If set allow run, if cleared wait.
         self._backend = backend
         self._is_restart = False
 
-        self._FROM_MANAGER_SIGNAL_DICT = {0: self.checkpoint_save,
-                                          1: self.callstop,
-                                          2: self._prepare_checkpoint,
-                                          3: self._checkpoint_pass,
-                                          4: self.inject}
-        self._TO_MANAGER_SIGNAL_DICT = {0: "Normal Termination",
-                                        1: "Confirm Pause",
-                                        9: "Other Message (Saved to Log)"}
+        self.FROM_MANAGER_SIGNAL_DICT = {0: self.checkpoint_save,
+                                         1: self.callstop,
+                                         2: self._prepare_checkpoint,
+                                         3: self._checkpoint_pass,
+                                         4: self.inject}
         self.workers = workers
         self.incumbent = {'x': None, 'fx': None}
         self.is_log_detailed = is_log_detailed
@@ -224,64 +279,50 @@ class BaseOptimizer(ABC):
                  x0: Sequence[float],
                  bounds: Sequence[Tuple[float, float]],
                  callbacks: Callable = None, **kwargs) -> MinimizeResult:
-        """
-        Minimizes a function, given an initial list of variable values `x0`, and possibly a list of `bounds` on the
-        variable values. The `callbacks` argument allows for specific callbacks such as early stopping.
-
-        NB
-            To Ensure GloMPO Functionality:
-            - Messages to the GloMPO manager must be sent via the message_manager method. The keys for these messages
-              are detailed in the _TO_MANAGER_SIGNAL_DICT dictionary.
-            - A convergence termination message should be sent if the optimizer successfully converges.
-            - Messages from the manager can be read by the check_messages method. See the _FROM_MANAGER_SIGNAL_DICT
-              for all the methods which must be implemented to interpret GloMPO signals correctly. The defaults are
-              generally suitable, however, and do not need to be overwritten! The only requirement is the implementation
-              of the callstop method which interrupts the optimization loop.
-            - self._pause_signal.wait() must be implemented in the body of the iterative loop to allow the optimizer to
-              be paused by the manager as needed.
-            - The TestSubclassGlompoCompatible test in test_optimizers.py can be used to test that an optimizer meets
-              these criteria and is GloMPO compatible.
-            - Should be able to handle resuming an optimization from any point using the checkpoint_save and
-              checkpoint_load methods.
+        """ Run the optimization algorithm to minimize a function.
 
         Parameters
         ----------
-        function: Callable[[Sequence[float]], float]
-            Function to be minimised. The minimum requirement is a Callable which accepts a vector in input space and
-            returns a single float.
+        function
+            Function to be minimised. See :class:`~glompo.core.function.BaseFunction` for an API guide.
 
-        x0: Sequence[float]
+        x0
             The initial optimizer starting point.
 
-        bounds: Sequence[Tuple[float, float]]
-            Min max boundary limit pairs for each element of the input vector to the minimisation function.
+        bounds
+            Min/max boundary limit pairs for each element of the input vector to the minimisation function.
 
-        callbacks: Callable = None
+        callbacks
             Code snippets usually called once per iteration that are able to signal early termination. Callbacks are
             leveraged differently by different optimizer implementations, the user is encouraged to consult the child
-            classes for more details.
+            classes for more details. Use of callbacks, however, is *strongly discouraged*.
         """
 
     def check_messages(self, return_signals: bool = False) -> Optional[List[int]]:
-        """ Processes and executes manager signals from the manager. Should not be overwritten.
+        """ Processes and executes manager signals from the manager.
 
-            Parameters
-            -------
-            return_signals: bool = False
-                If True the method returns the signal keys received by the manager in the call
+        .. caution::
+
+           This implementation has been very carefully structured to operate as expected by the manager. Should be
+           suitable for all optimizers. **Should not** be overwritten.
+
+        Parameters
+        ----------
+        return_signals
+            If :obj:`True` the method returns the signal keys received by the manager in the call.
         """
         processed_signals = []
         while self._signal_pipe.poll():
             message = self._signal_pipe.recv()
             self.logger.debug("Received signal: %s", message)
-            if isinstance(message, int) and message in self._FROM_MANAGER_SIGNAL_DICT:
-                self.logger.debug("Executing: %s", self._FROM_MANAGER_SIGNAL_DICT[message].__name__)
+            if isinstance(message, int) and message in self.FROM_MANAGER_SIGNAL_DICT:
+                self.logger.debug("Executing: %s", self.FROM_MANAGER_SIGNAL_DICT[message].__name__)
                 processed_signals.append(message)
-                self._FROM_MANAGER_SIGNAL_DICT[message]()
-            elif isinstance(message, tuple) and message[0] in self._FROM_MANAGER_SIGNAL_DICT:
+                self.FROM_MANAGER_SIGNAL_DICT[message]()
+            elif isinstance(message, tuple) and message[0] in self.FROM_MANAGER_SIGNAL_DICT:
                 processed_signals.append(message[0])
-                self.logger.debug("Executing: %s", self._FROM_MANAGER_SIGNAL_DICT[message[0]].__name__)
-                self._FROM_MANAGER_SIGNAL_DICT[message[0]](*message[1:])
+                self.logger.debug("Executing: %s", self.FROM_MANAGER_SIGNAL_DICT[message[0]].__name__)
+                self.FROM_MANAGER_SIGNAL_DICT[message[0]](*message[1:])
             else:
                 self.logger.warning("Cannot parse message, ignoring")
                 warnings.warn("Cannot parse message, ignoring", RuntimeWarning)
@@ -289,30 +330,56 @@ class BaseOptimizer(ABC):
         if return_signals:
             return processed_signals
 
-    def message_manager(self, key: int, message: Optional[Any] = None):
-        """ Sends arguments to the manager. key indicates the type of signal sent (see _TO_MANAGER_SIGNAL_DICT) and
-            message contains extra information which may be needed to process the request. Should not be overwritten.
+    def message_manager(self, key: int, message: Optional[str] = None):
+        """ Sends arguments to the manager.
+
+        .. caution::
+
+           Should not be overwritten.
+
+        Parameters
+        ----------
+        key
+            Indicates the type of signal sent. The manager recognises the following keys:
+
+            0: The optimizer has terminated normally according to its own internal convergence conditions.
+
+            1: Confirm that a pause signal has been received from the manager and the optimizer has complied with the
+            request.
+
+            9: General message to be appended to the optimizer's log.
+        message
+            Message to be appended when sending signal 9.
         """
         self._signal_pipe.send((key, message))
 
     @abstractmethod
     def callstop(self, reason: str):
-        """ Signal to terminate the minimize loop while still returning a result. """
+        """ Breaks out of the :meth:`minimize` minimization loop. """
 
     @needs_optional_package('dill')
     def checkpoint_save(self, path: Union[Path, str], force: Optional[Set[str]] = None):
-        """ Save current state, suitable for restarting. Path is the location for the file or folder to be constructed.
-            Note that only the absolutely critical aspects of the state of the optimizer need to be saved. The manager
-            will resupply multiprocessing parameters when the optimizer is reconstructed. Below is a basic
-            implementation which should suit most optimizers, may need to be overwritten.
+        """ Save current state, suitable for restarting.
 
-            Parameters
-            ----------
-            path: Union[Path, str]
-                Path to file into which the object will be dumped.
-            force: Optional[str]
-                Set of variable names which will be forced into the dumped file. Convenient shortcut for overwriting if
-                fails for a particular optimizer because a certain variable is filtered out of the data dump.
+        .. note::
+
+           Only the absolutely critical aspects of the state of the optimizer need to be saved. The manager will
+           resupply multiprocessing parameters when the optimizer is reconstructed.
+
+           This method will almost never be called directly by the user. Rather it will called (via signals) by the
+           manager.
+
+        .. note::
+
+           This is a basic implementation which should suit most optimizers; may need to be overwritten.
+
+        Parameters
+        ----------
+        path
+            Path to file into which the object will be dumped. Typically supplied by the manager.
+        force
+            Set of variable names which will be forced into the dumped file. Convenient shortcut for overwriting if
+            fails for a particular optimizer because a certain variable is filtered out of the data dump.
         """
         self.logger.debug("Creating restart file.")
 
@@ -330,19 +397,24 @@ class BaseOptimizer(ABC):
         self.logger.info("Restart file created successfully.")
 
     def inject(self, x: Sequence[float], fx: float):
-        """ If configured to do so, the manager will share the best solution seen by any optimizer with the others
-            through this method. The default is to save the iteration into the incumbent property which the minimize
-            algorithm may be able to use in some way.
-        """
+        """ Updates the :attr:`incumbent` with a better solution from the manager. """
         self.incumbent = {'x': x, 'fx': fx}
 
     def _checkpoint_pass(self):
-        """ Empty method. Allows optimizers captured by checkpoint to pass out without saving.
-            Should not be overwritten.
+        """ Allows optimizers captured by checkpoint to pass out without saving.
+
+            .. caution::
+
+               Empty method. Should not be overwritten.
         """
 
     def _prepare_checkpoint(self):
-        """ Process to pause, synchronize and save optimizers. Should not be overwritten. """
+        """ Process to pause, synchronize and save optimizers.
+
+        .. caution::
+
+           Should not be overwritten.
+        """
         self.logger.debug("Preparing for Checkpoint")
         self.message_manager(1)  # Certify waiting for next instruction
         self.logger.debug("Wait signal messaged to manager, waiting for reply...")
@@ -362,10 +434,20 @@ class BaseOptimizer(ABC):
                   x0: Sequence[float],
                   bounds: Sequence[Tuple[float, float]],
                   callbacks: Callable = None, **kwargs) -> MinimizeResult:
-        """ Wrapper around minimize that captures KeyboardInterrupt exceptions to exit gracefully and
-            other Exceptions to log them.
+        """ Wrapper around :meth:`minimize` which adds GloMPO specific functionality.
+        Main purposes are to:
 
-            Also correctly handles the opening and closing of the optimizer log file if it is being constructed.
+        #. Wrap the function with :class:`_MessagingWrapper`;
+
+        #. Capture :exc:`KeyboardInterrupt` exceptions to exit gracefully;
+
+        #. Capture other :exc:`Exception`s to log them.
+
+        #. Correctly handles the opening and closing of the optimizer log file if it is being constructed.
+
+        .. warning::
+
+           Do not overwrite.
         """
         try:
             function = _MessagingWrapper(function, self._results_queue, self.opt_id, self.is_log_detailed)

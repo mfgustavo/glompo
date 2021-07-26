@@ -32,7 +32,8 @@ __all__ = ("nested_string_formatting",
            "bound_group_presenter",
            "unknown_object_presenter",
            "WorkInDirectory",
-           "CheckpointingError")
+           "CheckpointingError",
+           "SplitOptimizerLogs")
 
 """ Sundry Code Stubs """
 
@@ -212,7 +213,13 @@ def present_memory(bytes_: float, digits: int = 2) -> str:
 def rolling_best(x: Sequence[float]) -> Sequence[float]:
     """ Returns a vector of shape x where each index has been replaced by the smallest number seen thus far when
         reading the list sequentially from left to right. For example:
-            rolling_best([3, 4, 5, 6, 2, 3, 4, 1, 2, 3]) == [3, 3, 3, 3, 2, 2, 2, 1, 1, 1]
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+           rolling_best([3, 4, 5, 6, 2, 3, 4, 1, 2, 3]) == [3, 3, 3, 3, 2, 2, 2, 1, 1, 1]
     """
     assert all([isinstance(i, (float, int)) and not math.isnan(i) for i in x]), \
         "Non numerical values found in array, unable to process."

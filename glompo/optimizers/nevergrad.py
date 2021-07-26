@@ -36,8 +36,7 @@ class Nevergrad(BaseOptimizer):
         zero : float
             Will stop the optimization when this cost function value is reached.
         """
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag,
-                         workers, backend, is_log_detailed)
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend, is_log_detailed)
 
         self.opt_algo = ng.optimizers.registry[optimizer]
         self.optimizer = None

@@ -49,33 +49,33 @@ class GloMPOScope:
 
         Parameters
         ----------
-        x_range: Union[Tuple[float, float], int, None] = 300
+        x_range
             If None is provided the x-axis will automatically and continuously rescale from zero as the number of
             function evaluations increases.
             If a tuple of the form (min, max) is provided then the x-axis will be fixed to this range.
             If an integer is provided then the plot will only show the last x_range evaluations and discard earlier
             points. This is useful to make differences between optimizers visible in the late stage and also keep the
             scope operating at an adequate speed.
-        y_range: Optional[Tuple[float, float]] = None
+        y_range
             Sets the y-axis limits of the plot, default is an empty tuple which leads the plot to automatically and
             constantly rescale the axis.
-        log_scale: bool = False
+        log_scale
             If True, the base 10 logarithm of y values are displayed on the scope. This can be used in conjunction
             with the y_range option and will be interpreted in the opt_log-scale.
-        record_movie: bool = False
+        record_movie
             If True then a matplotlib.animation.FFMpegWriter instance is created to record the plot.
-        interactive_mode: bool = False
+        interactive_mode
             If True the plot is visible on screen during the optimization.
-        events_per_flush: int = 10
+        events_per_flush
             The number of 'events' or updates and changes to the scope before the changes are flushed and the plot is
             redrawn. A lower number provides a smoother visualisation but is expensive and, if recorded,
             takes a larger amount of space.
-        elitism: bool = False
+        elitism
             If True the scope will only display values which improve on the best optimizer value.
-        writer_kwargs: Optional[Dict[str, Any]] = None
+        writer_kwargs
             Optional dictionary of arguments to be sent to the initialisation of the matplotlib.animation.FFMpegWriter
             class.
-        movie_kwargs: Optional[Dict[str, Any]] = None
+        movie_kwargs
             Optional dictionary of arguments to be sent to matplotlib.animation.FFMpegWriter.setup().
         """
         self.logger = logging.getLogger('glompo.scope')
@@ -318,7 +318,7 @@ class GloMPOScope:
 
             Parameters
             ----------
-            path: Optional[Path, str] = None
+            path
                 An optional directory into which the movie file will be directed. Will overwrite any 'outfile' argument
                 sent during scope initialisation.
         """

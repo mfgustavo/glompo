@@ -80,10 +80,11 @@ We can now setup the selector.
 
 Note the load balancing here. GloMPO will allow a fixed number of threads to be run. By default this is one less than
 the number of CPUs available. If your machine has 32 cores for example than the manager will use 1 and allow 31 to be
-used by the local optimizers. The :attr:`workers` keyword we used for the optimizer earlier tells GloMPO that each
-instance of CMA will use 1 of these slots. Thus, GloMPO will start a maximum of 31 parallel CMA optimizers in this run.
-Alternatively, if we had parallelized the function evaluations (by setting :attr:`workers` equal to 6) then 5 optimizers
-would be started taking 6 slots each. In such a configuration one core of the 32 core machine would remain unused:
+used by the local optimizers. The :attr:`~glompo.optimizers.baseoptimizer.BaseOptimizer.workers` keyword we used for the
+optimizer earlier tells GloMPO that each instance of CMA will use 1 of these slots. Thus, GloMPO will start a maximum of
+31 parallel CMA optimizers in this run. Alternatively, if we had parallelized the function evaluations (by setting
+:attr:`~glompo.optimizers.baseoptimizer.BaseOptimizer.workers` equal to 6) then 5 optimizers would be started taking 6
+slots each. In such a configuration one core of the 32 core machine would remain unused:
 :math:`5\times6=30\text{optimizers} + 1\text{manager} = 31`.
 
 If you want to fix the number of threads used regardless of the system resources, pass the optional
@@ -124,8 +125,10 @@ configure the manager and will give the user a good overview of what is possible
    :linenos:
 
 GloMPO contains built-in logging statements throughout the library. These will not show up by default but can be
-accessed if desired. In fact intercepting the :attr:`logging.INFO` level statements from the manager creates a nice
-progress stream from the optimization; we will set this up here. See :ref:`Logging` for more information.
+accessed if desired. In fact intercepting the
+`logging.INFO <https://docs.python.org/3.6/library/logging.html?highlight=logging%20info#logging-levels>`_ level
+statements from the manager creates a nice progress stream from the optimization; we will set this up here.
+See :ref:`Logging Messages` for more information.
 
 .. literalinclude:: ../examples/customized.py
    :linenos:
@@ -145,7 +148,7 @@ outperform normal optimization.
 
 Convergence of the GloMPO manager is controlled by :class:`~glompo.convergence.basechecker.BaseChecker` objects. These
 are small classes which define a single termination condition. These classes can then be easily combined to create
-sophisticated termination conditions using :obj:`&` and :obj:`|` symbolics.
+sophisticated termination conditions using :code:`&` and :code:`|` symbolics.
 
 In this case we would like the optimizer to run for a fixed number of iterations or stop if the global minimum is found.
 Of course we would not know the global minimum in typical problems but we do in this case.
@@ -184,8 +187,8 @@ In this example we will use a hunting set which has proven effective on several 
 .. note::
 
    :class:`~glompo.hunters.basehunter.BaseHunter` and :class:`~glompo.convergence.basechecker.BaseChecker` are evaluated
-   lazily this means that in :obj:`x | y`, :obj:`y` will not be evaluated if :obj:`x` is :obj:`True` and in :obj:`x & y`,
-   :obj:`y` will not be evaluated if :obj:`x` is :obj:`False`.
+   lazily this means that in :code:`x | y`, :code:`y` will not be evaluated if :code:`x` is :obj:`True` and in
+   :code:`x & y`, :code:`y` will not be evaluated if :code:`x` is :obj:`False`.
 
 :class:`~glompo.opt_selectors.baseselector.BaseSelector` objects select which optimizers to start but
 :class:`~glompo.generators.basegenerator.BaseGenerator` objects select a point in parameter space where to start them.
@@ -216,11 +219,11 @@ can also be used for tasks that are not multiprocessing safe. In this example we
 
 GloMPO includes a dynamic scope allowing one to watch the optimization progress in real-time using a graphic.
 This can be very helpful when configuring GloMPO and the results can be saved as movie files. This functionality
-requires an interactive version of :mod:`matplotlib` and :mod:`ffmpeg` installed on the system.
+requires `matplotlib <http://matplotlib.sourceforge.net/>`_ and `ffmpeg <ffmpeg.org>`_ installed on the system.
 
-This is turned on for this example but if the script fails simply set :obj:`visualisation` to :obj:`False` to
-bypass it. Note also that the scope is very helpful for preliminary configuration but is slow due to :mod:`matplotlib`
-limitations and should not be used during production runs.
+This is turned on for this example but if the script fails simply set :code:`visualisation` to :obj:`False` to
+bypass it. Note also that the scope is very helpful for preliminary configuration but is slow due to
+`matplotlib <http://matplotlib.sourceforge.net/>`_\\'s limitations and should not be used during production runs.
 
 .. literalinclude:: ../examples/customized.py
    :linenos:
@@ -240,7 +243,7 @@ crash. Note that this will not work on threaded backends. In this example this i
 GloMPO supports checkpointing. This means that its state can be persisted to file during an optimization and this
 checkpoint file can be loaded by another GloMPO instance to resume the optimization from that point. Checkpointing
 options are configured through a :class:`~glompo.core.checkpointing.CheckpointingControl` instance. In this case we will
-produce a checkpoint called :obj:`'customized_completed_<DATE>_<TIME>.tar.gz'` once the task has converged.
+produce a checkpoint called :code:`'customized_completed_<DATE>_<TIME>.tar.gz'` once the task has converged.
 
 .. literalinclude:: ../examples/customized.py
    :linenos:

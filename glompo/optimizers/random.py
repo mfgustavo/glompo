@@ -24,8 +24,7 @@ class RandomOptimizer(BaseOptimizer):
                  is_log_detailed: bool = False,
                  iters: int = 100):
         """ Initialize with the above parameters. """
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag,
-                         workers, backend, is_log_detailed)
+        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend, is_log_detailed)
         self.max_iters = iters
         self.used_iters = 0
         self.result = MinimizeResult()

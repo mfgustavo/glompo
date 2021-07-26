@@ -1,22 +1,17 @@
-.. _Logging:
+.. _Logging Messages:
 
-*******
-Logging
-*******
+****************
+Logging Messages
+****************
 
-Note that status messages are delivered
-through :attr:`logging.INFO` level message. Logging must be enabled and setup to see these messages.
-See :ref:`Logging` for more information.
+Logging is built into GloMPO and users may optionally configure its logging capability before running the manager in
+order to track its progress. Without this manual configuration no progress or status message will print at all! The
+logging system can be used to debug the code, but is most helpful in tracking execution through the program by sending
+`logging.INFO <https://docs.python.org/3.6/library/logging.html?highlight=logging%20info#logging-levels>`_ level
+messages and above to :obj:`python:sys.stdout`.
 
-Logging is built into GloMPO and users may optionally configure its logging capability
-before running the manager in order to track its progress. Without this manual
-configuration no progress or status message will print at all! The logging system can be
-used to debug the code, but is most helpful in tracking execution through the program by
-sending INFO level messages and above to stdout.
-
-The logging provided in this way is distinct from the summary files provided
-at the end of the GloMPO run which are regulated by the summary_files parameter in
-the initialisation of ``GloMPOManger``.
+The logging provided in this way is distinct from the summary files provided at the end of the GloMPO run which are
+regulated by the manager's :attr:`~glompo.core.manager.GloMPOManager.summary_files` attribute.
 
 The GloMPO logger is called ``glompo`` and components have individual loggers too,
 allowing filtering if desired. These are: ``glompo.manager``, ``glompo.checker``,
@@ -48,6 +43,11 @@ An example configuration may look like:
 
   manager = GloMPOManager(...)
   manager.start_manager(...)
+
+Note that status messages are delivered
+through `logging.INFO <https://docs.python.org/3.6/library/logging.html?highlight=logging%20info#logging-levels>`_
+level message. Logging must be enabled and setup to see these messages.
+See :ref:`Logging Messages` for more information.
 
 Resource Usage Logging
 **********************

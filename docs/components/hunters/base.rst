@@ -29,3 +29,7 @@ Default is :obj:`None` i.e. Killing is not used and the manager will not termina
 
 .. autoclass:: glompo.hunters.basehunter.BaseHunter
    :members:
+
+   .. attribute:: _last_result
+
+      Result of the last evaluation of the :class:`.BaseHunter`
