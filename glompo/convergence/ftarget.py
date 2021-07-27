@@ -1,5 +1,3 @@
-import numpy as np
-
 from .basechecker import BaseChecker
 
 __all__ = ("TargetCost",)
@@ -8,8 +6,8 @@ __all__ = ("TargetCost",)
 class TargetCost(BaseChecker):
 
     def __init__(self, target: float, atol: float = 1E-6):
-        """ Convergence is reached when the |f_best - target| < atol where f_best is the best value seen thus far
-            by the optimizer.
+        """ Convergence is reached when `f_best <= target + atol`, where `f_best` is the best value seen thus far by
+        the manager.
         """
         super().__init__()
         self.target = target
@@ -17,7 +15,7 @@ class TargetCost(BaseChecker):
 
     def __call__(self, manager: 'GloMPOManager') -> bool:
         if manager.result.fx is not None:
-            self.last_result = np.abs(manager.result.fx - self.target) < self.atol
+            self.last_result = manager.result.fx <= self.target + self.atol
         else:
             self.last_result = False
 
