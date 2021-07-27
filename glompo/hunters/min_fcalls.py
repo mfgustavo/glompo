@@ -18,5 +18,5 @@ class MinFuncCalls(BaseHunter):
                  log: BaseLogger,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
-        self._last_result = log.len(victim_opt_id) >= self.min_pts
-        return self._last_result
+        self.last_result = log.len(victim_opt_id) >= self.min_pts
+        return self.last_result

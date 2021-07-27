@@ -11,5 +11,5 @@ class MaxFuncCalls(BaseChecker):
         self.fmax = fmax
 
     def __call__(self, manager: 'GloMPOManager') -> bool:
-        self._last_result = manager.f_counter >= self.fmax
-        return self._last_result
+        self.last_result = manager.f_counter >= self.fmax
+        return self.last_result

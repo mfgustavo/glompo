@@ -37,5 +37,5 @@ class TimeAnnealing(BaseHunter):
         ratio = n_hunter / n_victim
         test_num = random.uniform(0, self.crit_ratio)
 
-        self._last_result = test_num > ratio
-        return self._last_result
+        self.last_result = test_num > ratio
+        return self.last_result

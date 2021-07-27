@@ -1,5 +1,3 @@
-.. _GloMPO Scope:
-
 GloMPO Scope
 ============
 

@@ -23,5 +23,5 @@ class KillsAfterConvergence(BaseChecker):
             self.enough_conv = True
             self.kill_count = len(manager.hunt_victims)
 
-        self._last_result = self.enough_conv and len(manager.hunt_victims) - self.kill_count >= self.n_killed
-        return self._last_result
+        self.last_result = self.enough_conv and len(manager.hunt_victims) - self.kill_count >= self.n_killed
+        return self.last_result

@@ -34,12 +34,15 @@ class ChainSelector(BaseSelector):
 
         Examples
         --------
-        ChainSelector([OptimizerA, OptimizerB], [1000])
-            In this case OptimizerA instances will be started in the first 1000 iterations and OptimizerB instances will
-            be started thereafter.
-        ChainSelector([OptimizerA, OptimizerB], [1000, 2000])
-            In this case OptimizerA instances will be started in the first 1000 iterations and OptimizerB instances will
-            be started until iteration 2000. No new optimizers will be spawned thereafter.
+        >>> ChainSelector([OptimizerA, OptimizerB], [1000])
+
+        In this case OptimizerA instances will be started in the first 1000 iterations and OptimizerB instances will be
+        started thereafter.
+
+        >>> ChainSelector([OptimizerA, OptimizerB], [1000, 2000])
+
+        In this case OptimizerA instances will be started in the first 1000 iterations and OptimizerB instances will be
+        started until iteration 2000. No new optimizers will be spawned thereafter.
         """
         super().__init__(*avail_opts, allow_spawn=allow_spawn)
         self.fcall_thresholds = fcall_thresholds

@@ -27,8 +27,8 @@ class EvaluationsUnmoving(BaseHunter):
 
         if n_calls < self.calls:
             # If there are insufficient iterations the hunter will return False
-            self._last_result = False
-            return self._last_result
+            self.last_result = False
+            return self.last_result
 
         try:
             st_dev = np.std(vals[-self.calls:])
@@ -36,5 +36,5 @@ class EvaluationsUnmoving(BaseHunter):
             vals = np.array(vals)[np.isfinite(vals)]
             st_dev = np.std(vals[-self.calls:])
 
-        self._last_result = st_dev <= np.abs(vals[-1] * self.tol)
-        return self._last_result
+        self.last_result = st_dev <= np.abs(vals[-1] * self.tol)
+        return self.last_result

@@ -20,7 +20,7 @@ class BaseChecker(_CoreBase):
         """ When called, this method may check any instance variables and any variables within the manager to determine
             if GloMPO has converged and returns a bool.
 
-            Note: For proper functionality, the result of __call__ must be saved to self._last_result before
+            Note: For proper functionality, the result of __call__ must be saved to self.last_result before
             returning.
         """
 

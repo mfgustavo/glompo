@@ -11,5 +11,5 @@ class MaxOptsStarted(BaseChecker):
         self.omax = omax
 
     def __call__(self, manager: 'GloMPOManager') -> bool:
-        self._last_result = manager.o_counter >= self.omax
-        return self._last_result
+        self.last_result = manager.o_counter >= self.omax
+        return self.last_result

@@ -39,5 +39,5 @@ class MaxSeconds(BaseChecker):
             t_total += manager.t_used
             cond = self.overall_max
 
-        self._last_result = t_total >= cond
-        return self._last_result
+        self.last_result = t_total >= cond
+        return self.last_result

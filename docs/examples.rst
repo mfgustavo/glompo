@@ -6,8 +6,6 @@ GloMPO comes bundled with several examples to get you started. They can all be f
 directory of the package. After working through the examples, the user is encouraged to read further in the
 documentation to get a proper understanding of all of GloMPO's components.
 
-.. _Minimal:
-
 Minimal
 *******
 
@@ -109,8 +107,6 @@ Finally we print the selected minimum
    :linenos:
    :lineno-match:
    :lines: 17-19
-
-.. _Customized:
 
 Customized
 **********

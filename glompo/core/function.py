@@ -69,12 +69,11 @@ class BaseFunction:
 
             Examples
             --------
-            .. code-block:: python
-
-               header = {'fx': tables.Float64Col(),
-                         'training_set_residuals': tables.Float64Col(shape=100),
-                         'validation_set_fx': tables.Float64Col(),
-                         'errors': tables.StringCol(itemsize=280, dflt=b'None')}
+            >>> import tables
+            >>> header = {'fx': tables.Float64Col(),
+            ...           'training_set_residuals': tables.Float64Col(shape=100),
+            ...           'validation_set_fx': tables.Float64Col(),
+            ...           'errors': tables.StringCol(itemsize=280, dflt=b'None')}
         """
         raise NotImplementedError
 

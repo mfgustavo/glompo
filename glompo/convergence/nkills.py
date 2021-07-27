@@ -11,5 +11,5 @@ class MaxKills(BaseChecker):
         self.kills_max = kills_max
 
     def __call__(self, manager: 'GloMPOManager') -> bool:
-        self._last_result = len(manager.hunt_victims) >= self.kills_max
-        return self._last_result
+        self.last_result = len(manager.hunt_victims) >= self.kills_max
+        return self.last_result

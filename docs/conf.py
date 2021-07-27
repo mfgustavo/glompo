@@ -36,6 +36,7 @@ extensions = ['sphinx.ext.autodoc',
               'sphinx.ext.coverage',
               'sphinx.ext.intersphinx',
               'sphinx_rtd_theme',
+              'sphinx.ext.autosectionlabel',
               ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -109,4 +110,5 @@ intersphinx_mapping = {
     'dill': ('https://dill.readthedocs.io/en/latest/', None),
     'psutil': ('https://psutil.readthedocs.io/en/latest/', None),
     'matplotlib': ('http://matplotlib.sourceforge.net/', None),
+    'numpy': ('http://docs.scipy.org/doc/numpy/', None),
 }

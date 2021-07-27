@@ -23,10 +23,10 @@ class BestUnmoving(BaseHunter):
 
         if fcalls <= self.calls:
             # If there are insufficient iterations the hunter will return False
-            self._last_result = False
-            return self._last_result
+            self.last_result = False
+            return self.last_result
 
         best_at_calls = min(vals[:-self.calls])
         best_at_end = min(vals)
-        self._last_result = abs(best_at_end - best_at_calls) <= abs(best_at_calls * self.tol)
-        return self._last_result
+        self.last_result = abs(best_at_end - best_at_calls) <= abs(best_at_calls * self.tol)
+        return self.last_result

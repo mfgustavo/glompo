@@ -37,8 +37,8 @@ class ValueAnnealing(BaseHunter):
 
         if f_hunter == 0 or f_victim <= f_hunter:
             # Catch very unlikely corner cases
-            self._last_result = False
-            return self._last_result
+            self.last_result = False
+            return self.last_result
 
         prob = (f_hunter - f_victim) / f_hunter
         prob = np.abs(prob)
@@ -47,5 +47,5 @@ class ValueAnnealing(BaseHunter):
 
         test_num = np.random.uniform(0, 1)
 
-        self._last_result = test_num > prob
-        return self._last_result
+        self.last_result = test_num > prob
+        return self.last_result

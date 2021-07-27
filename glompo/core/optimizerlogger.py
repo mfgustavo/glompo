@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Sequence, Union
 import numpy as np
 import tables as tb
 
-from ..common.helpers import deepsizeof, glompo_colors, rolling_best
+from ..common.helpers import deepsizeof, glompo_colors, rolling_min
 from ..common.namedtuples import IterationResult
 from ..common.wrappers import needs_optional_package
 
@@ -215,7 +215,7 @@ class BaseLogger:
             f_calls = self.get_history(opt_id, 'call_id')
             traj = self.get_history(opt_id, 'fx')
             if best_fx:
-                traj = rolling_best(traj)
+                traj = rolling_min(traj)
 
             if log_scale:
                 traj = np.sign(traj) * np.log10(np.abs(traj))

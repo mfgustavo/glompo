@@ -11,5 +11,5 @@ class NOptConverged(BaseChecker):
         self.nconv = nconv
 
     def __call__(self, manager: 'GloMPOManager') -> bool:
-        self._last_result = manager.conv_counter >= self.nconv
-        return self._last_result
+        self.last_result = manager.conv_counter >= self.nconv
+        return self.last_result

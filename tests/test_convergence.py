@@ -23,20 +23,20 @@ class PlainChecker(BaseChecker):
 class TrueChecker(BaseChecker):
     def __init__(self):
         super().__init__()
-        self._last_result = True
+        self.last_result = True
 
     def __call__(self, manager) -> bool:
-        self._last_result = True
+        self.last_result = True
         return True
 
 
 class FalseChecker(BaseChecker):
     def __init__(self):
         super().__init__()
-        self._last_result = False
+        self.last_result = False
 
     def __call__(self, manager) -> bool:
-        self._last_result = False
+        self.last_result = False
         return False
 
 

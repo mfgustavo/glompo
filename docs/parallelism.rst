@@ -1,5 +1,3 @@
-.. _Parallelism:
-
 ***********
 Parallelism
 ***********

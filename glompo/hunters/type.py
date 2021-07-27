@@ -27,5 +27,5 @@ class TypeHunter(BaseHunter):
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
 
-        self._last_result = self.opt_to_kill == log.get_metadata(victim_opt_id, "opt_type")
-        return self._last_result
+        self.last_result = self.opt_to_kill == log.get_metadata(victim_opt_id, "opt_type")
+        return self.last_result

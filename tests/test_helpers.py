@@ -16,7 +16,7 @@ except (ModuleNotFoundError, ImportError):
 from glompo.common.helpers import WorkInDirectory, LiteralWrapper, literal_presenter, nested_string_formatting, \
     unknown_object_presenter, generator_presenter, optimizer_selector_presenter, present_memory, FlowList, \
     flow_presenter, numpy_array_presenter, numpy_dtype_presenter, BoundGroup, bound_group_presenter, is_bounds_valid, \
-    distance, glompo_colors, rolling_best, unravel, deepsizeof, infer_headers, SplitOptimizerLogs
+    distance, glompo_colors, rolling_min, unravel, deepsizeof, infer_headers, SplitOptimizerLogs
 from glompo.opt_selectors import BaseSelector, CycleSelector, IterSpawnStop
 from glompo.generators import RandomGenerator, BaseGenerator
 from glompo.common.namedtuples import Bound
@@ -88,9 +88,9 @@ class TestSplitLogging:
 def test_rolling_best(arr, output):
     if np.isnan(arr).any():
         with pytest.raises(AssertionError):
-            rolling_best(arr)
+            rolling_min(arr)
     else:
-        assert rolling_best(arr) == output
+        assert rolling_min(arr) == output
 
 
 @pytest.mark.parametrize('obj, ret', [([0, [1, [2, [3, 4, 5], 6, [7, [8]]], 9], 10, [11, 12, 13],

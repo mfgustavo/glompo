@@ -1,5 +1,3 @@
-.. _Logging Messages:
-
 ****************
 Logging Messages
 ****************

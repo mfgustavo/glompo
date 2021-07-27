@@ -26,7 +26,7 @@ class BaseHunter(_CoreBase):
 
             .. note::
 
-               For proper functionality, the result of this method must be saved to :attr:`_last_result` before
+               For proper functionality, the result of this method must be saved to :attr:`last_result` before
                returning.
 
             Parameters

@@ -31,15 +31,15 @@ class StepSize(BaseHunter):
                  victim_opt_id: int) -> bool:
         trials = log.get_history(victim_opt_id, "x")[-self.calls:]
 
-        self._last_result = False
+        self.last_result = False
         if len(trials) >= self.calls:
             dists = map(distance, trials[1:], trials[:-1])
             mean_dist = np.mean([*dists])
-            self._last_result = mean_dist <= self.tol * self.trans_space_dist
+            self.last_result = mean_dist <= self.tol * self.trans_space_dist
             if self.logger.isEnabledFor(logging.DEBUG):
                 self.logger.debug(f"{hunter_opt_id} -> {victim_opt_id}\n"
                                   f"Mean: {mean_dist}\n"
                                   f"Maximum Trans Space Distance: {self.trans_space_dist}\n"
-                                  f"Returning: {self._last_result}")
+                                  f"Returning: {self.last_result}")
 
-        return self._last_result
+        return self.last_result
