@@ -4,11 +4,9 @@ __all__ = ("TargetCost",)
 
 
 class TargetCost(BaseChecker):
+    """ Returns `f_best <= target + atol`, where `f_best` is the best value seen thus far by the manager. """
 
     def __init__(self, target: float, atol: float = 1E-6):
-        """ Convergence is reached when `f_best <= target + atol`, where `f_best` is the best value seen thus far by
-        the manager.
-        """
         super().__init__()
         self.target = target
         self.atol = atol

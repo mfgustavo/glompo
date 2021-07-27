@@ -4,9 +4,12 @@ __all__ = ("NOptConverged",)
 
 
 class NOptConverged(BaseChecker):
+    """ Returns :obj:`True` when `nconv` optimizers have converged normally.
+    'Normally' here is defined as exiting the minimization loop according to the optimizer's own internal convergence
+    criteria, rather than any GloMPO intervention.
+    """
 
     def __init__(self, nconv: int):
-        """ Convergence is reached after nconv optimizers have been converged normally. """
         super().__init__()
         self.nconv = nconv
 

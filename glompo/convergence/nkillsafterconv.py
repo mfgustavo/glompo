@@ -4,14 +4,12 @@ __all__ = ("KillsAfterConvergence",)
 
 
 class KillsAfterConvergence(BaseChecker):
-    """ This class is used to determine GloMPO convergence based on the number of single optimizers converged and the
-        number of optimizers killed thereafter.
+    """ Evaluation based on the number of single optimizers converged and the number of optimizers killed thereafter.
+    Returns :obj:`True` after `n_killed` optimizers have been stopped by GloMPO after `n_converged` optimizers have
+    reached normal convergence.
     """
 
     def __init__(self, n_killed: int = 0, n_converged: int = 1):
-        """ Convergence is reached after n_killed optimizers have been stopped by GloMPO after n_converged optimizers
-            have reached normal convergence.
-        """
         super().__init__()
         self.enough_conv = False
         self.kill_count = 0

@@ -4,9 +4,9 @@ __all__ = ("MaxKills",)
 
 
 class MaxKills(BaseChecker):
+    """ Returns :obj:`True` after `kills_max` optimizers have been shutdown by the manager. """
 
     def __init__(self, kills_max: int):
-        """ Convergence is reached after kills_max optimizers have been killed. """
         super().__init__()
         self.kills_max = kills_max
 

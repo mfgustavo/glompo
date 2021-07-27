@@ -4,9 +4,9 @@ __all__ = ("MaxOptsStarted",)
 
 
 class MaxOptsStarted(BaseChecker):
+    """ Returns :obj:`True` after `omax` optimizers have been started. """
 
     def __init__(self, omax: int):
-        """ Convergence is reached after omax optimizers have been started. """
         super().__init__()
         self.omax = omax
 
