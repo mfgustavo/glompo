@@ -40,7 +40,7 @@ class OptimizerPackage(NamedTuple):
     optimizer: Callable
     """ Callable: Instance of :class:`.BaseOptimizer` """
     call_kwargs: Dict[str, Any]
-    """ Dict[str, Any]: Dictionary of kwargs send to :meth:`~.BaseOptimizer.minimize` """
+    """ Dict[str, Any]: Dictionary of kwargs send to :meth:`.BaseOptimizer.minimize` """
     signal_pipe: Connection
     """ :class:`~multiprocessing.connection.Connection`: Used to send messages between the optimizer and manager. """
     allow_run_event: Event

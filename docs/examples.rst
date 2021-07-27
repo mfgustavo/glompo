@@ -17,21 +17,20 @@ of its defaults) and demonstrates that very simple configurations are possible.
 .. literalinclude:: ../examples/minimal.py
    :linenos:
 
-The :class:`Michalewicz <glompo.benchmark_fncs.Michalewicz>` global optimization test function is a good
-example of where GloMPO can outperform normal optimization.
+The :class:`Michalewicz <.Michalewicz>` global optimization test function is a good example of where GloMPO can
+outperform normal optimization.
 
 .. literalinclude:: ../examples/minimal.py
    :linenos:
    :lineno-match:
    :lines: 7
 
-For this task we will use :class:`CMA-ES <glompo.optimizers.cmawrapper.CMAOptimizer>` which has good optimization
-properties for many function classes. Optimizers are sent to GloMPO via
-:class:`~glompo.opt_selectors.baseselector.BaseSelector` objects. These are code stubs which propose an optimizer type
-and configuration to start when asked by the manager.
+For this task we will use :class:`CMA-ES <.CMAOptimizer>` which has good optimization properties for many function
+classes. Optimizers are sent to GloMPO via :class:`.BaseSelector` objects. These are code stubs which propose an
+optimizer type and configuration to start when asked by the manager.
 
-A very basic selector is :class:`CycleSelector <glompo.opt_selectors.cycle.CycleSelector>` which returns a rotating list
-of optimizers when asked but can be used for just a single optimizer type.
+A very basic selector is :class:`CycleSelector <.CycleSelector>` which returns a rotating list of optimizers when asked
+but can be used for just a single optimizer type.
 
 Setting up any selector requires that a sequence of available optimizers be given to it during initialisation.
 The elements in this list can take two forms:
@@ -44,14 +43,13 @@ The elements in this list can take two forms:
 
    #. Dictionary of optional initialisation arguments;
 
-   #. Dictionary of optional arguments passed to :meth:`~glompo.optimizers.baseoptimizer.BaseOptimizer.minimize`.
+   #. Dictionary of optional arguments passed to :meth:`.BaseOptimizer.minimize`.
 
 In this case we need to setup:
 
 The initial :math:`\sigma` value:
    We choose this to be half the range of the bounds in each direction (in this case
-   the bounds are equal in all directions). This value must be sent to
-   :meth:`~glompo.optimizers.baseoptimizer.BaseOptimizer.minimize`.
+   the bounds are equal in all directions). This value must be sent to :meth:`~.BaseOptimizer.minimize`.
 
 .. literalinclude:: ../examples/minimal.py
    :linenos:
@@ -80,15 +78,14 @@ We can now setup the selector.
 
 Note the load balancing here. GloMPO will allow a fixed number of threads to be run. By default this is one less than
 the number of CPUs available. If your machine has 32 cores for example than the manager will use 1 and allow 31 to be
-used by the local optimizers. The :attr:`~glompo.optimizers.baseoptimizer.BaseOptimizer.workers` keyword we used for the
-optimizer earlier tells GloMPO that each instance of CMA will use 1 of these slots. Thus, GloMPO will start a maximum of
-31 parallel CMA optimizers in this run. Alternatively, if we had parallelized the function evaluations (by setting
-:attr:`~glompo.optimizers.baseoptimizer.BaseOptimizer.workers` equal to 6) then 5 optimizers would be started taking 6
-slots each. In such a configuration one core of the 32 core machine would remain unused:
-:math:`5\times6=30\text{optimizers} + 1\text{manager} = 31`.
+used by the local optimizers. :code:`'workers'` keyword we used for the optimizer earlier tells GloMPO
+that each instance of CMA will use 1 of these slots. Thus, GloMPO will start a maximum of 31 parallel CMA optimizers in
+this run. Alternatively, if we had parallelized the function evaluations (by setting :code:`'workers'` equal to 6) then
+5 optimizers would be started taking 6 slots each. In such a configuration one core of the 32 core machine would remain
+unused: :math:`5\times6=30\text{optimizers} + 1\text{manager} = 31`.
 
 If you want to fix the number of threads used regardless of the system resources, pass the optional
-:attr:`~glompo.core.manager.GloMPOManager.max_jobs` argument during the manager initialisation.
+:attr:`~.GloMPOManager.max_jobs` argument during the manager initialisation.
 
 The manager is setup using all GloMPO defaults in this case. Only the task, its box bounds and local optimizers need be
 provided.
@@ -98,8 +95,8 @@ provided.
    :lineno-match:
    :lines: 14
 
-To execute the minimization we simply run :meth:`~glompo.core.manager.GloMPOManager.start_manager`. Note: by default
-GloMPO will not save any files but this is available.
+To execute the minimization we simply run :meth:`.GloMPOManager.start_manager`. Note: by default GloMPO will not save
+any files but this is available.
 
 .. literalinclude:: ../examples/minimal.py
    :linenos:
@@ -138,7 +135,7 @@ See :ref:`Logging Messages` for more information.
 In this example GloMPO will be run on a well known global optimization test function but each configuration option will
 be individually set and explained.
 
-The :class:`~glompo.benchmark_fncs.Schwefel` global optimization test function is a good example of where GloMPO can
+The :class:`~.benchmark_fncs.Schwefel` global optimization test function is a good example of where GloMPO can
 outperform normal optimization.
 
 .. literalinclude:: ../examples/customized.py
@@ -146,9 +143,9 @@ outperform normal optimization.
    :lineno-match:
    :lines: 27
 
-Convergence of the GloMPO manager is controlled by :class:`~glompo.convergence.basechecker.BaseChecker` objects. These
-are small classes which define a single termination condition. These classes can then be easily combined to create
-sophisticated termination conditions using :code:`&` and :code:`|` symbolics.
+Convergence of the GloMPO manager is controlled by :class:`.BaseChecker` objects. These are small classes which define a
+single termination condition. These classes can then be easily combined to create sophisticated termination conditions
+using :code:`&` and :code:`|` symbolics.
 
 In this case we would like the optimizer to run for a fixed number of iterations or stop if the global minimum is found.
 Of course we would not know the global minimum in typical problems but we do in this case.
@@ -173,9 +170,8 @@ number of slots and limit the manager to 10:
    :lineno-match:
    :lines: 37
 
-:class:`~glompo.hunters.basehunter.BaseHunter` objects are setup in a similar way to
-:class:`~glompo.convergence.basechecker.BaseChecker` objects and control the conditions in which optimizers are shutdown
-by the manager. Each hunter is individually documented :ref:`here <Other Hunters>`.
+:class:`.BaseHunter` objects are setup in a similar way to :class:`.BaseChecker` objects and control the conditions in
+which optimizers are shutdown by the manager. Each hunter is individually documented :ref:`here <Other Hunters>`.
 
 In this example we will use a hunting set which has proven effective on several problems:
 
@@ -186,15 +182,14 @@ In this example we will use a hunting set which has proven effective on several 
 
 .. note::
 
-   :class:`~glompo.hunters.basehunter.BaseHunter` and :class:`~glompo.convergence.basechecker.BaseChecker` are evaluated
-   lazily this means that in :code:`x | y`, :code:`y` will not be evaluated if :code:`x` is :obj:`True` and in
-   :code:`x & y`, :code:`y` will not be evaluated if :code:`x` is :obj:`False`.
+   :class:`.BaseHunter` and :class:`.BaseChecker` are evaluated lazily this means that in :code:`x | y`, :code:`y` will
+   not be evaluated if :code:`x` is :obj:`True` and in :code:`x & y`, :code:`y` will not be evaluated if :code:`x` is
+   :obj:`False`.
 
-:class:`~glompo.opt_selectors.baseselector.BaseSelector` objects select which optimizers to start but
-:class:`~glompo.generators.basegenerator.BaseGenerator` objects select a point in parameter space where to start them.
+:class:`.BaseSelector` objects select which optimizers to start but :class:`.BaseGenerator` objects select a point in
+parameter space where to start them.
 
-In this example we will use the :class:`~glompo.generators.random.RandomGenerator` which starts optimizers at random
-locations.
+In this example we will use the :class:`.RandomGenerator` which starts optimizers at random locations.
 
 .. literalinclude:: ../examples/customized.py
    :linenos:
@@ -242,8 +237,8 @@ crash. Note that this will not work on threaded backends. In this example this i
 
 GloMPO supports checkpointing. This means that its state can be persisted to file during an optimization and this
 checkpoint file can be loaded by another GloMPO instance to resume the optimization from that point. Checkpointing
-options are configured through a :class:`~glompo.core.checkpointing.CheckpointingControl` instance. In this case we will
-produce a checkpoint called :code:`'customized_completed_<DATE>_<TIME>.tar.gz'` once the task has converged.
+options are configured through a :class:`.CheckpointingControl` instance. In this case we will produce a checkpoint
+called :code:`'customized_completed_<DATE>_<TIME>.tar.gz'` once the task has converged.
 
 .. literalinclude:: ../examples/customized.py
    :linenos:
@@ -258,7 +253,7 @@ are commented upon below:
    :lineno-match:
    :lines: 65-84
 
-To execute the minimization we simply run :meth:`~glompo.core.manager.GloMPOManager.start_manager`.
+To execute the minimization we simply run :meth:`.GloMPOManager.start_manager`.
 
 .. literalinclude:: ../examples/customized.py
    :linenos:

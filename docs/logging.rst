@@ -11,7 +11,7 @@ logging system can be used to debug the code, but is most helpful in tracking ex
 messages and above to :obj:`python:sys.stdout`.
 
 The logging provided in this way is distinct from the summary files provided at the end of the GloMPO run which are
-regulated by the manager's :attr:`~glompo.core.manager.GloMPOManager.summary_files` attribute.
+regulated by :attr:`.GloMPOManager.summary_files`.
 
 The GloMPO logger is called ``glompo`` and components have individual loggers too,
 allowing filtering if desired. These are: ``glompo.manager``, ``glompo.checker``,

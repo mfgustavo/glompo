@@ -83,11 +83,11 @@ class BaseFunction:
 
         This method is used when a checkpoint of the manager is made and the function cannot be persisted directly.
         A checkpoint is a compressed directory of files which persists all aspects of an in-progress optimization.
-        These checkpoints can be loaded by :class:`~glompo.core.manager.GloMPOManager` and the optimization resumed.
+        These checkpoints can be loaded by :class:`.GloMPOManager` and the optimization resumed.
 
         Implementing this function is optional and only required if directly pickling the function is not possible.
         In order to load a checkpoint in which :meth:`checkpoint_save` was used, see
-        :meth:`~glompo.core.manager.GloMPOManager.load_checkpoint`).
+        :meth:`.GloMPOManager.load_checkpoint`).
 
         Parameters
         ----------
@@ -101,7 +101,7 @@ class BaseFunction:
         """ Creates an instance of the :class:`BaseFunction` from sources.
 
         These source are the products of :meth:`checkpoint_save`. In order to use this method, it should be sent to the
-        :code:`task_loader` argument of :meth:`~glompo.core.manager.GloMPOManager.load_checkpoint`.
+        :code:`task_loader` argument of :meth:`.GloMPOManager.load_checkpoint`.
 
         Parameters
         ----------

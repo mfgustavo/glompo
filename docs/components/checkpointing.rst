@@ -2,8 +2,8 @@ Checkpointing
 =============
 
 This saves its state to disk,
-these files can be used by a new :class:`~glompo.core.manager.GloMPOManager` instance to resume. Checkpointing options are
-provided through a :class:`~glompo.core.checkpointing.CheckpointingControl` instance.
+these files can be used by a new :class:`.GloMPOManager` instance to resume. Checkpointing options are provided through
+a :class:`.CheckpointingControl` instance.
 
 Checkpointing tries to create an entire image of the GloMPO state, it is the user's
 responsibility to ensure that the used optimizers are restartable. Within

@@ -71,9 +71,9 @@ class GloMPOManager:
     allow_forced_terminations : bool
         :obj:`True` if the manager is allowed to force terminate optimizers which appear non-responsive (i.e. do not
         provide feedback within a specified period of time.
-    bounds : Sequence[:class:`~glompo.common.namedtuples.Bound`]
+    bounds : Sequence[:class:`.Bound`]
         (Min, max) tuples for each parameter being optimized beyond which optimizers will not explore.
-    checkpoint_control : :class:`~glompo.core.checkpointing.CheckpointingControl`
+    checkpoint_control : :class:`.CheckpointingControl`
         GloMPO object containing all checkpointing settings if this feature is being used.
     checkpoint_history : Set[str]
         Set of names of checkpoints constructed by the manager.
@@ -82,14 +82,14 @@ class GloMPOManager:
         terminated by the manager).
     converged : bool
         :obj:`True` if the conditions of :attr:`convergence_checker` have been met.
-    convergence_checker : :class:`~glompo.convergence.basechecker.BaseChecker`
+    convergence_checker : :class:`.BaseChecker`
         GloMPO object which evaluates whether conditions are met for overall manager termination.
     cpu_history : List[float]
         History of CPU percentage usage snapshots (taken every :attr:`status_frequency` seconds). This is the CPU
         percentage used only by the process and its children not the load on the whole system.
-    dt_ends : List[:class:`python:datetime.datetime`]
+    dt_ends : List[:class:`datetime.datetime`]
         Records the end of each optimization session for a problem optimized through several checkpoints.
-    dt_starts : List[:class:`python:datetime.datetime`]
+    dt_starts : List[:class:`datetime.datetime`]
         Records the start of each optimization session for a problem optimized through several checkpoints.
     end_timeout : float
         Amount of time the manager will wait to join child processes before forcibly terminating them (if children are
@@ -110,9 +110,9 @@ class GloMPOManager:
         If :obj:`True` the manager will send iteration information about the best ever seen solution to all its children
         whenever this is updated.
     is_log_detailed : bool
-        If :obj:`True` optimizers will attempt to call a task's :meth:`~glompo.core.function.BaseFunction.detailed_call`
+        If :obj:`True` optimizers will attempt to call a task's :meth:`~.BaseFunction.detailed_call`
         method and save the expanded return to the log.
-    killing_conditions : :class:`~glompo.hunters.basehunter.BaseHunter`
+    killing_conditions : :class:`.BaseHunter`
         GloMPO object which evaluates whether an optimizer meets its conditions to be terminated early.
     last_hunt : int
         Evaluation number at which the last hunt was executed.
@@ -127,7 +127,7 @@ class GloMPOManager:
     load_history : List[Tuple[float, float, float]]
         History of system load snapshots (taken every :attr:`status_frequency` seconds). This is is a system wide value,
         not tied to the specific process.
-    logger : :class:`python:logging.Logger`
+    logger : :class:`logging.Logger`
         GloMPO has built-in logging to allow tracking during an optimization (see :ref:`Logging Messages`). This
         attribute accesses the manager logger object.
     max_jobs : int
@@ -143,12 +143,12 @@ class GloMPOManager:
         Number of optimizers started.
     opt_crashed : bool
         :obj:`True` if any child optimizer crashed during its execution.
-    opt_log : :class:`~glompo.core.optimizerlogger.BaseLogger`
+    opt_log : :class:`.BaseLogger`
         GloMPO object collecting the entire iteration history and metadata of the manager's children.
-    opt_selector : :class:`~glompo.opt_selectors.baseselector.BaseSelector`
+    opt_selector : :class:`.BaseSelector`
         Object which returns an optimizer class and its configuration when requested by the manager. Can be based on
         previous results delivered by other optimizers.
-    optimizer_queue : :class:`python:queue.Queue`
+    optimizer_queue : :class:`queue.Queue`
         Common concurrency tool into which all results are paced by child optimizers.
     opts_daemonic : bool
         :obj:`True` if manager children are spawned as daemons. Default is :obj:`True` but can be set to :obj:`False`
@@ -157,9 +157,9 @@ class GloMPOManager:
         :obj:`True` if any old files detected in the working directory maybe be deleted when the optimization run begins.
     proc_backend : bool
         :obj:`True` if the manager children are spawned as processes, :obj:`False` if they are spawned as threads.
-    result : :class:`~glompo.common.namedtuples.Result`
+    result : :class:`.Result`
         Incumbent best solution found by any child optimizer.
-    scope : :class:`~glompo.core.scope.GloMPOScope`, optional
+    scope : Optional[:class:`.GloMPOScope`]
         GloMPO object presenting the optimization graphically in real time.
     spawning_opts : bool
         :obj:`True` if the manager is allowed to create new children. The manager will shutdown if all children
@@ -181,14 +181,14 @@ class GloMPOManager:
         Function being minimize by the optimizers.
     visualisation : bool
         :obj:`True` if the optimization is presented graphically in real time using a
-        :class:`~glompo.core.scope.GloMPOScope`.
+        :class:`.GloMPOScope`.
     visualisation_args : Dict[str, Any]
         Configuration arguments used for glompo.core.scope.GloMPOScope if the optimization is being visualised
         dynamically.
-    working_dir : :class:`python:pathlib.Path`
+    working_dir : :class:`pathlib.Path`
         Working directory in which all output files and directories are created. Note, the manager does not change the
         current working directory during the run.
-    x0_generator : :class:`~glompo.generators.basegenerator.BaseGenerator`
+    x0_generator : :class:`.BaseGenerator`
         GloMPO object which returns a starting location for a new child optimizer. Can be based on previous results
         delivered by other optimizers.
     """
@@ -371,8 +371,8 @@ class GloMPOManager:
             Criteria used for convergence.
 
         x0_generator
-            An instance of a subclass of :class:`~glompo.generators.basegenerator.BaseGenerator` which produces starting
-            points for the optimizer. If not provided, :class:`~glompo.generators.random.RandomGenerator` is used.
+            An instance of a subclass of :class:`.BaseGenerator` which produces starting points for the optimizer.
+            If not provided, :class:`.RandomGenerator` is used.
 
         killing_conditions
             Criteria used for killing optimizers.
@@ -427,7 +427,7 @@ class GloMPOManager:
 
         split_printstreams
             If :obj:`True`, optimizer print messages will be intercepted and saved to separate files.
-            See :class:`glompo.common.helpers.SplitOptimizerLogs`
+            See :class:`.SplitOptimizerLogs`
             
         Notes
         -----
@@ -438,11 +438,10 @@ class GloMPOManager:
         #. Do not use :attr:`bounds` to fix a parameter value as this will raise an error. Rather supply fixed parameter
            values through :code:`task_args` or :code:`task_kwargs`.
 
-        #. An optimizer will not be started if the number of 'slots' it requires (i.e. its
-           :attr:`~glompo.optimizers.baseoptimizer.BaseOptimizer.workers` attribute) will cause the total number of
-           occupied 'slots' to exceed :attr:`max_jobs`, even if the manager is currently managing fewer than the number
-           of jobs available. In other words, if the manager has registered a total of 30 of 32 slots filled, it will
-           not start an optimizer that requires 3 or more slots.
+        #. An optimizer will not be started if the number of 'slots' it requires (i.e. :attr:`.BaseOptimizer.workers`)
+           will cause the total number of occupied 'slots' to exceed :attr:`max_jobs`, even if the manager is currently
+           managing fewer than the number of jobs available. In other words, if the manager has registered a total of
+           30 of 32 slots filled, it will not start an optimizer that requires 3 or more slots.
            
         #. Checkpointing requires the use of the :mod:`dill` package for serialisation. If you attempt to checkpoint or
            supply :code:`checkpointing_controls` without this package present, a warning will be raised and no
@@ -632,11 +631,10 @@ class GloMPOManager:
         Notes
         -----
 
-        #. When making a checkpoint, GloMPO attempts to persist the :obj:`task` directly. If this is not possible
+        #. When making a checkpoint, GloMPO attempts to persist the :attr:`task` directly. If this is not possible
            it will attempt to call :meth:`checkpoint_save <glompo.core.function.BaseFunction.checkpoint_save>` to
            produce some files into the checkpoint. `task_loader` is the function or method which can return a
-           :attr:`~glompo.core.manager.GloMPOManager.task` from files within the checkpoint
-           (see :meth:`.BaseFunction.checkpoint_load`).
+           :attr:`task` from files within the checkpoint (see :meth:`.BaseFunction.checkpoint_load`).
 
            `task_loader` must accept a path to a directory containing the checkpoint files and return a callable
            which is the task itself.
@@ -659,21 +657,21 @@ class GloMPOManager:
            
         #. The following arguments cannot/should not be sent to `glompo_kwargs`:
 
-           :attr:`~glompo.core.manager.GloMPOManager.bounds`
+           :attr:`~.GloMPOManager.bounds`
               Many optimizers save the :attr:`bounds` during checkpointing. If changed here old optimizers will retain
               the old bounds but new optimizers will start in new bounds.
 
-           :attr:`~glompo.core.manager.GloMPOManager.max_jobs`
+           :attr:`~.GloMPOManager.max_jobs`
               If this is decreased and falls below the number required by the optimizers in the checkpoint, the manager
               will attempt to adjust the workers for each optimizer to fit the new limit. Slots are apportioned equally
               (regardless of the distribution in the checkpoint) and there is no guarantee that the optimizers will
               actually respond to this change.
 
-           :attr:`~glompo.core.manager.GloMPOManager.visualisation_args`
-              Due to the semantics of :class:`~glompo.core.scope.GloMPOScope` construction, these arguments will not be
-              accepted by the loaded scope object.
+           :attr:`~.GloMPOManager.visualisation_args`
+              Due to the semantics of :class:`.GloMPOScope` construction, these arguments will not be accepted by the
+              loaded scope object.
 
-           :attr:`~glompo.core.manager.GloMPOManager.working_dir`
+           :attr:`~.GloMPOManager.working_dir`
               This can be changed, however, if a log file exists and you would like to append into this file, make sure
               to copy/move it to the new :attr:`working_dir` and name it :code:`'glompo_log.h5'` before loading the
               checkpoint otherwise GloMPO will create a new log file (see :ref:`Logging Messages`).
@@ -1290,7 +1288,7 @@ class GloMPOManager:
 
         Returns
         -------
-        :class:`~glompo.common.namedtuples.OptimizerPackage`
+        :class:`~.OptimizerPackage`
             Sent to :meth:`_start_new_job` to begin new process. Returns :obj:`None` if an optimizer satisfying the
             number of available slots or spawning conditions is not found.
         """
@@ -1599,7 +1597,7 @@ class GloMPOManager:
             self.scope.update_kill(opt_id)
 
     def _update_best_result(self) -> Result:
-        """ Returns the best :class:`~glompo.common.namedtuples.Result` found in the :attr:`opt_log`. """
+        """ Returns the best :class:`.Result` found in the :attr:`opt_log`. """
 
         best_iter = self.opt_log.get_best_iter()
 

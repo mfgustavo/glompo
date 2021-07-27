@@ -2,8 +2,8 @@ BaseChecker
 ===========
 
 A collection of subclasses of
-:class:`~glompo.convergence.basechecker.BaseChecker` are provided, these can be used in combinations of and
-(:code:`&`) and or (:code:`|`) to tailor various conditions. For example::
+:class:`.BaseChecker` are provided, these can be used in combinations of and (:code:`&`) and or (:code:`|`) to tailor
+various conditions. For example::
 
    convergence_criteria = MaxFuncCalls(20000) | KillsAfterConvergence(3, 1) & MaxSeconds(60*5)
 

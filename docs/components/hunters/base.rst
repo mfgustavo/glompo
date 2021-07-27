@@ -2,11 +2,10 @@ BaseHunter
 ==========
 
 A collection of subclasses of
-:class:`~glompo.hunters.basehunter.BaseHunter` are provided, these can be used in combinations of and (&)
-and or (|) to tailor various conditions. For example::
+:class:`.BaseHunter` are provided, these can be used in combinations of and (:code:`&`) and or (:code:`|`) to tailor
+various conditions. For example::
 
-                killing_conditions = (BestUnmoving(100, 0.01) & TimeAnnealing(2) & ValueAnnealing()) |
-                ParameterDistance(0.1)
+   killing_conditions = (BestUnmoving(100, 0.01) & TimeAnnealing(2) & ValueAnnealing()) | ParameterDistance(0.1)
 
 In this case GloMPO will only allow a hunt to terminate an optimizer if:
 
