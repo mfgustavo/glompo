@@ -9,3 +9,11 @@ __all__ = ("BaseGenerator",
            "IncumbentGenerator",
            "SinglePointGenerator",
            "ExploitExploreGenerator")
+
+try:
+    from .peterbation import PerturbationGenerator
+
+    __all__ = (*__all__, "PerturbationGenerator")
+
+except ModuleNotFoundError:
+    pass

@@ -10,8 +10,8 @@ __all__ = ("IncumbentGenerator",)
 
 
 class IncumbentGenerator(BaseGenerator):
-    """ Starts a new optimizer at the current incumbent solution. A random vector is generated if this is
-        indeterminate.
+    """ Starts a new optimizer at :attr:`.GloMPOManager.result['x'] <.GloMPOManager.result>`.
+    A random vector is generated if this is indeterminate.
     """
 
     def __init__(self, bounds: Sequence[Tuple[float, float]]):

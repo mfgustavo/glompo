@@ -8,9 +8,9 @@ Components
    manager
    optimizers/optimizers
    selectors/selectors
-   generators/generators
-   checkers/checkers
-   hunters/hunters
+   generators
+   checkers
+   hunters
    checkpointing
    scope
    interfaces/interfaces

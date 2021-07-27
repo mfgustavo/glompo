@@ -1,7 +1,3 @@
-""" Subpackage containing the BaseHunter and several subclasses which are used to determine how optimizers are
-    stopped.
-"""
-
 from .basehunter import BaseHunter
 from .bestunmoving import BestUnmoving
 from .evalsunmoving import EvaluationsUnmoving

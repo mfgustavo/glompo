@@ -4,9 +4,9 @@ __all__ = ("MaxFuncCalls",)
 
 
 class MaxFuncCalls(BaseChecker):
+    """ Returns :obj:`True` after `fmax` function evaluations have been executed across all managed optimizers. """
 
     def __init__(self, fmax: int):
-        """ Convergence is reached after omax optimizers have been started. """
         super().__init__()
         self.fmax = fmax
 

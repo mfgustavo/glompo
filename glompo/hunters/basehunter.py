@@ -24,20 +24,20 @@ class BaseHunter(_CoreBase):
         """ When called, this method may check any values within the logs or GPRs of both hunter or the victim
             and return a bool if the desired condition is met.
 
-            .. note::
+        Parameters
+        ----------
+        log
+            Instance of Logger class that contains the iteration history of every optimizer.
+        hunter_opt_id
+            ID number of the 'hunter' optimizer currently identified as the best performer.
+        victim_opt_id
+            ID number of the 'victim' optimizer, aspects of which will be compared to the 'hunter' in this class to
+            ascertain whether it should be shutdown.
 
-               For proper functionality, the result of this method must be saved to :attr:`last_result` before
-               returning.
-
-            Parameters
-            ----------
-            log
-                Instance of Logger class that contains the iteration history of every optimizer.
-            hunter_opt_id
-                ID number of the 'hunter' optimizer currently identified as the best performer.
-            victim_opt_id
-                ID number of the 'victim' optimizer, aspects of which will be compared to the 'hunter' in this class to
-                ascertain whether it should be shutdown.
+        Notes
+        -----
+        For proper functionality, the result of this method must be saved to :attr:`last_result` before
+        returning.
         """
 
     def __or__(self, other: 'BaseHunter') -> '_OrHunter':

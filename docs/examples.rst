@@ -167,7 +167,7 @@ number of slots and limit the manager to 10:
    :lines: 37
 
 :class:`.BaseHunter` objects are setup in a similar way to :class:`.BaseChecker` objects and control the conditions in
-which optimizers are shutdown by the manager. Each hunter is individually documented :ref:`here <Other Hunters>`.
+which optimizers are shutdown by the manager. Each hunter is individually documented :ref:`here <Included Hunters>`.
 
 In this example we will use a hunting set which has proven effective on several problems:
 
