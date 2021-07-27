@@ -157,7 +157,9 @@ class TestOthers:
                                                  (MaxOptsStarted(20), False),
                                                  (TargetCost(0), True),
                                                  (TargetCost(0.9e-6), True),
-                                                 (TargetCost(1e-5), False)])
+                                                 (TargetCost(100), True),
+                                                 (TargetCost(-100), False),
+                                                 (TargetCost(-2e-6), False)])
     def test_conditions(self, checker, output):
         manager = self.Manager()
         assert checker(manager) == output
