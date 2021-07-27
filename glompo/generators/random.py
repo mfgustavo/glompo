@@ -9,7 +9,7 @@ __all__ = ("RandomGenerator",)
 
 
 class RandomGenerator(BaseGenerator):
-    """ Generates random points
+    """ Generates random points.
     Points are drawn from a uniform distribution within given `bounds`.
     """
 

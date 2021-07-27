@@ -7,7 +7,7 @@ Components
 
    manager
    optimizers/optimizers
-   selectors/selectors
+   selectors
    generators
    checkers
    hunters

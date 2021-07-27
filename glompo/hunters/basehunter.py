@@ -21,18 +21,22 @@ class BaseHunter(_CoreBase):
                  log: BaseLogger,
                  hunter_opt_id: int,
                  victim_opt_id: int) -> bool:
-        """ When called, this method may check any values within the logs or GPRs of both hunter or the victim
-            and return a bool if the desired condition is met.
+        """ Compares two optimizers and returns if one should be terminated according to some condition.
+        When called, this method may check any values within the logs of both the hunter or the victim.
 
         Parameters
         ----------
         log
-            Instance of Logger class that contains the iteration history of every optimizer.
+            Instance of :class:`.BaseLogger` that contains the iteration history of every optimizer.
         hunter_opt_id
-            ID number of the 'hunter' optimizer currently identified as the best performer.
+            ID number of the 'hunter'; defined as the optimizer which has found the lowest function value.
         victim_opt_id
-            ID number of the 'victim' optimizer, aspects of which will be compared to the 'hunter' in this class to
-            ascertain whether it should be shutdown.
+            ID number of the 'victim'; defined as any optimizer which is not the hunter.
+
+        Returns
+        -------
+        bool
+            :obj:`True` if the condition in the method is met, :obj:`False` otherwise.
 
         Notes
         -----

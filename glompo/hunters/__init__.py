@@ -11,11 +11,12 @@ from .valueannealing import ValueAnnealing
 
 __all__ = ("BaseHunter",
            "BestUnmoving",
-           "ValueAnnealing",
-           "TimeAnnealing",
-           "ParameterDistance",
-           "MinFuncCalls",
+           "EvaluationsUnmoving",
            "LastPointsInvalid",
-           "TypeHunter",
+           "MinFuncCalls",
+           "ParameterDistance",
            "StepSize",
-           "EvaluationsUnmoving")
+           "TimeAnnealing",
+           "TypeHunter",
+           "ValueAnnealing",
+           )

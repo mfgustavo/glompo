@@ -10,7 +10,7 @@ __all__ = ("IncumbentGenerator",)
 
 
 class IncumbentGenerator(BaseGenerator):
-    """ Starts a new optimizer at :attr:`.GloMPOManager.result['x'] <.GloMPOManager.result>`.
+    """ Starts a new optimizer at :attr:`GloMPOManager.result['x'] <.GloMPOManager.result>`.
     A random vector is generated if this is indeterminate.
     """
 

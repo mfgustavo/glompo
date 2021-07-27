@@ -10,8 +10,8 @@ from .tmax import MaxSeconds
 __all__ = ("BaseChecker",
            "KillsAfterConvergence",
            "MaxFuncCalls",
-           "MaxSeconds",
            "MaxKills",
            "MaxOptsStarted",
+           "MaxSeconds",
            "NOptConverged",
            "TargetCost",)
