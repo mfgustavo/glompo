@@ -33,7 +33,8 @@ from glompo.core.manager import GloMPOManager
 from glompo.core.optimizerlogger import BaseLogger
 from glompo.generators import BaseGenerator, RandomGenerator
 from glompo.hunters import BaseHunter, MinFuncCalls, TypeHunter
-from glompo.opt_selectors import BaseSelector, CycleSelector, IterSpawnStop
+from glompo.opt_selectors import BaseSelector, CycleSelector
+from glompo.opt_selectors.spawncontrol import IterSpawnStop
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult
 from glompo.optimizers.random import RandomOptimizer
 

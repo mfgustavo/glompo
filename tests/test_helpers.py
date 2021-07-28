@@ -17,7 +17,8 @@ from glompo.common.helpers import WorkInDirectory, LiteralWrapper, literal_prese
     unknown_object_presenter, generator_presenter, optimizer_selector_presenter, present_memory, FlowList, \
     flow_presenter, numpy_array_presenter, numpy_dtype_presenter, BoundGroup, bound_group_presenter, is_bounds_valid, \
     distance, glompo_colors, rolling_min, unravel, deepsizeof, infer_headers, SplitOptimizerLogs
-from glompo.opt_selectors import BaseSelector, CycleSelector, IterSpawnStop
+from glompo.opt_selectors import BaseSelector, CycleSelector
+from glompo.opt_selectors.spawncontrol import IterSpawnStop
 from glompo.generators import RandomGenerator, BaseGenerator
 from glompo.common.namedtuples import Bound
 from glompo.optimizers.random import RandomOptimizer
