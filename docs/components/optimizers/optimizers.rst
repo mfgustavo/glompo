@@ -3,10 +3,11 @@ Optimizers
 ==========
 
 .. toctree::
-    :maxdepth: 4
-    :caption: Table of Contents
+   :maxdepth: 4
+   :caption: Table of Contents
 
-    base
-    cma
-    nevergrad
-    gfls
+   base
+   cma
+   nevergrad
+   gfls
+   random

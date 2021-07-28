@@ -5,38 +5,39 @@ from multiprocessing.connection import Connection
 from pathlib import Path
 from typing import Callable, Optional, Sequence, Set, Union
 
-import nevergrad as ng
 import numpy as np
 
+import nevergrad as ng
 from .baseoptimizer import BaseOptimizer, MinimizeResult
 
 __all__ = ('Nevergrad',)
 
 
 class Nevergrad(BaseOptimizer):
-    """ Provides access to the optimizers available through the `nevergrad` package.
-        For more information see the module's `documentation <https://facebookresearch.github.io/nevergrad/>`.
+    """ Provides access to the optimizers available through the
+    `nevergrad <https://facebookresearch.github.io/nevergrad/>`_ package.
+
+    Parameters
+    ----------
+    Optional, _opt_id _signal_pipe _results_queue _pause_flag workers backend is_log_detailed
+        See :class:`.BaseOptimizer`.
+    optimizer
+        String key to the desired optimizer. See nevergrad documentation for a list of available algorithms.
+    zero
+        Will stop the optimization when this cost function value is reached.
     """
 
     def __init__(self,
-                 opt_id: int = None,
-                 signal_pipe: Connection = None,
-                 results_queue: Queue = None,
-                 pause_flag: Event = None,
+                 _opt_id: int = None,
+                 _signal_pipe: Connection = None,
+                 _results_queue: Queue = None,
+                 _pause_flag: Event = None,
                  workers: int = 1,
                  backend: str = 'processes',
                  is_log_detailed: bool = False,
                  optimizer: str = 'TBPSA',
                  zero: float = -float('inf')):
-        """
-        Parameters
-        ----------
-        optimizer: str
-            String key to the desired optimizer. See nevergrad documentation for a list of available algorithms.
-        zero : float
-            Will stop the optimization when this cost function value is reached.
-        """
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend, is_log_detailed)
+        super().__init__(_opt_id, _signal_pipe, _results_queue, _pause_flag, workers, backend, is_log_detailed)
 
         self.opt_algo = ng.optimizers.registry[optimizer]
         self.optimizer = None

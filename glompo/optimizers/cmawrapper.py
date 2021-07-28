@@ -114,18 +114,11 @@ class CMAOptimizer(BaseOptimizer):
 
         Parameters
         ----------
-        function
-            Task to be minimised.
+        Optional, function bounds callbacks
+            See :meth:`.BaseOptimizer.minimize`
         x0
             Initial mean of the multivariate normal distribution from which trials are drawn. Force injected into the
             solver to guarantee it is evaluated.
-        bounds
-            Bounds on the sampling limits of each dimension. CMA supports handling bounds as non-linear
-            transformations so that they are never exceeded (but bounds are likely to be over sampled) or with a
-            penalty function. See `CMA-ES <http://cma.gforge.inria.fr/apidocs-pycma/>`_ documentation for more on this.
-        callbacks
-            Callbacks are called once per iteration. They receive no arguments. If they return anything other than
-            :obj:`None` the minimization will terminate early.
         sigma0
             Initial standard deviation of the multivariate normal distribution from which trials are drawn. One value
             for all parameters which means that all parameters must be scaled accordingly. Default is zero which will

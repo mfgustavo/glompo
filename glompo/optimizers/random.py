@@ -10,21 +10,27 @@ __all__ = ('RandomOptimizer',)
 
 
 class RandomOptimizer(BaseOptimizer):
-    """
-    Evaluates random points within the bounds for a fixed number of iterations (used for debugging).
+    """ Evaluates random points within the bounds for a fixed number of iterations.
+    **Not** actually an optimizer. Intended for debugging.
+
+    Parameters
+    ----------
+    Optional, _opt_id _signal_pipe _results_queue _pause_flag workers backend is_log_detailed
+        See :class:`.BaseOptimizer`.
+    iters
+        Number of function evaluations the optimizer will execute before terminating.
     """
 
     def __init__(self,
-                 opt_id: int = None,
-                 signal_pipe: Connection = None,
-                 results_queue: Queue = None,
-                 pause_flag: Event = None,
+                 _opt_id: int = None,
+                 _signal_pipe: Connection = None,
+                 _results_queue: Queue = None,
+                 _pause_flag: Event = None,
                  workers: int = 1,
                  backend: str = 'processes',
                  is_log_detailed: bool = False,
                  iters: int = 100):
-        """ Initialize with the above parameters. """
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag, workers, backend, is_log_detailed)
+        super().__init__(_opt_id, _signal_pipe, _results_queue, _pause_flag, workers, backend, is_log_detailed)
         self.max_iters = iters
         self.used_iters = 0
         self.result = MinimizeResult()

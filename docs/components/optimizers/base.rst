@@ -1,3 +1,9 @@
+Optimizer Return Type
+=====================
+
+.. autoclass:: glompo.optimizers.baseoptimizer.MinimizeResult
+   :members:
+
 Abstract Base Optimizer
 =======================
 

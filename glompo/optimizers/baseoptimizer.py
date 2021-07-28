@@ -32,7 +32,7 @@ class MinimizeResult:
     ----------
     success : bool
         Whether the optimization was successful or not.
-    x : numpy.array
+    x : Sequence[float]
         The optimized parameters.
     fx : float
         The corresponding function value of :obj:`x`.

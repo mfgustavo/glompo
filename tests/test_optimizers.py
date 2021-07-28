@@ -295,9 +295,9 @@ class TestSubclassesGlompoCompatible:
         return Task()
 
     def test_callstop(self, opti, init_kwargs, call_kwargs, mp_package, task):
-        opti = opti(results_queue=mp_package.queue,
-                    signal_pipe=mp_package.c_pipe,
-                    pause_flag=mp_package.event,
+        opti = opti(_results_queue=mp_package.queue,
+                    _signal_pipe=mp_package.c_pipe,
+                    _pause_flag=mp_package.event,
                     **init_kwargs)
 
         mp_package.p_pipe.send(1)
@@ -313,9 +313,9 @@ class TestSubclassesGlompoCompatible:
 
     @pytest.mark.parametrize("task", [10], indirect=["task"])
     def test_pause(self, opti, init_kwargs, call_kwargs, mp_package, task):
-        opti = opti(results_queue=mp_package.queue,
-                    signal_pipe=mp_package.c_pipe,
-                    pause_flag=mp_package.event,
+        opti = opti(_results_queue=mp_package.queue,
+                    _signal_pipe=mp_package.c_pipe,
+                    _pause_flag=mp_package.event,
                     **init_kwargs)
 
         p = mp.Process(target=opti.minimize,
@@ -334,9 +334,9 @@ class TestSubclassesGlompoCompatible:
         assert not p.is_alive()
 
     def test_haslogger(self, opti, init_kwargs, call_kwargs, mp_package):
-        opti = opti(results_queue=mp_package.queue,
-                    signal_pipe=mp_package.c_pipe,
-                    pause_flag=mp_package.event,
+        opti = opti(_results_queue=mp_package.queue,
+                    _signal_pipe=mp_package.c_pipe,
+                    _pause_flag=mp_package.event,
                     **init_kwargs)
 
         assert hasattr(opti, 'logger')
