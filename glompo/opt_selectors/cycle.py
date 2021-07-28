@@ -8,7 +8,21 @@ __all__ = ("CycleSelector",)
 
 
 class CycleSelector(BaseSelector):
-    """ Iterates and loops through the list of given optimizers each time it is called. """
+    """ Cycles through the list of available optimizers.
+    Iterates through the list of available optimizers everytime :meth:`~.BaseSelector.select_optimizer` is called. When
+    the last element is reached, the selector loops back to the beginning.
+
+    Examples
+    --------
+    >>> selector = CycleSelector(OptimizerA, OptimizerB, OptimizerC)
+    >>> for i in range(5):
+    ...     selector.select_optimizer(manager, log, 1)
+    OptimizerA
+    OptimizerB
+    OptimizerC
+    OptimizerA
+    OptimizerB
+    """
 
     def __init__(self,
                  *avail_opts: Union[Type[BaseOptimizer],

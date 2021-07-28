@@ -216,7 +216,7 @@ class TestReaxFFError:
                 return loaded_eng.x
 
         def mock_evaluate(ff_results, *args, **kwargs):
-            return (None, ff_results, None)
+            return None, ff_results, None
 
         monkeypatch.setattr(self.built_tasks['classic'].job_col, 'run', mock_run)
         monkeypatch.setattr(self.built_tasks['classic'].dat_set, 'evaluate', mock_evaluate)

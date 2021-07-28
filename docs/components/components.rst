@@ -3,7 +3,7 @@ Components
 **********
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
 
    manager
    optimizers/optimizers

@@ -8,7 +8,35 @@ __all__ = ("ChainSelector",)
 
 
 class ChainSelector(BaseSelector):
-    """ Selects the type of generator to start based on the number of function evaluations already used.
+    """ Selects the type of optimizer to start based on the number of function evaluations already used.
+    Designed to start different types of optimizers at different stages of the optimization. Selects sequentially from
+    the list of available optimizers based on the number of function evaluations used.
+
+    Parameters
+    ----------
+    *avail_opts
+        See :meth:`.BaseSelector.__init__`.
+    fcall_thresholds
+        A list of length :code:`n` or :code:`n-1`, where :code:`n` is the length of `avail_opts`.
+
+        The first :code:`n-1` elements of this list indicate the function evaluation point at which the selector
+        switches to the next type of optimizer in `avail_opts`.
+
+        The optional :code:`n`\\th element indicates the function evaluation at which optimizer spawning is turned off.
+    allow_spawn
+        See :meth:`.BaseSelector.__init__`.
+
+    Examples
+    --------
+    >>> ChainSelector(OptimizerA, OptimizerB, fcall_thresholds=[1000])
+
+    In this case :class:`!OptimizerA` instances will be started in the first 1000 iterations and :class:`!OptimizerB`
+    instances will be started thereafter.
+
+    >>> ChainSelector(OptimizerA, OptimizerB, fcall_thresholds=[1000, 2000])
+
+    In this case :class:`!OptimizerA` instances will be started in the first 1000 iterations and :class:`!OptimizerB`
+    instances will be started until iteration 2000. No new optimizers will be spawned thereafter.
     """
 
     def __init__(self,
@@ -16,34 +44,6 @@ class ChainSelector(BaseSelector):
                                     Tuple[Type[BaseOptimizer], Optional[Dict[str, Any]], Optional[Dict[str, Any]]]],
                  fcall_thresholds: List[float],
                  allow_spawn: Optional[Callable[['GloMPOManager'], bool]] = None):
-        """
-        Parameters
-        ----------
-        avail_opts: List[Union[Type[BaseOptimizer], Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]]]]
-            List of available optimizers and their configurations in order of usage.
-        fcall_thresholds: List[float]
-            A list with length equal to n or n-1 where n is the length of avail_opts.
-
-            The first n-1 elements of this list indicate the function evaluation point at which the selector switches to
-            the next type of optimizer in avail_opts.
-
-            The optional nth element indicates the function evaluation at which optimizer spawning is turned off.
-        allow_spawn: Optional[Callable[['GloMPOManager'], bool]]
-                Optional function sent to the selector which is called with the manager object as argument. If it
-                returns False the manager will no longer spawn optimizers.
-
-        Examples
-        --------
-        >>> ChainSelector([OptimizerA, OptimizerB], [1000])
-
-        In this case OptimizerA instances will be started in the first 1000 iterations and OptimizerB instances will be
-        started thereafter.
-
-        >>> ChainSelector([OptimizerA, OptimizerB], [1000, 2000])
-
-        In this case OptimizerA instances will be started in the first 1000 iterations and OptimizerB instances will be
-        started until iteration 2000. No new optimizers will be spawned thereafter.
-        """
         super().__init__(*avail_opts, allow_spawn=allow_spawn)
         self.fcall_thresholds = fcall_thresholds
         n = len(avail_opts)
