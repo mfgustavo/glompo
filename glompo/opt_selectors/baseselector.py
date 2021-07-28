@@ -16,47 +16,55 @@ class BaseSelector(ABC):
     Selectors are classes which return an optimizer and its configuration when asked by the manager. This selection will
     then be used to start a new optimizer. The full manager is supplied to the selector allowing sophisticated decisions
     to be designed.
+
+    Parameters
+    ----------
+    *avail_opts
+        A set of optimizers available to the minimization. Elements may be:
+
+        #. Subclasses (not instances) of :class:`.BaseOptimizer`.
+
+        #. Tuples of:
+
+           #. :class:`.BaseOptimizer` subclasses (not instances);
+
+           #. Dictionary of kwargs sent to :class:`BaseOptimizer.__init__ <.BaseOptimizer>`, or :obj:`None`;
+
+           #. Dictionary of kwargs sent to :meth:`.BaseOptimizer.minimize`, or :obj:`None`.
+
+    allow_spawn
+        Optional function sent to the selector which is called with the manager object as argument. If it returns
+        :obj:`False` the manager will no longer spawn optimizers. See :ref:`Spawn Control`.
+
+    Examples
+    --------
+    >>> DummySelector(OptimizerA, (OptimizerB, {'setting_a': 7}, None))
+
+    The :code:`DummySelector` above may choose from two optimizers (:code:`OptimizerA` or :code:`OptimizerB`).
+    :code:`OptimizerA` has no special configuration settings. :code:`OptimizerB` is configured with
+    :code:`setting_a = 7` at initialisation, but no special arguments are needed for
+    :meth:`OptimizerB.minimize() <.BaseOptimizer.minimize>` and thus :obj:`None` is sent in the last place of the
+    tuple.
+
+    >>> DummySelector(OptimizerA, allow_spawn=IterSpawnStop(50_000))
+
+    In this case the selector will only spawn :code:`OptimizerA` optimizers but not allow any spawning after 50000
+    function evaluations.
+
+    Attributes
+    ----------
+    allow_spawn : Callable[[GloMPOManager], bool]
+        Function used to control if a new optimizer should be allowed to be created.
+    avail_opts : Union[Type[BaseOptimizer], Tuple[Type[BaseOptimizer], Optional[Dict[str, Any]], Optional[Dict[str, Any]]]]
+        Set of optimizers and configuration settings available to the optimizer.
+    logger : logging.Logger
+        :class:`logging.Logger` instance into which status messages may be added.
     """
 
     def __init__(self,
                  *avail_opts: Union[Type[BaseOptimizer],
                                     Tuple[Type[BaseOptimizer], Optional[Dict[str, Any]], Optional[Dict[str, Any]]]],
                  allow_spawn: Optional[Callable[['GloMPOManager'], bool]] = None):
-        """
-        Parameters
-        ----------
-        *avail_opts
-            A set of optimizers available to the minimization. Elements may be:
-
-            #. Subclasses (not instances) of :class:`.BaseOptimizer`.
-
-            #. Tuples of:
-
-               #. :class:`.BaseOptimizer` subclasses (not instances);
-
-               #. Dictionary of kwargs sent to :meth:`.BaseOptimizer.__init__`, or :obj:`None`;
-
-               #. Dictionary of kwargs sent to :meth:`.BaseOptimizer.minimize`, or :obj:`None`.
-
-        allow_spawn
-            Optional function sent to the selector which is called with the manager object as argument. If it returns
-            :obj:`False` the manager will no longer spawn optimizers.
-
-        Examples
-        --------
-        >>> DummySelector(OptimizerA, (OptimizerB, {'setting_a': 7}, None))
-
-        The :code:`DummySelector` above may choose from two optimizers (:code:`OptimizerA` or :code:`OptimizerB`).
-        :code:`OptimizerA` has no special configuration settings. :code:`OptimizerB` is configured with
-        :code:`setting_a = 7` at initialisation, but no special arguments are needed for
-        :meth:`OptimizerB.minimize() <.BaseOptimizer.minimize>` and thus :obj:`None` is sent in the last place of the
-        tuple.
-
-        >>> DummySelector(OptimizerA, allow_spawn=IterSpawnStop(50_000))
-
-        In this case the selector will only spawn :code:`OptimizerA` optimizers but not allow any spawning after 50000
-        function evaluations.
-        """
         self.logger = logging.getLogger('glompo.selector')
 
         self.avail_opts = []
@@ -118,8 +126,8 @@ class BaseSelector(ABC):
         -------
         Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]], None, bool]
             Optimizer class and configuration parameters: Tuple of optimizer class, dictionary of initialisation
-            parameters, and dictionary of minmization parameters (see :meth:`__init__`). Manager will use this to
-            initialise and start a new optimizer.
+            parameters, and dictionary of minimization parameters (see :class:`__init__ <.BaseSelector>`). Manager will
+            use this to initialise and start a new optimizer.
 
             :obj:`None` is returned in the case that no available optimizer configurations can satisfy the number of
             worker slots available.

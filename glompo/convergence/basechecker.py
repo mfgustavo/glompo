@@ -7,7 +7,13 @@ __all__ = ("BaseChecker",)
 
 
 class BaseChecker(_CoreBase):
-    """ Abstract class from which all checkers must inherit to be compatible with GloMPO. """
+    """ Abstract class from which all checkers must inherit to be compatible with GloMPO.
+
+    Attributes
+    ----------
+    logger : logging.Logger
+        :class:`logging.Logger` instance into which status messages may be added.
+    """
 
     def __init__(self):
         self.logger = logging.getLogger('glompo.checker')

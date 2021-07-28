@@ -6,6 +6,7 @@ from time import sleep, time
 from typing import Callable, NamedTuple, Sequence, Tuple
 
 import pytest
+
 from glompo.common.namedtuples import IterationResult
 from glompo.core.function import BaseFunction
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult, _MessagingWrapper
@@ -235,7 +236,7 @@ class TestBase:
             print("SAVED")
 
         opti = PlainOptimizer(1, mp_package.c_pipe, mp_package.queue, mp_package.event)
-        opti.FROM_MANAGER_SIGNAL_DICT[0] = checkpoint_save
+        opti._from_manager_signal_dict[0] = checkpoint_save
 
         process = mp.Process(target=opti._prepare_checkpoint, daemon=True)
         process.start()

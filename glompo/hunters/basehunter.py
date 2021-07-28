@@ -10,7 +10,13 @@ __all__ = ("BaseHunter",)
 
 
 class BaseHunter(_CoreBase):
-    """ Base hunter from which all hunters must inherit to be compatible with GloMPO. """
+    """ Base hunter from which all hunters must inherit to be compatible with GloMPO.
+
+    Attributes
+    ----------
+    logger : logging.Logger
+        :class:`logging.Logger` instance into which status messages may be added.
+    """
 
     def __init__(self):
         super().__init__()

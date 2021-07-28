@@ -15,7 +15,7 @@ class ChainSelector(BaseSelector):
     Parameters
     ----------
     *avail_opts
-        See :meth:`.BaseSelector.__init__`.
+        See :class:`.BaseSelector`.
     fcall_thresholds
         A list of length :code:`n` or :code:`n-1`, where :code:`n` is the length of `avail_opts`.
 
@@ -24,7 +24,7 @@ class ChainSelector(BaseSelector):
 
         The optional :code:`n`\\th element indicates the function evaluation at which optimizer spawning is turned off.
     allow_spawn
-        See :meth:`.BaseSelector.__init__`.
+        See :class:`.BaseSelector`.
 
     Examples
     --------

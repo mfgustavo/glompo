@@ -32,7 +32,11 @@ class MyFFMpegWriter(ani.FFMpegWriter):
 
 @decorate_all_methods(catch_user_interrupt)
 class GloMPOScope:
-    """ Constructs and records the dynamic plotting of optimizers run in parallel. """
+    """ Constructs and records the dynamic plotting of optimizers run in parallel.
+
+    Attributes
+    ----------
+    """
 
     def __init__(self,
                  x_range: Union[Tuple[float, float], int, None] = 300,

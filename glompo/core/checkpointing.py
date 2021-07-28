@@ -9,7 +9,11 @@ from typing import Union
 
 
 class CheckpointingControl:
-    """ Class to setup and control the checkpointing behaviour of GloMPOManagers. """
+    """ Class to setup and control the checkpointing behaviour of GloMPOManagers.
+
+    Attributes
+    ----------
+    """
 
     def __init__(self,
                  checkpoint_time_frequency: float = float('inf'),

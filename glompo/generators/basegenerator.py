@@ -7,7 +7,13 @@ __all__ = ("BaseGenerator",)
 
 
 class BaseGenerator(ABC):
-    """ Base generator from which all generators must inherit to be compatible with GloMPO. """
+    """ Base generator from which all generators must inherit to be compatible with GloMPO.
+
+    Attributes
+    ----------
+    logger : logging.Logger
+        :class:`logging.Logger` instance into which status messages may be added.
+    """
 
     def __init__(self):
         self.logger = logging.getLogger('glompo.generator')

@@ -154,7 +154,8 @@ class GloMPOManager:
         :obj:`True` if manager children are spawned as daemons. Default is :obj:`True` but can be set to :obj:`False`
         if double process layers are needed (see :ref:`Parallelism` for more details).
     overwrite_existing : bool
-        :obj:`True` if any old files detected in the working directory maybe be deleted when the optimization run begins.
+        :obj:`True` if any old files detected in the working directory maybe be deleted when the optimization run
+        begins.
     proc_backend : bool
         :obj:`True` if the manager children are spawned as processes, :obj:`False` if they are spawned as threads.
     result : :class:`.Result`
@@ -829,13 +830,13 @@ class GloMPOManager:
             event.set()
             try:
                 opt_class = self._opt_checkpoints[opt_id].opt_type
-                optimizer = opt_class.checkpoint_load(opt_id=opt_id,
-                                                      signal_pipe=child_pipe,
-                                                      results_queue=self.optimizer_queue,
-                                                      pause_flag=event,
+                optimizer = opt_class.checkpoint_load(path=tmp_dir / 'optimizers' / f'{opt_id:04}',
+                                                      _opt_id=opt_id,
+                                                      _signal_pipe=child_pipe,
+                                                      _results_queue=self.optimizer_queue,
+                                                      _pause_flag=event,
                                                       workers=slots,
-                                                      backend=backend,
-                                                      path=tmp_dir / 'optimizers' / f'{opt_id:04}')
+                                                      backend=backend)
 
                 optimizer.workers = slots
                 optimizer._backend = backend  # Overwrite in case load_state set old values
@@ -1322,10 +1323,10 @@ class GloMPOManager:
         else:
             backend = 'threads' if self.opts_daemonic else 'processes'
 
-        optimizer = selected(opt_id=self.o_counter,
-                             signal_pipe=child_pipe,
-                             results_queue=self.optimizer_queue,
-                             pause_flag=event,
+        optimizer = selected(_opt_id=self.o_counter,
+                             _signal_pipe=child_pipe,
+                             _results_queue=self.optimizer_queue,
+                             _pause_flag=event,
                              backend=backend,
                              is_log_detailed=self.is_log_detailed,
                              **init_kwargs)

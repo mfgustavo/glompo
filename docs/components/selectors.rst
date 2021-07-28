@@ -7,7 +7,7 @@ Abstract Base Selector
 
 .. autoclass:: glompo.opt_selectors.baseselector.BaseSelector
    :members:
-   :special-members: __contains__, __init__
+   :special-members: __contains__
 
 Spawn Control
 =============

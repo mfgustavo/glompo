@@ -22,7 +22,11 @@ __all__ = ("BaseLogger",
 
 
 class BaseLogger:
-    """ Holds iteration results in memory for faster access. """
+    """ Holds iteration results in memory for faster access.
+
+    Attributes
+    ----------
+    """
 
     @classmethod
     @needs_optional_package('dill')
