@@ -34,9 +34,77 @@ class MyFFMpegWriter(ani.FFMpegWriter):
 class GloMPOScope:
     """ Constructs and records the dynamic plotting of optimizers run in parallel.
 
+    Parameters
+    ----------
+    x_range
+        If :obj:`None` is provided the x-axis will automatically and continuously rescale from zero as the number of
+        function evaluations increases.
+        If a tuple of the form (min, max) is provided then the x-axis will be fixed to this range.
+        If an integer is provided then the plot will only show the last x_range evaluations and discard earlier
+        points. This is useful to make differences between optimizers visible in the late stage and also keep the
+        scope operating at an adequate speed.
+    y_range
+        Sets the y-axis limits of the plot, by default the plot to automatically and constantly rescales the axis.
+    log_scale
+        See :attr:`log_scale`. This can be used in conjunction with the `y_range` option which will be interpreted in
+        the log-scale.
+    record_movie
+        If :obj:`True` then a :class:`~matplotlib.animation.FFMpegWriter` instance is created to record the plot.
+    interactive_mode
+        If :obj:`True` the plot is visible on screen during the optimization.
+    events_per_flush
+        See :attr:`events_per_flush`.
+    elitism
+        See :attr:`elitism`.
+    writer_kwargs
+        Optional dictionary of arguments to be sent :class:`matplotlib.animation.FFMpegWriter`.
+    movie_kwargs
+        Optional dictionary of arguments to be sent to
+        :class:`matplotlib.animation.FFMpegWriter.setup () <matplotlib.animation.FFMpegWriter>`.
+
     Attributes
     ----------
+    ax : matplotlib.axes.Axes
+        :class:`~matplotlib.axes.Axes` object onto which the data is plotted.
+    color_map : matplotlib.colors.ListedColormap
+        List which represents the GloMPO color sequence.
+    elitism : bool
+        If :obj:`True` an optimizer's best function value over time will be plotted instead of its current function
+        value. This greatly simplifies the plot, making it easier to see certain behaviour but also masks a
+        lot of detail.
+    events_per_flush : int
+        The number of 'events' or updates and changes to the scope before the changes are flushed and the plot is
+        redrawn. A lower number provides a smoother visualisation but is expensive and, if recorded, takes a larger
+        amount of space.
+    fig : matplotlib.figure.Figure
+        :class:`~matplotlib.figure.Figure` object into which the :attr:`ax` is embedded.
+    gen_streams : Dict[str, matplotlib.lines.Line2D]
+        Collection of 'annotation' plots used to indicate optimizer terminations, convergences, checkpoints etc.
+    interactive_mode : bool
+        If :obj:`True` the plot will be displayed in real-time with the optimization. Otherwise it will be constructed
+        in memory only; :attr:`record_movie` would need to be :obj:`True` to see the results.
+    leg_elements : List[matplotlib.lines.Line2D]
+        Holds the plot legend.
+    log_scale : bool
+        If :obj:`True`, function values will be plotted on logarithmic scale.
+    logger : logging.Logger
+        :class:`logging.Logger` instance into which status messages may be added.
+    n_streams : int
+        Number of optimizers in the plot.
+    opt_streams : Dict[str, matplotlib.lines.Line2D]
+        Collection of data plots representing the actual optimizer trajectories.
+    record_movie : bool
+        If :obj:`True`, the dynamic plot will be saved to an MPEG-4 file.
+    truncated : Optional[int]
+        If a value is given, the plot will only retain data for the last `truncated` function evaluations.
+    x_max : int
+        The furthest point ever plotted by the scope.
     """
+
+    @property
+    def is_setup(self):
+        """ If :obj:`True`, :meth:`setup_moviemaker` has been properly called and the movie can be recorded. """
+        return self._is_setup
 
     def __init__(self,
                  x_range: Union[Tuple[float, float], int, None] = 300,
@@ -48,40 +116,7 @@ class GloMPOScope:
                  elitism: bool = False,
                  writer_kwargs: Optional[Dict[str, Any]] = None,
                  movie_kwargs: Optional[Dict[str, Any]] = None):
-        """
-        Initializes the plot and movie recorder.
 
-        Parameters
-        ----------
-        x_range
-            If None is provided the x-axis will automatically and continuously rescale from zero as the number of
-            function evaluations increases.
-            If a tuple of the form (min, max) is provided then the x-axis will be fixed to this range.
-            If an integer is provided then the plot will only show the last x_range evaluations and discard earlier
-            points. This is useful to make differences between optimizers visible in the late stage and also keep the
-            scope operating at an adequate speed.
-        y_range
-            Sets the y-axis limits of the plot, default is an empty tuple which leads the plot to automatically and
-            constantly rescale the axis.
-        log_scale
-            If True, the base 10 logarithm of y values are displayed on the scope. This can be used in conjunction
-            with the y_range option and will be interpreted in the opt_log-scale.
-        record_movie
-            If True then a matplotlib.animation.FFMpegWriter instance is created to record the plot.
-        interactive_mode
-            If True the plot is visible on screen during the optimization.
-        events_per_flush
-            The number of 'events' or updates and changes to the scope before the changes are flushed and the plot is
-            redrawn. A lower number provides a smoother visualisation but is expensive and, if recorded,
-            takes a larger amount of space.
-        elitism
-            If True the scope will only display values which improve on the best optimizer value.
-        writer_kwargs
-            Optional dictionary of arguments to be sent to the initialisation of the matplotlib.animation.FFMpegWriter
-            class.
-        movie_kwargs
-            Optional dictionary of arguments to be sent to matplotlib.animation.FFMpegWriter.setup().
-        """
         self.logger = logging.getLogger('glompo.scope')
         self._dead_streams: Set[int] = set()
         self.n_streams = 0
@@ -93,7 +128,7 @@ class GloMPOScope:
         self.color_map = glompo_colors()
         self.interactive_mode = interactive_mode
         self.record_movie = record_movie
-        self.is_setup = False
+        self._is_setup = False
 
         plt.ion() if interactive_mode else plt.ioff()
 
@@ -117,8 +152,8 @@ class GloMPOScope:
 
         self.ax.legend(loc='upper right', handles=self.leg_elements, bbox_to_anchor=(1.35, 1))
 
-        self.opt_streams: Dict[int, plt.Axes.plot] = {}
-        self.gen_streams: Dict[str, plt.Axes.plot] = {
+        self.opt_streams: Dict[int, lines.Line2D] = {}
+        self.gen_streams: Dict[str, lines.Line2D] = {
             'opt_kill': self.ax.plot([], [], ls='', marker='x', color='black', zorder=500)[0],
             'opt_norm': self.ax.plot([], [], ls='', marker='*', color='black', zorder=500)[0],
             'opt_crash': self.ax.plot([], [], ls='', marker='s', color='black', zorder=500)[0],
@@ -177,7 +212,7 @@ class GloMPOScope:
         self.logger.debug("Scope initialised successfully")
 
     def _new_writer(self):
-        """ Constructs a new FFMpegWriter to record a movie """
+        """ Constructs a new :class:`matplotlib.animation.FFMpegWriter` to record a movie. """
         try:
             self._writer = MyFFMpegWriter(**self._writer_kwargs) if self._writer_kwargs else MyFFMpegWriter()
         except TypeError:
@@ -187,7 +222,7 @@ class GloMPOScope:
 
     def _redraw_graph(self, force=False):
         """ Redraws the figure after new data has been added. Grabs a frame if a movie is being recorded.
-            force=True overrides the normal flush counter and forces an explict reconstruction of the graph.
+        :code:`force=True` overrides the normal flush counter and forces an explict reconstruction of the graph.
         """
         if self._event_counter >= self.events_per_flush or force:
             self._event_counter = 1
@@ -260,7 +295,15 @@ class GloMPOScope:
             line.set_ydata(y_vals)
 
     def add_stream(self, opt_id: int, opt_type: Optional[str] = None):
-        """ Registers and sets up a new optimizer in the scope. """
+        """ Registers and sets up a new optimizer in the scope.
+
+        Parameters
+        ----------
+        opt_id
+            Unique, GloMPO assigned, optimizer identification key.
+        opt_type
+            String name of the optimizer type/configuration. Used only in the plot legend.
+        """
         self.n_streams += 1
 
         line_style = '-'
@@ -279,7 +322,7 @@ class GloMPOScope:
         self.logger.debug("Added new plot set for optimizer %d", opt_id)
 
     def update_optimizer(self, opt_id: int, pt: tuple):
-        """ Given pt tuple is used to update the opt_id optimizer plot."""
+        """ Given `pt` is used to update the `opt_id` optimizer plot."""
         x, y = pt
         if self.elitism:
             y_vals = self.opt_streams[opt_id].get_ydata()
@@ -292,39 +335,39 @@ class GloMPOScope:
         self._redraw_graph()
 
     def update_kill(self, opt_id: int):
-        """ The opt_id kill optimizer plot is updated at its final point. """
+        """ The `opt_id` optimizer plot is updated to show a manager termination at its final point. """
         self._update_point(opt_id, 'opt_kill')
         self._redraw_graph()
 
     def update_norm_terminate(self, opt_id: int):
-        """ The opt_id normal optimizer plot is updated at its final point if the optimizer converged normally. """
+        """ The `opt_id` optimizer plot is updated to show normal convergence at its final point. """
         self._update_point(opt_id, 'opt_norm')
         self._redraw_graph()
 
     def update_crash_terminate(self, opt_id: int):
-        """ The opt_id normal optimizer plot is updated at its final point if the optimizer crashed. """
+        """ The `opt_id` optimizer plot is updated to show a crash termination at its final point. """
         self._update_point(opt_id, 'opt_crash')
         self._redraw_graph()
 
     def update_pause(self, opt_id: int):
-        """ The opt_id normal optimizer plot is updated at its final point. """
+        """ The `opt_id` optimizer plot is updated to show a pause event at its final point. """
         self._update_point(opt_id, 'pause')
         self._redraw_graph()
 
     def update_checkpoint(self, opt_id: int):
-        """ The opt_id normal optimizer plot is updated at its final point. """
+        """ The `opt_id` optimizer plot is updated to show a checkpoint at its final point. """
         self._update_point(opt_id, 'chkpt')
         self._redraw_graph()
 
     def setup_moviemaker(self, path: Union[Path, str, None] = None):
-        """ Setups up the movie recording framework. Must be called before the scope begins to be filled in order to
-            begin generating movies correctly.
+        """ Setups up the movie recording framework.
+        Must be called before the scope begins to be filled in order to begin generating movies correctly.
 
-            Parameters
-            ----------
-            path
-                An optional directory into which the movie file will be directed. Will overwrite any 'outfile' argument
-                sent during scope initialisation.
+        Parameters
+        ----------
+        path
+            An optional directory into which the movie file will be directed. Will overwrite any 'outfile' argument sent
+            during scope initialisation.
         """
         if not self.record_movie:
             warnings.warn("Cannot initialise movie writer. record_movie must be True at initialisation. Aborting.",
@@ -344,7 +387,7 @@ class GloMPOScope:
             self.logger.warning("Unidentified key in writer_kwargs. Using default values.")
             self._writer.setup(fig=self.fig, outfile=str(self._movie_kwargs['outfile']))
         finally:
-            self.is_setup = True
+            self._is_setup = True
 
     def generate_movie(self):
         """ Final call to write the saved frames into a single movie. """
@@ -360,8 +403,8 @@ class GloMPOScope:
             warnings.warn("Unable to generate movie file as data was not collected during the dynamic plotting.\n"
                           "Rerun GloMPOScope with record_movie = True during initialisation.", UserWarning)
 
-    def get_farthest_pt(self, opt_id: int) -> Tuple[float, float]:
-        """ Returns the furthest evaluated point of the opt_id optimizer. """
+    def get_farthest_pt(self, opt_id: int) -> Optional[Tuple[float, float]]:
+        """ Returns the furthest evaluated point of the `opt_id` optimizer. """
         try:
             x = float(self.opt_streams[opt_id].get_xdata()[-1])
             y = float(self.opt_streams[opt_id].get_ydata()[-1])
@@ -371,9 +414,10 @@ class GloMPOScope:
         return x, y
 
     def close_fig(self):
-        """ Matplotlib will keep a figure alive in its memory for the duration a process is alive. This can lead to
-            many figures being open if GloMPO is looped in some way. The manager will explicitly call this method to
-            close the matplotlib figure at the end of the optimization routine to stop figures building up in this way.
+        """ Closes the :class:`matplotlib.figure.Figure` when the scope is closed.
+        Matplotlib will keep a figure alive in its memory for the duration a process is alive. This can lead to many
+        figures being open if GloMPO is looped in some way. The manager will explicitly call this method to close the
+        matplotlib figure at the end of the optimization routine to stop figures building up in this way.
         """
         if self.record_movie and self.is_setup:
             self._writer.cleanup()
@@ -381,8 +425,8 @@ class GloMPOScope:
 
     @needs_optional_package('dill')
     def checkpoint_save(self, path: Union[Path, str] = ''):
-        """ Saves the state of the scope, suitable for resumption, during a checkpoint. Path is a directory in which to
-            dump the generated files.
+        """ Saves the state of the scope, suitable for resumption, during a checkpoint.
+        `path` is a directory in which to dump the generated files.
         """
         if self.is_setup:
             self._redraw_graph(True)
@@ -402,8 +446,9 @@ class GloMPOScope:
 
     @needs_optional_package('dill')
     def load_state(self, path: Union[Path, str]):
-        """ Loads a saved scope state. Path is a directory containing the checkpoint files. """
-
+        """ Loads a saved scope state.
+        `path` is a directory containing the checkpoint files.
+        """
         with Path(path, 'scope').open('rb') as file:
             data = dill.load(file)
 
