@@ -1,4 +1,3 @@
-""" Contains classes which save log information for GloMPO and its optimizers. """
 import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Union
@@ -26,12 +25,26 @@ class BaseLogger:
 
     Attributes
     ----------
+    build_traj_plot
+        :obj:`True` if the user has asked for a trajectory plot at the end of the optimization. Used to decide whether
+        to hold all iterations in memory or purge them during the optimization when they would no longer be needed for
+        hunting purposes.
     """
+
+    @property
+    def n_optimizers(self) -> int:
+        """ Returns the number of optimizers in the log. """
+        return len(self._storage)
+
+    @property
+    def largest_eval(self) -> float:
+        """ Returns the largest (finite) function evaluation processed thus far. """
+        return self._max_eval
 
     @classmethod
     @needs_optional_package('dill')
     def checkpoint_load(cls, path: Union[Path, str]):
-        """ Construct a new BaseLogger from the attributes saved in the checkpoint file located at path. """
+        """ Construct a new :class:`BaseLogger` from the attributes saved in the checkpoint file located at `path`. """
         opt_log = cls.__new__(cls)
 
         with Path(path).open('rb') as file:
@@ -52,25 +65,15 @@ class BaseLogger:
         self._figure_data = {}
 
     def __contains__(self, item) -> bool:
-        """ Returns True if the optimizer is being recorded in memory. """
+        """ Returns :obj:`True` if the optimizer is being recorded in memory. """
         return item in self._storage
 
     def __len__(self) -> int:
         """ Returns the total number of function evaluations saved in the log. """
         return self._f_counter
 
-    @property
-    def n_optimizers(self) -> int:
-        """ Returns the number of optimizer in the log. """
-        return len(self._storage)
-
-    @property
-    def largest_eval(self) -> float:
-        """ Returns the largest (finite) function evaluation processed thus far. """
-        return self._max_eval
-
     def len(self, opt_id: int) -> int:
-        """ Returns the number of function evaluations associated with optimizer opt_id. """
+        """ Returns the number of function evaluations associated with optimizer `opt_id`. """
         if self.has_iter_history(opt_id):
             return len(self._storage[opt_id]['fx'])
         return 0
@@ -91,12 +94,12 @@ class BaseLogger:
             self._storage[opt_id][k] = []
 
     def has_iter_history(self, opt_id: int) -> bool:
-        """ Returns True if an iteration history table has been constructed for optimizer opt_id. """
+        """ Returns :obj:`True` if an iteration history table has been constructed for optimizer `opt_id`. """
         return opt_id in self._storage and 'fx' in self._storage[opt_id]
 
     def clear_cache(self, opt_id: Optional[int] = None):
-        """ Removes all data associated with opt_id form memory. The data is NOT cleared if a summary trajectory plot
-            has been configured.
+        """ Removes all data associated with `opt_id` from memory.
+        The data is **not** cleared if a summary trajectory plot has been configured.
         """
         if self.build_traj_plot:  # Data not cleared if a summary trajectory image has been requested.
             return
@@ -106,17 +109,18 @@ class BaseLogger:
             del self._storage[key]
 
     def put_metadata(self, opt_id: int, key: str, value: Any):
-        """ Adds metadata to storage. """
+        """ Adds optimizer metadata to storage. """
         self._storage[opt_id]['metadata'][key] = value
 
     def put_manager_metadata(self, key: str, value: Any):
         pass
 
     def put_message(self, opt_id: int, message: str):
+        """ Stores message signals sent from optimizers to the manager. """
         self._storage[opt_id]['messages'].append(message)
 
     def put_iteration(self, iter_res: IterationResult):
-        """ Records function evaluation in memory. """
+        """ Records function evaluations in memory. """
         self._f_counter += 1
 
         if iter_res.fx < self._best_iters[iter_res.opt_id]['fx']:
@@ -137,29 +141,48 @@ class BaseLogger:
             self._storage[iter_res.opt_id][k].append(v)
 
     def get_best_iter(self, opt_id: Optional[int] = None) -> Dict[str, Any]:
-        """ Returns the overall best record in history if opt_id is not provided. If it is, the best iteration
-            of the corresponding optimizer is returned.
+        """ Returns the overall best record in history if `opt_id` is not provided.
+        If it is, the best iteration of the corresponding optimizer is returned.
         """
         if opt_id:
             return self._best_iters[opt_id]
         return self._best_iter
 
     def get_history(self, opt_id: int, track: str) -> List:
-        """ Returns all the evaluations associated with optimizer opt_id. track refers to the column of interest (e.g.
-            'call_id', 'x', 'fx').
+        """ Returns data from the evaluation history of an optimizer.
+
+        Parameters
+        ----------
+        opt_id
+            Unique optimizer identifier.
+        track
+            Column name to return. Any column name in the logfile can be used. The following are always present:
+
+            * :code:`'call_id'`: The overall evaluation number across all function calls.
+
+            * :code:`'x'`: Input vectors evaluated by the optimizer.
+
+            * :code:`'fx'`: The function response for each iteration.
         """
         if self.has_iter_history(opt_id):
             return self._storage[opt_id][track]
         return []
 
     def get_metadata(self, opt_id: int, key: str) -> Any:
-        """ Returns a piece of metadata in memory. """
+        """ Returns metadata of a given optimizer and key. """
         return self._storage[opt_id]['metadata'][key]
 
     @needs_optional_package('matplotlib')
     def plot_optimizer_trials(self, path: Optional[Path] = None, opt_id: Optional[int] = None):
-        """ Generates plots for each optimizer in the log of each trialed parameter value as a function of optimizer
-            iterations.
+        """ Generates plots of parameter value versus optimizer function evaluation number for each parameter of input
+        space.
+
+        Parameters
+        ----------
+        path
+            Path to directory into which the image/s will be saved.
+        opt_id
+            Optimizer for which the plot should be made. If :obj:`None`, plots will be made for all optimizers.
         """
         is_interactive = plt.isinteractive()
         if is_interactive:
@@ -188,17 +211,17 @@ class BaseLogger:
 
     @needs_optional_package('matplotlib')
     def plot_trajectory(self, title: Union[Path, str], log_scale: bool = False, best_fx: bool = False):
-        """ Generates a plot of each optimizer function values versus the overall function evaluation number.
+        """ Generates a plot of function values versus the overall function evaluation number.
 
-            Parameters
-            ----------
-            title
-                Path to file to which the plot should be saved.
-            log_scale
-                If True the function evaluations will be converted to base 10 log values.
-            best_fx
-                If True the best function evaluation see thus far of each optimizer will be plotted rather than the
-                function evaluation at the matching evaluation number.
+        Parameters
+        ----------
+        title
+            Path to file to which the plot should be saved.
+        log_scale
+            If :obj:`True` the function evaluations will be converted to base 10 log values.
+        best_fx
+            If :obj:`True` the best function evaluation see thus far of each optimizer will be plotted rather than the
+            function evaluation at the matching evaluation number.
         """
         is_interactive = plt.isinteractive()
         if is_interactive:
@@ -273,12 +296,12 @@ class BaseLogger:
     def checkpoint_save(self, path: Union[Path, str] = '', block: Optional[Sequence[str]] = None):
         """ Saves the state of the logger, suitable for resumption, during a checkpoint.
 
-            Parameters
-            ----------
-            path
-                Directory in which to dump the generated files.
-            block
-                Iterable of class attributes which should not be included in the log.
+        Parameters
+        ----------
+        path
+            Directory in which to dump the generated files.
+        block
+            Iterable of class attributes which should not be included in the log.
         """
         block = block if block else []
         block += ['n_optimizers', 'largest_eval']
@@ -294,25 +317,23 @@ class BaseLogger:
 # noinspection PyProtectedMember
 class FileLogger(BaseLogger):
     """ Extends the BaseLogger to write progress of GloMPO optimizers to disk in HDF5 format through PyTables.
-        Results of living optimizers are still held in memory to optimizer hunting.
+    Results of living optimizers are still held in memory for optimizer hunting.
+
+    Parameters
+    ----------
+    n_parms
+        Number of parameters in the domain of the optimization problem.
+    expected_rows
+        Estimated number of rows in each optimizer log file. Estimated by :class:`.GloMPOManager` based on convergence
+        settings and dimensionality of the optimization task.
+    build_traj_plot
+        Flag the logger to hold trajectories in memory to construct the summary image.
     """
 
     def __init__(self,
                  n_parms: int,
                  expected_rows: int,
                  build_traj_plot: bool):
-        """ Setups and opens the logfile.
-
-            Parameters
-            ----------
-            n_parms
-                Number of parameters in the domain of the optimization problem.
-            expected_rows
-                Estimated number of rows in each optimizer log file. Estimated by GloMPOManager based on convergence
-                settings and dimensionality of the optimization task.
-            build_traj_plot
-                Flag the logger to hold trajectories in memory to construct the summary image.
-        """
         super().__init__(build_traj_plot)
         self.pytab_file = None
 
@@ -326,16 +347,13 @@ class FileLogger(BaseLogger):
         self._tables = {}  # In memory address to pytables_file tables (expensive otherwise)
 
     def __contains__(self, opt_id: int) -> bool:
-        """ Returns True if a group exists in the HDF5 file for the optimizer with ID opt_id """
         return f'/optimizer_{opt_id}' in self.pytab_file
 
     @property
     def n_optimizers(self):
-        """ Returns the number of optimizers in the log. """
         return self._o_counter
 
     def len(self, opt_id: int) -> int:
-        """ Returns the number of function evaluations associated with optimizer opt_id. """
         try:
             return super().len(opt_id)
         except KeyError:
@@ -344,7 +362,7 @@ class FileLogger(BaseLogger):
             return 0
 
     def add_optimizer(self, opt_id: int, opt_type: str, t_start: datetime.datetime):
-        """ Creates a new optimizer H5 file and memory logger. """
+        """ Creates an HDF5 file and memory log for a new optimizer. """
         super().add_optimizer(opt_id, opt_type, t_start)
         group = self.pytab_file.create_group(where='/',
                                              name=f'optimizer_{opt_id}')
@@ -363,7 +381,7 @@ class FileLogger(BaseLogger):
         self._o_counter += 1
 
     def add_iter_history(self, opt_id: int, extra_headers: Optional[Dict[str, tb.Col]] = None):
-        """ Creates an iteration history table in the H5 file. """
+        """ Creates an iteration history table in the HDF5 file. """
         super().add_iter_history(opt_id, {})  # Do not hold extras in memory if file in use.
         headers = {'call_id': tb.UInt32Col(pos=-3),
                    'x': tb.Float64Col(shape=self.n_task_dims, pos=-2),
@@ -380,11 +398,9 @@ class FileLogger(BaseLogger):
         self._tables[opt_id] = table
 
     def has_iter_history(self, opt_id: int) -> bool:
-        """ Returns True if an iteration history table has been constructed for optimizer opt_id. """
         return opt_id in self._tables
 
     def put_iteration(self, iter_res: IterationResult):
-        """ Records a function evaluation to memory. """
         try:
             super().put_iteration(iter_res)  # Increment f_counter and update best_iters
         except KeyError:
@@ -400,7 +416,6 @@ class FileLogger(BaseLogger):
             self.flush(iter_res.opt_id)
 
     def put_metadata(self, opt_id: int, key: str, value: Any):
-        """ Adds metadata about an optimizer. """
         try:
             super().put_metadata(opt_id, key, value)
         except KeyError:
@@ -408,43 +423,24 @@ class FileLogger(BaseLogger):
         self._get_group(opt_id)._v_attrs[key] = value
 
     def put_manager_metadata(self, key: str, value: Any):
-        """ Records optimization settings and history information (similar to that in glompo_manager_log.yml) into the
-            H5 file.
+        """ Records optimization settings and history information (similar to that in ``glompo_manager_log.yml``) into
+         the HDF5 file.
         """
         self.pytab_file.root._v_attrs[key] = value
 
     def put_message(self, opt_id: int, message: str):
-        """ Optimizers can signal special messages to the optimizer during the optimization which can be saved to
-            the log.
-        """
         super().put_message(opt_id, message)
         table = self._get_group(opt_id)['messages']
         table.append(message)
         table.flush()
 
     def get_metadata(self, opt_id, key: str) -> Any:
-        """ Returns metadata of a given optimizer and key. """
         try:
             return super().get_metadata(opt_id, key)
         except KeyError:
             return self._get_group(opt_id)._v_attrs[key]
 
     def get_history(self, opt_id: int, track: str) -> List:
-        """ Returns data from the evaluation history of optimizer opt_id.
-
-            Parameters
-            ----------
-            opt_id
-                Unique optimizer identifier.
-            track
-                Column name to return. Any column name in the logfile can be used. The following are always present:
-                    - 'call_id'
-                        The overall evaluation number across all function calls.
-                    - 'x'
-                        Input vectors evaluated by the optimizer.
-                    - 'fx'
-                        The function response for each iteration.
-        """
         try:
             return super().get_history(opt_id, track)
         except KeyError:
@@ -456,20 +452,20 @@ class FileLogger(BaseLogger):
             return []
 
     def _get_group(self, opt_id: int) -> tb.Group:
-        """ Returns the the tables.Group object for optimizer opt_id"""
+        """ Returns the the :class:`tables.Group` object for optimizer `opt_id`. """
         if opt_id not in self._groups:
             self._groups[opt_id] = self.pytab_file.get_node('/', f'optimizer_{opt_id}')
         return self._groups[opt_id]
 
     def _get_table(self, opt_id: int) -> tb.Table:
-        """ Returns the the tables.Table object for optimizer opt_id"""
+        """ Returns the the :class:`tables.Table` object for optimizer `opt_id`. """
         if not self.has_iter_history(opt_id):
             self._tables[opt_id] = self.pytab_file.get_node('/', f'optimizer_{opt_id}/iter_hist')
         return self._tables[opt_id]
 
     def flush(self, opt_id: Optional[int] = None):
-        """ Writes iterations held in chunks to disk. If opt_id is provided then the corresponding
-            optimizer is closed, else all optimizers are closed in this way.
+        """ Writes iterations held in chunks to disk.
+        If `opt_id` is provided then the corresponding optimizer is closed, else all optimizers are closed in this way.
         """
         opt_ids = [opt_id] if opt_id else self._writing_chunk.keys()
 
@@ -482,8 +478,8 @@ class FileLogger(BaseLogger):
                 table.flush()
 
     def clear_cache(self, opt_id: Optional[int] = None):
-        """ Clears information held in the cache for hunting purposes. If opt_id is provided then the corresponding
-            optimizer is closed, else all optimizers are closed in this way.
+        """ Clears information held in the cache for hunting purposes.
+        If `opt_id` is provided then the corresponding optimizer is closed, else all optimizers are closed in this way.
         """
         opt_ids = [opt_id] if opt_id else range(1, self.n_optimizers + 1)
         for o in opt_ids:
@@ -495,18 +491,18 @@ class FileLogger(BaseLogger):
                 super().clear_cache(o)
 
     def open(self, path: Union[Path, str], mode: str, checksum: str):
-        """ Opens or creates the H5 file.
+        """ Opens or creates the HDF5 file.
 
-            Parameters
-            ----------
-            path
-                File path in which to construct the logfile.
-            mode
-                The open mode of the file. 'w' and 'a' modes are supported.
-            checksum
-                Unique checksum value generated by GloMPOManager and stored in checkpoints and the logfile. When a
-                checkpoint is loaded, GloMPO will confirm a match between the checksum value in the checkpoint and in
-                the logfile before using it.
+        Parameters
+        ----------
+        path
+            File path in which to construct the logfile.
+        mode
+            The open mode of the file. :code:`'w'` and :code:`'a'` modes are supported.
+        checksum
+            Unique checksum value generated by :class:`.GloMPOManager` and stored in checkpoints and the logfile. When a
+            checkpoint is loaded, GloMPO will confirm a match between the checksum value in the checkpoint and in
+            the logfile before using it (see :ref:`Checkpointing`).
         """
         self.pytab_file = tb.open_file(str(path), mode, filters=tb.Filters(1, 'blosc'))
         self.pytab_file.root._v_attrs.checksum = checksum
@@ -528,7 +524,4 @@ class FileLogger(BaseLogger):
         self.pytab_file.close()
 
     def checkpoint_save(self, path: Union[Path, str] = '', block: Optional[Sequence[str]] = None):
-        """ Saves the state of the logger, suitable for resumption, during a checkpoint. Path is a directory in which to
-            dump the generated files.
-        """
         super().checkpoint_save(path, ['pytab_file', '_tables', '_groups'])

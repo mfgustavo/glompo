@@ -66,6 +66,16 @@ __all__ = ("GloMPOManager",)
 class GloMPOManager:
     """ Provides the main interface to GloMPO. The manager runs the optimization and produces all the output.
 
+    The manager is not initialised directly with its settings (:meth:`!__init__` accepts no arguments).
+    Either use :meth:`setup` to build a new optimization or :meth:`load_checkpoint` to resume an optimization from a
+    previously saved checkpoint file. Alternatively, class methods :meth:`new_manager` and :meth:`load_manager` are also
+    provided. Two equivalent ways to setup a new manager are shown below::
+
+       manager = GloMPOManager()
+       manager.setup(...)
+
+       manager = GloMPOManager.new_manager(...)
+
     Attributes
     ----------
     allow_forced_terminations : bool
@@ -166,7 +176,7 @@ class GloMPOManager:
         :obj:`True` if the manager is allowed to create new children. The manager will shutdown if all children
         terminate and this is :obj:`False`.
     split_printstreams : bool
-        :obj:`True` if the printstreams for children are redirected to individual files (see :ref:`Logging Messages`).
+        :obj:`True` if the printstreams for children are redirected to individual files (see :ref:`Outputs`).
     status_frequency : float
         Frequency (in seconds) with which a status message is produced for the logger.
     summary_files : int
@@ -217,13 +227,6 @@ class GloMPOManager:
 
     # noinspection PyTypeChecker
     def __init__(self):
-        """ Creates a new manager object.
-
-        The manager is not initialised directly with its settings. Either use :meth:`setup` to build a new optimization
-        or :meth:`load_checkpoint` to resume an optimization from a previously saved checkpoint file. Alternatively,
-        class methods :meth:`new_manager` and :meth:`load_manager` are also provided.
-        """
-
         # Filter Warnings
         warnings.simplefilter("always", UserWarning)
         warnings.simplefilter("always", RuntimeWarning)
@@ -675,7 +678,7 @@ class GloMPOManager:
            :attr:`~.GloMPOManager.working_dir`
               This can be changed, however, if a log file exists and you would like to append into this file, make sure
               to copy/move it to the new :attr:`working_dir` and name it :code:`'glompo_log.h5'` before loading the
-              checkpoint otherwise GloMPO will create a new log file (see :ref:`Logging Messages`).
+              checkpoint otherwise GloMPO will create a new log file (see :ref:`Outputs` and :ref:`Checkpointing`).
         """
 
         if self.is_initialised:

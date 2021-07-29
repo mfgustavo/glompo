@@ -13,7 +13,7 @@ Globally Managed Parallel Optimization
     parallelism
     components/components
     userinterventions
-    results
+    outputs
     tests
     references
 

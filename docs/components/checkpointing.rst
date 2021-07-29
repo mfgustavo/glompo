@@ -14,7 +14,7 @@ responsibility to ensure that the used optimizers are restartable.
 
 .. tip::
 
-   Within :code:`tests/test_optimizers.py` there is the :class:`!TestSubclassesGlompoCompatible` class which can be used
+   Within ``tests/test_optimizers.py`` there is the :class:`!TestSubclassesGlompoCompatible` class which can be used
    to ensure an optimizer is compatible with all of GloMPO's functionality.
 
 The optimization task can sometimes not be reduced to a pickled state depending on it complexity and interfaces to other
@@ -24,7 +24,7 @@ without the optimization task. GloMPO can be restarted from an incomplete checkp
 provided.
 
 Similarly to manual stopping of optimizers (see :ref:`User Interventions`), manual checkpoints can also be requested by
-creating a file named `CHKPT` in the working directory. Note, that this file will be deleted by the manager when the
+creating a file named ``CHKPT`` in the working directory. Note, that this file will be deleted by the manager when the
 checkpoint is created.
 
 .. caution::
@@ -60,7 +60,7 @@ checkpoint is created.
    copy/rename the log file they wish to retain before loading a checkpoint.
 
 Checkpointing Control Settings
-==============================
+------------------------------
 
 .. autoclass:: glompo.core.checkpointing.CheckpointingControl
    :members:

@@ -103,7 +103,7 @@ class Ackley(BaseTestCase):
 
         Global minimum: :math:`f(0, 0, ..., 0) = 0`
 
-        .. image:: /_figs/ackley.png
+        .. image:: /_static/ackley.png
            :align: center
            :alt: Multimodal flat surface with a single deep global minima. Multimodal version of the Easom function.
     """
@@ -158,7 +158,7 @@ class Alpine01(BaseTestCase):
 
         Global minimum: :math:`f(0, 0, ..., 0) = 0`
 
-        .. image:: /_figs/alpine01.png
+        .. image:: /_static/alpine01.png
            :align: center
            :alt: Highly oscillatory non-periodic surface.
     """
@@ -197,7 +197,7 @@ class Alpine02(BaseTestCase):
 
         Global minimum: :math:`f(7.917, 7.917, ..., 7.917) = -6.1295`
 
-        .. image:: /_figs/alpine02.png
+        .. image:: /_static/alpine02.png
            :align: center
            :alt: Moderately oscillatory periodic surface.
     """
@@ -233,7 +233,7 @@ class Deceptive(BaseTestCase):
 
         Global minimum: :math:`f(a) = -1`
 
-        .. image:: /_figs/deceptive.png
+        .. image:: /_static/deceptive.png
            :align: center
            :alt: Small global minimum surrounded by areas which slope away from it.
     """
@@ -302,7 +302,7 @@ class Easom(BaseTestCase):
 
         Global minimum: :math:`f(\\pi, \\pi) = -1`
 
-        .. image:: /_figs/easom.png
+        .. image:: /_static/easom.png
            :align: center
            :alt: Totally flat surface with a single very small bullet hole type minimum.
     """
@@ -351,7 +351,7 @@ class Griewank(BaseTestCase):
 
         Global minimum: :math:`f(0, 0, ..., 0) = 0`
 
-        .. image:: /_figs/griewank.png
+        .. image:: /_static/griewank.png
            :align: center
            :alt: Highly oscillatory totally-periodic surface on a general parabolic surface. Similar to Rastrigin.
     """
@@ -394,7 +394,7 @@ class Langermann(BaseTestCase):
 
         Global minimum: :math:`f(2.00299219, 1.006096) = -5.1621259`
 
-        .. image:: /_figs/langermann.png
+        .. image:: /_static/langermann.png
            :align: center
            :alt: Analogous to ripples on a water surface after three drops have hit it.
     """
@@ -452,7 +452,7 @@ class ExpLeastSquaresCost(BaseTestCase):
 
         Global minimum: :math:`f(p_1, p_2, ..., p_n) \\approx 0`
 
-        .. image:: /_figs/lstsqrs.png
+        .. image:: /_static/lstsqrs.png
            :align: center
            :alt: Minimum sandwiched between very flat surface and very steep walls.
 
@@ -547,7 +547,7 @@ class Levy(BaseTestCase):
 
         Global minimum: :math:`f(1, 1, ..., 1) = 0`
 
-        .. image:: /_figs/levy.png
+        .. image:: /_static/levy.png
            :align: center
            :alt: Moderately oscillatory periodic surface.
     """
@@ -603,7 +603,7 @@ class Michalewicz(BaseTestCase):
                         -9.66 & \\text{if} & d=10 \\\\
                    \\end{cases}
 
-        .. image:: /_figs/michalewicz.png
+        .. image:: /_static/michalewicz.png
            :align: center
            :alt: Flat surface with many valleys and a single global minimum.
 
@@ -662,7 +662,7 @@ class Qing(BaseTestCase):
 
         Global minimum: :math:`f(\\sqrt{1}, \\sqrt{2}, ..., \\sqrt{n}) = 0`
 
-        .. image:: /_figs/qing.png
+        .. image:: /_static/qing.png
            :align: center
            :alt: Globally flat with parabolic walls but has :math:`2^d` degenerate global minima.
     """
@@ -705,7 +705,7 @@ class Rana(BaseTestCase):
 
         Global minimum: :math:`f(-500, -500, ..., -500) = -928.5478`
 
-        .. image:: /_figs/rana.png
+        .. image:: /_static/rana.png
            :align: center
            :alt: Highly multimodal and chaotic, optimum is on the lower bound
     """
@@ -747,7 +747,7 @@ class Rastrigin(BaseTestCase):
 
         Global minimum: :math:`f(0, 0, ..., 0) = 0`
 
-        .. image:: /_figs/rastrigin.png
+        .. image:: /_static/rastrigin.png
            :align: center
            :alt: Modulation of a unimodal paraboloid with multiple regular local minima.
     """
@@ -784,7 +784,7 @@ class Rosenbrock(BaseTestCase):
 
         Global minimum: :math:`f(1, 1, ..., 1) = 0`
 
-        .. image:: /_figs/rosenbrock.png
+        .. image:: /_static/rosenbrock.png
            :align: center
            :alt: Global minimum is located in a very easy to find valley but locating it within the valley is difficult.
     """
@@ -819,7 +819,7 @@ class Schwefel(BaseTestCase):
 
         Global minimum: :math:`f(420.9687, 420.9687, ..., 420.9687) = -418.9829d`
 
-        .. image:: /_figs/schwefel.png
+        .. image:: /_static/schwefel.png
            :align: center
            :alt: Multimodal and deceptive in that the global minimum is very far from the next best local minimum.
     """
@@ -866,7 +866,7 @@ class Shekel(BaseTestCase):
 
         Global minimum: :math:`f(4, 4, 4, 4) =~ -10`
 
-        .. image:: /_figs/shekel.png
+        .. image:: /_static/shekel.png
            :align: center
            :alt: Multiple minima of different depths clustered together on a mostly-flat surface.
     """
@@ -951,7 +951,7 @@ class Shubert(BaseTestCase):
 
         Recommended bounds: :math:`x_i \\in [-10, 10]`
 
-        .. image:: /_figs/shubert.png
+        .. image:: /_static/shubert.png
            :align: center
            :alt: Highly oscillatory, periodic surface. Many degenerate global minima regularly placed.
     """
@@ -1046,7 +1046,7 @@ class Stochastic(BaseTestCase):
 
         Global minimum: :math:`f(1/d, 1/d, ..., 1/d) = 0`
 
-        .. image:: /_figs/stochastic.png
+        .. image:: /_static/stochastic.png
            :align: center
            :alt: Parabolic function with random evaluation noise making a substantial contribution.
     """
@@ -1084,7 +1084,7 @@ class StyblinskiTang(BaseTestCase):
 
         Global minimum: :math:`f(-2.90, -2.90, ..., -2.90) = -39.16616570377 d`
 
-        .. image:: /_figs/styblinskitang.png
+        .. image:: /_static/styblinskitang.png
            :align: center
            :alt: Similar to Qing function but minima are deceptively similar but not actually degenerate.
     """
@@ -1121,7 +1121,7 @@ class Trigonometric(BaseTestCase):
 
         Global minimum: :math:`f(0.9, 0.9, ..., 0.9) = 1`
 
-        .. image:: /_figs/trigonometric.png
+        .. image:: /_static/trigonometric.png
            :align: center
            :alt: Parabolic but becomes a multimodal flat surface with many peaks and troughs near the minimum.
     """
@@ -1159,7 +1159,7 @@ class Vincent(BaseTestCase):
 
         Global minimum: :math:`f(7.706, 7.706, ..., 7.706) = -d`
 
-        .. image:: /_figs/vincent.png
+        .. image:: /_static/vincent.png
            :align: center
            :alt: 'Flat' surface made of period peaks and trough of various sizes.
     """
@@ -1199,7 +1199,7 @@ class ZeroSum(BaseTestCase):
 
         Global minimum: :math:`f(x) = 0 \text{where} \\sum^n_{i=1} x_i = 0`
 
-        .. image:: /_figs/zerosum.png
+        .. image:: /_static/zerosum.png
            :align: center
            :alt: Single valley of degenerate global minimum results that is not axi-parallel.
     """

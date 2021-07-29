@@ -1,6 +1,6 @@
 .. Add banner here
 
-.. image:: docs/_figs/banner.gif
+.. image:: docs/_static/banner.gif
    :width: 800
 
 ..  Add buttons here
@@ -28,7 +28,7 @@ The three main advantages to optimization in this way:
 
 3. The use of multiple optimizers allows multiple competitive/equivalent solutions to be found.
 
-.. image:: docs/_figs/demo.gif
+.. image:: docs/_static/demo.gif
    :width: 500
    :align: center
 
@@ -43,6 +43,8 @@ Installation
 ############
 
 [`Back to Top`_]
+
+.. install-start
 
 #. The source code may be downloaded directly from `GitHub <https://github.com/mfgustavo/glompo>`_, or it may be cloned
    into a target directory using:
@@ -97,6 +99,8 @@ Installation
 
    .. note::
        If your tests fail, please raise an issue as detailed in the `Issues`_ section.
+
+.. install-end
 
 #####
 Usage

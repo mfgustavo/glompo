@@ -119,7 +119,7 @@ configure the manager and will give the user a good overview of what is possible
 
 GloMPO contains built-in logging statements throughout the library. These will not show up by default but can be
 accessed if desired. In fact intercepting the
-`logging.INFO <https://docs.python.org/3.6/library/logging.html?highlight=logging%20info#logging-levels>`_ level
+`logging.INFO <https://docs.python.org/3.6/library/logging.html?#logging-levels>`_ level
 statements from the manager creates a nice progress stream from the optimization; we will set this up here.
 See :ref:`Logging Messages` for more information.
 
@@ -210,11 +210,11 @@ can also be used for tasks that are not multiprocessing safe. In this example we
 
 GloMPO includes a dynamic scope allowing one to watch the optimization progress in real-time using a graphic.
 This can be very helpful when configuring GloMPO and the results can be saved as movie files. This functionality
-requires `matplotlib <http://matplotlib.sourceforge.net/>`_ and `ffmpeg <ffmpeg.org>`_ installed on the system.
+requires :doc:`matplotlib <matplotlib:index>` and `ffmpeg <ffmpeg.org>`_ installed on the system.
 
 This is turned on for this example but if the script fails simply set :code:`visualisation` to :obj:`False` to
 bypass it. Note also that the scope is very helpful for preliminary configuration but is slow due to
-`matplotlib <http://matplotlib.sourceforge.net/>`_\\'s limitations and should not be used during production runs.
+:doc:`matplotlib <matplotlib:index>`\\'s limitations and should not be used during production runs.
 
 .. literalinclude:: ../examples/customized.py
    :linenos:
@@ -234,7 +234,7 @@ crash. Note that this will not work on threaded backends. In this example this i
 GloMPO supports checkpointing. This means that its state can be persisted to file during an optimization and this
 checkpoint file can be loaded by another GloMPO instance to resume the optimization from that point. Checkpointing
 options are configured through a :class:`.CheckpointingControl` instance. In this case we will produce a checkpoint
-called :code:`'customized_completed_<DATE>_<TIME>.tar.gz'` once the task has converged.
+called ``customized_completed_<DATE>_<TIME>.tar.gz`` once the task has converged.
 
 .. literalinclude:: ../examples/customized.py
    :linenos:

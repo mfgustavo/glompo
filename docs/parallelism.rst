@@ -5,7 +5,7 @@ Parallelism
 Resource balancing is critical to GloMPO's success. The typical GloMPO execution
 hierarchy takes the following form:
 
-.. image:: /_figs/hierarchy.png
+.. image:: /_static/hierarchy.png
 
 The first level of parallelization is done at the manager level and controls how the
 optimizer routines are spun-off from the manager. This can be done using multiprocessing
