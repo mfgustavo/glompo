@@ -4,7 +4,7 @@ from time import sleep
 import numpy as np
 import pytest
 
-pytest.importorskip('matplotlib.pyplot', "Matplotlib package needed to use these features.")
+pytest.importorskip('matplotlib.pyplot', reason="Matplotlib package needed to use these features.")
 
 import matplotlib.pyplot as plt
 
@@ -99,7 +99,7 @@ class TestScope:
 
     @pytest.mark.parametrize("record", [True, False])
     def test_checkpointing(self, record, tmp_path):
-        pytest.importorskip('dill', "dill package needed to test and use checkpointing")
+        pytest.importorskip('dill', reason="dill package needed to test and use checkpointing")
 
         scope = GloMPOScope(log_scale=False,
                             record_movie=record,

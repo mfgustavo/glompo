@@ -2,7 +2,7 @@
 ======================  =====
 Install Key             Description
 ======================  =====
-all                     Installs all optional requirements.
+all                     Installs all (publicly available) optional requirements.
 checkpointing           Build checkpoints from which to resume runs.
 cma                     Add CMA-ES optimizer.
 docs                    Build documentation locally.
@@ -19,7 +19,7 @@ video                   Produce a MPEG-4 file of the optimization.
 .. tab-end
 PySide2~=5.15.2:         video
 cma~=2.7:                cma
-dill~=0.2.7:             checkpointing
+dill~=0.3:               checkpointing
 matplotlib~=3.3.2:       plotting, video
 nevergrad~=0.3.2:        nevergrad
 optsam:                  gfls

@@ -82,7 +82,7 @@ class TestLogger:
         assert filled_log.get_metadata(3, "end_cond") == "fmax condition met"
 
     def test_checkpoint_save(self, request, filled_log, tmp_path):
-        pytest.importorskip('dill', "dill package needed to test and use checkpointing")
+        pytest.importorskip('dill', reason="dill package needed to test and use checkpointing")
         filled_log.checkpoint_save(tmp_path)
         assert (tmp_path / 'opt_log').exists()
         request.config.cache.set('log_checkpoint', str(tmp_path / 'opt_log'))
@@ -102,12 +102,12 @@ class TestLogger:
     @pytest.mark.parametrize("log_scale", [True, False])
     @pytest.mark.parametrize("best_fx", [True, False])
     def test_plot_traj(self, filled_log, log_scale, best_fx, tmp_path, save_outputs):
-        pytest.importorskip('matplotlib.pyplot', "Matplotlib package needed to use these features.")
+        pytest.importorskip('matplotlib.pyplot', reason="Matplotlib package needed to use these features.")
         filled_log.plot_trajectory(Path(tmp_path, 'traj.png'), log_scale, best_fx)
         assert Path(tmp_path, 'traj.png').exists()
 
     def test_plot_opts(self, tmp_path, filled_log, save_outputs):
-        pytest.importorskip('matplotlib.pyplot', "Matplotlib package needed to use these features.")
+        pytest.importorskip('matplotlib.pyplot', reason="Matplotlib package needed to use these features.")
         filled_log.plot_optimizer_trials(tmp_path)
         for i in range(1, 4):
             assert Path(tmp_path, f"opt{i}_parms.png").exists()

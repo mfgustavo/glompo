@@ -191,7 +191,7 @@ class TestBase:
         assert process.exitcode == 0 and 0.5 < time() - t_start < 1.5
 
     def test_checkpointsave(self, mp_package, tmp_path, capfd):
-        dill = pytest.importorskip('dill', "dill package needed to test and use checkpointing")
+        dill = pytest.importorskip('dill', reason="dill package needed to test and use checkpointing")
         opti = PlainOptimizer(1, mp_package.c_pipe, mp_package.queue, mp_package.event)
         opti.workers = 685
         process = mp.Process(target=opti.minimize, args=(None, None, None))
@@ -344,7 +344,7 @@ class TestSubclassesGlompoCompatible:
         assert "glompo.optimizers.opt" in opti.logger.name
 
     def test_checkpointing(self, opti, init_kwargs, call_kwargs, mp_package, task, tmp_path):
-        pytest.importorskip('dill', "dill package needed to test and use checkpointing")
+        pytest.importorskip('dill', reason="dill package needed to test and use checkpointing")
 
         opti = opti(results_queue=mp_package.queue,
                     signal_pipe=mp_package.c_pipe,

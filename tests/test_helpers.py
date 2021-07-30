@@ -16,7 +16,7 @@ except (ModuleNotFoundError, ImportError):
 from glompo.common.helpers import WorkInDirectory, LiteralWrapper, literal_presenter, nested_string_formatting, \
     unknown_object_presenter, generator_presenter, optimizer_selector_presenter, present_memory, FlowList, \
     flow_presenter, numpy_array_presenter, numpy_dtype_presenter, BoundGroup, bound_group_presenter, is_bounds_valid, \
-    distance, glompo_colors, rolling_min, unravel, deepsizeof, infer_headers, SplitOptimizerLogs
+    distance, glompo_colors, rolling_min, unravel, infer_headers, SplitOptimizerLogs
 from glompo.opt_selectors import BaseSelector, CycleSelector
 from glompo.opt_selectors.spawncontrol import IterSpawnStop
 from glompo.generators import RandomGenerator, BaseGenerator
@@ -99,15 +99,6 @@ def test_rolling_best(arr, output):
                                       ('averylongstring', ['averylongstring'])])
 def test_unravel(obj, ret):
     assert [*unravel(obj)] == ret
-
-
-@pytest.mark.parametrize('obj, size', [([1, 2, 3, 4, [1, 2, 3, 4]], 200),
-                                       (11231, 28),
-                                       (1123131231, 32),
-                                       ([121, {'ag': [1, 2, 3], 'b': [4, 5, 6]}, ('4', None), [3, 3, 3]],
-                                        96 + 240 + 51 + 50 + 88 + 88 + 64 + 88)])
-def test_deepsizeof(obj, size):
-    assert deepsizeof(obj) == size
 
 
 @pytest.mark.parametrize('obj, ret', [(123.4, {'result_0': tb.Float64Col(pos=0)}),
@@ -201,8 +192,8 @@ def test_work_in_directory(tmp_path):
 
 @pytest.mark.parametrize("opt_id", [10, 35, 53, 67, 73, 88, 200, None])
 def test_colors(opt_id):
-    plt = pytest.importorskip('matplotlib.pyplot', "Matplotlib package needed to use these features.")
-    cols = pytest.importorskip('matplotlib.colors', "Matplotlib package needed to use these features.")
+    plt = pytest.importorskip('matplotlib.pyplot', reason="Matplotlib package needed to use these features.")
+    cols = pytest.importorskip('matplotlib.colors', reason="Matplotlib package needed to use these features.")
     if opt_id:
         if opt_id < 20:
             colors = plt.get_cmap("tab20")

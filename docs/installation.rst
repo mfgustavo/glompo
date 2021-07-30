@@ -18,7 +18,7 @@ To install GloMPO with extra requirements:
 
    pip install .[cma, checkpointing]
 
-To install GloMPO with all extra requirements:
+To install GloMPO with all (publicly available) extra requirements:
 
 .. code-block:: bash
 

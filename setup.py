@@ -18,7 +18,8 @@ def get_extra_requires(path: str):
     req_dict = {'all': set()}
     for r in req:
         pack, key = (_.strip() for _ in r.split(':'))
-        req_dict['all'].add(pack)
+        if not any(special in pack for special in ('scm', 'optsam')):  # Cannot be requested from PyPI.
+            req_dict['all'].add(pack)
 
         if key in req_dict:
             req_dict[key].add(pack)
