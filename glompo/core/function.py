@@ -51,8 +51,8 @@ class BaseFunction:
         raise NotImplementedError
 
     def headers(self) -> Dict[str, tb.Col]:
-        """ Optional implementation. If detailed_call is being used, this method returns a dictionary descriptor for
-            each column of the return. Keys represent the name of each element of the return, values represent the
+        """ Optional implementation. If :meth:`detailed_call` is being used, this method returns a dictionary descriptor
+            for each column of the return. Keys represent the name of each element of the return, values represent the
             corresponding :class:`tables.Col` data type.
 
             If headers is not defined, GloMPO will attempt to infer types from a function evaluation return. Be warned

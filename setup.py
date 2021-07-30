@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from setuptools import find_packages, setup
 
 
@@ -5,6 +7,25 @@ def get_readme():
     """Load README.rst for display on PyPI."""
     with open("README.rst") as fhandle:
         return fhandle.read()
+
+
+def get_extra_requires(path: str):
+    req = Path(path).read_text()
+    req = req.split('.. tab-end')[1]
+    req = req.strip()
+    req = req.split('\n')
+
+    req_dict = {'all': set()}
+    for r in req:
+        pack, key = (_.strip() for _ in r.split(':'))
+        req_dict['all'].add(pack)
+
+        if key in req_dict:
+            req_dict[key].add(pack)
+        else:
+            req_dict[key] = {pack}
+
+    return req_dict
 
 
 with open('glompo/_version.py', 'r') as file:
@@ -23,19 +44,7 @@ setup(
     license_file='LICENSE',
     include_package_data=True,
     package_dir={"glompo": "glompo"},
-    install_requires=['numpy', 'PyYAML', 'tables'],
+    install_requires=['numpy~=1.17.4', 'PyYAML~=5.1.2', 'tables~=3.6.1'],
     python_requires='>=3.6',
-    extras_require={
-        'Docs': ['sphinx==1.8.5', 'sphinx-rtd-theme==0.5.2'],
-        'Plotting': ['matplotlib'],
-        'Video': ['matplotlib>=3.0, <3.4', 'PySide2'],
-        'PerturbationGenerator': ['scipy'],
-        'UnitTesting': ['pytest>=4.4'],
-        'CMAOptimizer': ['cma>=2.7, <3'],
-        'GFLSOptimizer': ['optsam'],
-        'Nevergrad': ['nevergrad'],
-        'ParAMSWrapper': ['scm'],
-        'Checkpointing': ['dill>=0.2.7'],
-        'ResourceUsageStatusPrinting': ['psutil>=5.6.2']
-    }
+    extras_require=get_extra_requires('extra_requirements.txt'),
 )

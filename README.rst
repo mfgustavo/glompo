@@ -12,6 +12,8 @@
 
 .. Describe your project in brief
 
+.. describe-start
+
 GloMPO (**Glo**\bally **M**\anaged **P**\arallel **O**\ptimization) is an optimisation framework which supervises and
 controls traditional optimization routines in real-time using customisable heuristics. By monitoring the performance of
 each of these optimizers in real time, the GloMPO manager is able to make decisions to terminate and start new
@@ -27,6 +29,8 @@ The three main advantages to optimization in this way:
 2. Through terminations of optimizers stuck in local minima, function evaluations can be used more efficiently;
 
 3. The use of multiple optimizers allows multiple competitive/equivalent solutions to be found.
+
+.. describe-end
 
 .. image:: docs/_static/demo.gif
    :width: 500
@@ -46,61 +50,67 @@ Installation
 
 .. install-start
 
-#. The source code may be downloaded directly from `GitHub <https://github.com/mfgustavo/glompo>`_, or it may be cloned
-   into a target directory using:
+The source code may be downloaded directly from `GitHub <https://github.com/mfgustavo/glompo>`_, or it may be cloned
+into a target directory using:
 
-   .. code-block:: bash
+.. code-block:: bash
 
-       git clone https://github.com/mfgustavo/glompo.git
+    git clone https://github.com/mfgustavo/glompo.git
 
+Installation is easy after download:
 
+.. code-block:: bash
 
-#. Installation is easy after download:
+    cd /path/to/glompo
+    pip install .
 
-   .. code-block:: bash
+This will copy the GloMPO source code into your Python environment. If you are developing for GloMPO, you may prefer to
+install in developer mode:
 
-       cd /path/to/glompo
-       pip install .
+.. code-block:: bash
 
-   This will copy the GloMPO source code into your Python environment. If you are developing for GloMPO, you may prefer
-   to install in developer mode:
+    cd /path/to/glompo
+    pip install -e .
 
-   .. code-block:: bash
-
-       cd /path/to/glompo
-       pip install -e .
-
-   This will not copy the source code and GloMPO will be read directly from the directory into which it was downloaded
-   or extracted.
-
-#. The installation will only install core GloMPO dependencies.
-   Packages required for optional features must be installed manually. These
-   features and their dependencies can be consulted in the ``extra_requires``
-   option of ``setup.py``.
-
-   Alternatively, you may select, during installation, the optional features you would like to use:
-
-   .. code-block:: bash
-
-       pip install .[CMAOptimizer,Video,Plotting,Checkpointing,...]
-
-#. You should confirm that everything is working correctly by running the tests in the
-   ``tests`` folder. Running the tests requires ``pytest`` be installed to your Python
-   environment. This is not installed automatically with GloMPO.
-
-   .. code-block:: bash
-
-       cd /path/to/glompo
-       pytest
-
-   .. note::
-       Tests which require optional components will be automatically skipped if the
-       required packages are not installed.
-
-   .. note::
-       If your tests fail, please raise an issue as detailed in the `Issues`_ section.
+This will not copy the source code and GloMPO will be read directly from the directory into which it was downloaded or
+extracted.
 
 .. install-end
+
+The installation will only install core GloMPO dependencies. Packages required for optional features must be installed
+manually. These features and their dependencies can be consulted in the
+`documentation <https://glompo.readthedocs.io/installation.html>`_.
+
+To install GloMPO with optional dependencies:
+
+.. code-block:: bash
+
+    pip install .[cma,checkpointing,...]
+
+#####
+Tests
+#####
+
+.. test-start
+
+You should confirm that everything is working correctly by running the tests in the ``tests`` folder. Running the tests
+requires ``pytest`` be installed to your Python environment. This is not installed automatically with GloMPO, but can be
+done with the ``testing`` install option.
+
+.. code-block:: bash
+
+   cd /path/to/glompo
+   pytest
+
+.. note::
+    Tests which require optional components will be automatically skipped if the required packages are not installed.
+
+.. test-end
+
+.. note::
+    If your tests fail, please raise an issue as detailed in the `Issues`_ section.
+
+
 
 #####
 Usage
@@ -188,7 +198,7 @@ implemented in a modular way such that all decision criteria is customizable.
 ``hunters``
    Each file contains a different ``BaseHunter`` child-class. These are termination conditions which, if satisfied,
    will get GloMPO to trigger an early termination of a particular optimizer. These classes/conditions can be combined
-   similarly to ``BaseChecker`` s:
+   similarly to ``BaseChecker``\s:
 
 ``benchmark_fncs``
    A collection of well-known global optimization test functions. These are often faster to evaluate than the actual
@@ -201,14 +211,21 @@ Issues
 
 [`Back to Top`_]
 
+.. issue-start
+
 Raise any issues encountered on the appropriate `GitHub <https://github.com/mfgustavo/glompo/issues/new>`_ page. Please
-include a MWE of the problem and a detailed description of the workflow which led to the error.
+include a MWE of the problem, a list of packages installed in your python environment, and a detailed description of the
+workflow which led to the error.
+
+.. issue-end
 
 #############
 Contributions
 #############
 
 [`Back to Top`_]
+
+.. contri-start
 
 Contributions are welcome and can be submitted as pull requests `here <https://github.com/mfgustavo/glompo/pulls>`_.
 Before contributing new material, please raise a new `issue <https://github.com/mfgustavo/glompo/issues/new>`_ and tag
@@ -227,16 +244,26 @@ Pull request checklist:
 
 #. Keep each pull request small and linked to a single issue.
 
+.. contri-end
+
 #######
 License
 #######
 
 [`Back to Top`_]
 
+.. license-start
+
 GloMPO is licensed under `GPL-3.0 <https://opensource.org/licenses/GPL-3.0>`_.
+
+.. license-end
 
 ########
 Citation
 ########
 
+.. citation-start
+
 If you find GloMPO useful, please consider citing the follow article in your work:
+
+.. citation-end

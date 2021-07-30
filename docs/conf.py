@@ -22,7 +22,11 @@ copyright = '2021, Michael Freitas Gustavo'
 author = 'Michael Freitas Gustavo'
 
 # The full version, including alpha/beta/rc tags
-release = 'v3.0.2'
+with open('../glompo/_version.py', 'r') as file:
+    exec(file.read())
+
+# noinspection PyUnresolvedReferences
+release = __version__
 
 # -- General configuration ---------------------------------------------------
 
