@@ -78,7 +78,6 @@ nitpick_ignore = [('py:class', 'List'),
 
 # Autodoc settings ----------------------------------------------------------
 autodoc_mock_imports = ['matplotlib',
-                        'ffmpeg',
                         'PySide2',
                         'scipy',
                         'pytest',
