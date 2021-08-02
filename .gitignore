@@ -5,3 +5,4 @@ saved_test_outputs
 .idea/
 __pycache__
 docs/_build
+.pylintrc

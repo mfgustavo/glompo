@@ -61,7 +61,7 @@ def needs_optional_package(package: str):
                 return func(*args, **kwargs)
             except (ModuleNotFoundError, ImportError):
                 warnings.warn(f"Unable to construct checkpoint without {package} package installed.", ResourceWarning)
-                return
+                return None
 
         return wrapper
 

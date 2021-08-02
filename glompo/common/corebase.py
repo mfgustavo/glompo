@@ -1,4 +1,4 @@
-""" Abstract classes used to construct the hunter and convergence bases. """
+""" Abstract classes used to construct the :class:`BaseHunter` and :class:`BaseChecker` classes. """
 
 import inspect
 from abc import ABC, abstractmethod

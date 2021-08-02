@@ -360,7 +360,7 @@ class GloMPOManager:
 
         backend
             Indicates the form of parallelism used by the optimizers.
-            
+
             Accepts:
 
             :code:`'processes'`: Optimizers spawned as :class:`multiprocessing.Process`
@@ -432,7 +432,7 @@ class GloMPOManager:
         split_printstreams
             If :obj:`True`, optimizer print messages will be intercepted and saved to separate files.
             See :class:`.SplitOptimizerLogs`
-            
+
         Notes
         -----
 
@@ -446,16 +446,16 @@ class GloMPOManager:
            will cause the total number of occupied 'slots' to exceed :attr:`max_jobs`, even if the manager is currently
            managing fewer than the number of jobs available. In other words, if the manager has registered a total of
            30 of 32 slots filled, it will not start an optimizer that requires 3 or more slots.
-           
+
         #. Checkpointing requires the use of the :mod:`dill` package for serialisation. If you attempt to checkpoint or
            supply :code:`checkpointing_controls` without this package present, a warning will be raised and no
            checkpointing will occur.
-           
+
         #. .. caution::
 
               Use :code:`force_terminations_after` with caution as it runs the risk of corrupting the results queue, but
               ensures resources are not wasted on hanging processes.
-              
+
         #. After :obj:`end_timeout`, if the optimizer is still alive and a process, GloMPO will send a terminate signal
            to force it to close. However, threads cannot be terminated in this way and the manager can leave dangling
            threads at the end of its routine. If the script ends after a GloMPO routine then all its children
@@ -658,7 +658,7 @@ class GloMPOManager:
         #. GloMPO does not support making a single continuous recording of the optimization if it is stopped and
            resumed at some point. However, at the end of each section a movie file is made and these can be stitched
            together to make a continuous recording.
-           
+
         #. The following arguments cannot/should not be sent to `glompo_kwargs`:
 
            :attr:`~.GloMPOManager.bounds`
@@ -1663,15 +1663,15 @@ class GloMPOManager:
     def _save_log(self, result: Result, reason: str, caught_exception: Optional[str], dump_dir: Path,
                   summary_files: int):
         """ Saves the manager's state and history into the collection of files indicated by :obj:`summary_files`.
-            Valid options for :obj:`summary_files`:
-            
-            0. Nothing is saved.
+        Valid options for :obj:`summary_files`:
 
-            1. YAML file with summary info about the optimization settings, performance and the result.
+        0. Nothing is saved.
 
-            2. PNG file showing the trajectories of the optimizers.
+        1. YAML file with summary info about the optimization settings, performance and the result.
 
-            3. HDF5 file containing iteration history for each optimizer.
+        2. PNG file showing the trajectories of the optimizers.
+
+        3. HDF5 file containing iteration history for each optimizer.
         """
 
         data = {}
