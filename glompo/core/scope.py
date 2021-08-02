@@ -434,7 +434,7 @@ class GloMPOScope:
         dump_variables = {}
         for var in dir(self):
             if '__' not in var and not callable(getattr(self, var)) and \
-                    all([var != block for block in ('_writer', 'logger')]):
+                    all([var != block for block in ('_writer', 'logger', 'is_setup')]):
                 dump_variables[var] = getattr(self, var)
 
         with Path(path, 'scope').open('wb') as file:
