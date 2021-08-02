@@ -39,9 +39,12 @@ except ModuleNotFoundError:
 
 class PlainOptimizer(BaseOptimizer):
 
-    def __init__(self, opt_id: int = None, signal_pipe: mp.connection.Connection = None, results_queue: mp.Queue = None,
-                 pause_flag: mp.Event = None):
-        super().__init__(opt_id, signal_pipe, results_queue, pause_flag)
+    def __init__(self,
+                 _opt_id: int = None,
+                 _signal_pipe: mp.connection.Connection = None,
+                 _results_queue: mp.Queue = None,
+                 _pause_flag: mp.Event = None):
+        super().__init__(_opt_id, _signal_pipe, _results_queue, _pause_flag)
         self.terminate = False
         self.i = 0
 
@@ -208,7 +211,7 @@ class TestBase:
             assert data == {'i': 1, 'incumbent': {'x': None, 'fx': None}, 'is_log_detailed': False, 'terminate': False,
                             'workers': 685}
 
-            loaded_opt = PlainOptimizer.checkpoint_load(tmp_path / '0001', 1)
+            loaded_opt = PlainOptimizer.checkpoint_load(tmp_path / '0001', _opt_id=1)
             assert loaded_opt.i == data['i']
             assert loaded_opt.terminate is False
             assert loaded_opt.workers == 685
@@ -346,9 +349,9 @@ class TestSubclassesGlompoCompatible:
     def test_checkpointing(self, opti, init_kwargs, call_kwargs, mp_package, task, tmp_path):
         pytest.importorskip('dill', reason="dill package needed to test and use checkpointing")
 
-        opti = opti(results_queue=mp_package.queue,
-                    signal_pipe=mp_package.c_pipe,
-                    pause_flag=mp_package.event,
+        opti = opti(_results_queue=mp_package.queue,
+                    _signal_pipe=mp_package.c_pipe,
+                    _pause_flag=mp_package.event,
                     **init_kwargs)
 
         opti.added_to_check = 555
@@ -395,10 +398,10 @@ class TestCMA:
 
     @pytest.fixture()
     def optimizer(self, mp_package):
-        return CMAOptimizer(opt_id=1,
-                            signal_pipe=mp_package.c_pipe,
-                            results_queue=mp_package.queue,
-                            pause_flag=mp_package.event,
+        return CMAOptimizer(_opt_id=1,
+                            _signal_pipe=mp_package.c_pipe,
+                            _results_queue=mp_package.queue,
+                            _pause_flag=mp_package.event,
                             workers=1,
                             backend='threads',
                             popsize=3)
