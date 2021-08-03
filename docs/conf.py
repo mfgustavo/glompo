@@ -78,6 +78,7 @@ nitpick_ignore = [('py:class', 'List'),
                   ('py:class', 'Type'),
                   ('py:class', 'Union'),
                   ('py:class', 'Optional'),
+                  ('py:class', 'Inherited'),
                   ]
 
 # Autodoc settings ----------------------------------------------------------
@@ -93,8 +94,7 @@ autodoc_mock_imports = ['matplotlib',
                         'psutil',
                         ]
 
-autodoc_typehints = 'both'
-autoclass_content = 'class'
+autoclass_content = 'both'
 
 # Napoleon settings ----------------------------------------------------------
 napoleon_numpy_docstring = True
@@ -104,8 +104,6 @@ napoleon_use_admonition_for_notes = True
 
 # Autosummary settings -------------------------------------------------------
 autosummary_generate = False
-autosummary_generate_overwrite = True
-autosummary_generate_autosummary_docs = True
 
 # Intersphinx settings -------------------------------------------------------
 intersphinx_mapping = {
@@ -115,4 +113,6 @@ intersphinx_mapping = {
     'psutil': ('https://psutil.readthedocs.io/en/latest/', None),
     'matplotlib': ('http://matplotlib.sourceforge.net/', None),
     'numpy': ('http://docs.scipy.org/doc/numpy/', None),
+    'scm': ('https://www.scm.com/doc/params/', None),
+    'scipy': ('http://docs.scipy.org/doc/scipy/reference/', None),
 }

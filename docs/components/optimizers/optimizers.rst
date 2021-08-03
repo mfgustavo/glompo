@@ -10,4 +10,5 @@ Optimizers
    cma
    nevergrad
    gfls
+   scipy
    random

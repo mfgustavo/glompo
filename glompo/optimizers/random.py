@@ -15,7 +15,7 @@ class RandomOptimizer(BaseOptimizer):
 
     Parameters
     ----------
-    Optional, _opt_id _signal_pipe _results_queue _pause_flag workers backend is_log_detailed
+    Inherited, _opt_id _signal_pipe _results_queue _pause_flag workers backend is_log_detailed
         See :class:`.BaseOptimizer`.
     iters
         Number of function evaluations the optimizer will execute before terminating.

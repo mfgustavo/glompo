@@ -6,23 +6,11 @@ Resource balancing is critical to GloMPO's success. The typical GloMPO execution
 
 .. image:: _static/hierarchy.png
 
-The first level of parallelization is done at the manager level and controls how the optimizer routines are spun-off
-from the manager. This can be done using multiprocessing or multithreading and is controlled by sending
-:code:`'processes'` or :code:`'threads'` to the :code:`backend` parameter of the :class:`.GloMPOManager` initialisation
-method. Processes are preferable to threads as they sidestep the
-`Python Global Interpreter Lock <https://docs.python.org/3.6/glossary.html#term-global-interpreter-lock>`_  but there
-are scenarios where this is inappropriate.
+The first level of parallelization is done at the manager level and controls how the optimizer routines are spun-off from the manager. This can be done using multiprocessing or multithreading and is controlled by sending :code:`'processes'` or :code:`'threads'` to the :code:`backend` parameter of the :class:`.GloMPOManager` initialisation method. Processes are preferable to threads as they sidestep the `Python Global Interpreter Lock <https://docs.python.org/3.6/glossary.html#term-global-interpreter-lock>`_  but there are scenarios where this is inappropriate.
 
-The second level of parallelization is optimizer specific and present in swarm type optimizers like
-:class:`CMA-ES <.CMAOptimizer>` which require multiple function evaluations per optimizer iteration. These too can
-generally be evaluated in parallel using processes or threads. This can be configured by sending :code:`'processes'`,
-:code:`'threads'` or :code:`'processes_forced'` to the :code:`backend` parameter of :class:`.BaseOptimizer` objects
-during initialisation. To avoid crashes (see table below) GloMPO defaults to threading at this level. Parallelization at
-this level is not always advisable and should only be used in cases where the function evaluation itself is very
-expensive.
+The second level of parallelization is optimizer specific and present in swarm type optimizers like :class:`CMA-ES <.CMAOptimizer>` which require multiple function evaluations per optimizer iteration. These too can generally be evaluated in parallel using processes or threads. This can be configured by sending :code:`'processes'`, :code:`'threads'` or :code:`'processes_forced'` to the :code:`backend` parameter of :class:`.BaseOptimizer` objects during initialisation. To avoid crashes (see table below) GloMPO defaults to threading at this level. Parallelization at this level is not always advisable and should only be used in cases where the function evaluation itself is very expensive.
 
-In the case where the function being minimized is in pure python (and there are no calls to processes outside of python
-or calculations based on I/O calls) then load balancing will become challenging due to Python's own limitations:
+In the case where the function being minimized is in pure python (and there are no calls to processes outside of python or calculations based on I/O calls) then load balancing will become challenging due to Python's own limitations:
 
 =========  =========  =====
 Parallelization       Setup
@@ -56,21 +44,14 @@ Processes  Processes  |  Theoretically the ideal scenario which guarantees perfe
 
    We emphasize here that these difficulties only arise when attempting to load balance over two parallelization levels.
 
-As explained in the above table achieving process parallelism at both levels is not straightforward but GloMPO does
-support an avenue to do this, however, its use is **not recommended**: the user may send :code:`'processes_forced'` to
-the :code:`backend` parameter of the :class:`.GloMPOManager` initialisation method. This will spawn optimizers
-non-daemonically.
+As explained in the above table achieving process parallelism at both levels is not straightforward but GloMPO does support an avenue to do this, however, its use is **not recommended**: the user may send :code:`'processes_forced'` to the :code:`backend` parameter of the :class:`.GloMPOManager` initialisation method. This will spawn optimizers non-daemonically.
 
 .. warning::
 
-   This method is **not recommended**. It is unsafe to spawn non-daemonic processes since these expensive routines will
-   not be shutdown if the manager were to crash. The user would have to terminate them manually.
+   This method is **not recommended**. It is unsafe to spawn non-daemonic processes since these expensive routines will not be shutdown if the manager were to crash. The user would have to terminate them manually.
 
-The appropriateness of each configuration depends on the task itself. Using multiprocessing may provide computational
-advantages but becomes resource expensive as the task is duplicated between processes, there may also be I/O collisions
-if the task relies on external files during its calculation.
+The appropriateness of each configuration depends on the task itself. Using multiprocessing may provide computational advantages but becomes resource expensive as the task is duplicated between processes, there may also be I/O collisions if the task relies on external files during its calculation.
 
-If threads are used, make sure the task is thread-safe! Also note that forced terminations are not possible in this case
-and hanging optimizers will not be killed.
+If threads are used, make sure the task is thread-safe! Also note that forced terminations are not possible in this case and hanging optimizers will not be killed.
 
 Finally, GloMPO is not configured for use over multiple nodes. It is currently limited to use over a single machine.

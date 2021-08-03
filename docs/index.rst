@@ -16,8 +16,7 @@ Introduction
 
 .. For a detailed description of GloMPO's architecture, please see ...
 
-The user is advised to first work through the introduction and then the examples which give a good introduction to the
-GloMPO package and its components before diving deeper into the rest of the documentation.
+The user is advised to first work through the introduction and then the examples which give a good introduction to the GloMPO package and its components before diving deeper into the rest of the documentation.
 
 *****************
 Table of Contents

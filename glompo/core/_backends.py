@@ -104,6 +104,13 @@ class ChunkingQueue(queue.Queue):
     very fast functions. This class detects when this is the case and begins pushing the results in chunks of several
     items rather than individually.
 
+    Parameters
+    ----------
+    max_queue_size
+        Maximum number of items allowed in the queue at one time.
+    max_chunk_size
+        Number of items grouped together into the cache before being put in the queue.
+
     Attributes
     ----------
     cache
@@ -120,15 +127,6 @@ class ChunkingQueue(queue.Queue):
     """
 
     def __init__(self, max_queue_size: int = 0, max_chunk_size: int = 1):
-        """ Extends functionality of :class:`queue.Queue` with a chunking system.
-
-        Parameters
-        ----------
-        max_queue_size
-            Maximum number of items allowed in the queue at one time.
-        max_chunk_size
-            Number of items grouped together into the cache before being put in the queue.
-        """
         super().__init__(max_queue_size)
         self.chunk_size = max_chunk_size
         self.fast_func = False

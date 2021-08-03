@@ -9,8 +9,7 @@ Installation
 Optional Requirements
 *********************
 
-During installation, GloMPO only installs core requirements. However, many of its most useful abilities are optional
-extensions with other package requirements.
+During installation, GloMPO only installs core requirements. However, many of its most useful abilities are optional extensions with other package requirements.
 
 To install GloMPO with extra requirements:
 

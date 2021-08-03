@@ -40,47 +40,47 @@ __all__ = ("SplitOptimizerLogs",
 
 
 class SplitOptimizerLogs(logging.Filter):
-    """ If this filter is applied to a :class:`~logging.Handler` on the :code:`'glompo.optimizers'` logger it will
-        automatically separate the single :code:`'glompo.optimizers'` logging stream into separate ones for each
-        individual optimizer.
+    """ Splits print statements from child processes and threads to text files.
+    If this filter is applied to a :class:`~logging.Handler` on the :code:`'glompo.optimizers'` logger it will
+    automatically separate the single :code:`'glompo.optimizers'` logging stream into separate ones for each individual
+    optimizer.
+
+    Parameters
+    ----------
+    filepath
+        Directory in which new log files will be located.
+    propagate
+        If propagate is :obj:`True` then the filter will allow the message to pass through the filter allowing all
+        :code:`'glompo.optimizers'` logging to be simultaneously recorded together.
+    formatter
+        Formatting to be applied in the new logs. If not supplied the :mod:`logging` default is used.
+
+    Examples
+    --------
+    >>> frmttr = logging.Formatter("%(levelname)s : %(name)s : %(processName)s :: %(message)s")
+
+    Adds individual handlers for each optimizer created. Format for the new handlers is set by :code:`frmttr`
+    :code:`propagate=True` sends the message on to :code:`opt_handler` which in this case is :obj:`sys.stdout`.
+
+    >>> opt_filter = SplitOptimizerLogs("diverted_logs", propagate=True, formatter=frmttr)
+    >>> opt_handler = logging.StreamHandler(sys.stdout)
+    >>> opt_handler.addFilter(opt_filter)
+    >>> opt_handler.setFormatter(frmttr)
+
+    Messages of the :code:`'INFO'` level will propogate to :obj:`sys.stdout`.
+
+    >>> opt_handler.setLevel('INFO')
+    >>> logging.getLogger("glompo.optimizers").addHandler(opt_handler)
+
+    The level for the handlers made in :class:`SplitOptimizerLogs` is set at the higher level.
+    Here :code:`'DEBUG'` level messages will be logged to the files even though :code:`'INFO'` level propagates to
+    the console.
+
+    >>> logging.getLogger("glompo.optimizers").setLevel('DEBUG')
     """
 
     def __init__(self, filepath: Union[Path, str] = "", propagate: bool = False,
                  formatter: Optional[logging.Formatter] = None):
-        """
-        Parameters
-        ----------
-        filepath
-            Directory in which new log files will be located.
-        propagate
-            If propagate is :obj:`True` then the filter will allow the message to pass through the filter allowing all
-            :code:`'glompo.optimizers'` logging to be simultaneously recorded together.
-        formatter
-            Formatting to be applied in the new logs. If not supplied the :mod:`logging` default is used.
-
-        Examples
-        --------
-        >>> frmttr = logging.Formatter("%(levelname)s : %(name)s : %(processName)s :: %(message)s")
-
-        Adds individual handlers for each optimizer created. Format for the new handlers is set by :code:`frmttr`
-        :code:`propagate=True` sends the message on to :code:`opt_handler` which in this case is :obj:`sys.stdout`.
-
-        >>> opt_filter = SplitOptimizerLogs("diverted_logs", propagate=True, formatter=frmttr)
-        >>> opt_handler = logging.StreamHandler(sys.stdout)
-        >>> opt_handler.addFilter(opt_filter)
-        >>> opt_handler.setFormatter(frmttr)
-
-        Messages of the :code:`'INFO'` level will propogate to :obj:`sys.stdout`.
-
-        >>> opt_handler.setLevel('INFO')
-        >>> logging.getLogger("glompo.optimizers").addHandler(opt_handler)
-
-        The level for the handlers made in :class:`SplitOptimizerLogs` is set at the higher level.
-        Here :code:`'DEBUG'` level messages will be logged to the files even though :code:`'INFO'` level propagates to
-        the console.
-
-        >>> logging.getLogger("glompo.optimizers").setLevel('DEBUG')
-        """
         super().__init__()
         self.opened = set()
         self.filepath = Path(filepath) if filepath else Path.cwd()
@@ -518,16 +518,16 @@ def unknown_object_presenter(dumper, unknown_class: object):
 
 
 class WorkInDirectory:
-    """ Context manager to manage the creation of new files in a different directory from the working one. """
+    """ Context manager to manage the creation of new files in a different directory from the working one.
+
+    Parameters
+    ----------
+    path
+        A directory to which the working directory will be changed on entering the context manager. If the directory
+        does not exist, it will be created. The working directory is changed back on exiting the context manager.
+    """
 
     def __init__(self, path: Union[Path, str]):
-        """
-        Parameters
-        ----------
-        path
-            A directory to which the working directory will be changed on entering the context manager. If the directory
-            does not exist, it will be created. The working directory is changed back on exiting the context manager.
-        """
         path = Path(path).resolve()
         self.orig_dir = Path.cwd()
         path.mkdir(parents=True, exist_ok=True)

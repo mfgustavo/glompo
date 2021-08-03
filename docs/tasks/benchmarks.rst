@@ -2,9 +2,7 @@
 Benchmark Test Functions
 ========================
 
-For convenience, a collection of benchmark functions is bundled with GloMPO. These may be helpful for testing purposes
-and may be used to experiment with different configurations and ensure a script is functional before being applied to a
-more expensive test case.
+For convenience, a collection of benchmark functions is bundled with GloMPO. These may be helpful for testing purposes and may be used to experiment with different configurations and ensure a script is functional before being applied to a more expensive test case.
 
 .. py:currentmodule:: glompo.benchmark_fncs
 
@@ -19,6 +17,7 @@ more expensive test case.
    ExpLeastSquaresCost
    Griewank
    Langermann
+   LennardJones
    Levy
    Michalewicz
    Qing
@@ -38,7 +37,6 @@ more expensive test case.
    :member-order: alphabetical
    :ignore-module-all:
    :members:
-   :special-members: __init__
    :show-inheritance:
    :exclude-members: BaseTestCase, bounds, delay, dims, min_fx, min_x
 

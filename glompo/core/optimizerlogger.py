@@ -1,9 +1,11 @@
 import datetime
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 import numpy as np
 import tables as tb
+from tables.exceptions import HDF5ExtError
 
 from ..common.helpers import deepsizeof, glompo_colors, rolling_min
 from ..common.namedtuples import IterationResult
@@ -426,7 +428,10 @@ class FileLogger(BaseLogger):
         """ Records optimization settings and history information (similar to that in ``glompo_manager_log.yml``) into
          the HDF5 file.
         """
-        self.pytab_file.root._v_attrs[key] = value
+        try:
+            self.pytab_file.root._v_attrs[key] = value
+        except HDF5ExtError:
+            warnings.warn(f"Could not append '{key}' to the HDF5 log file.")
 
     def put_message(self, opt_id: int, message: str):
         super().put_message(opt_id, message)
@@ -513,11 +518,12 @@ class FileLogger(BaseLogger):
 
     def close(self):
         """ Remove from memory, flush to file and close the file. """
-        self.pytab_file.root._v_attrs.opts_started = self._o_counter
-        self.pytab_file.root._v_attrs.f_counter = self._f_counter
-        self.pytab_file.root._v_attrs.best_iters = self._best_iters
-        self.pytab_file.root._v_attrs.best_iter = self._best_iter
-        self.pytab_file.root._v_attrs.max_eval = self._max_eval
+        for key, value in (('opts_started', self._o_counter),
+                           ('f_counter', self._f_counter),
+                           ('best_iter', self._best_iter),
+                           ('best_iters', self._best_iters),
+                           ('max_eval', self._max_eval)):
+            self.put_manager_metadata(key, value)
 
         self.flush()
         self.pytab_file.flush()

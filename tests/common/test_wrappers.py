@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from glompo.common.wrappers import catch_user_interrupt, decorate_all_methods, process_print_redirect, \
-    needs_optional_package
+from glompo.common.wrappers import catch_user_interrupt, decorate_all_methods, needs_optional_package, \
+    process_print_redirect
 
 
 def test_redirect(tmp_path):
