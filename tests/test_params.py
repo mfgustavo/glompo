@@ -26,6 +26,8 @@ from glompo.optimizers.baseoptimizer import BaseOptimizer
 from glompo.common.namedtuples import Result
 from glompo.core.optimizerlogger import BaseLogger
 
+from scm.params.common._version import __version__ as PARAMS_VERSION
+
 
 class FakeLossEvaluator(_LossEvaluator):
     def check(self):
@@ -130,7 +132,11 @@ class TestReaxFFError:
     def check_result(self, input_files):
         with (input_files / 'check_result.pkl').open('rb') as file:
             result = pickle.load(file)
-        return result
+
+        try:
+            return result[PARAMS_VERSION]
+        except KeyError:
+            return None
 
     @pytest.fixture(scope='function')
     def simple_func(self, request):
@@ -183,6 +189,9 @@ class TestReaxFFError:
         if name not in self.built_tasks:
             pytest.xfail("Task not constructed successfully")
 
+        if check_result is None:
+            pytest.xfail("Calculate result check not yet supported for this ParAMS version.")
+
         task = self.built_tasks[name]
         fx, resids, cont = check_result
         result = task._calculate([0.5] * task.n_parms)
@@ -190,9 +199,9 @@ class TestReaxFFError:
         assert isinstance(result, tuple)
         assert len(result) == 2
         assert len(result[0]) == 3
-        assert result[0][0] == fx
-        assert np.all(result[0][1] == resids)
-        assert np.all(result[0][2] == cont)
+        assert np.isclose(result[0][0], fx, atol=1e-6)
+        assert np.all(np.isclose(result[0][1], resids, atol=1e-6))
+        assert np.all(np.isclose(result[0][2], cont, atol=1e-6))
 
     def test_race(self, monkeypatch, input_files):
         """ Tests calculate method with multiple calls from multiple threads to ensure there are no race conditions.

@@ -11,7 +11,7 @@ from scm.params.core.jobcollection import JobCollection
 from scm.params.core.opt_components import LinearParameterScaler, _Step
 from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
 from scm.params.parameterinterfaces.base import BaseParameters
-from scm.params.parameterinterfaces.reaxff import ReaxParams
+from scm.params.parameterinterfaces.reaxff import ReaxParams  # Instead of ReaxFFParameters for backward compatibility
 from scm.params.parameterinterfaces.xtb import XTBParams
 from scm.plams.core.errors import ResultsError
 from scm.plams.interfaces.adfsuite.reaxff import reaxff_control_to_settings
@@ -29,8 +29,8 @@ __all__ = ("GlompoParamsWrapper",
 
 class _FunctionWrapper:
     """ Wraps function produced by ParAMS internals (instance of :class:`!scm.params.core.opt_components._Step`) to
-    match the API required by the 'task' parameter of GloMPOManager. Can be modified to achieve compatibility with
-    other optimizers.
+    match the API required by the :attr:`.GloMPOManager.task`. Can be modified to achieve compatibility with other
+    optimizers.
     """
 
     def __init__(self, func: _Step):
@@ -284,9 +284,9 @@ class BaseParamsError:
                  'jc': filenames['jc'] if 'jc' in filenames else 'job_collection.yml',
                  'ff': filenames['ff'] if 'ff' in filenames else 'ffield'}
 
-        self.dat_set.store(Path(path, names['ds']))
-        self.job_col.store(Path(path, names['jc']))
-        self.par_eng.write(Path(path, names['ff']), parameters)
+        self.dat_set.store(str(Path(path, names['ds'])))
+        self.job_col.store(str(Path(path, names['jc'])))
+        self.par_eng.write(str(Path(path, names['ff'])), parameters)
 
     def _calculate(self, x: Sequence[float]) -> Sequence[Tuple[float, np.ndarray, np.ndarray]]:
         """ Core calculation function, returns both the error function value and the residuals. """
@@ -339,8 +339,8 @@ class ReaxFFError(BaseParamsError):
         """ Used to store files into a GloMPO checkpoint (at path) suitable to reconstruct the task when the checkpoint
         is loaded.
         """
-        self.dat_set.pickle_dump(Path(path, 'data_set.pkl'))
-        self.job_col.pickle_dump(Path(path, 'job_collection.pkl'))
+        self.dat_set.pickle_dump(str(Path(path, 'data_set.pkl')))
+        self.job_col.pickle_dump(str(Path(path, 'job_collection.pkl')))
         self.par_eng.pickle_dump(str(Path(path, 'reax_params.pkl')))  # Method does not support Path
 
 
@@ -461,7 +461,7 @@ def _setup_collections_from_params(path: Union[Path, str]) -> Tuple[DataSet, Job
         for suffix, loader in {'.pkl': 'pickle_load', '.yml': 'load'}.items():
             file = Path(path, name + suffix)
             if file.exists():
-                getattr(params_obj, loader)(file)
+                getattr(params_obj, loader)(str(file))
                 built = True
         if not built:
             raise FileNotFoundError(f"No {name.replace('_', ' ')} data found")
