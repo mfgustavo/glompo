@@ -53,6 +53,18 @@ class MinimizeResult:
 class _MessagingWrapper:
     """ Messages results to the manager whenever the optimization task is evaluated.
     Automatically wrapped around the optimization task by the GloMPO manager for each optimizer it starts.
+
+    Parameters
+    ----------
+    func
+        Function to be minimized.
+    results_queue
+        Results queue into which results are put.
+    opt_id
+        Optimizer to which this wrapper is associated.
+    is_log_detailed
+        If :obj:`True`, using :meth:`__call__` will log the return of :meth:`detailed_call` in the log.
+        If :obj:`False`, using :meth:`__call__` will log the return of :meth:`__call__` in the log.
     """
 
     def __init__(self,
@@ -60,18 +72,6 @@ class _MessagingWrapper:
                  results_queue: ChunkingQueue,
                  opt_id: int,
                  is_log_detailed: bool):
-        """ Parameters
-            ----------
-            func
-                Function to be minimized.
-            results_queue
-                Results queue into which results are put.
-            opt_id
-                Optimizer to which this wrapper is associated.
-            is_log_detailed
-                If :obj:`True`, using :meth:`__call__` will log the return of :meth:`detailed_call` in the log.
-                If :obj:`False`, using :meth:`__call__` will log the return of :meth:`__call__` in the log.
-        """
         self.func = func
         self.results_queue = results_queue
         self.opt_id = opt_id

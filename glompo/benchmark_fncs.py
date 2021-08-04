@@ -32,18 +32,17 @@ __all__ = ("BaseTestCase",
 
 
 class BaseTestCase(ABC):
-    """ Basic API for Optimization test cases. """
+    """ Basic API for Optimization test cases.
+
+    Parameters
+    ----------
+    dims
+        Number of parameters in the input space.
+    delay
+        Pause (in seconds) between function evaluations to mimic slow functions.
+    """
 
     def __init__(self, dims: int, *, delay: float = 0):
-        """ Initialize function
-
-            Parameters
-            ----------
-            dims
-                Number of parameters in the input space.
-            delay
-                Pause (in seconds) between function evaluations to mimic slow functions.
-        """
         self._dims = dims
         self._delay = delay
 
@@ -93,31 +92,31 @@ class BaseTestCase(ABC):
 class Ackley(BaseTestCase):
     """ Implementation of the Ackley optimization test function [b]_.
 
-        .. math::
-           f(x) = - a \\exp\\left(-b \\sqrt{\\frac{1}{d}\\sum^d_{i=1}x_i^2}\\right)
-                  - \\exp\\left(\\frac{1}{d}\\sum^d_{i=1}\\cos\\left(cx_i\\right)\\right)
-                  + a
-                  + \\exp(1)
+    .. math::
+       f(x) = - a \\exp\\left(-b \\sqrt{\\frac{1}{d}\\sum^d_{i=1}x_i^2}\\right)
+              - \\exp\\left(\\frac{1}{d}\\sum^d_{i=1}\\cos\\left(cx_i\\right)\\right)
+              + a
+              + \\exp(1)
 
-        Recommended bounds: :math:`x_i \\in [-32.768, 32.768]`
+    Recommended bounds: :math:`x_i \\in [-32.768, 32.768]`
 
-        Global minimum: :math:`f(0, 0, ..., 0) = 0`
+    Global minimum: :math:`f(0, 0, ..., 0) = 0`
 
-        .. image:: /_static/ackley.png
-           :align: center
-           :alt: Multimodal flat surface with a single deep global minima. Multimodal version of the Easom function.
+    .. image:: /_static/ackley.png
+       :align: center
+       :alt: Multimodal flat surface with a single deep global minima. Multimodal version of the Easom function.
+
+    Parameters
+    ----------
+    a
+        Ackley function parameter
+    b
+        Ackley function parameter
+    c
+        Ackley function parameter
     """
 
     def __init__(self, dims: int = 2, a: float = 20, b: float = 0.2, c: float = 2 * np.pi, *, delay: float = 0):
-        """ Parameters
-            ----------
-            a
-                Ackley function parameter
-            b
-                Ackley function parameter
-            c
-                Ackley function parameter
-        """
         super().__init__(dims, delay=delay)
         self.a, self.b, self.c = a, b, c
 
@@ -226,26 +225,26 @@ class Alpine02(BaseTestCase):
 class Deceptive(BaseTestCase):
     """ Implementation of the Deceptive optimization test function [a]_.
 
-        .. math:
-           f(x) = - \\left[\\frac{1}{n}\\sum^n_{i=1}g_i\\left(x_i\\right)\\right]
+    .. math:
+       f(x) = - \\left[\\frac{1}{n}\\sum^n_{i=1}g_i\\left(x_i\\right)\\right]
 
-        Recommended bounds: :math:`x_i \\in [0, 1]`
+    Recommended bounds: :math:`x_i \\in [0, 1]`
 
-        Global minimum: :math:`f(a) = -1`
+    Global minimum: :math:`f(a) = -1`
 
-        .. image:: /_static/deceptive.png
-           :align: center
-           :alt: Small global minimum surrounded by areas which slope away from it.
+    .. image:: /_static/deceptive.png
+       :align: center
+       :alt: Small global minimum surrounded by areas which slope away from it.
+
+    Parameters
+    ----------
+    b
+        Non-linearity parameter.
+    shift_positive
+        Shifts the entire function such that the global minimum falls at 0.
     """
 
     def __init__(self, dims: int = 2, b: float = 2, *, shift_positive: bool = False, delay: float = 0):
-        """ Parameters
-            ----------
-            b
-                Non-linearity parameter.
-            shift_positive
-                Shifts the entire function such that the global minimum falls at 0.
-        """
         super().__init__(dims, delay=delay)
         self.shift = shift_positive
         self.b = b
@@ -295,24 +294,24 @@ class Deceptive(BaseTestCase):
 class Easom(BaseTestCase):
     """ Implementation of the Easom optimization test function [a]_.
 
-        .. math::
-           f(x) = - \\cos\\left(x_1\\right)\\cos\\left(x_2\\right)\\exp\\left(-(x_1-\\pi)^2-(x_2-\\pi)^2\\right)
+    .. math::
+       f(x) = - \\cos\\left(x_1\\right)\\cos\\left(x_2\\right)\\exp\\left(-(x_1-\\pi)^2-(x_2-\\pi)^2\\right)
 
-        Recommended bounds: :math:`x_1,x _2 \\in [-100, 100]`
+    Recommended bounds: :math:`x_1,x _2 \\in [-100, 100]`
 
-        Global minimum: :math:`f(\\pi, \\pi) = -1`
+    Global minimum: :math:`f(\\pi, \\pi) = -1`
 
-        .. image:: /_static/easom.png
-           :align: center
-           :alt: Totally flat surface with a single very small bullet hole type minimum.
+    .. image:: /_static/easom.png
+       :align: center
+       :alt: Totally flat surface with a single very small bullet hole type minimum.
+
+    Parameters
+    ----------
+    shift_positive
+        Shifts the entire function such that the global minimum falls at 0.
     """
 
     def __init__(self, *args, shift_positive: bool = False, delay: float = 0):
-        """ Parameters
-            ----------
-            shift_positive
-                Shifts the entire function such that the global minimum falls at 0.
-        """
         super().__init__(2, delay=delay)
         self.shift = shift_positive
 
@@ -383,28 +382,28 @@ class Griewank(BaseTestCase):
 class Langermann(BaseTestCase):
     """ When called returns evaluations of the Langermann function [a]_ [b]_.
 
-        .. math::
-          f(x) & = & - \\sum_{i=1}^5 \\frac{c_i\\cos\\left(\\pi\\left[(x_1-a_i)^2 + (x_2-b_i)^2\\right]\\right)}
-                                           {\\exp\\left(\\frac{(x_1-a_i)^2 + (x_2-b_i)^2}{\\pi}\\right)}\\\\
-          \\mathbf{a} & = & \\{3, 5, 2, 1, 7\\}\\\\
-          \\mathbf{b} & = & \\{5, 2, 1, 4, 9\\}\\\\
-          \\mathbf{c} & = & \\{1, 2, 5, 2, 3\\}\\\\
+    .. math::
+      f(x) & = & - \\sum_{i=1}^5 \\frac{c_i\\cos\\left(\\pi\\left[(x_1-a_i)^2 + (x_2-b_i)^2\\right]\\right)}
+                                       {\\exp\\left(\\frac{(x_1-a_i)^2 + (x_2-b_i)^2}{\\pi}\\right)}\\\\
+      \\mathbf{a} & = & \\{3, 5, 2, 1, 7\\}\\\\
+      \\mathbf{b} & = & \\{5, 2, 1, 4, 9\\}\\\\
+      \\mathbf{c} & = & \\{1, 2, 5, 2, 3\\}\\\\
 
-        Recommended bounds: :math:`x_1, x_2 \\in [0, 10]`
+    Recommended bounds: :math:`x_1, x_2 \\in [0, 10]`
 
-        Global minimum: :math:`f(2.00299219, 1.006096) = -5.1621259`
+    Global minimum: :math:`f(2.00299219, 1.006096) = -5.1621259`
 
-        .. image:: /_static/langermann.png
-           :align: center
-           :alt: Analogous to ripples on a water surface after three drops have hit it.
+    .. image:: /_static/langermann.png
+       :align: center
+       :alt: Analogous to ripples on a water surface after three drops have hit it.
+
+    Parameters
+    ----------
+    shift_positive
+        Shifts the entire function such that the global minimum falls at ~0.
     """
 
     def __init__(self, *args, shift_positive: bool = False, delay: float = 0):
-        """ Parameters
-            ----------
-            shift_positive
-                Shifts the entire function such that the global minimum falls at ~0.
-        """
         super().__init__(2, delay=delay)
         self.shift = shift_positive
 
@@ -439,55 +438,54 @@ class Langermann(BaseTestCase):
 
 
 class ExpLeastSquaresCost(BaseTestCase):
-    """ Bespoke test function which takes the form of least squares cost function by solving for the parameters of a
-        sum of exponential terms. Compatible with the GFLS solver.
+    """ Least squares type cost function.
+    Bespoke test function which takes the form of least squares cost function by solving for the parameters of a
+    sum of exponential terms. Compatible with the GFLS solver.
 
-        .. math::
-           f(p) & = & \\sum_i^{n} (g - g_{train})^2\\\\
-           g(p, u) & = & \\sum_i^d \\exp(-p_i u)\\\\
-           g_{train}(p) & = & g(p, u_{train}) \\\\
-           u_{train} & = & \\mathcal{U}_{[x_{min}, x_{max}]}
+    .. math::
+       f(p) & = & \\sum_i^{n} (g - g_{train})^2\\\\
+       g(p, u) & = & \\sum_i^d \\exp(-p_i u)\\\\
+       g_{train}(p) & = & g(p, u_{train}) \\\\
+       u_{train} & = & \\mathcal{U}_{[x_{min}, x_{max}]}
 
-        Recommended bounds: :math:`x_i \\in [-2, 2]`
+    Recommended bounds: :math:`x_i \\in [-2, 2]`
 
-        Global minimum: :math:`f(p_1, p_2, ..., p_n) \\approx 0`
+    Global minimum: :math:`f(p_1, p_2, ..., p_n) \\approx 0`
 
-        .. image:: /_static/lstsqrs.png
-           :align: center
-           :alt: Minimum sandwiched between very flat surface and very steep walls.
+    .. image:: /_static/lstsqrs.png
+       :align: center
+       :alt: Minimum sandwiched between very flat surface and very steep walls.
 
+    Parameters
+    ----------
+    n_train
+        Number of training points used in the construction of the error function.
+    sigma_eval
+        Random perturbations added at the execution of each function evaluation.
+        :math:`f = f(1 + \\mathcal{U}_{[-\\sigma_{eval}, \\sigma_{eval}]})`
+    sigma_fixed
+        Random perturbations added to the construction of the training set so that the
+        global minimum error cannot be zero.
+        :math:`g_{train} = g_{train}(1 + \\mathcal{U}_{[-\\sigma_{eval}, \\sigma_{eval}]})`
+    u_train
+        If an int is provided, training points are randomly selected in the interval :math:`[0, u_{train})`.
+        If a tuple is provided, training points are randomly selected in the interval :math:`[u_{train,0},
+        u_{train,1}]`.
+        If an array like object of length >2 is provided then the list is explicitly used as the locations of
+        the training points.
+    p_range
+        Range between which the true parameter values will be drawn.
+
+    Notes
+    -----
+    The properties :attr:`~BaseTestCase.min_fx` and :attr:`~BaseTestCase.min_x` are only guaranteed for
+    `sigma_fixed` = 0; otherwise they are only estimates. This is because the added random noise may create a
+    better fit of the data an unknown vector.
     """
 
     def __init__(self, dims: int = 2, n_train: int = 10, sigma_eval: float = 0,
                  sigma_fixed: float = 0, u_train: Union[int, Tuple[float, float], Sequence[float]] = 10,
                  p_range: Tuple[float, float] = (-2, 2), *, delay: float = 0):
-        """ Parameters
-            ----------
-            n_train
-                Number of training points used in the construction of the error function.
-            sigma_eval
-                Random perturbations added at the execution of each function evaluation.
-                :math:`f = f(1 + \\mathcal{U}_{[-\\sigma_{eval}, \\sigma_{eval}]})`
-            sigma_fixed
-                Random perturbations added to the construction of the training set so that the
-                global minimum error cannot be zero.
-                :math:`g_{train} = g_{train}(1 + \\mathcal{U}_{[-\\sigma_{eval}, \\sigma_{eval}]})`
-            u_train
-                If an int is provided, training points are randomly selected in the interval :math:`[0, u_{train})`.
-                If a tuple is provided, training points are randomly selected in the interval :math:`[u_{train,0},
-                u_{train,1}]`.
-                If an array like object of length >2 is provided then the list is explicitly used as the locations of
-                the training points.
-            p_range
-                Range between which the true parameter values will be drawn.
-
-            Notes
-            -----
-            The properties :attr:`~BaseTestCase.min_fx` and :attr:`~BaseTestCase.min_x` are only guaranteed for
-            `sigma_fixed` = 0; otherwise they are only estimates. This is because the added random noise may create a
-            better fit of the data an unknown vector.
-
-        """
         super().__init__(dims, delay=delay)
         self.n_train = n_train
         self.sigma_eval = sigma_eval
@@ -588,35 +586,34 @@ class Levy(BaseTestCase):
 class Michalewicz(BaseTestCase):
     """ Implementation of the Michalewicz optimization test function [b]_.
 
-        .. math::
-            f(x) = - \\sum^d_{i=1}\\sin(x_i)\\sin^{2m}\\left(\\frac{ix_i^2}{\\pi}\\right)
+    .. math::
+        f(x) = - \\sum^d_{i=1}\\sin(x_i)\\sin^{2m}\\left(\\frac{ix_i^2}{\\pi}\\right)
 
-        Recommended bounds: :math:`x_i \\in [0, \\pi]`
+    Recommended bounds: :math:`x_i \\in [0, \\pi]`
 
-        Global minimum:
+    Global minimum:
 
-        .. math::
+    .. math::
 
-            f(x) = \\begin{cases}
-                        -1.8013 & \\text{if} & d=2 \\\\
-                        -4.687 & \\text{if} & d=5 \\\\
-                        -9.66 & \\text{if} & d=10 \\\\
-                   \\end{cases}
+        f(x) = \\begin{cases}
+                    -1.8013 & \\text{if} & d=2 \\\\
+                    -4.687 & \\text{if} & d=5 \\\\
+                    -9.66 & \\text{if} & d=10 \\\\
+               \\end{cases}
 
-        .. image:: /_static/michalewicz.png
-           :align: center
-           :alt: Flat surface with many valleys and a single global minimum.
+    .. image:: /_static/michalewicz.png
+       :align: center
+       :alt: Flat surface with many valleys and a single global minimum.
 
+    Parameters
+    ----------
+    m
+        Parametrization of the function. Lower values make the valleys more informative at pointing to the
+        minimum. High values (:math:`\\pm10`) create a needle-in-a-haystack function where there is no
+        information pointing to the minimum.
     """
 
     def __init__(self, dims: int = 2, m: float = 10, *, delay: float = 0):
-        """ Parameters
-            ----------
-            m
-                Parametrization of the function. Lower values make the valleys more informative at pointing to the
-                minimum. High values (:math:`\\pm10`) create a needle-in-a-haystack function where there is no
-                information pointing to the minimum.
-        """
         super().__init__(dims, delay=delay)
         self.m = m
 
@@ -812,24 +809,24 @@ class Rosenbrock(BaseTestCase):
 class Schwefel(BaseTestCase):
     """ Implementation of the Schwefel optimization test function [b]_.
 
-        .. math::
-           f(x) = 418.9829d - \\sum^d_{i=1} x_i\\sin\\left(\\sqrt{|x_i|}\\right)
+    .. math::
+       f(x) = 418.9829d - \\sum^d_{i=1} x_i\\sin\\left(\\sqrt{|x_i|}\\right)
 
-        Recommended bounds: :math:`x_i \\in [-500, 500]`
+    Recommended bounds: :math:`x_i \\in [-500, 500]`
 
-        Global minimum: :math:`f(420.9687, 420.9687, ..., 420.9687) = -418.9829d`
+    Global minimum: :math:`f(420.9687, 420.9687, ..., 420.9687) = -418.9829d`
 
-        .. image:: /_static/schwefel.png
-           :align: center
-           :alt: Multimodal and deceptive in that the global minimum is very far from the next best local minimum.
+    .. image:: /_static/schwefel.png
+       :align: center
+       :alt: Multimodal and deceptive in that the global minimum is very far from the next best local minimum.
+
+    Parameters
+    ----------
+    shift_positive
+        Shifts the entire function such that the global minimum falls at ~0.
     """
 
     def __init__(self, dims: int = 2, *, shift_positive: bool = False, delay: float = 0):
-        """ Parameters
-            ----------
-            shift_positive
-                Shifts the entire function such that the global minimum falls at ~0.
-        """
         super().__init__(dims, delay=delay)
         self.shift = shift_positive
 
@@ -859,28 +856,28 @@ class Schwefel(BaseTestCase):
 class Shekel(BaseTestCase):
     """ Implementation of the Shekel optimization test function [b]_.
 
-        .. math::
-           f(x) = - \\sum^m_{i=1}\\left(\\sum^d_{j=1} (x_j - C_{ji})^2 + \\beta_i\\right)^{-1}
+    .. math::
+       f(x) = - \\sum^m_{i=1}\\left(\\sum^d_{j=1} (x_j - C_{ji})^2 + \\beta_i\\right)^{-1}
 
-        Recommended bounds: :math:`x_i \\in [-32.768, 32.768]`
+    Recommended bounds: :math:`x_i \\in [-32.768, 32.768]`
 
-        Global minimum: :math:`f(4, 4, 4, 4) =~ -10`
+    Global minimum: :math:`f(4, 4, 4, 4) =~ -10`
 
-        .. image:: /_static/shekel.png
-           :align: center
-           :alt: Multiple minima of different depths clustered together on a mostly-flat surface.
+    .. image:: /_static/shekel.png
+       :align: center
+       :alt: Multiple minima of different depths clustered together on a mostly-flat surface.
+
+    Parameters
+    ----------
+    m
+        Number of minima. Global minimum certified for m=5,7 and 10.
+    shift_positive
+        Shifts the entire function such that the function is strictly positive.
+        Since this is variable for this function the adjustment is +12 and thus the global minimum will not
+        necessarily fall at zero.
     """
 
     def __init__(self, dims: int = 2, m: int = 10, *, shift_positive: bool = False, delay: float = 0):
-        """ Parameters
-            ----------
-            m
-                Number of minima. Global minimum certified for m=5,7 and 10.
-            shift_positive
-                Shifts the entire function such that the function is strictly positive.
-                Since this is variable for this function the adjustment is +12 and thus the global minimum will not
-                necessarily fall at zero.
-        """
         assert 0 < dims < 5
         super().__init__(dims, delay=delay)
         self.shift = shift_positive
@@ -944,26 +941,26 @@ class Shekel(BaseTestCase):
 class Shubert(BaseTestCase):
     """ Implementation of the Shubert Type-I, Type-III and Type-IV optimization test functions [a]_.
 
-        .. math::
-           f_I(x) & = & \\sum^2_{i=1}\\sum^5_{j=1} j \\cos\\left[(j+1)x_i+j\\right]\\\\
-           f_{III}(x) & = & \\sum^5_{i=1}\\sum^5_{j=1} j \\sin\\left[(j+1)x_i+j\\right]\\\\
-           f_{IV}(x) & = & \\sum^5_{i=1}\\sum^5_{j=1} j \\cos\\left[(j+1)x_i+j\\right]\\\\
+    .. math::
+       f_I(x) & = & \\sum^2_{i=1}\\sum^5_{j=1} j \\cos\\left[(j+1)x_i+j\\right]\\\\
+       f_{III}(x) & = & \\sum^5_{i=1}\\sum^5_{j=1} j \\sin\\left[(j+1)x_i+j\\right]\\\\
+       f_{IV}(x) & = & \\sum^5_{i=1}\\sum^5_{j=1} j \\cos\\left[(j+1)x_i+j\\right]\\\\
 
-        Recommended bounds: :math:`x_i \\in [-10, 10]`
+    Recommended bounds: :math:`x_i \\in [-10, 10]`
 
-        .. image:: /_static/shubert.png
-           :align: center
-           :alt: Highly oscillatory, periodic surface. Many degenerate global minima regularly placed.
+    .. image:: /_static/shubert.png
+       :align: center
+       :alt: Highly oscillatory, periodic surface. Many degenerate global minima regularly placed.
+
+    Parameters
+    ----------
+    style
+        Selection between the Shubert01, Shubert03 & Shubert04 functions. Each more oscillatory than the previous.
+    shift_positive
+        Shifts the entire function such that the global minimum falls at 0.
     """
 
     def __init__(self, dims: int = 2, style: int = 1, *, shift_positive: bool = False, delay: float = 0):
-        """ Parameters
-            ----------
-            style
-                Selection between the Shubert01, Shubert03 & Shubert04 functions. Each more oscillatory than the previous.
-            shift_positive
-                Shifts the entire function such that the global minimum falls at 0.
-        """
         super().__init__(dims, delay=delay)
         self.style = style
         self.shift_positive = shift_positive

@@ -5,9 +5,9 @@ from multiprocessing.connection import Connection
 from pathlib import Path
 from typing import Callable, Optional, Sequence, Set, Union
 
+import nevergrad as ng
 import numpy as np
 
-import nevergrad as ng
 from .baseoptimizer import BaseOptimizer, MinimizeResult
 
 __all__ = ('Nevergrad',)
@@ -117,7 +117,6 @@ class _NevergradCallbacksWrapper:
                                   Callable[[ng.optimizers.base.Optimizer, Sequence[float], float], bool],
                                   Sequence[Callable[[ng.optimizers.base.Optimizer, Sequence[float], float],
                                                     bool]]] = None):
-        """ Passes pipe and queue references into the algorithm iteration. """
         self.parent = parent
         self.i_fcalls = 0
 

@@ -38,7 +38,6 @@ more expensive test case.
    :member-order: alphabetical
    :ignore-module-all:
    :members:
-   :special-members: __init__
    :show-inheritance:
    :exclude-members: BaseTestCase, bounds, delay, dims, min_fx, min_x
 

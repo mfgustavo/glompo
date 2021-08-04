@@ -28,4 +28,4 @@ pytest~=4.4.0:           testing
 scipy~=1.2.1:            perturbation_generator
 scm~=1.3.0:              params
 sphinx==1.8.5:           docs
-sphinx-rtd-theme~=0.2.4: docs
+sphinx-rtd-theme~=0.5.2: docs
