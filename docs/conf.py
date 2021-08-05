@@ -112,4 +112,5 @@ intersphinx_mapping = {
     'psutil': ('https://psutil.readthedocs.io/en/latest/', None),
     'matplotlib': ('http://matplotlib.sourceforge.net/', None),
     'numpy': ('http://docs.scipy.org/doc/numpy/', None),
+    'scm': ('https://www.scm.com/doc/params/', None),
 }
