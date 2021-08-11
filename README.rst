@@ -50,8 +50,16 @@ Installation
 
 .. install-start
 
-The source code may be downloaded directly from `GitHub <https://github.com/mfgustavo/glompo>`_, or it may be cloned
-into a target directory using:
+The most straightforward method to download and install GloMPO into your Python environment is to install GloMPO
+directly using:
+
+.. code-block:: bash
+
+   pip install git+https://github.com/mfgustavo/glompo
+
+If you would like access to the test suite, examples, or wish to have a separate editable copy of the source code, you
+may want to download the code separately. This may be done directly from
+`GitHub <https://github.com/mfgustavo/glompo>`_, or it may be cloned into a target directory using:
 
 .. code-block:: bash
 
