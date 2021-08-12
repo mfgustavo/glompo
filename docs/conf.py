@@ -78,6 +78,7 @@ nitpick_ignore = [('py:class', 'List'),
                   ('py:class', 'Type'),
                   ('py:class', 'Union'),
                   ('py:class', 'Optional'),
+                  ('py:class', 'Inherited'),
                   ]
 
 # Autodoc settings ----------------------------------------------------------

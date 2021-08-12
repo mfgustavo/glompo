@@ -24,17 +24,18 @@ Table of Contents
 *****************
 
 .. toctree::
-    :maxdepth: 2
+   :maxdepth: 2
 
-    installation
-    examples
-    tasks/tasks
-    logging
-    parallelism
-    components/components
-    userinterventions
-    outputs
-    backmatter
+   installation
+   examples
+   tasks/tasks
+   logging
+   parallelism
+   components/components
+   analysis/analysis
+   userinterventions
+   outputs
+   backmatter
 
 ******************
 Indices and tables

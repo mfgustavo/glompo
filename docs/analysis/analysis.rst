@@ -1,0 +1,7 @@
+********
+Analysis
+********
+
+.. toctree::
+
+   trajectories
