@@ -139,7 +139,7 @@ def make_radial_trajectory(k: int, groupings: Optional[np.ndarray] = None,
     Campolongo, F., Saltelli, A., & Cariboni, J. (2011). From screening to quantitative sensitivity analysis. A unified
     approach. *Computer Physics Communications*, 182(4), 978–988. https://doi.org/10.1016/J.CPC.2010.12.039
     """
-    a = np.array(base_pt) if base_pt else np.random.random(k)
+    a = np.array(base_pt) if base_pt is not None else np.random.random(k)
 
     while aux_pt is None:
         b = np.random.random(k)
