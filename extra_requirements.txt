@@ -21,7 +21,7 @@ analysis                Provides sensitivity tools for model simplification and 
 PySide2~=5.15.2:         video
 cma~=2.7:                cma
 dill~=0.3:               checkpointing
-matplotlib~=3.3.2:       plotting, video
+matplotlib~=3.3.2:       plotting, video, analysis
 nevergrad~=0.3.2:        nevergrad
 optsam:                  gfls
 psutil~=5.6.2:           system_stats
