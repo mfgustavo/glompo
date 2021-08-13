@@ -307,7 +307,7 @@ def traj_distance(t1: np.ndarray, t2: np.ndarray) -> float:
     return np.sum(np.sqrt(np.sum(paired ** 2, axis=1)))
 
 
-def subset_distance(trajs) -> float:
+def subset_spread(trajs) -> float:
     """ Returns the measure of spread between a set of trajectories (`trajs`).
     Spread is defined as :math:`D_{1,2,...,m} = \\sqrt{d_{12}^2 + d_{13}^2 + ... d_{ml}^2}` where :math:`d_{ml}` is the
     distance measure between two trajectories (see :func:`traj_distance`).
