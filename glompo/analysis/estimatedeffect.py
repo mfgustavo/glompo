@@ -245,7 +245,7 @@ class EstimatedEffects:
         mus_j = self.calculate(j)[1]
 
         pos_i = np.abs(mus_i.argsort().argsort() - len(mus_i))
-        pos_j = np.abs(mus_i.argsort().argsort() - len(mus_i))
+        pos_j = np.abs(mus_j.argsort().argsort() - len(mus_j))
 
         return np.sum(2 * (pos_i - pos_j) / (pos_i + pos_j))
 
