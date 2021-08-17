@@ -1,6 +1,6 @@
 import warnings
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Union
+from typing import Callable, Dict, List, Optional, Sequence, Union
 
 import numpy as np
 
@@ -8,6 +8,11 @@ from ..common.wrappers import needs_optional_package
 
 try:
     import matplotlib.pyplot as plt
+
+    plt.rcParams['font.size'] = 8
+    plt.rcParams['mathtext.fontset'] = 'cm'
+    plt.rcParams['savefig.format'] = 'svg'
+    plt.rcParams['figure.figsize'] = 6.7, 3.35
 except (ModuleNotFoundError, ImportError):
     pass
 
@@ -17,6 +22,7 @@ SpecialSlice = Union[int, str, List[int], List[str], slice]
 
 
 class EstimatedEffects:
+    # TODO Numpy warnings?
     # TODO Complete parameters
     # TODO Complete attributes
     """ Implementation of Morris screening strategy.
@@ -418,6 +424,7 @@ class EstimatedEffects:
         for application of the Morris method to systems with many input factors. *Environmental Modelling & Software*,
         37, 103–109. https://doi.org/10.1016/j.envsoft.2012.03.008
         """
+        # TODO Being calculated correctly?
         mus_i = self[1, :, out_index, :i]
         mus_j = self[1, :, out_index, :j]
 
@@ -427,7 +434,10 @@ class EstimatedEffects:
         return np.sum(2 * (pos_i - pos_j) / (pos_i + pos_j), axis=1).squeeze()
 
     @needs_optional_package('matplotlib')
-    def plot_sensitivities(self, path: Union[Path, str] = 'sensitivities', out_index: SpecialSlice = 'mean'):
+    def plot_sensitivities(self,
+                           path: Union[Path, str] = 'sensitivities',
+                           out_index: SpecialSlice = 'mean',
+                           factor_labels: Optional[Sequence[str]] = None):
         """ Saves a sensitivity plot.
         The plot is a scatter of :math:`\\mu^*` versus :math:`\\sigma` with dividers between 'important', 'interacting'
         and 'non-influential' categories.
@@ -439,7 +449,10 @@ class EstimatedEffects:
             figure. If multiple plots are produced for all the outputs then this is interpreted as a directory into
             which the figures will be saved.
         out_index
-            See :meth:`__get_item__`. If :obj:`None`, one plot will be created for each output.
+            See :meth:`__get_item__`. If :obj:`None` or :code:`'all'`, one plot will be created for each output.
+        factor_labels
+            Optional sequence of descriptive names for each factor to add to the figure. Defaults to the factor's
+            index position.
 
         Warnings
         --------
@@ -451,10 +464,13 @@ class EstimatedEffects:
         water quality modelling: Terminology, convergence and comparison of different methods. *Journal of Hydrology*,
         522, 339–352. https://doi.org/10.1016/J.JHYDROL.2014.12.056
         """
-        self._plotting_core(path, out_index, self._plot_sensitivities_stub)
+        self._plotting_core(path, out_index, self._plot_sensitivities_stub, factor_labels=factor_labels)
 
     @needs_optional_package('matplotlib')
-    def plot_rankings(self, path: Union[Path, str] = 'ranking', out_index: SpecialSlice = 'mean'):
+    def plot_rankings(self,
+                      path: Union[Path, str] = 'ranking',
+                      out_index: SpecialSlice = 'mean',
+                      factor_labels: Optional[Sequence[str]] = None):
         """ Saves the factor rankings as a plot.
         Plots the ordered :math:`\\mu^*` values against their corresponding parameter indices.
 
@@ -462,10 +478,67 @@ class EstimatedEffects:
         ----------
         See :meth:`plot_sensitivities`.
         """
-        self._plotting_core(path, out_index, self._plot_ranking_stub)
+        self._plotting_core(path, out_index, self._plot_ranking_stub, factor_labels=factor_labels)
+
+    @needs_optional_package('matplotlib')
+    def plot_convergence(self,
+                         path: Union[Path, str] = 'sensi_convergence',
+                         out_index: SpecialSlice = 'mean',
+                         step_size: int = 10,
+                         out_labels: Optional[Sequence[str]] = None):
+        """ Plots the evolution of the Position Factor ($PF_{i \\to j}$) metric as a function of increasing
+        number of trajectories.
+
+        Parameters
+        ----------
+        path
+            Path to file into which the plot should be saved.
+        out_index
+            See :meth:`__get_item__`. If multiple output dimensions are selected, they will be included on the same plot
+        step_size
+            The step size in number of trajectories when calculating the position factor.
+        out_labels
+            Optional sequence of descriptive labels for the plot legend corresponding to the outputs selected to be
+            plotted. Defaults to 'Output 0', 'Output 1', 'Output 2', ...
+
+        Notes
+        -----
+        The Position Factor metric is a measure of how much rankings have changed between the rankings calculated
+        using :math:`i` trajectories, and the rankings calculated using :math:`j` trajectories sometime later. Thus, if
+        `step_size` is 10 then the plot would show the evolution of the Position Factor at:
+        :math:`0 \\to 10, 10 \\to 20, 20 \\to 30, ...`
+
+        See Also
+        --------
+        :meth:`position_factor`
+        """
+        steps = np.clip([(i, i + step_size) for i in range(0, self.r, step_size)], None, self.r)
+        pf = np.array([self.position_factor(*pair, out_index) for pair in steps])
+
+        fig, ax = plt.subplots()
+        fig: plt.Figure
+        ax: plt.Axes
+
+        ax.set_title('Convergence of sensitivity rankings ($PF$ v $r$)')
+        ax.set_xlabel('Trajectories Compared ($i \\to j$)')
+        ax.set_ylabel('Position Factor ($PF_{i \\to j}$)')
+
+        ax.plot(pf, marker='.')
+        if len(pf) > 1:
+            labs = out_labels if out_labels is not None else [f'Output {i}' for i in range(pf.shape[0])]
+            ax.legend(labels=labs)
+
+        ax.set_xticks([i for i, _ in enumerate(steps)])
+        ax.set_xticklabels([f'{s[0]}$\\to${s[1]}' for s in steps])
+
+        fig.tight_layout()
+        fig.savefig(path)
+
+        plt.close(fig)
 
     def invert(self):
         """  """
+        # TODO Implement
 
     def _calculate(self,
                    out_index: SpecialSlice,
@@ -522,7 +595,7 @@ class EstimatedEffects:
 
         return np.array([mu, mu_star, sigma])
 
-    def _plotting_core(self, path: Union[Path, str], out_index: SpecialSlice, plot_stub: Callable[..., None]):
+    def _plotting_core(self, path: Union[Path, str], out_index: SpecialSlice, plot_stub: Callable[..., None], **kwargs):
         """ Most plot function require the same looping and gathering of metrics, this is done here and then passed
         to the `plot_stub` method which have the individualized plot commands.
         """
@@ -538,23 +611,24 @@ class EstimatedEffects:
             is_multi = True
 
         for i in range(metrics.shape[2]):
-            fig, ax = plt.subplots(figsize=(15, 15))
+            fig, ax = plt.subplots(figsize=(6.7, 6.7))
             fig: plt.Figure
             ax: plt.Axes
 
             if self.is_grouped:
-                plot_stub(fig, ax, mu_star=metrics[0, :, i])
+                plot_stub(fig, ax, mu_star=metrics[0, :, i], **kwargs)
             else:
-                plot_stub(fig, ax, mu=metrics[0, :, i], mu_star=metrics[1, :, i], sigma=metrics[2, :, i])
+                plot_stub(fig, ax, mu=metrics[0, :, i], mu_star=metrics[1, :, i], sigma=metrics[2, :, i], **kwargs)
 
             fig.tight_layout()
-            fig.savefig(path / f'{i:03}.png' if is_multi else path)
+            fig.savefig(path / f'{i:03}' if is_multi else path)
             plt.close(fig)
 
     def _plot_sensitivities_stub(self, fig: plt.Figure, ax: plt.Axes,
                                  mu: Optional[np.ndarray] = None,
                                  mu_star: Optional[np.ndarray] = None,
-                                 sigma: Optional[np.ndarray] = None):
+                                 sigma: Optional[np.ndarray] = None,
+                                 factor_labels: Optional[Sequence[str]] = None):
         ax.set_title("Sensitivity classification of all input factors.")
         ax.set_xlabel("$\\mu^*$")
         ax.set_ylabel("$\\sigma$")
@@ -572,16 +646,22 @@ class EstimatedEffects:
 
         # Sensitivities
         ax.scatter(mu_star, sigma, marker='.')
-        for j in range(self.g):
-            ax.annotate(j, (mu_star[j], sigma[j]), fontsize=9)
+        labs = factor_labels if factor_labels is not None else range(self.g)
+        for j, lab in enumerate(labs):
+            ax.annotate(lab, (mu_star[j], sigma[j]), fontsize=9)
 
     def _plot_ranking_stub(self, fig: plt.Figure, ax: plt.Axes,
                            mu: Optional[np.ndarray] = None,
                            mu_star: Optional[np.ndarray] = None,
-                           sigma: Optional[np.ndarray] = None):
+                           sigma: Optional[np.ndarray] = None,
+                           factor_labels: Optional[Sequence[str]] = None):
         ax.set_title("Parameter Ranking")
         ax.set_xlabel("Parameter Index")
         ax.set_ylabel("$\\mu^*$")
 
         i_sort = np.argsort(mu_star)
-        ax.bar(i_sort.astype(str), mu_star[i_sort])
+        if factor_labels is None:
+            labs = i_sort.astype(str)
+        else:
+            labs = np.array(factor_labels)[i_sort]
+        ax.bar(labs, mu_star[i_sort])
