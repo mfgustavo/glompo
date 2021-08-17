@@ -1,6 +1,6 @@
 import warnings
 from pathlib import Path
-from typing import Callable, Dict, List, Union
+from typing import Callable, Dict, List, Optional, Union
 
 import numpy as np
 
@@ -12,10 +12,6 @@ except (ModuleNotFoundError, ImportError):
     pass
 
 __all__ = ('EstimatedEffects',)
-
-# TODO Are groups compatible throughout?
-# TODO Are multi-dim outputs compatible throughout?
-# TODO Users will not know that to take all indices they must send slice(None) to out_index of methods
 
 SpecialSlice = Union[int, str, List[int], List[str], slice]
 
@@ -33,7 +29,17 @@ class EstimatedEffects:
 
     Parameters
     ----------
+    groupings
+        :math:`k \\times g` array grouping each :math:`k` factor into one and only one of the :math:`g` groups.
+        See :attr:`groupings`.
 
+        .. warning::
+
+           The use of groups comes at the cost of the :math:`\\mu` and :math:`\\sigma` metrics. They are unobtainable
+           in this regime because it is not possible to define . Only :math:`\\mu^*` is accessible.
+
+    trajectory_style
+        Type of trajectories used in the sensitivity analysis. Accepts 'radial' and 'stairs'
 
     References
     ----------
@@ -72,6 +78,10 @@ class EstimatedEffects:
     def mu(self):
         """ Shortcut access to the Estimated Effects :meth:`\\mu` metric using all trajectories, for all input
         dimensions, taking the average along output dimensions. Equivalent to: :code:`ee['mu', :, 'mean', :]`
+
+        Warnings
+        --------
+        Unavailable if using groups, will raise a :obj:`ValueError`. See :attr:`groupings`.
         """
         return self['mu', :, 'mean', :].squeeze()
 
@@ -87,6 +97,10 @@ class EstimatedEffects:
     def sigma(self):
         """ Shortcut access to the Estimated Effects :meth:`\\sigma` metric using all trajectories, for all input
         dimensions, taking the average along output dimensions. Equivalent to: :code:`ee['sigma', :, 'mean', :]`
+
+        Warnings
+        --------
+        Unavailable if using groups, will raise a :obj:`ValueError`. See :attr:`groupings`.
         """
         return self['sigma', :, 'mean', :].squeeze()
 
@@ -106,6 +120,31 @@ class EstimatedEffects:
         return self.out_dims
 
     @property
+    def g(self) -> int:
+        """ The number of factor groups if one is not analysing each factor individually. """
+        return self.groupings.shape[1]
+
+    @property
+    def groupings(self) -> np.ndarray:
+        """ :math:`k \\times g` array grouping each :math:`k` factor into one and only one of the :math:`g` groups. This
+        allows one to perform a sensitivity analysis with far fewer function evaluations and sensitivities are reported
+        for groups rather than factors.
+
+        .. note::
+
+           This attribute cannot be altered. It is not possible to go from grouped analysis to a individual factor
+           analysis (or vice versa), or to a different grouping due to the manner in which trajectories are constructed.
+           One would need to start a new :class:`EstimatedEffects` instance and generate new trajectories to analyze a
+           different grouping.
+        """
+        return self._groupings
+
+    @property
+    def is_grouped(self) -> bool:
+        """ :obj:`True` if a grouped factor analysis is being conducted. """
+        return self._is_grouped
+
+    @property
     def is_converged(self, out_index: SpecialSlice = 'mean') -> bool:
         """ Converged if the instance has enough trajectories for the factor ordering to be stable.
         Returns :obj:`True` if the change in :meth:`position_factor` over the last 10 trajectory entries is smaller
@@ -114,7 +153,7 @@ class EstimatedEffects:
         Parameters
         ----------
         out_index
-            See :meth:`get_metrics`.
+            See :meth:`__get_item__`.
         """
         # TODO Rethink definition of converged
         return np.squeeze(self.position_factor(self.r - 10, self.r, out_index) < self.convergence_threshold)
@@ -141,6 +180,10 @@ class EstimatedEffects:
         out_index
             Output dimension along which to do the classification.
 
+        Warnings
+        --------
+        Unavailable if using groups, will raise a :obj:`ValueError`. See :attr:`groupings`.
+
         References
         ----------
         Vanrolleghem, P. A., Mannina, G., Cosenza, A., & Neumann, M. B. (2015). Global sensitivity analysis for urban
@@ -165,6 +208,7 @@ class EstimatedEffects:
 
     def __init__(self, input_dims: int,
                  output_dims: int,
+                 groupings: Optional[np.ndarray] = None,
                  convergence_threshold: float = 0,
                  cutoff_threshold: float = 0.1,
                  trajectory_style: str = 'radial'):
@@ -173,6 +217,10 @@ class EstimatedEffects:
         self.trajectories = np.array([])
         self.dims: int = input_dims
         self.traj_style = trajectory_style
+        self._groupings = groupings if groupings is not None else np.identity(input_dims)
+        self._is_grouped = groupings is not None
+        if np.sum(self._groupings) != input_dims:
+            raise ValueError("Invalid grouping matrix, each factor must be in exactly 1 group.")
 
         self.outputs = np.array([])
         self.out_dims = output_dims
@@ -184,7 +232,7 @@ class EstimatedEffects:
         """ Retrieves the sensitivity metrics (:math:`\\mu, \\mu^*, \\sigma`) for a particular calculation configuration
         The indexing has a maximum length of 4:
 
-        * First index:
+        * First index (code:`metric_index`):
             Indexes the metric. If :code:`:` is used, all metrics are returned.
             Also accepts strings which are paired to the following corresponding ints:
             === ===
@@ -195,10 +243,10 @@ class EstimatedEffects:
             2   'sigma'
             === ===
 
-        * Second index:
+        * Second index (code:`factor_index`):
            Indexes the factor. :code:`:` returns metrics for all factors.
 
-        * Third index:
+        * Third index (code:`out_index`):
             Only applicable if a multidimensional output is being investigated. Determines which metrics to use in the
             calculation. Accepts one of the following:
 
@@ -207,11 +255,27 @@ class EstimatedEffects:
 
                * :code:`'mean'`: The metrics will be averaged across the output dimension.
 
-               * :code:`:`: Metrics will be returned for all outputs.
+               * :code:`:, 'all', None`: Metrics will be returned for all outputs.
 
-        * Fourth Index:
+        * Fourth Index (code:`traj_index`):
            Which trajectories to use in the calculation. If not supplied or :code:`:`, all trajectories will be used.
            Accepts slices as well as lists of integers. Helpful for bootstrapping.
+
+        Parameters
+        ----------
+        item
+            Tuple of slices and indices. Maximum length of 4.
+
+        Returns
+        -------
+        numpy.ndarray
+            :math:`m \\times \\times k \\times h` array of sensitivity metrics where :math:`m` is the metric, :math:`k`
+            is the factor and :math:`h` is the output dimensionality.
+
+        Raises
+        ------
+        ValueError
+            If an attempt is made to access :math:`\\mu` or :math:`\\sigma` while using groups.
 
         Examples
         --------
@@ -231,11 +295,6 @@ class EstimatedEffects:
 
         >>> ee[:, :, :, :20]
 
-        Returns
-        -------
-        numpy.ndarray
-            :math:`m \\times \\times k \\times h` array of sensitivity metrics where :math:`m` is the metric, :math:`k`
-            is the factor and :math:`h` is the output dimensionality.
         """
         if self.trajectories.size == 0:
             warnings.warn("Please add at least one trajectory before attempting to access calculations.", UserWarning)
@@ -249,8 +308,11 @@ class EstimatedEffects:
                 m[m == s] = i
             m = m.astype(int)
 
+        if self.is_grouped and (isinstance(m, slice) or any([i in m for i in [0, 2]])):
+            raise ValueError('Cannot access mu and sigma metrics if groups are being used')
+
         mean_out = k == 'mean'
-        k = slice(None) if mean_out else k
+        k = slice(None) if mean_out or k == 'all' or k is None else k
 
         # Attempt to access existing results
         if t == slice(None) and self._metrics.size > 0:
@@ -296,17 +358,17 @@ class EstimatedEffects:
         # Clear old results
         self._metrics = np.array([[[]]])
 
-        if trajectory.shape != (self.k + 1, self.k):
-            raise ValueError(f"Cannot parse trajectory with shape {trajectory.shape}, must be ({self.k + 1}, "
+        if trajectory.shape != (self.g + 1, self.k):
+            raise ValueError(f"Cannot parse trajectory with shape {trajectory.shape}, must be ({self.g + 1}, "
                              f"{self.k}).")
-        if self.h > 1 and outputs.shape != (self.k + 1, self.h):
-            raise ValueError(f"Cannot parse outputs with shape {outputs.shape}, must be ({self.k + 1}, {self.h})")
+        if self.h > 1 and outputs.shape != (self.g + 1, self.h):
+            raise ValueError(f"Cannot parse outputs with shape {outputs.shape}, must be ({self.g + 1}, {self.h})")
 
-        if self.h == 1 and (outputs.shape != (self.k + 1, self.h) or outputs.shape != (self.k + 1,)):
-            raise ValueError(f"Cannot parse outputs with length {len(outputs)}, {self.k + 1} values expected.")
+        if self.h == 1 and (outputs.shape != (self.g + 1, self.h) or outputs.shape != (self.g + 1,)):
+            raise ValueError(f"Cannot parse outputs with length {len(outputs)}, {self.g + 1} values expected.")
 
         if self.h == 1:
-            outputs = outputs.reshape((self.k + 1, self.h))
+            outputs = outputs.reshape((self.g + 1, self.h))
 
         if len(self.trajectories) > 0:
             self.trajectories = np.append(self.trajectories, [trajectory], axis=0)
@@ -314,6 +376,9 @@ class EstimatedEffects:
         else:
             self.trajectories = np.array([trajectory])
             self.outputs = np.array([outputs])
+
+    def generate_add_trajectory(self, style: Optional[None]):
+        """ Convenience method to automatically generate a trajectory and add it to the calculation. """
 
     def build_until_convergence(self,
                                 func: Callable[[np.ndarray], float],
@@ -345,7 +410,7 @@ class EstimatedEffects:
         j
             Final trajectory index against which the comparision is made.
         out_index
-            See :meth:`get_metrics`.
+            See :meth:`__get_item__`.
 
         References
         ----------
@@ -356,8 +421,8 @@ class EstimatedEffects:
         mus_i = self[1, :, out_index, :i]
         mus_j = self[1, :, out_index, :j]
 
-        pos_i = np.abs(mus_i.argsort().argsort() - self.k)
-        pos_j = np.abs(mus_j.argsort().argsort() - self.k)
+        pos_i = np.abs(mus_i.argsort().argsort() - self.g)
+        pos_j = np.abs(mus_j.argsort().argsort() - self.g)
 
         return np.sum(2 * (pos_i - pos_j) / (pos_i + pos_j), axis=1).squeeze()
 
@@ -374,7 +439,11 @@ class EstimatedEffects:
             figure. If multiple plots are produced for all the outputs then this is interpreted as a directory into
             which the figures will be saved.
         out_index
-            See :meth:`get_metrics`. If :obj:`None`, one plot will be created for each output.
+            See :meth:`__get_item__`. If :obj:`None`, one plot will be created for each output.
+
+        Warnings
+        --------
+        Unavailable if using groups, will raise a :obj:`ValueError`. See :attr:`groupings`.
 
         References
         ----------
@@ -406,9 +475,9 @@ class EstimatedEffects:
         Parameters
         ----------
         out_index
-            See :attr:`metrics`.
+            See :meth:`__get_item__`.
         traj_index
-            See :attr:`metrics`.
+            See :meth:`__get_item__`.
 
         Returns
         -------
@@ -432,15 +501,17 @@ class EstimatedEffects:
         """
         if self.traj_style == 'stairs':
             x_diffs = self.trajectories[traj_index, :-1] - self.trajectories[traj_index, 1:]
-            where = np.where(x_diffs)[0::2]
-            x_diffs = np.sum(x_diffs, axis=2)
             y_diffs = self.outputs[traj_index, :-1, out_index] - self.outputs[traj_index, 1:, out_index]
 
         else:  # Radial style trajectories
             x_diffs = self.trajectories[traj_index, 0] - self.trajectories[traj_index, 1:]
-            where = np.where(x_diffs)[0::2]
-            x_diffs = np.sum(x_diffs, axis=1)
             y_diffs = self.outputs[traj_index, 0, out_index] - self.outputs[traj_index, 1:, out_index]
+
+        where = np.where(x_diffs @ self.groupings)[0::2]
+        if not self.is_grouped:  # If not using groups
+            x_diffs = np.sum(x_diffs, axis=2)
+        else:
+            x_diffs = np.sqrt(np.sum(x_diffs ** 2, axis=2))
 
         ee = y_diffs / x_diffs[:, :, None]
         ee[where] = ee.copy().ravel().reshape(-1, self.h)
@@ -455,7 +526,10 @@ class EstimatedEffects:
         """ Most plot function require the same looping and gathering of metrics, this is done here and then passed
         to the `plot_stub` method which have the individualized plot commands.
         """
-        metrics = np.atleast_3d(self[:, :, out_index])
+        if not self.is_grouped:
+            metrics = np.atleast_3d(self[:, :, out_index])
+        else:
+            metrics = np.atleast_3d(self[['mu_star'], :, out_index])
 
         path = Path(path)
         is_multi = False
@@ -468,41 +542,46 @@ class EstimatedEffects:
             fig: plt.Figure
             ax: plt.Axes
 
-            plot_stub(metrics[:, :, i], fig, ax)
+            if self.is_grouped:
+                plot_stub(fig, ax, mu_star=metrics[0, :, i])
+            else:
+                plot_stub(fig, ax, mu=metrics[0, :, i], mu_star=metrics[1, :, i], sigma=metrics[2, :, i])
 
             fig.tight_layout()
             fig.savefig(path / f'{i:03}.png' if is_multi else path)
             plt.close(fig)
 
-    def _plot_sensitivities_stub(self, metrics: np.ndarray, fig: plt.Figure, ax: plt.Axes):
-        _, ms, sd = metrics
-
+    def _plot_sensitivities_stub(self, fig: plt.Figure, ax: plt.Axes,
+                                 mu: Optional[np.ndarray] = None,
+                                 mu_star: Optional[np.ndarray] = None,
+                                 sigma: Optional[np.ndarray] = None):
         ax.set_title("Sensitivity classification of all input factors.")
         ax.set_xlabel("$\\mu^*$")
         ax.set_ylabel("$\\sigma$")
 
         # Influencial / Non-influencial Line
-        max_sd = max(sd)
+        max_sd = max(sigma)
         ax.vlines(self.ct, 0, max_sd, color='red')
         ax.annotate('Non-Influential   ', (self.ct, max_sd), ha='right')
 
         # Linear / Nonlinear Effect Line
-        max_mu = max(ms)
+        max_mu = max(mu_star)
         ax.plot([0, max_mu], [0, max_mu * np.sqrt(self.r) / 2], color='red')
         ax.annotate('   Interacting', (self.ct, max_sd), ha='left')
         ax.annotate('   Important', (self.ct, 0), ha='left')
 
         # Sensitivities
-        ax.scatter(ms, sd, marker='.')
-        for j in range(self.dims):
-            ax.annotate(j, (ms[j], sd[j]), fontsize=9)
+        ax.scatter(mu_star, sigma, marker='.')
+        for j in range(self.g):
+            ax.annotate(j, (mu_star[j], sigma[j]), fontsize=9)
 
-    def _plot_ranking_stub(self, metrics: np.ndarray, fig: plt.Figure, ax: plt.Axes):
-        _, ms, _ = metrics
-
+    def _plot_ranking_stub(self, fig: plt.Figure, ax: plt.Axes,
+                           mu: Optional[np.ndarray] = None,
+                           mu_star: Optional[np.ndarray] = None,
+                           sigma: Optional[np.ndarray] = None):
         ax.set_title("Parameter Ranking")
         ax.set_xlabel("Parameter Index")
         ax.set_ylabel("$\\mu^*$")
 
-        i_sort = np.argsort(ms)
-        ax.bar(i_sort.astype(str), ms[i_sort])
+        i_sort = np.argsort(mu_star)
+        ax.bar(i_sort.astype(str), mu_star[i_sort])
