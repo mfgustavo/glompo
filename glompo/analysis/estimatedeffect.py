@@ -151,18 +151,18 @@ class EstimatedEffects:
         return self._is_grouped
 
     @property
-    def is_converged(self, out_index: SpecialSlice = 'mean') -> bool:
+    def is_converged(self) -> np.ndarray:
         """ Converged if the instance has enough trajectories for the factor ordering to be stable.
         Returns :obj:`True` if the change in :meth:`position_factor` over the last 10 trajectory entries is smaller
         than :attr:`convergence_threshold`.
 
-        Parameters
-        ----------
-        out_index
-            See :meth:`__get_item__`.
+        Returns
+        -------
+        numpy.ndarray
+            Array of length :math:`h` (of :math:`g` if using groups) with boolean values indicating if the sensitivity
+            metrics for that output have converged.
         """
-        # TODO Rethink definition of converged
-        return np.squeeze(self.position_factor(self.r - 10, self.r, out_index) < self.convergence_threshold)
+        return np.squeeze(np.abs(self.position_factor(self.r - 10, self.r, 'all')) < self.convergence_threshold)
 
     @property
     def classification(self, out_index: Union[int, str] = 'mean') -> Dict[str, np.ndarray]:
@@ -424,7 +424,6 @@ class EstimatedEffects:
         for application of the Morris method to systems with many input factors. *Environmental Modelling & Software*,
         37, 103–109. https://doi.org/10.1016/j.envsoft.2012.03.008
         """
-        # TODO Being calculated correctly?
         mus_i = self[1, :, out_index, :i]
         mus_j = self[1, :, out_index, :j]
 
@@ -486,7 +485,7 @@ class EstimatedEffects:
                          out_index: SpecialSlice = 'mean',
                          step_size: int = 10,
                          out_labels: Optional[Sequence[str]] = None):
-        """ Plots the evolution of the Position Factor ($PF_{i \\to j}$) metric as a function of increasing
+        """ Plots the evolution of the Position Factor ($PF_{r_i \\to r_j}$) metric as a function of increasing
         number of trajectories.
 
         Parameters
