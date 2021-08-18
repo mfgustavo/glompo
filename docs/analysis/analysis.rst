@@ -5,3 +5,4 @@ Analysis
 .. toctree::
 
    trajectories
+   estimatedeffects

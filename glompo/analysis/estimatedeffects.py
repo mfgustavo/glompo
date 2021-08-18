@@ -13,7 +13,7 @@ try:
     plt.rcParams['mathtext.fontset'] = 'cm'
     plt.rcParams['savefig.format'] = 'svg'
     plt.rcParams['figure.figsize'] = 6.7, 3.35
-except (ModuleNotFoundError, ImportError):
+except (ModuleNotFoundError, ImportError, TypeError):  # TypeError caught for building docs
     pass
 
 __all__ = ('EstimatedEffects',)
@@ -23,18 +23,27 @@ SpecialSlice = Union[int, str, List[int], List[str], slice]
 
 class EstimatedEffects:
     # TODO Numpy warnings?
-    # TODO Complete parameters
-    # TODO Complete attributes
+    # TODO Ranking is buggy?
+    # TODO Property methods cannot accept args!!
+    # TODO Position factor also buggy (breaks for multiple dimensions)
+    # TODO Check all functions are compatible with an 'extra' dimension ie using 'mean' and 'all'
+    # TODO Check docs for array dimensions. Where should g be used.
     """ Implementation of Morris screening strategy.
-    Based on the original work of Morris (1991) but includes extensions published over the years.
-    Global sensitivity method for expensive functions. Uses minimal number of function evaluations to develop a good
-    proxy for the total sensitivity of each input factor. Produces three sensitivity measures (:math:`\\mu`,
-    :math:`\\mu^*` and :math:`\\sigma`) that are able to capture magnitude and direction the sensitivity, as well as
-    nonlinear and interaction effects. The user is directed to the references below for a detailed explanation of the
-    meaning of each of these measures.
+    Based on the original work of `Morris (1991) <https://doi.org/10.1080/00401706.1991.10484804>`_ but includes
+    extensions published over the years. Global sensitivity method for expensive functions. Uses minimal number of
+    function evaluations to develop a good proxy for the total sensitivity of each input factor. Produces three
+    sensitivity measures (:math:`\\mu`, :math:`\\mu^*` and :math:`\\sigma`) that are able to capture magnitude and
+    direction the sensitivity, as well as nonlinear and interaction effects. The user is directed to the references
+    below for a detailed explanation of the meaning of each of these measures.
 
     Parameters
     ----------
+    input_dims
+        Number of factors in the input space on which the sensitivity analysis is being done.
+
+    output_dims
+        Number of dimensions in the response of the function.
+
     groupings
         :math:`k \\times g` array grouping each :math:`k` factor into one and only one of the :math:`g` groups.
         See :attr:`groupings`.
@@ -44,8 +53,14 @@ class EstimatedEffects:
            The use of groups comes at the cost of the :math:`\\mu` and :math:`\\sigma` metrics. They are unobtainable
            in this regime because it is not possible to define . Only :math:`\\mu^*` is accessible.
 
+    convergence_threshold
+        See :attr:`convergence_threshold`.
+
+    cutoff_threshold
+        See :attr:`ct`.
+
     trajectory_style
-        Type of trajectories used in the sensitivity analysis. Accepts 'radial' and 'stairs'
+        See :attr:`traj_style`
 
     References
     ----------
@@ -69,15 +84,32 @@ class EstimatedEffects:
 
     Attributes
     ----------
-    dims: int
+    convergence_threshold : float
+        Value of the Position Factor, below which sensitivities should be considered converged. See :meth:`is_converged`
+        and :meth:`position_factor`.
+
+    ct : float
+        Value of :math:`\\mu^*` below which the factor is classified as 'non-influential'. See :attr:`classification`.
+
+    dims : int
         The number of input factors for which sensitivity is being tested. Often referred to as :math:`k` throughout the
-        documentation here to match literature.
-    out_dims: int
+        documentation here to match literature. See :attr:`k`.
+
+    out_dims : int
         Dimensionality of the output if one would like to investigate factor sensitivities against multiple function
-        responses. Often reffered to as :math:`h` in the documentation of equations.
+        responses. Often referred to as :math:`h` in the documentation of equations. See :attr:`h`.
+
     outputs : numpy.ndarray
-        :math:`r \\times (k+1) \\times h` array of function evaluations corresponding to the input factors in
-        :attr:`trajectories`. :math:`h` is the dimensionality of the outputs.
+        :math:`r \\times (g+1) \\times h` array of function evaluations corresponding to the input factors in
+        :attr:`trajectories`. Represents the responses of the model to the points in the :attr:`trajectories`.
+
+    trajectories : numpy.ndarray
+        :math:`r \\times (g+1) \\times k` array of :math:`r` trajectories, each with :math:`g+1` points of :math:`k`
+        factors each. Represents the carefully sampled points in the factor space where the model will be evaluated.
+
+    traj_style : str
+        The style of the trajectories which will be used in this calculation. Accepts :code:`'radial'` and
+        :code:`'stairs'`. See :mod:`.trajectories`.
     """
 
     @property
@@ -93,7 +125,7 @@ class EstimatedEffects:
 
     @property
     def mu_star(self):
-        """ Shortcut access to the Estimated Effects :meth:`\\mu^*` metric using all trajectories, for all input
+        """ Shortcut access to the Estimated Effects :math:`\\mu^*` metric using all trajectories, for all input
         dimensions, taking the average along output dimensions. Equivalent to:
         :code:`ee['mu_star', :, 'mean', :]`
         """
@@ -127,7 +159,7 @@ class EstimatedEffects:
 
     @property
     def g(self) -> int:
-        """ The number of factor groups if one is not analysing each factor individually. """
+        """ The number of factor groups equals :attr:`k` if analyzing each factor individually. """
         return self.groupings.shape[1]
 
     @property
@@ -159,8 +191,8 @@ class EstimatedEffects:
         Returns
         -------
         numpy.ndarray
-            Array of length :math:`h` (of :math:`g` if using groups) with boolean values indicating if the sensitivity
-            metrics for that output have converged.
+            Array of length :math:`h` with boolean values indicating if the sensitivity metrics for that output have
+            converged.
         """
         return np.squeeze(np.abs(self.position_factor(self.r - 10, self.r, 'all')) < self.convergence_threshold)
 
@@ -208,7 +240,7 @@ class EstimatedEffects:
         Parameters
         ----------
         out_index
-            See :meth:`__get_item__`.
+            See :meth:`__getitem__`.
         """
         return np.squeeze(self[1, :, out_index].argsort()[:, -1::-1] + 1)
 
@@ -238,9 +270,10 @@ class EstimatedEffects:
         """ Retrieves the sensitivity metrics (:math:`\\mu, \\mu^*, \\sigma`) for a particular calculation configuration
         The indexing has a maximum length of 4:
 
-        * First index (code:`metric_index`):
+        * First index (:code:`metric_index`):
             Indexes the metric. If :code:`:` is used, all metrics are returned.
-            Also accepts strings which are paired to the following corresponding ints:
+            Also accepts :obj:`str` which are paired to the following corresponding :obj:`int`:
+
             === ===
             int str
             === ===
@@ -249,21 +282,22 @@ class EstimatedEffects:
             2   'sigma'
             === ===
 
-        * Second index (code:`factor_index`):
-           Indexes the factor. :code:`:` returns metrics for all factors.
+        * Second index (:code:`factor_index`):
+           Indexes the factor or group for which sensitivities are being calculated. :code:`:` returns metrics for all
+           factors.
 
-        * Third index (code:`out_index`):
+        * Third index (:code:`out_index`):
             Only applicable if a multidimensional output is being investigated. Determines which metrics to use in the
             calculation. Accepts one of the following:
 
-               * Any integers or slices of 0, 1, ... :math:`h`: The metrics for the outputs at the corresponding index
-                 will be used.
+               * Any integers or slices of 0, 1, ... :math:`h`: The metrics for the outputs at the
+                 corresponding index will be used.
 
                * :code:`'mean'`: The metrics will be averaged across the output dimension.
 
                * :code:`:, 'all', None`: Metrics will be returned for all outputs.
 
-        * Fourth Index (code:`traj_index`):
+        * Fourth Index (:code:`traj_index`):
            Which trajectories to use in the calculation. If not supplied or :code:`:`, all trajectories will be used.
            Accepts slices as well as lists of integers. Helpful for bootstrapping.
 
@@ -275,8 +309,8 @@ class EstimatedEffects:
         Returns
         -------
         numpy.ndarray
-            :math:`m \\times \\times k \\times h` array of sensitivity metrics where :math:`m` is the metric, :math:`k`
-            is the factor and :math:`h` is the output dimensionality.
+            :math:`m \\times g \\times h` array of sensitivity metrics where :math:`m` is the metric, :math:`g` is the
+            factor or group and :math:`h` is the output dimensionality.
 
         Raises
         ------
@@ -351,7 +385,7 @@ class EstimatedEffects:
 
         Raises
         ------
-        ValueErrror
+        ValueError
             If `trajectory` or `outputs` do not match the dimensions above.
 
         Notes
@@ -399,11 +433,11 @@ class EstimatedEffects:
         trajectories and `j` trajectories.  Where `i` and `j` are a number of trajectories such that
         :math:`0 < i < j \\leq M` where :math:`M` is the number of trajectories added to the calculation.
 
-        The position factor metric (:math:`PF_{r_i \\shortrightarrow r_j}`) is calculated as:
+        The position factor metric (:math:`PF_{r_i \\to r_j}`) is calculated as:
 
         .. math::
 
-           PF_{r_i \\shortrightarrow r_j} = \\sum_{k=1}^k \\frac{2(P_{k,i} - P_{k,j})}{P_{k,i} + P_{k,j}}
+           PF_{r_i \\to r_j} = \\sum_{k=1}^k \\frac{2(P_{k,i} - P_{k,j})}{P_{k,i} + P_{k,j}}
 
         where:
            :math:`P_{k,i}` is the ranking of factor :math:`k` using :math:`i` trajectories.
@@ -414,9 +448,9 @@ class EstimatedEffects:
         i
             Initial trajectory index from which to start the comparison.
         j
-            Final trajectory index against which the comparision is made.
+            Final trajectory index against which the comparison is made.
         out_index
-            See :meth:`__get_item__`.
+            See :meth:`__getitem__`.
 
         References
         ----------
@@ -448,7 +482,7 @@ class EstimatedEffects:
             figure. If multiple plots are produced for all the outputs then this is interpreted as a directory into
             which the figures will be saved.
         out_index
-            See :meth:`__get_item__`. If :obj:`None` or :code:`'all'`, one plot will be created for each output.
+            See :meth:`__getitem__`. If :obj:`None` or :code:`'all'`, one plot will be created for each output.
         factor_labels
             Optional sequence of descriptive names for each factor to add to the figure. Defaults to the factor's
             index position.
@@ -493,7 +527,7 @@ class EstimatedEffects:
         path
             Path to file into which the plot should be saved.
         out_index
-            See :meth:`__get_item__`. If multiple output dimensions are selected, they will be included on the same plot
+            See :meth:`__getitem__`. If multiple output dimensions are selected, they will be included on the same plot
         step_size
             The step size in number of trajectories when calculating the position factor.
         out_labels
@@ -547,15 +581,15 @@ class EstimatedEffects:
         Parameters
         ----------
         out_index
-            See :meth:`__get_item__`.
+            See :meth:`__getitem__`.
         traj_index
-            See :meth:`__get_item__`.
+            See :meth:`__getitem__`.
 
         Returns
         -------
         numpy.ndarray
-            :math:`m \\times \\times k \\times h` array of sensitivity metrics where :math:`m` is the metric, :math:`k`
-            is the factor and :math:`h` is the output dimensionality.
+            :math:`m \\times \\times g \\times h` array of sensitivity metrics where :math:`m` is the metric, :math:`g`
+            is the factor or group and :math:`h` is the output dimensionality.
 
             Metrics are ordered: :math:`\\mu`, :math:`\\mu^*` and :math:`\\sigma`.
 
