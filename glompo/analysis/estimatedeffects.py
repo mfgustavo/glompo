@@ -1,3 +1,4 @@
+import copy
 import warnings
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Union
@@ -18,16 +19,10 @@ except (ModuleNotFoundError, ImportError, TypeError):  # TypeError caught for bu
 
 __all__ = ('EstimatedEffects',)
 
-SpecialSlice = Union[int, str, List[int], List[str], slice]
+SpecialSlice = Union[None, int, str, List, slice]
 
 
 class EstimatedEffects:
-    # TODO Numpy warnings?
-    # TODO Ranking is buggy?
-    # TODO Property methods cannot accept args!!
-    # TODO Position factor also buggy (breaks for multiple dimensions)
-    # TODO Check all functions are compatible with an 'extra' dimension ie using 'mean' and 'all'
-    # TODO Check docs for array dimensions. Where should g be used.
     """ Implementation of Morris screening strategy.
     Based on the original work of `Morris (1991) <https://doi.org/10.1080/00401706.1991.10484804>`_ but includes
     extensions published over the years. Global sensitivity method for expensive functions. Uses minimal number of
@@ -114,8 +109,17 @@ class EstimatedEffects:
 
     @property
     def mu(self):
-        """ Shortcut access to the Estimated Effects :meth:`\\mu` metric using all trajectories, for all input
+        """ Shortcut access to the Estimated Effects :math:`\\mu` metric using all trajectories, for all input
         dimensions, taking the average along output dimensions. Equivalent to: :code:`ee['mu', :, 'mean', :]`
+
+        Returns
+        -------
+        numpy.ndarray
+            :math:`h \\times k` array.
+
+        Notes
+        -----
+        If using a single output, then this attribute is the metric itself. Using :code:`'mean'` has no effect.
 
         Warnings
         --------
@@ -128,6 +132,15 @@ class EstimatedEffects:
         """ Shortcut access to the Estimated Effects :math:`\\mu^*` metric using all trajectories, for all input
         dimensions, taking the average along output dimensions. Equivalent to:
         :code:`ee['mu_star', :, 'mean', :]`
+
+        Returns
+        -------
+        numpy.ndarray
+            :math:`h \\times g` array.
+
+        Notes
+        -----
+        If using a single output, then this attribute is the metric itself. Using :code:`'mean'` has no effect.
         """
         return self['mu_star', :, 'mean', :].squeeze()
 
@@ -135,6 +148,15 @@ class EstimatedEffects:
     def sigma(self):
         """ Shortcut access to the Estimated Effects :meth:`\\sigma` metric using all trajectories, for all input
         dimensions, taking the average along output dimensions. Equivalent to: :code:`ee['sigma', :, 'mean', :]`
+
+        Returns
+        -------
+        numpy.ndarray
+            :math:`h \\times k` array.
+
+        Notes
+        -----
+        If using a single output, then this attribute is the metric itself. Using :code:`'mean'` has no effect.
 
         Warnings
         --------
@@ -159,7 +181,7 @@ class EstimatedEffects:
 
     @property
     def g(self) -> int:
-        """ The number of factor groups equals :attr:`k` if analyzing each factor individually. """
+        """ The number of factor groups. Equals :attr:`k` if analyzing each factor individually. """
         return self.groupings.shape[1]
 
     @property
@@ -174,6 +196,11 @@ class EstimatedEffects:
            analysis (or vice versa), or to a different grouping due to the manner in which trajectories are constructed.
            One would need to start a new :class:`EstimatedEffects` instance and generate new trajectories to analyze a
            different grouping.
+
+        Returns
+        -------
+        numpy.ndarray
+            :math:`k \\times g` array mapping each factor to exactly one group.
         """
         return self._groupings
 
@@ -194,55 +221,9 @@ class EstimatedEffects:
             Array of length :math:`h` with boolean values indicating if the sensitivity metrics for that output have
             converged.
         """
+        if self.r < 10:
+            return np.full(self.h, False)
         return np.squeeze(np.abs(self.position_factor(self.r - 10, self.r, 'all')) < self.convergence_threshold)
-
-    @property
-    def classification(self, out_index: Union[int, str] = 'mean') -> Dict[str, np.ndarray]:
-        """ Returns a dictionary with each factor index classified as :code:`'important'`, :code:`'interacting'` and
-        :code:`'non-influential'`. Follows the definitive classification system of
-        `Vanrolleghem et al. (2105) <https://doi.org/10.1016/J.JHYDROL.2014.12.056>`_.
-
-        Categories are defined as follows:
-
-        :code:`'important'`:
-           These factors have a linear effect on the model output.
-
-        :code:`'interacting'`:
-           These factors have a nonlinear effect on the model output.
-
-        :code:`'non-influential'`:
-            These factors do not have a significant impact on model output.
-
-        Parameters
-        ----------
-        out_index
-            Output dimension along which to do the classification.
-
-        Warnings
-        --------
-        Unavailable if using groups, will raise a :obj:`ValueError`. See :attr:`groupings`.
-
-        References
-        ----------
-        Vanrolleghem, P. A., Mannina, G., Cosenza, A., & Neumann, M. B. (2015). Global sensitivity analysis for urban
-        water quality modelling: Terminology, convergence and comparison of different methods. *Journal of Hydrology*,
-        522, 339–352. https://doi.org/10.1016/J.JHYDROL.2014.12.056
-        """
-        mu, ms, sd = self[:, :, out_index, :]
-        return {'important': np.argwhere((ms > self.ct) & (sd < ms * np.sqrt(self.r) / 2)).ravel(),
-                'interacting': np.argwhere((ms > self.ct) & (sd >= ms * np.sqrt(self.r) / 2)).ravel(),
-                'non-influential': np.argwhere(ms < self.ct).ravel()}
-
-    @property
-    def ranking(self, out_index: SpecialSlice = 'mean') -> np.ndarray:
-        """ Returns factor indices in descending order of their influence on the outputs.
-
-        Parameters
-        ----------
-        out_index
-            See :meth:`__getitem__`.
-        """
-        return np.squeeze(self[1, :, out_index].argsort()[:, -1::-1] + 1)
 
     def __init__(self, input_dims: int,
                  output_dims: int,
@@ -268,11 +249,10 @@ class EstimatedEffects:
 
     def __getitem__(self, item):
         """ Retrieves the sensitivity metrics (:math:`\\mu, \\mu^*, \\sigma`) for a particular calculation configuration
-        The indexing has a maximum length of 4:
+        The indexing is a strictly ordered set of maximum length 4:
 
         * First index (:code:`metric_index`):
-            Indexes the metric. If :code:`:` is used, all metrics are returned.
-            Also accepts :obj:`str` which are paired to the following corresponding :obj:`int`:
+            Indexes the metric. Also accepts :obj:`str` which are paired to the following corresponding :obj:`int`:
 
             === ===
             int str
@@ -283,8 +263,7 @@ class EstimatedEffects:
             === ===
 
         * Second index (:code:`factor_index`):
-           Indexes the factor or group for which sensitivities are being calculated. :code:`:` returns metrics for all
-           factors.
+           Indexes the factor or group for which sensitivities are being calculated.
 
         * Third index (:code:`out_index`):
             Only applicable if a multidimensional output is being investigated. Determines which metrics to use in the
@@ -295,11 +274,8 @@ class EstimatedEffects:
 
                * :code:`'mean'`: The metrics will be averaged across the output dimension.
 
-               * :code:`:, 'all', None`: Metrics will be returned for all outputs.
-
         * Fourth Index (:code:`traj_index`):
-           Which trajectories to use in the calculation. If not supplied or :code:`:`, all trajectories will be used.
-           Accepts slices as well as lists of integers. Helpful for bootstrapping.
+           Which trajectories to use in the calculation.
 
         Parameters
         ----------
@@ -309,13 +285,22 @@ class EstimatedEffects:
         Returns
         -------
         numpy.ndarray
-            :math:`m \\times g \\times h` array of sensitivity metrics where :math:`m` is the metric, :math:`g` is the
-            factor or group and :math:`h` is the output dimensionality.
+            Three dimensional array of selected metrics, factors/groups and outputs.
 
         Raises
         ------
         ValueError
             If an attempt is made to access :math:`\\mu` or :math:`\\sigma` while using groups.
+
+        Notes
+        -----
+        For all of the indices using :code:`:`, :code:`'all'` or :obj:`None` will return all items.
+
+        If an index is not supplied, all indices will also be returned.
+
+        When passing indices as arguments in other functions (see :meth:`ranking` for example) it is not possible to
+        pass slices exactly as is done here (e.g. :code:`:2` would not be a valid construct as a function argument). To
+        pass a slice, use a :obj:`slice` object (e.g. :code:`:2` could be sent as :code:`slice(None, 2)`).
 
         Examples
         --------
@@ -340,19 +325,25 @@ class EstimatedEffects:
             warnings.warn("Please add at least one trajectory before attempting to access calculations.", UserWarning)
             return np.array([[[]]])
 
-        m, h, k, t = (*item, *(slice(None),) * (4 - len(item)))
+        if not isinstance(item, tuple):
+            item = (item,)  # NOT the same as tuple(item) since you dont want to expand 'mu' to ('m', 'u')
+        item = [slice(None) if i is None or i == 'all' else i for i in item]
+        item += [slice(None)] * (4 - len(item))
+        m, k, h, t = item
 
         if not isinstance(m, slice):
             m = np.atleast_1d(m)
             for s, i in (('mu', 0), ('mu_star', 1), ('sigma', 2)):
-                m[m == s] = i
+                m[[_ == s for _ in m]] = i
             m = m.astype(int)
 
         if self.is_grouped and (isinstance(m, slice) or any([i in m for i in [0, 2]])):
             raise ValueError('Cannot access mu and sigma metrics if groups are being used')
 
-        mean_out = k == 'mean'
-        k = slice(None) if mean_out or k == 'all' or k is None else k
+        orig_h = copy.copy(h)
+        nest_out = isinstance(h, list) or isinstance(h, tuple)
+        mean_out = h == 'mean' or (nest_out and 'mean' in h)
+        h = slice(None) if mean_out else h
 
         # Attempt to access existing results
         if t == slice(None) and self._metrics.size > 0:
@@ -365,8 +356,19 @@ class EstimatedEffects:
 
         metrics = metrics[m, k, h]
 
-        if mean_out:
-            metrics = np.mean(metrics, 2)
+        if nest_out:
+            cols = []
+            for o in orig_h:
+                if o == 'all':
+                    cols += np.split(metrics, self.h, axis=2)
+                elif o == 'mean':
+                    cols.append(np.mean(metrics, 2)[:, :, None])
+                else:
+                    cols.append(metrics[:, :, o, None])
+            metrics = np.concatenate(cols, axis=2)
+
+        if mean_out and not nest_out:
+            return np.mean(metrics, 2)
 
         return metrics
 
@@ -419,6 +421,7 @@ class EstimatedEffects:
 
     def generate_add_trajectory(self, style: Optional[None]):
         """ Convenience method to automatically generate a trajectory and add it to the calculation. """
+        # TODO Implement
 
     def build_until_convergence(self,
                                 func: Callable[[np.ndarray], float],
@@ -452,19 +455,135 @@ class EstimatedEffects:
         out_index
             See :meth:`__getitem__`.
 
+        Returns
+        -------
+        numpy.ndarray
+            Array equal in length to the number of outputs requested.
+
         References
         ----------
         Ruano, M. V., Ribes, J., Seco, A., & Ferrer, J. (2012). An improved sampling strategy based on trajectory design
         for application of the Morris method to systems with many input factors. *Environmental Modelling & Software*,
         37, 103–109. https://doi.org/10.1016/j.envsoft.2012.03.008
         """
-        mus_i = self[1, :, out_index, :i]
-        mus_j = self[1, :, out_index, :j]
-
-        pos_i = np.abs(mus_i.argsort().argsort() - self.g)
-        pos_j = np.abs(mus_j.argsort().argsort() - self.g)
-
+        pos_i = np.atleast_2d(self.ranking(out_index, slice(None, i + 1)))
+        pos_j = np.atleast_2d(self.ranking(out_index, slice(None, j + 1)))
         return np.sum(2 * (pos_i - pos_j) / (pos_i + pos_j), axis=1).squeeze()
+
+    def order_factors(self,
+                      out_index: SpecialSlice = 'mean',
+                      traj_index: SpecialSlice = None) -> np.ndarray:
+        """ Returns factor indices in descending order of their influence on the outputs.
+        The *positions* in the array are the rankings, the *contents* of the array are the factor / group indices. This
+        is the inverse of :meth:`ranking`.
+
+        Parameters
+        ----------
+        See :meth:`__getitem__`.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of :math:`g` length vectors for each of the selected outputs.
+
+        See Also
+        --------
+        :meth:`ranking`
+
+        Examples
+        --------
+        Return a factor ordering for all outputs, using all available trajectories:
+
+        >>> ee.order_factors()
+
+        Returns the factor ordering of the third output using the first 10 trajectories:
+
+        >>> ee.order_factors(2, slice(None, 10))
+        """
+        metric = np.atleast_3d(self[1, :, out_index, traj_index])
+        return metric.argsort(1)[:, -1::-1].squeeze().T
+
+    def ranking(self, out_index: SpecialSlice = 'mean', traj_index: SpecialSlice = None) -> np.ndarray:
+        """ Returns the ranking of each factor being analyzed.
+        The *positions* in the array are the factor or group indices, the *contents* of the array are rankings such that
+        1 is the most influential factor / group and :math:`g+1` is the least influential. This is the inverse of
+        :meth:`order_factors`.
+
+        Parameters
+        ----------
+        See :meth:`__getitem__`.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of :math:`g` length vectors for each of the selected outputs.
+
+        See Also
+        --------
+        :meth:`order_factors`
+        """
+        return np.squeeze(np.atleast_2d(self.order_factors(out_index, traj_index)).argsort(1) + 1)
+
+    def classification(self, out_index: Union[int, str] = 'mean') -> Dict[str, np.ndarray]:
+        """ Returns a dictionary with each factor index classified as :code:`'important'`, :code:`'interacting'` and
+        :code:`'non-influential'`. Follows the definitive classification system of
+        `Vanrolleghem et al. (2105) <https://doi.org/10.1016/J.JHYDROL.2014.12.056>`_.
+
+        Categories are defined as follows:
+
+        :code:`'important'`:
+           These factors have a linear effect on the model output.
+
+        :code:`'interacting'`:
+           These factors have a nonlinear effect on the model output.
+
+        :code:`'non-influential'`:
+            These factors do not have a significant impact on model output.
+
+        Parameters
+        ----------
+        out_index
+            Output dimension along which to do the classification.
+
+        Returns
+        -------
+        Dict[str, np.ndarray]
+            Dictionary with the category names as keys. The corresponding arrays are two-dimensional: number of outputs
+            requested by `out_index` by number of parameters in the category.
+
+        Raises
+        ------
+        ValueError
+            If `out_index` includes more than one index.
+
+        Warnings
+        --------
+        Unavailable if using groups, will raise a :obj:`ValueError`. See :attr:`groupings`.
+
+        Notes
+        -----
+        `out_index` supports :code:`'mean'` (averages metrics over the outputs) and integer indices. Unlike most other
+        methods, however, it does not support slices and combinations of outputs. Only one classification can be
+        generated at a time.
+
+        References
+        ----------
+        Vanrolleghem, P. A., Mannina, G., Cosenza, A., & Neumann, M. B. (2015). Global sensitivity analysis for urban
+        water quality modelling: Terminology, convergence and comparison of different methods. *Journal of Hydrology*,
+        522, 339–352. https://doi.org/10.1016/J.JHYDROL.2014.12.056
+        """
+        if out_index != 'mean' and not isinstance(out_index, int):
+            raise ValueError('Classification can only be done on a single output at a time.')
+        mu, ms, sd = self[:, :, out_index, :]
+        return {'important': np.argwhere((ms > self.ct) & (sd < ms * np.sqrt(self.r) / 2)).ravel(),
+                'interacting': np.argwhere((ms > self.ct) & (sd >= ms * np.sqrt(self.r) / 2)).ravel(),
+                'non-influential': np.argwhere(ms < self.ct).ravel()}
+
+    def bootstrap_metrics(self,
+                          metric_index: SpecialSlice = None,
+                          factor_index: SpecialSlice = None,
+                          out_index: SpecialSlice = None):
+        """  """
 
     @needs_optional_package('matplotlib')
     def plot_sensitivities(self,
@@ -557,8 +676,8 @@ class EstimatedEffects:
         ax.set_ylabel('Position Factor ($PF_{i \\to j}$)')
 
         ax.plot(pf, marker='.')
-        if len(pf) > 1:
-            labs = out_labels if out_labels is not None else [f'Output {i}' for i in range(pf.shape[0])]
+        if pf.shape[1] > 1:
+            labs = out_labels if out_labels is not None else [f'Output {i}' for i in range(pf.shape[1])]
             ax.legend(labels=labs)
 
         ax.set_xticks([i for i, _ in enumerate(steps)])
@@ -588,9 +707,7 @@ class EstimatedEffects:
         Returns
         -------
         numpy.ndarray
-            :math:`m \\times \\times g \\times h` array of sensitivity metrics where :math:`m` is the metric, :math:`g`
-            is the factor or group and :math:`h` is the output dimensionality.
-
+            Three dimensional array of selected metrics, factors/groups and outputs.
             Metrics are ordered: :math:`\\mu`, :math:`\\mu^*` and :math:`\\sigma`.
 
         Notes
@@ -624,7 +741,7 @@ class EstimatedEffects:
 
         mu = np.mean(ee, axis=0)
         mu_star = np.mean(np.abs(ee), axis=0)
-        sigma = np.std(ee, axis=0, ddof=1)
+        sigma = np.std(ee, axis=0, ddof=1) if ee.shape[0] > 1 else np.full_like(mu, np.nan)
 
         return np.array([mu, mu_star, sigma])
 
