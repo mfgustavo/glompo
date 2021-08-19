@@ -9,11 +9,15 @@ from ..common.wrappers import needs_optional_package
 
 try:
     import matplotlib.pyplot as plt
+    from matplotlib import lines
+    from matplotlib import patches
+    from matplotlib import cm
 
     plt.rcParams['font.size'] = 8
     plt.rcParams['mathtext.fontset'] = 'cm'
     plt.rcParams['savefig.format'] = 'svg'
     plt.rcParams['figure.figsize'] = 6.7, 3.35
+    plt.rcParams['font.size'] = 6
 except (ModuleNotFoundError, ImportError, TypeError):  # TypeError caught for building docs
     pass
 
@@ -59,19 +63,27 @@ class EstimatedEffects:
 
     References
     ----------
-    Morris, M. D. (1991). Factorial Sampling Plans for Preliminary Computational Experiments. *Technometrics*, 33(2),
-    161–174. https://doi.org/10.1080/00401706.1991.10484804
+    Cosenza, A., Mannina, G., Vanrolleghem, P. A., & Neumann, M. B. (2013). Global sensitivity analysis in wastewater
+    applications: A comprehensive comparison of different methods. Environmental Modelling & Software, 49, 40–52.
+    https://doi.org/10.1016/J.ENVSOFT.2013.07.009
 
     Campolongo, F., Cariboni, J., & Saltelli, A. (2007). An effective screening design for sensitivity analysis of large
     models. *Environmental Modelling & Software*, 22(10), 1509–1518. https://doi.org/10.1016/j.envsoft.2006.10.004
 
-    Saltelli, A., Ratto, M., Andres, T., Campolongo, F., Cariboni, J., Gatelli, D., Saisana, M., & Tarantola, S. (2007).
-    Global Sensitivity Analysis. The Primer (A Saltelli, M. Ratto, T. Andres, F. Campolongo, J. Cariboni, D. Gatelli,
-    M. Saisana, & S. Tarantola (eds.)). *John Wiley & Sons, Ltd.* https://doi.org/10.1002/9780470725184
+    Garcia Sanchez, D., Lacarrière, B., Musy, M., & Bourges, B. (2014). Application of sensitivity analysis in building
+    energy simulations: Combining first- and second-order elementary effects methods. Energy and Buildings, 68(PART C),
+    741–750. https://doi.org/10.1016/J.ENBUILD.2012.08.048
+
+    Morris, M. D. (1991). Factorial Sampling Plans for Preliminary Computational Experiments. *Technometrics*, 33(2),
+    161–174. https://doi.org/10.1080/00401706.1991.10484804
 
     Ruano, M. V., Ribes, J., Seco, A., & Ferrer, J. (2012). An improved sampling strategy based on trajectory design for
     application of the Morris method to systems with many input factors. *Environmental Modelling & Software*, 37,
     103–109. https://doi.org/10.1016/j.envsoft.2012.03.008
+
+    Saltelli, A., Ratto, M., Andres, T., Campolongo, F., Cariboni, J., Gatelli, D., Saisana, M., & Tarantola, S. (2007).
+    Global Sensitivity Analysis. The Primer (A Saltelli, M. Ratto, T. Andres, F. Campolongo, J. Cariboni, D. Gatelli,
+    M. Saisana, & S. Tarantola (eds.)). *John Wiley & Sons, Ltd.* https://doi.org/10.1002/9780470725184
 
     Vanrolleghem, P. A., Mannina, G., Cosenza, A., & Neumann, M. B. (2015). Global sensitivity analysis for urban water
     quality modelling: Terminology, convergence and comparison of different methods. *Journal of Hydrology*, 522,
@@ -440,7 +452,7 @@ class EstimatedEffects:
 
         .. math::
 
-           PF_{r_i \\to r_j} = \\sum_{k=1}^k \\frac{2(P_{k,i} - P_{k,j})}{P_{k,i} + P_{k,j}}
+           PF_{r_i \\to r_j} = \\sum_{k=1}^k \\frac{2\\left|P_{k,i} - P_{k,j}\\right|}{P_{k,i} + P_{k,j}}
 
         where:
            :math:`P_{k,i}` is the ranking of factor :math:`k` using :math:`i` trajectories.
@@ -465,10 +477,14 @@ class EstimatedEffects:
         Ruano, M. V., Ribes, J., Seco, A., & Ferrer, J. (2012). An improved sampling strategy based on trajectory design
         for application of the Morris method to systems with many input factors. *Environmental Modelling & Software*,
         37, 103–109. https://doi.org/10.1016/j.envsoft.2012.03.008
+
+        Cosenza, A., Mannina, G., Vanrolleghem, P. A., & Neumann, M. B. (2013). Global sensitivity analysis in
+        wastewater applications: A comprehensive comparison of different methods. Environmental Modelling & Software,
+        49, 40–52. https://doi.org/10.1016/J.ENVSOFT.2013.07.009
         """
         pos_i = np.atleast_2d(self.ranking(out_index, slice(None, i + 1)))
         pos_j = np.atleast_2d(self.ranking(out_index, slice(None, j + 1)))
-        return np.sum(2 * (pos_i - pos_j) / (pos_i + pos_j), axis=1).squeeze()
+        return np.sum(2 * np.abs(pos_i - pos_j) / (pos_i + pos_j), axis=1).squeeze()
 
     def order_factors(self,
                       out_index: SpecialSlice = 'mean',
@@ -524,30 +540,48 @@ class EstimatedEffects:
         """
         return np.squeeze(np.atleast_2d(self.order_factors(out_index, traj_index)).argsort(1) + 1)
 
-    def classification(self, out_index: Union[int, str] = 'mean') -> Dict[str, np.ndarray]:
-        """ Returns a dictionary with each factor index classified as :code:`'important'`, :code:`'interacting'` and
-        :code:`'non-influential'`. Follows the definitive classification system of
-        `Vanrolleghem et al. (2105) <https://doi.org/10.1016/J.JHYDROL.2014.12.056>`_.
-
-        Categories are defined as follows:
-
-        :code:`'important'`:
-           These factors have a linear effect on the model output.
-
-        :code:`'interacting'`:
-           These factors have a nonlinear effect on the model output.
-
-        :code:`'non-influential'`:
-            These factors do not have a significant impact on model output.
+    def classification(self, n_cats: int, out_index: Union[int, str] = 'mean') -> Dict[str, np.ndarray]:
+        """ Returns a dictionary with each factor index classified according to its effect on the function outputs.
 
         Parameters
         ----------
+        n_cats
+            Number of categories in the classification. Two categorizations from literature are supported:
+
+            * :code:`n_cats = 3`:
+
+              Three category classification of `Vanrolleghem et al (2015)
+              <https://doi.org/10.1016/J.JHYDROL.2014.12.056>`_:
+
+              ========================= ========================================================== ===
+              Name                      Condition                                                  Description
+              ========================= ========================================================== ===
+              :code:`'non-influential'` :math:`\\mu^* < \\text{CT}`                                  No appreciably effect.
+              :code:`'important'`       :math:`\\mu^* > \\text{CT} \\& \\sigma/\\mu^* < \\sqrt{r}/2`     Strong individual effect.
+              :code:`'interacting'`     :math:`\\mu^* > \\text{CT} \\& \\sigma/\\mu^* > \\sqrt{r}/2`     Strong interacting effects.
+              ========================= ========================================================== ===
+
+            * :code:`n_cats = 5`:
+
+              Five category classification of `Garcia Sanchez et al. (2014)
+              <https://doi.org/10.1016/J.ENBUILD.2012.08.048>`_:
+
+              ========================= ================================================== ===
+              Name                      Condition                                          Description
+              ========================= ================================================== ===
+              :code:`'non-influential'` :math:`\\mu^* < \\text{CT}`                          No appreciably effect.
+              :code:`'linear'`          :math:`\\mu^* > \\text{CT} \\& \\sigma/\\mu^* < 0.1`    Strong linear effect.
+              :code:`'monotonic'`       :math:`\\mu^* > \\text{CT} \\& \\sigma/\\mu^* < 0.2`    Strong monotonic effect.
+              :code:`'quasi-monotonic'` :math:`\\mu^* > \\text{CT} \\& \\sigma/\\mu^* < 0.5`    Moderate monotonic effect.
+              :code:`'interacting'`     :math:`\\mu^* > \\text{CT} \\& \\sigma/\\mu^* < 1.0`    Strongly non-linear effects.
+              ========================= ================================================== ===
+
         out_index
             Output dimension along which to do the classification.
 
         Returns
         -------
-        Dict[str, np.ndarray]
+        Dict[str, numpy.ndarray]
             Dictionary with the category names as keys. The corresponding arrays are two-dimensional: number of outputs
             requested by `out_index` by number of parameters in the category.
 
@@ -555,6 +589,9 @@ class EstimatedEffects:
         ------
         ValueError
             If `out_index` includes more than one index.
+
+        ValueError
+            If `n_cats` does not equal 3 or 5.
 
         Warnings
         --------
@@ -571,13 +608,56 @@ class EstimatedEffects:
         Vanrolleghem, P. A., Mannina, G., Cosenza, A., & Neumann, M. B. (2015). Global sensitivity analysis for urban
         water quality modelling: Terminology, convergence and comparison of different methods. *Journal of Hydrology*,
         522, 339–352. https://doi.org/10.1016/J.JHYDROL.2014.12.056
+
+        Garcia Sanchez, D., Lacarrière, B., Musy, M., & Bourges, B. (2014). Application of sensitivity analysis in
+        building energy simulations: Combining first- and second-order elementary effects methods. Energy and Buildings,
+        68(PART C), 741–750. https://doi.org/10.1016/J.ENBUILD.2012.08.048
         """
         if out_index != 'mean' and not isinstance(out_index, int):
             raise ValueError('Classification can only be done on a single output at a time.')
         mu, ms, sd = self[:, :, out_index, :]
-        return {'important': np.argwhere((ms > self.ct) & (sd < ms * np.sqrt(self.r) / 2)).ravel(),
-                'interacting': np.argwhere((ms > self.ct) & (sd >= ms * np.sqrt(self.r) / 2)).ravel(),
-                'non-influential': np.argwhere(ms < self.ct).ravel()}
+        fr = sd / ms
+
+        if n_cats == 3:
+            grad = np.sqrt(self.r) / 2
+            return {'important': np.argwhere((ms > self.ct) & (fr < grad)).ravel(),
+                    'interacting': np.argwhere((ms > self.ct) & (fr >= grad)).ravel(),
+                    'non-influential': np.argwhere(ms < self.ct).ravel()}
+
+        if n_cats == 5:
+            return {'non-influential': np.argwhere(ms < self.ct).ravel(),
+                    'linear': np.argwhere((ms > self.ct) & (fr <= 0.1)).ravel(),
+                    'monotonic': np.argwhere((ms > self.ct) & (fr > 0.1) & (fr <= 0.5)).ravel(),
+                    'quasi-monotonic': np.argwhere((ms > self.ct) & (fr > 0.5) & (fr <= 1.0)).ravel(),
+                    'interacting': np.argwhere((ms > self.ct) & (fr > 1)).ravel(),
+                    }
+
+        raise ValueError(f'Cannot parse n_cats = {n_cats}, must equal 3 or 5.')
+
+    def relevance_factor(self, category: str, out_index: Union[int, str] = 'mean') -> np.ndarray:
+        """ Measure of the fraction of factors which have an influence on the outputs.
+        Calculated as:
+
+        .. math::
+
+           Rel_{\\text{category}} = \\frac{N_\\text{category}}{g}
+
+        Where :math:`N_\\text{category}` are the number of factors classified into a particular classification category.
+
+        Parameters
+        ----------
+        category
+            Classification key (see :meth:`classification`) for
+        out_index
+            See :meth:`__getitem__`
+
+        References
+        ----------
+        Cosenza, A., Mannina, G., Vanrolleghem, P. A., & Neumann, M. B. (2013). Global sensitivity analysis in
+        wastewater applications: A comprehensive comparison of different methods. Environmental Modelling & Software,
+        49, 40–52. https://doi.org/10.1016/J.ENVSOFT.2013.07.009
+        """
+        return self.classification(out_index)[category] / self.k
 
     def bootstrap_metrics(self,
                           metric_index: SpecialSlice = None,
@@ -589,10 +669,17 @@ class EstimatedEffects:
     def plot_sensitivities(self,
                            path: Union[Path, str] = 'sensitivities',
                            out_index: SpecialSlice = 'mean',
-                           factor_labels: Optional[Sequence[str]] = None):
+                           factor_labels: Optional[Sequence[str]] = None,
+                           log_scale: bool = False):
         """ Saves a sensitivity plot.
-        The plot is a scatter of :math:`\\mu^*` versus :math:`\\sigma` with dividers between 'important', 'interacting'
-        and 'non-influential' categories.
+        Produces two side-by-side scatter plots. The first is :math:`\\mu^*` versus :math:`\\sigma`, the second is
+        :math:`\\mu^*` versus :math:`\\sigma/\\mu^*`. Defined dividers are included to classify factors into:
+
+           #. 'important'
+           #. 'linear'
+           #. 'monotonic'
+           #. 'interacting'
+           #. 'non-influential'
 
         Parameters
         ----------
@@ -605,6 +692,8 @@ class EstimatedEffects:
         factor_labels
             Optional sequence of descriptive names for each factor to add to the figure. Defaults to the factor's
             index position.
+        log_scale
+            If :obj:`True` the axes will be plotted on a log scale.
 
         Warnings
         --------
@@ -615,8 +704,13 @@ class EstimatedEffects:
         Vanrolleghem, P. A., Mannina, G., Cosenza, A., & Neumann, M. B. (2015). Global sensitivity analysis for urban
         water quality modelling: Terminology, convergence and comparison of different methods. *Journal of Hydrology*,
         522, 339–352. https://doi.org/10.1016/J.JHYDROL.2014.12.056
+
+        Garcia Sanchez, D., Lacarrière, B., Musy, M., & Bourges, B. (2014). Application of sensitivity analysis in
+        building energy simulations: Combining first- and second-order elementary effects methods. Energy and Buildings,
+        68(PART C), 741–750. https://doi.org/10.1016/J.ENBUILD.2012.08.048
         """
-        self._plotting_core(path, out_index, self._plot_sensitivities_stub, factor_labels=factor_labels)
+        self._plotting_core(path, out_index, self._plot_sensitivities_stub,
+                            factor_labels=factor_labels, log_scale=log_scale)
 
     @needs_optional_package('matplotlib')
     def plot_rankings(self,
@@ -761,50 +855,121 @@ class EstimatedEffects:
             is_multi = True
 
         for i in range(metrics.shape[2]):
-            fig, ax = plt.subplots(figsize=(6.7, 6.7))
-            fig: plt.Figure
-            ax: plt.Axes
+            fig = plt.figure()
 
             if self.is_grouped:
-                plot_stub(fig, ax, mu_star=metrics[0, :, i], **kwargs)
+                plot_stub(fig, mu_star=metrics[0, :, i], **kwargs)
             else:
-                plot_stub(fig, ax, mu=metrics[0, :, i], mu_star=metrics[1, :, i], sigma=metrics[2, :, i], **kwargs)
+                plot_stub(fig, mu=metrics[0, :, i], mu_star=metrics[1, :, i], sigma=metrics[2, :, i], **kwargs)
 
             fig.tight_layout()
             fig.savefig(path / f'{i:03}' if is_multi else path)
             plt.close(fig)
 
-    def _plot_sensitivities_stub(self, fig: plt.Figure, ax: plt.Axes,
+    def _plot_sensitivities_stub(self, fig: plt.Figure,
                                  mu: Optional[np.ndarray] = None,
                                  mu_star: Optional[np.ndarray] = None,
                                  sigma: Optional[np.ndarray] = None,
-                                 factor_labels: Optional[Sequence[str]] = None):
-        ax.set_title("Sensitivity classification of all input factors.")
-        ax.set_xlabel("$\\mu^*$")
-        ax.set_ylabel("$\\sigma$")
+                                 factor_labels: Optional[Sequence[str]] = None,
+                                 log_scale: bool = False):
+        fig.set_size_inches(6.7, 3.35)
+        cmap = cm.get_cmap('Pastel2')
 
-        # Influencial / Non-influencial Line
-        max_sd = max(sigma)
-        ax.vlines(self.ct, 0, max_sd, color='red')
-        ax.annotate('Non-Influential   ', (self.ct, max_sd), ha='right')
+        axt: plt.Axes = fig.add_subplot(111)
+        ax0: plt.Axes = fig.add_subplot(121)
+        ax1: plt.Axes = fig.add_subplot(122)
 
-        # Linear / Nonlinear Effect Line
-        max_mu = max(mu_star)
-        ax.plot([0, max_mu], [0, max_mu * np.sqrt(self.r) / 2], color='red')
-        ax.annotate('   Interacting', (self.ct, max_sd), ha='left')
-        ax.annotate('   Important', (self.ct, 0), ha='left')
+        ax0.set_ylabel("$\\sigma$")
+        ax1.set_ylabel("$\\sigma/\\mu^*$")
 
-        # Sensitivities
-        ax.scatter(mu_star, sigma, marker='.')
-        labs = factor_labels if factor_labels is not None else range(self.g)
-        for j, lab in enumerate(labs):
-            ax.annotate(lab, (mu_star[j], sigma[j]), fontsize=9)
+        axt.set_title("Sensitivity classification of input factors")
+        axt.set_xlabel("$\\mu^*$")
+        axt.spines['top'].set_color('none')
+        axt.spines['bottom'].set_color('none')
+        axt.spines['left'].set_color('none')
+        axt.spines['right'].set_color('none')
+        axt.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
 
-    def _plot_ranking_stub(self, fig: plt.Figure, ax: plt.Axes,
+        leg = []
+        labs = factor_labels if factor_labels is not None else np.arange(self.g)
+        for ax in (ax0, ax1):
+            y = sigma if ax is ax0 else sigma / mu_star
+            ax.scatter(mu_star, y, marker='x', color='black', s=2)
+
+            for j, lab in enumerate(labs):
+                ax.annotate(lab, (mu_star[j], y[j]), fontsize=5)
+
+            if log_scale:
+                ax.semilogx()
+                ax.semilogy()
+
+            # Linear / Nonlinear Effect Line
+            xlims = ax.get_xlim()
+            y_pts = []
+            grads = np.array((0.1, 0.5, 1.0, np.sqrt(self.r) / 2))
+            for i, grad in enumerate(grads):
+                ys = np.full(2, grad)
+                if ax is ax0:
+                    ys *= np.array(xlims)
+                if i < 3:
+                    ax.plot(xlims, ys,
+                            color='black',
+                            linewidth=0.5,
+                            linestyle='solid',
+                            zorder=1000)
+                    y_pts.append(ys[1])
+                else:
+                    ax.plot(xlims, ys,
+                            color='black',
+                            linewidth=0.7,
+                            linestyle='dotted',
+                            zorder=1000)
+
+            # Influential / Non-influential Line
+            ylims = ax.get_ylim()
+            if self.ct > xlims[0]:
+                ax.vlines(self.ct, ylims[0], ylims[1], color='black', linewidth=0.5)
+                ni = patches.Polygon([[xlims[0], ylims[0]],
+                                      [xlims[0], ylims[1]],
+                                      [self.ct, ylims[1]],
+                                      [self.ct, ylims[0]]],
+                                     facecolor='black',
+                                     edgecolor='black',
+                                     alpha=0.3,
+                                     zorder=-1000)
+                ax.add_patch(ni)
+
+            # Patches
+            x_min = max(self.ct, xlims[0])
+            y_min = np.array(grads)
+            if ax is ax0:
+                y_min *= x_min
+            y_min = np.concatenate(([ylims[0]], y_min[:-1], [ylims[1]]))
+            y_pts = np.concatenate(([ylims[0]], y_pts, [ylims[1]]))
+            for i, l in enumerate(('Linear', 'Monotonic', 'Quasi-Monotonic', 'Interacting')):
+                poly = patches.Polygon([[x_min, y_min[i]],
+                                        [xlims[1], y_pts[i]],
+                                        [xlims[1], y_pts[i + 1]],
+                                        [x_min, y_min[i + 1]]],
+                                       facecolor=cmap.colors[i],
+                                       edgecolor=cmap.colors[i],
+                                       zorder=-1000)
+                ax.add_patch(poly)
+                if ax is ax0:
+                    leg.append(patches.Patch(cmap.colors[i], cmap.colors[i], label=l))
+
+        leg.append(patches.Patch('black', 'black', alpha=0.3, label='Non-Influential'))
+        leg.append(lines.Line2D([], [], c='black', ls='dotted', lw=0.7, label='SEM'))
+        fig.legend(handles=leg, loc='lower center', ncol=6)
+
+    def _plot_ranking_stub(self, fig: plt.Figure,
                            mu: Optional[np.ndarray] = None,
                            mu_star: Optional[np.ndarray] = None,
                            sigma: Optional[np.ndarray] = None,
                            factor_labels: Optional[Sequence[str]] = None):
+        fig.set_size_inches(6.7, 6.7)
+        ax = fig.add_subplot(111)
+
         ax.set_title("Parameter Ranking")
         ax.set_xlabel("Parameter Index")
         ax.set_ylabel("$\\mu^*$")
