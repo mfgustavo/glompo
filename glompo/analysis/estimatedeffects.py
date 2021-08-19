@@ -406,8 +406,8 @@ class EstimatedEffects:
         if self.h > 1 and outputs.shape != (self.g + 1, self.h):
             raise ValueError(f"Cannot parse outputs with shape {outputs.shape}, must be ({self.g + 1}, {self.h})")
 
-        if self.h == 1 and (outputs.shape != (self.g + 1, self.h) or outputs.shape != (self.g + 1,)):
-            raise ValueError(f"Cannot parse outputs with length {len(outputs)}, {self.g + 1} values expected.")
+        if self.h == 1 and outputs.shape != (self.g + 1, self.h) and outputs.shape != (self.g + 1,):
+            raise ValueError(f"Cannot parse outputs with shape {outputs.shape}, ({self.g + 1},) expected.")
 
         if self.h == 1:
             outputs = outputs.reshape((self.g + 1, self.h))
