@@ -664,8 +664,8 @@ class EstimatedEffects:
         --------
         :meth:`position_factor`
         """
-        steps = np.clip([(i, i + step_size) for i in range(0, self.r, step_size)], None, self.r)
-        pf = np.array([self.position_factor(*pair, out_index) for pair in steps])
+        steps = np.clip([(i, i + step_size) for i in range(1, self.r, step_size)], None, self.r)
+        pf = np.array([np.atleast_1d(self.position_factor(*pair, out_index)) for pair in steps])
 
         fig, ax = plt.subplots()
         fig: plt.Figure
