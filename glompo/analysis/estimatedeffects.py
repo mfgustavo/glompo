@@ -338,7 +338,7 @@ class EstimatedEffects:
             return np.array([[[]]])
 
         if not isinstance(item, tuple):
-            item = (item,)  # NOT the same as tuple(item) since you dont want to expand 'mu' to ('m', 'u')
+            item = (item,)  # NOT the same as tuple(item) since you don't want to expand 'mu' to ('m', 'u')
         item = [slice(None) if i is None or i == 'all' else i for i in item]
         item += [slice(None)] * (4 - len(item))
         m, k, h, t = item
@@ -556,7 +556,7 @@ class EstimatedEffects:
               ========================= ========================================================== ===
               Name                      Condition                                                  Description
               ========================= ========================================================== ===
-              :code:`'non-influential'` :math:`\\mu^* < \\text{CT}`                                  No appreciably effect.
+              :code:`'non-influential'` :math:`\\mu^* < \\text{CT}`                                  No appreciable effect.
               :code:`'important'`       :math:`\\mu^* > \\text{CT} \\& \\sigma/\\mu^* < \\sqrt{r}/2`     Strong individual effect.
               :code:`'interacting'`     :math:`\\mu^* > \\text{CT} \\& \\sigma/\\mu^* > \\sqrt{r}/2`     Strong interacting effects.
               ========================= ========================================================== ===
@@ -569,7 +569,7 @@ class EstimatedEffects:
               ========================= ================================================== ===
               Name                      Condition                                          Description
               ========================= ================================================== ===
-              :code:`'non-influential'` :math:`\\mu^* < \\text{CT}`                          No appreciably effect.
+              :code:`'non-influential'` :math:`\\mu^* < \\text{CT}`                          No appreciable effect.
               :code:`'linear'`          :math:`\\mu^* > \\text{CT} \\& \\sigma/\\mu^* < 0.1`    Strong linear effect.
               :code:`'monotonic'`       :math:`\\mu^* > \\text{CT} \\& \\sigma/\\mu^* < 0.2`    Strong monotonic effect.
               :code:`'quasi-monotonic'` :math:`\\mu^* > \\text{CT} \\& \\sigma/\\mu^* < 0.5`    Moderate monotonic effect.
