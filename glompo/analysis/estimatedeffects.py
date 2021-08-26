@@ -244,7 +244,7 @@ class EstimatedEffects:
                  convergence_threshold: float = 0,
                  cutoff_threshold: float = 0.1,
                  trajectory_style: str = 'radial'):
-        self._metrics = np.array([[[]]])
+        self.logger = logging.getLogger('glompo.analyzer')
 
         self.trajectories = np.array([])
         self.dims: int = input_dims
