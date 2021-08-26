@@ -1,4 +1,5 @@
 import copy
+import logging
 import warnings
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Union
@@ -258,6 +259,7 @@ class EstimatedEffects:
 
         self.convergence_threshold = convergence_threshold
         self.ct = cutoff_threshold
+        self._metrics = np.array([[[]]])
 
     def __getitem__(self, item):
         """ Retrieves the sensitivity metrics (:math:`\\mu, \\mu^*, \\sigma`) for a particular calculation configuration
@@ -616,7 +618,9 @@ class EstimatedEffects:
         if out_index != 'mean' and not isinstance(out_index, int):
             raise ValueError('Classification can only be done on a single output at a time.')
         mu, ms, sd = self[:, :, out_index, :]
-        fr = sd / ms
+
+        fr = np.zeros_like(mu)
+        np.divide(sd, ms, out=fr, where=sd != 0)
 
         if n_cats == 3:
             grad = np.sqrt(self.r) / 2
@@ -699,6 +703,8 @@ class EstimatedEffects:
         --------
         Unavailable if using groups, will raise a :obj:`ValueError`. See :attr:`groupings`.
 
+        If using `log_scale` parameters where :math:`\\sigma = \\mu^* = 0` will not appear on the plot.
+
         References
         ----------
         Vanrolleghem, P. A., Mannina, G., Cosenza, A., & Neumann, M. B. (2015). Global sensitivity analysis for urban
@@ -758,6 +764,7 @@ class EstimatedEffects:
         --------
         :meth:`position_factor`
         """
+        # TODO x-axis plot
         steps = np.clip([(i, i + step_size) for i in range(1, self.r, step_size)], None, self.r)
         pf = np.array([np.atleast_1d(self.position_factor(*pair, out_index)) for pair in steps])
 
@@ -825,7 +832,7 @@ class EstimatedEffects:
             y_diffs = self.outputs[traj_index, 0, out_index] - self.outputs[traj_index, 1:, out_index]
 
         where = np.where(x_diffs @ self.groupings)[0::2]
-        if not self.is_grouped:  # If not using groups
+        if not self.is_grouped:
             x_diffs = np.sum(x_diffs, axis=2)
         else:
             x_diffs = np.sqrt(np.sum(x_diffs ** 2, axis=2))
@@ -882,7 +889,8 @@ class EstimatedEffects:
         ax0.set_ylabel("$\\sigma$")
         ax1.set_ylabel("$\\sigma/\\mu^*$")
 
-        axt.set_title("Sensitivity classification of input factors")
+        axt.set_title("Sensitivity classification of input factors" +
+                      ("(Factors with $\\sigma=\\mu^*=0$ excluded.)" if log_scale else ""))
         axt.set_xlabel("$\\mu^*$")
         axt.spines['top'].set_color('none')
         axt.spines['bottom'].set_color('none')
@@ -893,15 +901,27 @@ class EstimatedEffects:
         leg = []
         labs = factor_labels if factor_labels is not None else np.arange(self.g)
         for ax in (ax0, ax1):
-            y = sigma if ax is ax0 else sigma / mu_star
+            y = sigma.copy()
+            if ax is ax1:
+                np.divide(sigma, mu_star, out=y, where=sigma != 0)
+
             ax.scatter(mu_star, y, marker='x', color='black', s=2)
 
             for j, lab in enumerate(labs):
                 ax.annotate(lab, (mu_star[j], y[j]), fontsize=5)
 
+            raw_xlims = ax.get_xlim()
+            raw_ylims = ax.get_ylim()
+
             if log_scale:
-                ax.semilogx()
-                ax.semilogy()
+                ax.set_xscale('log', nonpositive='mask')
+                ax.set_yscale('log', nonpositive='mask')
+
+                raw_xlims = 0.9 * mu_star[mu_star > 0].min(), ax.get_xlim()[1]
+                raw_ylims = 0.9 * y[y > 0].min(), ax.get_ylim()[1]
+
+                ax.set_xlim(*raw_xlims)
+                ax.set_ylim(*raw_ylims)
 
             # Linear / Nonlinear Effect Line
             xlims = ax.get_xlim()
@@ -958,6 +978,9 @@ class EstimatedEffects:
                 if ax is ax0:
                     leg.append(patches.Patch(cmap.colors[i], cmap.colors[i], label=l))
 
+            ax.set_xlim(*raw_xlims)
+            ax.set_ylim(*raw_ylims)
+
         leg.append(patches.Patch('black', 'black', alpha=0.3, label='Non-Influential'))
         leg.append(lines.Line2D([], [], c='black', ls='dotted', lw=0.7, label='SEM'))
         fig.legend(handles=leg, loc='lower center', ncol=6)
@@ -967,6 +990,7 @@ class EstimatedEffects:
                            mu_star: Optional[np.ndarray] = None,
                            sigma: Optional[np.ndarray] = None,
                            factor_labels: Optional[Sequence[str]] = None):
+        # TODO x-axis label?
         fig.set_size_inches(6.7, 6.7)
         ax = fig.add_subplot(111)
 
