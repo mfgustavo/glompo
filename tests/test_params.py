@@ -16,7 +16,7 @@ from scm.params.core.opt_components import _LossEvaluator, EvaluatorReturn
 from scm.params.common.parallellevels import ParallelLevels
 from scm.params.core.dataset import DataSet, Loss
 from scm.params.core.jobcollection import JobCollection
-from scm.params.core.opt_components import LinearParameterScaler, _Step
+from scm.params.core.opt_components import _Step
 from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
 from scm.params.parameterinterfaces.reaxff import ReaxParams
 
@@ -180,7 +180,12 @@ class TestReaxFFError:
         assert isinstance(task.par_eng, ReaxParams)
         assert isinstance(task.loss, Loss)
         assert isinstance(task.par_levels, ParallelLevels)
-        assert isinstance(task.scaler, LinearParameterScaler)
+
+    def test_props(self, task):
+        assert task.n_parms == 87
+        assert task.n_all_parms == 701
+        assert len(task.active_names) == 87
+        assert len(task.active_abs_indices) == 87
 
     @pytest.mark.parametrize("method, suffix", [('save', 'yml'), ('checkpoint_save', 'pkl')])
     def test_save(self, method, suffix, tmp_path, task):
@@ -230,7 +235,7 @@ class TestReaxFFError:
 
         params_rtrn = np.array([vector[task.par_eng.is_active] for vector in params_rtrn])
 
-        params_orig = np.array([task.scaler.scaled2real(vector) for vector in params_orig])
+        params_orig = np.array([task.convert_parms_scaled2real(vector) for vector in params_orig])
         params_orig = np.round(params_orig, 4)
         assert np.all(params_orig == params_rtrn)
 
@@ -246,10 +251,39 @@ class TestReaxFFError:
 
         assert res == expected
 
+    def test_indices_transform(self, task):
+        abs_ind = [5, 70, 43, 26, 87, 124, 677, 656]
+        rel_ind = [0, 3, 2, 1, 4, 5, 7, 6]
+        activate = [False] * 701
+
+        for t in abs_ind:
+            activate[t] = True
+
+        task.par_eng.is_active = activate
+
+        assert task.convert_indices_rel2abs(rel_ind) == abs_ind
+        assert task.convert_indices_abs2rel(abs_ind) == rel_ind
+
+    @pytest.mark.parametrize('val', [0, 0.1, 0.5, 1])
+    def test_parms_transforms(self, val, task):
+        for n in (87, 701):
+            vec = [val] * n
+            assert np.isclose(task.convert_parms_real2scaled(task.convert_parms_scaled2real(vec)), vec).all()
+
+    def test_parms_transforms_raises(self, task):
+        with pytest.raises(ValueError, match="Cannot parse x with length"):
+            task.convert_parms_real2scaled([0.5] * 100)
+
     @pytest.mark.parametrize('nparams, full', [(701, True),
                                                (87, False)])
     def test_set_parameters(self, nparams, full, task):
-        task.set_parameters(range(nparams), full)
+        new = [0.5] * nparams
+
+        with pytest.warns(UserWarning, match="x contains parameters which are outside their bounds."):
+            task.set_parameters(new, 'scaled', full)
+        task_parms = task.par_eng.x if full else task.par_eng.active.x
+
+        assert np.isclose(task_parms, task.convert_parms_scaled2real(new)).all()
 
     @pytest.mark.parametrize('simple_func', [None, DataSet()], indirect=['simple_func'])
     def test_resids(self, simple_func, monkeypatch):
@@ -259,13 +293,25 @@ class TestReaxFFError:
 
     @pytest.mark.parametrize('activate', [range(5),
                                           ('O.H.S:-p_hb2;;18;;Hydrogen bond/bond order',
-                                           '0.O.S.0:n/a 1;;n/a;;n/a',
-                                           '0.H.S.0:n/a 1;;n/a;;n/a',
                                            'C.S.S.C:V_3;;16a;;V3-torsion barrier',)])
     def test_toggle_parameter(self, task, activate):
         task.toggle_parameter(range(701), toggle='off')
+        assert task.n_parms == 0
+
         task.toggle_parameter(activate, toggle='on')
-        task([0.5] * len(activate))
+        assert task.n_parms == len(activate)
+
+    @pytest.mark.parametrize('force', [True, False])
+    def test_toggle_parameter_notallowed(self, task, force):
+        task.toggle_parameter(range(701), False)
+        with pytest.warns(UserWarning, match="The following parameters should never be activated:"):
+            task.toggle_parameter(('O.H.S:-p_hb2;;18;;Hydrogen bond/bond order',
+                                   '0.O.S.0:n/a 1;;n/a;;n/a',
+                                   '0.H.S.0:n/a 1;;n/a;;n/a',
+                                   'C.S.S.C:V_3;;16a;;V3-torsion barrier',),
+                                  toggle='on',
+                                  force=force)
+        assert task.n_parms == 4 if force else 2
 
     def test_toggle_parameter_warning(self, task):
         with pytest.warns(UserWarning, match="not recognised, ignoring."):
