@@ -434,10 +434,6 @@ class EstimatedEffects:
             self.trajectories = np.array([trajectory])
             self.outputs = np.array([outputs])
 
-    def generate_add_trajectory(self, style: Optional[None]):
-        """ Convenience method to automatically generate a trajectory and add it to the calculation. """
-        # TODO Implement
-
     def build_until_convergence(self,
                                 func: Callable[[np.ndarray], float],
                                 r_max: int):
