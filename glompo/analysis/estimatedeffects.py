@@ -655,10 +655,33 @@ class EstimatedEffects:
         return self.classification(out_index)[category] / self.k
 
     def bootstrap_metrics(self,
+                          n_samples: int,
                           metric_index: SpecialSlice = None,
                           factor_index: SpecialSlice = None,
-                          out_index: SpecialSlice = None):
-        """  """
+                          out_index: SpecialSlice = None) -> Tuple[np.ndarray, np.ndarray]:
+        """ Calculates sensitivity metrics with a confidence interval based on resampling bootstrapping.
+
+        Parameters
+        ----------
+        n_samples
+            Number of resamples to perform.
+        metric_index
+            See :meth:`__getitem___`
+        factor_index
+            See :meth:`__getitem___`
+        out_index
+            See :meth:`__getitem___`
+
+        Returns
+        -------
+        Tuple[np.ndarray, np.ndarray]
+            Two three-dimensional arrays of selected metrics, factors/groups and outputs.
+            Metrics are ordered: :math:`\\mu`, :math:`\\mu^*` and :math:`\\sigma`.
+            The first array contains the mean value of the bootstrap, the second contains its standard deviation.
+        """
+        multis = np.array([self[metric_index, factor_index, out_index,
+                                np.random.choice(self.r, self.r, replace=True)] for _ in range(n_samples)])
+        return multis.mean(0), multis.std(0)
 
     @needs_optional_package('matplotlib')
     def plot_sensitivities(self,
@@ -778,6 +801,98 @@ class EstimatedEffects:
         fig.savefig(path)
 
         plt.close(fig)
+
+    def plot_bootstrap_metrics(self,
+                               path: Union[Path, str] = 'sensi_booststrap',
+                               n_samples: int = 10,
+                               metric_index: SpecialSlice = None,
+                               factor_index: SpecialSlice = None,
+                               out_index: SpecialSlice = None,
+                               log_scale: bool = False,
+                               out_labels: Optional[Sequence[str]] = None,
+                               factor_labels: Optional[Sequence[str]] = None):
+        """ Plots and saves results of a boostrap analysis.
+
+        Parameters
+        ----------
+        path
+            See :meth:`plot_sensitivities`.
+        n_samples
+            See :meth:`bootstrap_metrics`.
+        metric_index
+            See :meth:`__getitem__`.
+        factor_index
+            See :meth:`__getitem__`.
+        out_index
+            See :meth:`__getitem__`.
+        log_scale
+            If :obj:`True` the metric axis will be plotted on a log scale.
+        out_labels
+            Optional list of names to give to the outputs, if multiple are selected. Will be used in the figure title
+            and as the filename. Must be equal in length to `out_index`.
+        factor_labels
+            Optional list of names to gives the factors. Will be used in the axes labels. Must be equal in length to
+            `factor_index`.
+        """
+        if self.is_grouped and metric_index is None:
+            metric_index = 'mu_star'
+            met_map = {0: '$\\mu^*$'}
+        else:
+            metric_index = self._expand_index('metric', metric_index)
+            met_map = {i: {0: '$\\mu$', 1: '$\\mu^*$', 2: '$\\sigma$'}[m] for i, m in enumerate(metric_index)}
+
+        factor_index = self._expand_index('factor', factor_index)
+        out_index = self._expand_index('output', out_index)
+
+        boot_m, boot_s = self.bootstrap_metrics(n_samples, metric_index, factor_index, out_index)
+        metrics = self[metric_index, factor_index, out_index]
+
+        valid = [False, False]
+        for lab_var, ind_var, v, str_ in ((factor_labels, factor_index, 0, 'factor'),
+                                          (out_labels, out_index, 1, 'out')):
+            if lab_var:
+                if len(lab_var) == len(ind_var):
+                    valid[v] = True
+                else:
+                    warnings.warn(f"The number of {str_} labels does not match the number of factors calculated. "
+                                  f"Ignoring the labels provided.", UserWarning)
+
+        path = Path(path)
+        is_multi = False
+        if boot_m.shape[2] > 1:
+            path.mkdir(exist_ok=True, parents=True)
+            is_multi = True
+
+        for o, oname in enumerate(out_index):
+            fig, ax = plt.subplots(boot_m.shape[0], 1, figsize=(6.7, 3.35 * boot_m.shape[0]))
+            ax: List[plt.Axes]
+            if boot_m.shape[0] == 1:
+                ax = [ax]
+
+            for m in range(boot_m.shape[0]):
+                ax[m].errorbar(factor_index, boot_m[m, :, o],
+                               yerr=boot_s[m, :, o], fmt='.', ecolor='k', label='Bootstrap')
+                ax[m].scatter(factor_index, metrics[m, :, o],
+                              color='r', marker='_', s=10, zorder=1000, label='Raw Result')
+                ax[m].set_xlabel("Parameter Index")
+                ax[m].set_ylabel(met_map[m])
+                ax[m].legend()
+                ax[m].set_yscale('log' if log_scale else 'linear')
+
+                if valid[0]:
+                    ax[m].set_xticks(range(len(factor_index)))
+                    ax[m].set_xticklabels(factor_labels, rotation=30)
+                else:
+                    ax[m].xaxis.get_major_locator().set_params(integer=True)
+
+            name = oname if not isinstance(oname, int) else f'{oname:03}'
+            if valid[1]:
+                ax[0].set_title(out_labels[o])
+                name = out_labels[o]
+
+            fig.tight_layout()
+            fig.savefig(path / name if is_multi else path)
+            plt.close(fig)
 
     def invert(self):
         """  """
