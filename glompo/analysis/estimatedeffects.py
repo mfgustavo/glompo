@@ -2,7 +2,7 @@ import copy
 import logging
 import warnings
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Sequence, Union
+from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -121,7 +121,7 @@ class EstimatedEffects:
     """
 
     @property
-    def mu(self):
+    def mu(self) -> np.ndarray:
         """ Shortcut access to the Estimated Effects :math:`\\mu` metric using all trajectories, for all input
         dimensions, taking the average along output dimensions. Equivalent to: :code:`ee['mu', :, 'mean', :]`
 
@@ -141,7 +141,7 @@ class EstimatedEffects:
         return self['mu', :, 'mean', :].squeeze()
 
     @property
-    def mu_star(self):
+    def mu_star(self) -> np.ndarray:
         """ Shortcut access to the Estimated Effects :math:`\\mu^*` metric using all trajectories, for all input
         dimensions, taking the average along output dimensions. Equivalent to:
         :code:`ee['mu_star', :, 'mean', :]`
@@ -158,7 +158,7 @@ class EstimatedEffects:
         return self['mu_star', :, 'mean', :].squeeze()
 
     @property
-    def sigma(self):
+    def sigma(self) -> np.ndarray:
         """ Shortcut access to the Estimated Effects :meth:`\\sigma` metric using all trajectories, for all input
         dimensions, taking the average along output dimensions. Equivalent to: :code:`ee['sigma', :, 'mean', :]`
 
@@ -261,7 +261,7 @@ class EstimatedEffects:
         self.ct = cutoff_threshold
         self._metrics = np.array([[[]]])
 
-    def __getitem__(self, item):
+    def __getitem__(self, item) -> np.ndarray:
         """ Retrieves the sensitivity metrics (:math:`\\mu, \\mu^*, \\sigma`) for a particular calculation configuration
         The indexing is a strictly ordered set of maximum length 4:
 
