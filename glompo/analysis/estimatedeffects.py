@@ -341,37 +341,34 @@ class EstimatedEffects:
 
         if not isinstance(item, tuple):
             item = (item,)  # NOT the same as tuple(item) since you don't want to expand 'mu' to ('m', 'u')
-        item = [i if not isinstance(i, np.ndarray) else list(i) for i in item]
-        item = [slice(None) if i is None or i == 'all' else i for i in item]
-        item += [slice(None)] * (4 - len(item))
-        m, k, h, t = item
+        item += (slice(None),) * (4 - len(item))
+        m = self._expand_index('metric', item[0])
+        k = self._expand_index('factor', item[1])
+        h = self._expand_index('output', item[2])
+        t = self._expand_index('trajec', item[3])
 
-        if not isinstance(m, slice):
-            m = np.atleast_1d(m)
-            for s, i in (('mu', 0), ('mu_star', 1), ('sigma', 2)):
-                m[[_ == s for _ in m]] = i
-            m = m.astype(int)
-
-        if self.is_grouped and (isinstance(m, slice) or any([i in m for i in [0, 2]])):
+        if self.is_grouped and any([i in m for i in [0, 2]]):
             raise ValueError('Cannot access mu and sigma metrics if groups are being used')
 
+        all_t = list(range(self.r))
+        all_h = list(range(self.h))
+
         orig_h = copy.copy(h)
-        nest_out = isinstance(h, list) or isinstance(h, tuple)
-        mean_out = h == 'mean' or (nest_out and 'mean' in h)
-        h = slice(None) if mean_out else h
+        spec_out = 'mean' in h or 'all' in h
+        h = all_h if spec_out else h
 
         # Attempt to access existing results
-        if t == slice(None) and self._metrics.size > 0:
+        if t == all_t and self._metrics.size > 0:
             metrics = self._metrics
         else:
-            metrics = self._calculate(k, t)
-            if k == slice(None) and t == slice(None):
+            metrics = self._calculate(h, t)
+            if h == all_h and t == all_t:
                 # Save results to cache if a full calculation was done.
                 self._metrics = metrics
 
-        metrics = metrics[m, k, h]
+        metrics = metrics[np.ix_(m, k)]
 
-        if nest_out:
+        if spec_out:
             cols = []
             for o in orig_h:
                 if o == 'all':
@@ -381,9 +378,6 @@ class EstimatedEffects:
                 else:
                     cols.append(metrics[:, :, o, None])
             metrics = np.concatenate(cols, axis=2)
-
-        if mean_out and not nest_out:
-            return np.mean(metrics, 2)
 
         return metrics
 
@@ -819,13 +813,16 @@ class EstimatedEffects:
         call), this method is automatically called for all available trajectories. In other words, there is never any
         risk of accessing metrics which are out-of-sync with the number of trajectories appended to the calculation.
         """
+        pt_index = np.arange(self.g + 1)
         if self.traj_style == 'stairs':
             x_diffs = self.trajectories[traj_index, :-1] - self.trajectories[traj_index, 1:]
-            y_diffs = self.outputs[traj_index, :-1, out_index] - self.outputs[traj_index, 1:, out_index]
+            y_diffs = self.outputs[np.ix_(traj_index, pt_index[:-1], out_index)] - \
+                      self.outputs[np.ix_(traj_index, pt_index[1:], out_index)]
 
         else:  # Radial style trajectories
             x_diffs = self.trajectories[traj_index, 0] - self.trajectories[traj_index, 1:]
-            y_diffs = self.outputs[traj_index, 0, out_index] - self.outputs[traj_index, 1:, out_index]
+            y_diffs = self.outputs[traj_index, 0, out_index] - \
+                      self.outputs[np.ix_(traj_index, pt_index[1:], out_index)]
 
         where = np.where(x_diffs @ self.groupings)[0::2]
         if not self.is_grouped:
@@ -834,7 +831,7 @@ class EstimatedEffects:
             x_diffs = np.sqrt(np.sum(x_diffs ** 2, axis=2))
 
         ee = y_diffs / x_diffs[:, :, None]
-        ee[where] = ee.copy().ravel().reshape(-1, self.h)
+        ee[where] = ee.copy().ravel().reshape(-1, ee.shape[-1])
 
         mu = np.mean(ee, axis=0)
         mu_star = np.mean(np.abs(ee), axis=0)
@@ -1000,3 +997,39 @@ class EstimatedEffects:
         else:
             labs = np.array(factor_labels)[i_sort]
         ax.bar(labs, mu_star[i_sort])
+
+    def _expand_index(self, index_type: str, index) -> List[int]:
+        """ Converts the various ways to specify the output/group index into a list of absolute index positions. """
+        full = {'metric': 3,
+                'factor': self.g,
+                'output': self.h,
+                'trajec': self.r}[index_type]
+
+        key_map = {'mu': 0,
+                   'mu_star': 1,
+                   'sigma': 2}
+
+        if isinstance(index, np.ndarray):
+            index = getattr(index, "tolist", lambda: index)()
+
+        if index is None or index == 'all' or index == slice(None):
+            return list(range(full))
+
+        if isinstance(index, slice):
+            return list(range(full))[index]
+
+        if isinstance(index, str) or isinstance(index, int):
+            index = [index]
+
+        proc_index = []
+        for i in index:
+            if i == 'all':
+                [proc_index.append(_) for _ in range(full)]
+            elif isinstance(i, str) and index_type == 'metric':
+                proc_index.append(key_map[i])
+            elif isinstance(i, int) or (i == 'mean' and index_type == 'output'):
+                proc_index.append(i)
+            else:
+                raise ValueError(f"Cannot parse {i} in index.")
+
+        return proc_index
