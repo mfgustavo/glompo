@@ -764,7 +764,6 @@ class EstimatedEffects:
         --------
         :meth:`position_factor`
         """
-        # TODO x-axis plot
         steps = np.clip([(i, i + step_size) for i in range(1, self.r, step_size)], None, self.r)
         pf = np.array([np.atleast_1d(self.position_factor(*pair, out_index)) for pair in steps])
 
@@ -782,7 +781,7 @@ class EstimatedEffects:
             ax.legend(labels=labs)
 
         ax.set_xticks([i for i, _ in enumerate(steps)])
-        ax.set_xticklabels([f'{s[0]}$\\to${s[1]}' for s in steps])
+        ax.set_xticklabels([f'{s[0]}$\\to${s[1]}' for s in steps], rotation=45)
 
         fig.tight_layout()
         fig.savefig(path)
@@ -990,13 +989,13 @@ class EstimatedEffects:
                            mu_star: Optional[np.ndarray] = None,
                            sigma: Optional[np.ndarray] = None,
                            factor_labels: Optional[Sequence[str]] = None):
-        # TODO x-axis label?
         fig.set_size_inches(6.7, 6.7)
         ax = fig.add_subplot(111)
 
         ax.set_title("Parameter Ranking")
         ax.set_xlabel("Parameter Index")
         ax.set_ylabel("$\\mu^*$")
+        ax.tick_params(axis='x', rotation=90)
 
         i_sort = np.argsort(mu_star)
         if factor_labels is None:
