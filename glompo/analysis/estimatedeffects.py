@@ -24,7 +24,7 @@ except (ModuleNotFoundError, ImportError, TypeError):  # TypeError caught for bu
 
 __all__ = ('EstimatedEffects',)
 
-SpecialSlice = Union[None, int, str, List, slice]
+SpecialSlice = Union[None, int, str, List, slice, np.ndarray]
 
 
 class EstimatedEffects:
@@ -341,6 +341,7 @@ class EstimatedEffects:
 
         if not isinstance(item, tuple):
             item = (item,)  # NOT the same as tuple(item) since you don't want to expand 'mu' to ('m', 'u')
+        item = [i if not isinstance(i, np.ndarray) else list(i) for i in item]
         item = [slice(None) if i is None or i == 'all' else i for i in item]
         item += [slice(None)] * (4 - len(item))
         m, k, h, t = item
