@@ -428,13 +428,6 @@ class EstimatedEffects:
             self.trajectories = np.array([trajectory])
             self.outputs = np.array([outputs])
 
-    def build_until_convergence(self,
-                                func: Callable[[np.ndarray], float],
-                                r_max: int):
-        """  """
-        # TODO Implement
-        raise NotImplementedError
-
     def position_factor(self, i: int, j: int, out_index: SpecialSlice = 'mean') -> np.ndarray:
         """ Returns the position factor metric.
         This is a measure of convergence. Measures the changes between the factor rankings obtained when using `i`
