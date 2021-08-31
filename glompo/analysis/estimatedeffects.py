@@ -468,8 +468,8 @@ class EstimatedEffects:
         wastewater applications: A comprehensive comparison of different methods. Environmental Modelling & Software,
         49, 40–52. https://doi.org/10.1016/J.ENVSOFT.2013.07.009
         """
-        pos_i = np.atleast_2d(self.ranking(out_index, slice(None, i + 1)))
-        pos_j = np.atleast_2d(self.ranking(out_index, slice(None, j + 1)))
+        pos_i = np.atleast_2d(self.ranking(out_index, slice(None, i)))
+        pos_j = np.atleast_2d(self.ranking(out_index, slice(None, j)))
         return np.sum(2 * np.abs(pos_i - pos_j) / (pos_i + pos_j), axis=1).squeeze()
 
     def order_factors(self,
