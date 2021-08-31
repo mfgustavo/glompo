@@ -108,73 +108,18 @@ class EstimatedEffects:
 
     outputs : numpy.ndarray
         :math:`r \\times (g+1) \\times h` array of function evaluations corresponding to the input factors in
-        :attr:`trajectories`. Represents the responses of the model to the points in the :attr:`trajectories`.
+        :attr:`trajectories`. Represents the responses of the model to the points in the :attr:`trajectories`. See
+        :attr:`r`, :attr:`g` and :attr:`h`.
 
     trajectories : numpy.ndarray
         :math:`r \\times (g+1) \\times k` array of :math:`r` trajectories, each with :math:`g+1` points of :math:`k`
         factors each. Represents the carefully sampled points in the factor space where the model will be evaluated.
+        See :attr:`r`, :attr:`g` and :attr:`h`.
 
     traj_style : str
         The style of the trajectories which will be used in this calculation. Accepts :code:`'radial'` and
         :code:`'stairs'`. See :mod:`.trajectories`.
     """
-
-    @property
-    def mu(self) -> np.ndarray:
-        """ Shortcut access to the Estimated Effects :math:`\\mu` metric using all trajectories, for all input
-        dimensions, taking the average along output dimensions. Equivalent to: :code:`ee['mu', :, 'mean', :]`
-
-        Returns
-        -------
-        numpy.ndarray
-            :math:`h \\times k` array.
-
-        Notes
-        -----
-        If using a single output, then this attribute is the metric itself. Using :code:`'mean'` has no effect.
-
-        Warnings
-        --------
-        Unavailable if using groups, will raise a :obj:`ValueError`. See :attr:`groupings`.
-        """
-        return self['mu', :, 'mean', :].squeeze()
-
-    @property
-    def mu_star(self) -> np.ndarray:
-        """ Shortcut access to the Estimated Effects :math:`\\mu^*` metric using all trajectories, for all input
-        dimensions, taking the average along output dimensions. Equivalent to:
-        :code:`ee['mu_star', :, 'mean', :]`
-
-        Returns
-        -------
-        numpy.ndarray
-            :math:`h \\times g` array.
-
-        Notes
-        -----
-        If using a single output, then this attribute is the metric itself. Using :code:`'mean'` has no effect.
-        """
-        return self['mu_star', :, 'mean', :].squeeze()
-
-    @property
-    def sigma(self) -> np.ndarray:
-        """ Shortcut access to the Estimated Effects :meth:`\\sigma` metric using all trajectories, for all input
-        dimensions, taking the average along output dimensions. Equivalent to: :code:`ee['sigma', :, 'mean', :]`
-
-        Returns
-        -------
-        numpy.ndarray
-            :math:`h \\times k` array.
-
-        Notes
-        -----
-        If using a single output, then this attribute is the metric itself. Using :code:`'mean'` has no effect.
-
-        Warnings
-        --------
-        Unavailable if using groups, will raise a :obj:`ValueError`. See :attr:`groupings`.
-        """
-        return self['sigma', :, 'mean', :].squeeze()
 
     @property
     def r(self) -> int:
@@ -237,6 +182,63 @@ class EstimatedEffects:
             return np.full(self.h, False)
         return np.squeeze(np.abs(self.position_factor(self.r - 10, self.r, 'all')) < self.convergence_threshold)
 
+    @property
+    def mu(self) -> np.ndarray:
+        """ Shortcut access to the Estimated Effects :math:`\\mu` metric using all trajectories, for all input
+        dimensions, taking the average along output dimensions. Equivalent to: :code:`ee['mu', :, 'mean', :]`
+
+        Returns
+        -------
+        numpy.ndarray
+            :math:`h \\times k` array.
+
+        Notes
+        -----
+        If using a single output, then this attribute is the metric itself. Using :code:`'mean'` has no effect.
+
+        Warnings
+        --------
+        Unavailable if using groups, will raise a :obj:`ValueError`. See :attr:`groupings`.
+        """
+        return self['mu', :, 'mean', :].squeeze()
+
+    @property
+    def mu_star(self) -> np.ndarray:
+        """ Shortcut access to the Estimated Effects :math:`\\mu^*` metric using all trajectories, for all input
+        dimensions, taking the average along output dimensions. Equivalent to:
+        :code:`ee['mu_star', :, 'mean', :]`
+
+        Returns
+        -------
+        numpy.ndarray
+            :math:`h \\times g` array.
+
+        Notes
+        -----
+        If using a single output, then this attribute is the metric itself. Using :code:`'mean'` has no effect.
+        """
+        return self['mu_star', :, 'mean', :].squeeze()
+
+    @property
+    def sigma(self) -> np.ndarray:
+        """ Shortcut access to the Estimated Effects :meth:`\\sigma` metric using all trajectories, for all input
+        dimensions, taking the average along output dimensions. Equivalent to: :code:`ee['sigma', :, 'mean', :]`
+
+        Returns
+        -------
+        numpy.ndarray
+            :math:`h \\times k` array.
+
+        Notes
+        -----
+        If using a single output, then this attribute is the metric itself. Using :code:`'mean'` has no effect.
+
+        Warnings
+        --------
+        Unavailable if using groups, will raise a :obj:`ValueError`. See :attr:`groupings`.
+        """
+        return self['sigma', :, 'mean', :].squeeze()
+
     def __init__(self, input_dims: int,
                  output_dims: int,
                  groupings: Optional[np.ndarray] = None,
@@ -280,7 +282,7 @@ class EstimatedEffects:
 
         * Third index (:code:`out_index`):
             Only applicable if a multidimensional output is being investigated. Determines which metrics to use in the
-            calculation. Accepts one of the following:
+            calculation. Accepts one or a combination of the following:
 
                * Any integers or slices of 0, 1, ... :math:`h`: The metrics for the outputs at the
                  corresponding index will be used.
@@ -387,10 +389,10 @@ class EstimatedEffects:
         ----------
         trajectory
             A trajectory of points as produced by one of the trajectory generation functions (see :mod:`.trajectories`).
-            Should have a shape of :math:`(k+1) \\times k` where :math:`k` is the number of factors / dimensions of the
-            input.
+            Should have a shape of :math:`(g+1) \\times k` where :math:`k` is the number of factors / dimensions of the
+            input and :math:`g` is the number of groups being analyzed.
         outputs
-            :math:`(k+1) \\times h` model outputs corresponding to the points in the `trajectory`. Where :math:`h` is
+            :math:`(g+1) \\times h` model outputs corresponding to the points in the `trajectory`. Where :math:`h` is
             the dimensionality of the outputs.
 
         Raises
@@ -398,12 +400,18 @@ class EstimatedEffects:
         ValueError
             If `trajectory` or `outputs` do not match the dimensions above.
 
+        See Also
+        --------
+        :attr:`g`
+        :attr:`groupings`
+        :attr:`k`
+
         Notes
         -----
-        The actual calculation of the Estimated Effects metrics is not performed in this method. Add new trajectories is
-        essentially free. The calculation is only performed the moment the user attempts to access any of the metrics.
-        The results of the calculation are held in memory, thus if the number of trajectories remains unchanged, the
-        user may continue accessing the metrics at no further cost.
+        The actual calculation of the Estimated Effects metrics is not performed in this method. Adding new trajectories
+        is essentially free. The calculation is only performed the moment the user attempts to access any of the
+        metrics. The results of the calculation are held in memory, thus if the number of trajectories remains
+        unchanged, the user may continue accessing the metrics at no further cost.
         """
         # Clear old results
         self._metrics = np.array([[[]]])
@@ -440,7 +448,9 @@ class EstimatedEffects:
            PF_{r_i \\to r_j} = \\sum_{k=1}^k \\frac{2\\left|P_{k,i} - P_{k,j}\\right|}{P_{k,i} + P_{k,j}}
 
         where:
+
            :math:`P_{k,i}` is the ranking of factor :math:`k` using :math:`i` trajectories.
+
            :math:`P_{k,j}` is the ranking of factor :math:`k` using :math:`j` trajectories.
 
         Parameters
@@ -480,7 +490,10 @@ class EstimatedEffects:
 
         Parameters
         ----------
-        See :meth:`__getitem__`.
+        out_index
+            See :meth:`__getitem__`.
+        traj_index
+            See :meth:`__getitem__`.
 
         Returns
         -------
@@ -512,7 +525,10 @@ class EstimatedEffects:
 
         Parameters
         ----------
-        See :meth:`__getitem__`.
+        out_index
+            See :meth:`__getitem__`.
+        traj_index
+            See :meth:`__getitem__`.
 
         Returns
         -------
@@ -538,28 +554,32 @@ class EstimatedEffects:
               Three category classification of `Vanrolleghem et al (2015)
               <https://doi.org/10.1016/J.JHYDROL.2014.12.056>`_:
 
-              ========================= ========================================================== ===
-              Name                      Condition                                                  Description
-              ========================= ========================================================== ===
-              :code:`'non-influential'` :math:`\\mu^* < \\text{CT}`                                  No appreciable effect.
-              :code:`'important'`       :math:`\\mu^* > \\text{CT} \\& \\sigma/\\mu^* < \\sqrt{r}/2`     Strong individual effect.
-              :code:`'interacting'`     :math:`\\mu^* > \\text{CT} \\& \\sigma/\\mu^* > \\sqrt{r}/2`     Strong interacting effects.
-              ========================= ========================================================== ===
+              ========================= ============== ======================= ============================
+              Name                      Condition                              Description
+              ------------------------- -------------------------------------- ----------------------------
+              ..                        :math:`\\mu^*`  :math:`\\sigma/\\mu^*`
+              ========================= ============== ======================= ============================
+              :code:`'non-influential'` < CT                                   No appreciable effect.
+              :code:`'important'`       > CT           < :math:`\\sqrt{r}/2`    Strong individual effect.
+              :code:`'interacting'`     > CT           > :math:`\\sqrt{r}/2`    Strong interacting effects.
+              ========================= ============== ======================= ============================
 
             * :code:`n_cats = 5`:
 
               Five category classification of `Garcia Sanchez et al. (2014)
               <https://doi.org/10.1016/J.ENBUILD.2012.08.048>`_:
 
-              ========================= ================================================== ===
-              Name                      Condition                                          Description
-              ========================= ================================================== ===
-              :code:`'non-influential'` :math:`\\mu^* < \\text{CT}`                          No appreciable effect.
-              :code:`'linear'`          :math:`\\mu^* > \\text{CT} \\& \\sigma/\\mu^* < 0.1`    Strong linear effect.
-              :code:`'monotonic'`       :math:`\\mu^* > \\text{CT} \\& \\sigma/\\mu^* < 0.2`    Strong monotonic effect.
-              :code:`'quasi-monotonic'` :math:`\\mu^* > \\text{CT} \\& \\sigma/\\mu^* < 0.5`    Moderate monotonic effect.
-              :code:`'interacting'`     :math:`\\mu^* > \\text{CT} \\& \\sigma/\\mu^* < 1.0`    Strongly non-linear effects.
-              ========================= ================================================== ===
+              ========================= ============== ======================= ============================
+              Name                      Condition                              Description
+              ------------------------- -------------------------------------- ----------------------------
+              ..                        :math:`\\mu^*`  :math:`\\sigma/\\mu^*`
+              ========================= ============== ======================= ============================
+              :code:`'non-influential'` < CT                                   No appreciable effect.
+              :code:`'linear'`          > CT           < 0.1                   Strong linear effect.
+              :code:`'monotonic'`       > CT           [0.1, 0.5)              Strong monotonic effect.
+              :code:`'quasi-monotonic'` > CT           [0.5, 1.0)              Moderate monotonic effect.
+              :code:`'interacting'`     > CT           > 1.0                   Strongly non-linear effects.
+              ========================= ============== ======================= ============================
 
         out_index
             Output dimension along which to do the classification.
@@ -613,10 +633,10 @@ class EstimatedEffects:
 
         elif n_cats == 5:
             classi = {'non-influential': np.argwhere(ms < self.ct).ravel(),
-                      'linear': np.argwhere((ms > self.ct) & (fr <= 0.1)).ravel(),
-                      'monotonic': np.argwhere((ms > self.ct) & (fr > 0.1) & (fr <= 0.5)).ravel(),
-                      'quasi-monotonic': np.argwhere((ms > self.ct) & (fr > 0.5) & (fr <= 1.0)).ravel(),
-                      'interacting': np.argwhere((ms > self.ct) & (fr > 1)).ravel(),
+                      'linear': np.argwhere((ms > self.ct) & (fr < 0.1)).ravel(),
+                      'monotonic': np.argwhere((ms > self.ct) & (fr >= 0.1) & (fr < 0.5)).ravel(),
+                      'quasi-monotonic': np.argwhere((ms > self.ct) & (fr >= 0.5) & (fr < 1.0)).ravel(),
+                      'interacting': np.argwhere((ms > self.ct) & (fr >= 1)).ravel(),
                       }
 
         else:
@@ -638,9 +658,9 @@ class EstimatedEffects:
         Parameters
         ----------
         category
-            Classification key (see :meth:`classification`) for
+            Classification key (see :meth:`classification`) to calculate the factor for.
         out_index
-            See :meth:`__getitem__`
+            See :meth:`classification`.
 
         References
         ----------
@@ -648,7 +668,7 @@ class EstimatedEffects:
         wastewater applications: A comprehensive comparison of different methods. Environmental Modelling & Software,
         49, 40–52. https://doi.org/10.1016/J.ENVSOFT.2013.07.009
         """
-        return self.classification(out_index)[category] / self.k
+        return self.classification(out_index)[category] / self.g
 
     def bootstrap_metrics(self,
                           n_samples: int,
@@ -662,15 +682,15 @@ class EstimatedEffects:
         n_samples
             Number of resamples to perform.
         metric_index
-            See :meth:`__getitem___`
+            See :meth:`__getitem__`
         factor_index
-            See :meth:`__getitem___`
+            See :meth:`__getitem__`
         out_index
-            See :meth:`__getitem___`
+            See :meth:`__getitem__`
 
         Returns
         -------
-        Tuple[np.ndarray, np.ndarray]
+        Tuple[numpy.ndarray, numpy.ndarray]
             Two three-dimensional arrays of selected metrics, factors/groups and outputs.
             Metrics are ordered: :math:`\\mu`, :math:`\\mu^*` and :math:`\\sigma`.
             The first array contains the mean value of the bootstrap, the second contains its standard deviation.
@@ -744,7 +764,8 @@ class EstimatedEffects:
 
         Parameters
         ----------
-        See :meth:`plot_sensitivities`.
+        Optional, path, out_index, factor_labels, out_labels, log_scale
+            See :meth:`plot_sensitivities`.
         """
         self._plotting_core(path, out_index, self._plot_ranking_stub,
                             factor_labels=factor_labels, out_labels=out_labels, log_scale=log_scale)
@@ -755,7 +776,7 @@ class EstimatedEffects:
                          out_index: SpecialSlice = 'mean',
                          step_size: int = 10,
                          out_labels: Optional[Sequence[str]] = None):
-        """ Plots the evolution of the Position Factor ($PF_{r_i \\to r_j}$) metric as a function of increasing
+        """ Plots the evolution of the Position Factor (:math:`PF_{r_i \\to r_j}`) metric as a function of increasing
         number of trajectories.
 
         Parameters
@@ -775,13 +796,13 @@ class EstimatedEffects:
         The Position Factor metric is a measure of how much rankings have changed between the rankings calculated
         using :math:`i` trajectories, and the rankings calculated using :math:`j` trajectories sometime later. Thus, if
         `step_size` is 10 then the plot would show the evolution of the Position Factor at:
-        :math:`0 \\to 10, 10 \\to 20, 20 \\to 30, ...`
+        :math:`1 \\to 10, 10 \\to 20, 20 \\to 30, ...`
 
         See Also
         --------
         :meth:`position_factor`
         """
-        steps = np.clip([(i, i + step_size) for i in range(1, self.r, step_size)], None, self.r)
+        steps = np.clip([(i, i + step_size) for i in range(1, self.r, step_size)], 1, self.r)
         pf = np.array([np.atleast_1d(self.position_factor(*pair, out_index)) for pair in steps])
 
         fig, ax = plt.subplots()
