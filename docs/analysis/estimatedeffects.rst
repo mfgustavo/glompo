@@ -1,6 +1,6 @@
-*****************
+=================
 Estimated Effects
-*****************
+=================
 
 .. autoclass:: glompo.analysis.estimatedeffects.EstimatedEffects
    :members:
