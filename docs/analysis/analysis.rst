@@ -6,3 +6,4 @@ Analysis
 
    trajectories
    estimatedeffects
+   residuals
