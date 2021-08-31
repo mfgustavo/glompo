@@ -14,11 +14,10 @@ try:
     from matplotlib import patches
     from matplotlib import cm
 
-    plt.rcParams['font.size'] = 8
+    plt.rcParams['font.size'] = 6
     plt.rcParams['mathtext.fontset'] = 'cm'
     plt.rcParams['savefig.format'] = 'svg'
     plt.rcParams['figure.figsize'] = 6.7, 3.35
-    plt.rcParams['font.size'] = 6
 except (ModuleNotFoundError, ImportError, TypeError):  # TypeError caught for building docs
     pass
 
@@ -685,6 +684,7 @@ class EstimatedEffects:
                            path: Union[Path, str] = 'sensitivities',
                            out_index: SpecialSlice = 'mean',
                            factor_labels: Optional[Sequence[str]] = None,
+                           out_labels: Optional[Sequence[str]] = None,
                            log_scale: bool = False):
         """ Saves a sensitivity plot.
         Produces two side-by-side scatter plots. The first is :math:`\\mu^*` versus :math:`\\sigma`, the second is
@@ -707,6 +707,9 @@ class EstimatedEffects:
         factor_labels
             Optional sequence of descriptive names for each factor to add to the figure. Defaults to the factor's
             index position.
+        out_labels
+            Optional list of names to give to the outputs, if multiple are selected. Will be used in the figure title
+            and as the filename. Must be equal in length to `out_index`.
         log_scale
             If :obj:`True` the axes will be plotted on a log scale.
 
@@ -727,13 +730,15 @@ class EstimatedEffects:
         68(PART C), 741–750. https://doi.org/10.1016/J.ENBUILD.2012.08.048
         """
         self._plotting_core(path, out_index, self._plot_sensitivities_stub,
-                            factor_labels=factor_labels, log_scale=log_scale)
+                            factor_labels=factor_labels, out_labels=out_labels, log_scale=log_scale)
 
     @needs_optional_package('matplotlib')
     def plot_rankings(self,
                       path: Union[Path, str] = 'ranking',
                       out_index: SpecialSlice = 'mean',
-                      factor_labels: Optional[Sequence[str]] = None):
+                      factor_labels: Optional[Sequence[str]] = None,
+                      out_labels: Optional[Sequence[str]] = None,
+                      log_scale: bool = False):
         """ Saves the factor rankings as a plot.
         Plots the ordered :math:`\\mu^*` values against their corresponding parameter indices.
 
@@ -741,7 +746,8 @@ class EstimatedEffects:
         ----------
         See :meth:`plot_sensitivities`.
         """
-        self._plotting_core(path, out_index, self._plot_ranking_stub, factor_labels=factor_labels)
+        self._plotting_core(path, out_index, self._plot_ranking_stub,
+                            factor_labels=factor_labels, out_labels=out_labels, log_scale=log_scale)
 
     @needs_optional_package('matplotlib')
     def plot_convergence(self,
@@ -779,8 +785,6 @@ class EstimatedEffects:
         pf = np.array([np.atleast_1d(self.position_factor(*pair, out_index)) for pair in steps])
 
         fig, ax = plt.subplots()
-        fig: plt.Figure
-        ax: plt.Axes
 
         ax.set_title('Convergence of sensitivity rankings ($PF$ v $r$)')
         ax.set_xlabel('Trajectories Compared ($i \\to j$)')
@@ -862,7 +866,6 @@ class EstimatedEffects:
 
         for o, oname in enumerate(out_index):
             fig, ax = plt.subplots(boot_m.shape[0], 1, figsize=(6.7, 3.35 * boot_m.shape[0]))
-            ax: List[plt.Axes]
             if boot_m.shape[0] == 1:
                 ax = [ax]
 
@@ -871,7 +874,7 @@ class EstimatedEffects:
                                yerr=boot_s[m, :, o], fmt='.', ecolor='k', label='Bootstrap')
                 ax[m].scatter(factor_index, metrics[m, :, o],
                               color='r', marker='_', s=10, zorder=1000, label='Raw Result')
-                ax[m].set_xlabel("Parameter Index")
+                ax[m].set_xlabel("Parameter")
                 ax[m].set_ylabel(met_map[m])
                 ax[m].legend()
                 ax[m].set_yscale('log' if log_scale else 'linear')
@@ -886,6 +889,7 @@ class EstimatedEffects:
             if valid[1]:
                 ax[0].set_title(out_labels[o])
                 name = out_labels[o]
+            ax[0].set_title(ax[0].get_title() + f"\n(Number of resamples: {n_samples})")
 
             fig.tight_layout()
             fig.savefig(path / name if is_multi else path)
@@ -947,8 +951,9 @@ class EstimatedEffects:
 
         return np.array([mu, mu_star, sigma])
 
-    def _plotting_core(self, path: Union[Path, str], out_index: SpecialSlice, plot_stub: Callable[..., None], **kwargs):
-        """ Most plot function require the same looping and gathering of metrics, this is done here and then passed
+    def _plotting_core(self, path: Union[Path, str], out_index: SpecialSlice, plot_stub: Callable[..., plt.Axes],
+                       **kwargs):
+        """ Several plot function require the same looping and gathering of metrics, this is done here and then passed
         to the `plot_stub` method which have the individualized plot commands.
         """
         if not self.is_grouped:
@@ -966,20 +971,24 @@ class EstimatedEffects:
             fig = plt.figure()
 
             if self.is_grouped:
-                plot_stub(fig, mu_star=metrics[0, :, i], **kwargs)
+                ax = plot_stub(fig, mu_star=metrics[0, :, i], **kwargs)
             else:
-                plot_stub(fig, mu=metrics[0, :, i], mu_star=metrics[1, :, i], sigma=metrics[2, :, i], **kwargs)
+                ax = plot_stub(fig, mu=metrics[0, :, i], mu_star=metrics[1, :, i], sigma=metrics[2, :, i], **kwargs)
+
+            name = f'{i:03}'
+            if 'out_labels' in kwargs and kwargs['out_labels'] is not None:
+                name = kwargs['out_labels'][i]
+                ax.set_title(ax.get_title() + f"\n({kwargs['out_labels'][i]})")
 
             fig.tight_layout()
-            fig.savefig(path / f'{i:03}' if is_multi else path)
+            fig.savefig(path / name if is_multi else path)
             plt.close(fig)
 
     def _plot_sensitivities_stub(self, fig: plt.Figure,
-                                 mu: Optional[np.ndarray] = None,
                                  mu_star: Optional[np.ndarray] = None,
                                  sigma: Optional[np.ndarray] = None,
                                  factor_labels: Optional[Sequence[str]] = None,
-                                 log_scale: bool = False):
+                                 log_scale: bool = False, **kwargs) -> plt.Axes:
         fig.set_size_inches(6.7, 3.35)
         cmap = cm.get_cmap('Pastel2')
 
@@ -1015,6 +1024,10 @@ class EstimatedEffects:
             raw_ylims = ax.get_ylim()
 
             if log_scale:
+                if not np.any(mu_star > 0):
+                    warnings.warn("Data has no positive values and cannot be log-scaled. Usually occurs when an output"
+                                  "is totally insensitive to all factor changes.", RuntimeWarning)
+                    break
                 ax.set_xscale('log', nonpositive='mask')
                 ax.set_yscale('log', nonpositive='mask')
 
@@ -1086,11 +1099,12 @@ class EstimatedEffects:
         leg.append(lines.Line2D([], [], c='black', ls='dotted', lw=0.7, label='SEM'))
         fig.legend(handles=leg, loc='lower center', ncol=6)
 
+        return axt
+
     def _plot_ranking_stub(self, fig: plt.Figure,
-                           mu: Optional[np.ndarray] = None,
                            mu_star: Optional[np.ndarray] = None,
-                           sigma: Optional[np.ndarray] = None,
-                           factor_labels: Optional[Sequence[str]] = None):
+                           factor_labels: Optional[Sequence[str]] = None,
+                           log_scale: bool = False, **kwargs) -> plt.Axes:
         fig.set_size_inches(6.7, 6.7)
         ax = fig.add_subplot(111)
 
@@ -1105,6 +1119,9 @@ class EstimatedEffects:
         else:
             labs = np.array(factor_labels)[i_sort]
         ax.bar(labs, mu_star[i_sort])
+        ax.set_yscale('log' if log_scale else 'linear')
+
+        return ax
 
     def _expand_index(self, index_type: str, index) -> List[int]:
         """ Converts the various ways to specify the output/group index into a list of absolute index positions. """
