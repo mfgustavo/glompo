@@ -247,16 +247,16 @@ class EstimatedEffects:
                  trajectory_style: str = 'radial'):
         self.logger = logging.getLogger('glompo.analyzer')
 
-        self.trajectories = np.array([])
         self.dims: int = input_dims
+        self.out_dims = output_dims
         self.traj_style = trajectory_style
         self._groupings = groupings if groupings is not None else np.identity(input_dims)
         self._is_grouped = groupings is not None
         if np.sum(self._groupings) != input_dims:
             raise ValueError("Invalid grouping matrix, each factor must be in exactly 1 group.")
 
-        self.outputs = np.array([])
-        self.out_dims = output_dims
+        self.trajectories = np.empty((0, self.g + 1, self.k))
+        self.outputs = np.empty((0, self.g + 1, self.h))
 
         self.convergence_threshold = convergence_threshold
         self.ct = cutoff_threshold
@@ -388,12 +388,13 @@ class EstimatedEffects:
         Parameters
         ----------
         trajectory
-            A trajectory of points as produced by one of the trajectory generation functions (see :mod:`.trajectories`).
-            Should have a shape of :math:`(g+1) \\times k` where :math:`k` is the number of factors / dimensions of the
-            input and :math:`g` is the number of groups being analyzed.
+            One or several trajectories of points as produced by one of the trajectory generation functions
+            (see :mod:`.trajectories`). Should have a shape of :math:`n \\times (g+1) \\times k` where :math:`k`
+            is the number of factors / dimensions of the input and :math:`g` is the number of groups being analyzed, and
+            :math:`n` is the number of trajectories being appended.
         outputs
-            :math:`(g+1) \\times h` model outputs corresponding to the points in the `trajectory`. Where :math:`h` is
-            the dimensionality of the outputs.
+            :math:`n \\times (g+1) \\times h` model outputs corresponding to the points in `trajectory`. Where :math:`h`
+            is the dimensionality of the outputs.
 
         Raises
         ------
@@ -416,24 +417,26 @@ class EstimatedEffects:
         # Clear old results
         self._metrics = np.array([[[]]])
 
-        if trajectory.shape != (self.g + 1, self.k):
-            raise ValueError(f"Cannot parse trajectory with shape {trajectory.shape}, must be ({self.g + 1}, "
-                             f"{self.k}).")
-        if self.h > 1 and outputs.shape != (self.g + 1, self.h):
-            raise ValueError(f"Cannot parse outputs with shape {outputs.shape}, must be ({self.g + 1}, {self.h})")
+        if trajectory.ndim != 3:
+            trajectory = np.array([trajectory])
 
-        if self.h == 1 and outputs.shape != (self.g + 1, self.h) and outputs.shape != (self.g + 1,):
-            raise ValueError(f"Cannot parse outputs with shape {outputs.shape}, ({self.g + 1},) expected.")
+        if outputs.ndim != 3:
+            outputs = np.array([outputs])
+
+        if trajectory.shape[1:] != (self.g + 1, self.k):
+            raise ValueError(f"Cannot parse trajectory with shape {trajectory.shape}, must be (n, {self.g + 1}, "
+                             f"{self.k}).")
+        if self.h > 1 and outputs.shape[1:] != (self.g + 1, self.h):
+            raise ValueError(f"Cannot parse outputs with shape {outputs.shape}, must be (n, {self.g + 1}, {self.h})")
+
+        if self.h == 1 and outputs.shape[1:] != (self.g + 1, self.h) and outputs.shape[1:] != (self.g + 1,):
+            raise ValueError(f"Cannot parse outputs with shape {outputs.shape}, (n, {self.g + 1}) expected.")
 
         if self.h == 1:
-            outputs = outputs.reshape((self.g + 1, self.h))
+            outputs = outputs.reshape((-1, self.g + 1, self.h))
 
-        if len(self.trajectories) > 0:
-            self.trajectories = np.append(self.trajectories, [trajectory], axis=0)
-            self.outputs = np.append(self.outputs, [outputs], axis=0)
-        else:
-            self.trajectories = np.array([trajectory])
-            self.outputs = np.array([outputs])
+        self.trajectories = np.append(self.trajectories, trajectory, axis=0)
+        self.outputs = np.append(self.outputs, outputs, axis=0)
 
     def position_factor(self, i: int, j: int, out_index: SpecialSlice = 'mean') -> np.ndarray:
         """ Returns the position factor metric.
