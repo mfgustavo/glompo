@@ -359,14 +359,14 @@ class EstimatedEffects:
 
         # Attempt to access existing results
         if t == all_t and self._metrics.size > 0:
-            metrics = self._metrics
+            metrics = self._metrics[np.ix_(m, k, h)]
+            metrics = metrics
         else:
             metrics = self._calculate(h, t)
             if h == all_h and t == all_t:
                 # Save results to cache if a full calculation was done.
                 self._metrics = metrics
-
-        metrics = metrics[np.ix_(m, k)]
+            metrics = metrics[np.ix_(m, k)]
 
         if spec_out:
             cols = []
