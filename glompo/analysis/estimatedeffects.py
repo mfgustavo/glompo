@@ -894,10 +894,6 @@ class EstimatedEffects:
             fig.savefig(path / name if is_multi else path)
             plt.close(fig)
 
-    def invert(self):
-        """  """
-        # TODO Implement
-
     def _calculate(self,
                    out_index: SpecialSlice,
                    traj_index: Union[int, slice, List[int]]) -> np.ndarray:
