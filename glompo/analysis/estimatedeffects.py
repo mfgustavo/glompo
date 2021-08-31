@@ -601,26 +601,30 @@ class EstimatedEffects:
         """
         if out_index != 'mean' and not isinstance(out_index, int):
             raise ValueError('Classification can only be done on a single output at a time.')
-        mu, ms, sd = self[:, :, out_index, :]
+        mu, ms, sd = self[:, :, out_index, :].squeeze()
 
         fr = np.zeros_like(mu)
         np.divide(sd, ms, out=fr, where=sd != 0)
 
         if n_cats == 3:
             grad = np.sqrt(self.r) / 2
-            return {'important': np.argwhere((ms > self.ct) & (fr < grad)).ravel(),
-                    'interacting': np.argwhere((ms > self.ct) & (fr >= grad)).ravel(),
-                    'non-influential': np.argwhere(ms < self.ct).ravel()}
+            classi = {'important': np.argwhere((ms > self.ct) & (fr < grad)).ravel(),
+                      'interacting': np.argwhere((ms > self.ct) & (fr >= grad)).ravel(),
+                      'non-influential': np.argwhere(ms < self.ct).ravel()}
 
-        if n_cats == 5:
-            return {'non-influential': np.argwhere(ms < self.ct).ravel(),
-                    'linear': np.argwhere((ms > self.ct) & (fr <= 0.1)).ravel(),
-                    'monotonic': np.argwhere((ms > self.ct) & (fr > 0.1) & (fr <= 0.5)).ravel(),
-                    'quasi-monotonic': np.argwhere((ms > self.ct) & (fr > 0.5) & (fr <= 1.0)).ravel(),
-                    'interacting': np.argwhere((ms > self.ct) & (fr > 1)).ravel(),
-                    }
+        elif n_cats == 5:
+            classi = {'non-influential': np.argwhere(ms < self.ct).ravel(),
+                      'linear': np.argwhere((ms > self.ct) & (fr <= 0.1)).ravel(),
+                      'monotonic': np.argwhere((ms > self.ct) & (fr > 0.1) & (fr <= 0.5)).ravel(),
+                      'quasi-monotonic': np.argwhere((ms > self.ct) & (fr > 0.5) & (fr <= 1.0)).ravel(),
+                      'interacting': np.argwhere((ms > self.ct) & (fr > 1)).ravel(),
+                      }
 
-        raise ValueError(f'Cannot parse n_cats = {n_cats}, must equal 3 or 5.')
+        else:
+            raise ValueError(f'Cannot parse n_cats = {n_cats}, must equal 3 or 5.')
+
+        assert sum([c.size for c in classi.values()]) == self.g
+        return classi
 
     def relevance_factor(self, category: str, out_index: Union[int, str] = 'mean') -> np.ndarray:
         """ Measure of the fraction of factors which have an influence on the outputs.
