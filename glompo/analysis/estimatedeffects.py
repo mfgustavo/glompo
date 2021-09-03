@@ -421,7 +421,7 @@ class EstimatedEffects:
             trajectory = np.array([trajectory])
 
         if outputs.ndim != 3:
-            outputs = np.array([outputs])
+            outputs = np.array([outputs]).reshape((-1, self.g + 1, self.h))
 
         if trajectory.shape[1:] != (self.g + 1, self.k):
             raise ValueError(f"Cannot parse trajectory with shape {trajectory.shape}, must be (n, {self.g + 1}, "
@@ -956,8 +956,8 @@ class EstimatedEffects:
                       self.outputs[np.ix_(traj_index, pt_index[1:], out_index)]
 
         else:  # Radial style trajectories
-            x_diffs = self.trajectories[traj_index, 0] - self.trajectories[traj_index, 1:]
-            y_diffs = self.outputs[traj_index, 0, out_index] - \
+            x_diffs = self.trajectories[traj_index, 0, None] - self.trajectories[traj_index, 1:]
+            y_diffs = self.outputs[np.ix_(traj_index, [0], out_index)] - \
                       self.outputs[np.ix_(traj_index, pt_index[1:], out_index)]
 
         where = np.where(x_diffs @ self.groupings)[0::2]
