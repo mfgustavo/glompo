@@ -23,7 +23,7 @@ class GFLSOptimizer(BaseOptimizer):
 
     Parameters
     ----------
-    Optional, _opt_id _signal_pipe _results_queue _pause_flag workers backend is_log_detailed
+    Inherited, _opt_id _signal_pipe _results_queue _pause_flag workers backend is_log_detailed
         See :class:`.BaseOptimizer`.
     logger
         If :obj:`True` a :class:`!optsam.Logger` will be run along with the optimization and saved after the

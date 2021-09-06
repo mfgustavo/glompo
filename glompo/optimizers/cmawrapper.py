@@ -26,7 +26,7 @@ class CMAOptimizer(BaseOptimizer):
 
     Parameters
     ----------
-    Optional, _opt_id _signal_pipe _results_queue _pause_flag workers backend is_log_detailed
+    Inherited, _opt_id _signal_pipe _results_queue _pause_flag workers backend is_log_detailed
         See :class:`.BaseOptimizer`.
     sampler
         Allows the use of :code:`'GaussVDSampler'` and :code:`'GaussVkDSampler'` settings.
@@ -114,7 +114,7 @@ class CMAOptimizer(BaseOptimizer):
 
         Parameters
         ----------
-        Optional, function bounds callbacks
+        Inherited, function bounds callbacks
             See :meth:`.BaseOptimizer.minimize`
         x0
             Initial mean of the multivariate normal distribution from which trials are drawn. Force injected into the

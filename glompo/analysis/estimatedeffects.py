@@ -453,9 +453,7 @@ class EstimatedEffects:
 
         Parameters
         ----------
-        out_index
-            See :meth:`__getitem__`.
-        traj_index
+        Inherited, out_index traj_index
             See :meth:`__getitem__`.
 
         Returns
@@ -525,9 +523,7 @@ class EstimatedEffects:
 
         Parameters
         ----------
-        out_index
-            See :meth:`__getitem__`.
-        traj_index
+        Inherited, out_index traj_index
             See :meth:`__getitem__`.
 
         Returns
@@ -560,9 +556,7 @@ class EstimatedEffects:
 
         Parameters
         ----------
-        out_index
-            See :meth:`__getitem__`.
-        traj_index
+        Inherited, out_index traj_index
             See :meth:`__getitem__`.
 
         Returns
@@ -716,11 +710,7 @@ class EstimatedEffects:
         ----------
         n_samples
             Number of resamples to perform.
-        metric_index
-            See :meth:`__getitem__`
-        factor_index
-            See :meth:`__getitem__`
-        out_index
+        Inherited, metric_index factor_index out_index
             See :meth:`__getitem__`
 
         Returns
@@ -799,7 +789,7 @@ class EstimatedEffects:
 
         Parameters
         ----------
-        Optional, path, out_index, factor_labels, out_labels, log_scale
+        Inherited, path out_index factor_labels out_labels log_scale
             See :meth:`plot_sensitivities`.
         """
         self._plotting_core(path, out_index, self._plot_ranking_stub,
@@ -876,11 +866,7 @@ class EstimatedEffects:
             See :meth:`plot_sensitivities`.
         n_samples
             See :meth:`bootstrap_metrics`.
-        metric_index
-            See :meth:`__getitem__`.
-        factor_index
-            See :meth:`__getitem__`.
-        out_index
+        Inherited, metric_index factor_index out_index
             See :meth:`__getitem__`.
         log_scale
             If :obj:`True` the metric axis will be plotted on a log scale.
