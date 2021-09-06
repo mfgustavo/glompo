@@ -89,8 +89,11 @@ def make_winding_stair_trajectory(k: int, levels: int, groupings: Optional[np.nd
     return traj
 
 
-def make_radial_trajectory(k: int, groupings: Optional[np.ndarray] = None,
-                           base_pt: Optional[np.ndarray] = None, aux_pt: Optional[np.ndarray] = None) -> np.ndarray:
+def make_radial_trajectory(k: int,
+                           groupings: Optional[np.ndarray] = None,
+                           base_pt: Optional[np.ndarray] = None,
+                           aux_pt: Optional[np.ndarray] = None,
+                           min_dist: float = 0.1) -> np.ndarray:
     """ Produces a radial sample set.
     Generates a set of `k`-dimensional points constructed from `base_pt` (:math:`\\mathbf{a}`) and
     `aux_pt` (:math:`\\mathbf{b}`):
@@ -117,6 +120,9 @@ def make_radial_trajectory(k: int, groupings: Optional[np.ndarray] = None,
     aux_pt
         Optional `k` length vector representing a point which is never evaluated but whose elements will be substituted
         into the `base_pt` individually in each dimension. Randomly generated in unit space if not supplied.
+    min_dist
+        The minimum distance distance between `base_pt` and `aux_pt` along each axis. Used only if `base_pt` and
+        `aux_pt` have not been provided.
 
     Returns
     -------
@@ -143,7 +149,7 @@ def make_radial_trajectory(k: int, groupings: Optional[np.ndarray] = None,
 
     while aux_pt is None:
         b = np.random.random(k)
-        if np.all(np.abs(a - b) > 0.1):
+        if np.all(np.abs(a - b) > min_dist):
             # Accept a candidate for b only if it is sufficiently far away from a
             break
     else:
