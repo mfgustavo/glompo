@@ -317,6 +317,14 @@ class EstimatedEffects:
         pass slices exactly as is done here (e.g. :code:`:2` would not be a valid construct as a function argument). To
         pass a slice, use a :obj:`slice` object (e.g. :code:`:2` could be sent as :code:`slice(None, 2)`).
 
+        If `traj_index` is provided then the results will *not* be saved as the :attr:`mu`, :attr:`mu_star` and
+        :attr:`sigma` attributes of the class. If all available trajectories are used *and* metrics for all the outputs
+        are calculated, then the results are saved into the above mentioned attributes.
+
+        If a user attempts to access any of the attributes (and the number of trajectories has changed since the last
+        call), this method is automatically called for all available trajectories. In other words, there is never any
+        risk of accessing metrics which are out-of-sync with the number of trajectories appended to the calculation.
+
         Examples
         --------
         Return all metrics for all factors and outputs, using all available trajectories:
@@ -363,7 +371,7 @@ class EstimatedEffects:
             metrics = self._metrics[np.ix_(m, k, h)]
             metrics = metrics
         else:
-            metrics = self._calculate(h, t)
+            metrics = self._calculate_metrics(h, t)
             if h == all_h and t == all_t:
                 # Save results to cache if a full calculation was done.
                 self._metrics = metrics
@@ -437,6 +445,30 @@ class EstimatedEffects:
 
         self.trajectories = np.append(self.trajectories, trajectory, axis=0)
         self.outputs = np.append(self.outputs, outputs, axis=0)
+
+    def elementary_effects(self,
+                           out_index: SpecialSlice = None,
+                           traj_index: Union[int, slice, List[int]] = None) -> np.ndarray:
+        """ Returns the raw elementary effects for a given calculation configuration.
+
+        Parameters
+        ----------
+        out_index
+            See :meth:`__getitem__`.
+        traj_index
+            See :meth:`__getitem__`.
+
+        Returns
+        -------
+        numpy.ndarray
+            :math:`r \\times g \\times h` of raw elementary effects from which the metrics are calculated.
+        """
+        h = self._expand_index('output', out_index)
+        t = self._expand_index('trajec', traj_index)
+
+        ee = self._calculate_ee(h, t)
+
+        return ee
 
     def position_factor(self, i: int, j: int, out_index: SpecialSlice = 'mean') -> np.ndarray:
         """ Returns the position factor metric.
@@ -919,10 +951,10 @@ class EstimatedEffects:
             fig.savefig(path / name if is_multi else path)
             plt.close(fig)
 
-    def _calculate(self,
-                   out_index: SpecialSlice,
-                   traj_index: Union[int, slice, List[int]]) -> np.ndarray:
-        """ Calculates the Estimated Effects metrics (:math:`\\mu`, :math:`\\mu^*` and :math:`\\sigma`).
+    def _calculate_ee(self,
+                      out_index: List[int],
+                      traj_index: List[int]) -> np.ndarray:
+        """ Returns an array of the Estimated Effects themselves.
 
         Parameters
         ----------
@@ -934,20 +966,8 @@ class EstimatedEffects:
         Returns
         -------
         numpy.ndarray
-            Three dimensional array of selected metrics, factors/groups and outputs.
-            Metrics are ordered: :math:`\\mu`, :math:`\\mu^*` and :math:`\\sigma`.
-
-        Notes
-        -----
-        If `traj_index` is provided then the results will *not* be saved as the :attr:`mu`, :attr:`mu_star` and :
-        attr:`sigma` attributes of the class.
-
-        If all available trajectories are used *and* all metrics for all the outputs are calculated, then the results
-        are saved into the above mentioned attributes.
-
-        If a user attempts to access any of the attributes (and the number of trajectories has changed since the last
-        call), this method is automatically called for all available trajectories. In other words, there is never any
-        risk of accessing metrics which are out-of-sync with the number of trajectories appended to the calculation.
+            :math:`\\hat{r} \\times g \\times \\hat{h}` array of elementary effects for every factor/group using the
+            trajectories and outputs selected (:math:`\\hat{r}` and :math:`\\hat{h}` respectively).
         """
         pt_index = np.arange(self.g + 1)
         if self.traj_style == 'stairs':
@@ -968,6 +988,28 @@ class EstimatedEffects:
 
         ee = y_diffs / x_diffs[:, :, None]
         ee[where] = ee.copy().ravel().reshape(-1, ee.shape[-1])
+
+        return ee
+
+    def _calculate_metrics(self,
+                           out_index: List[int],
+                           traj_index: List[int]) -> np.ndarray:
+        """ Calculates the Estimated Effects metrics (:math:`\\mu`, :math:`\\mu^*` and :math:`\\sigma`).
+
+        Parameters
+        ----------
+        out_index
+            See :meth:`__getitem__`.
+        traj_index
+            See :meth:`__getitem__`.
+
+        Returns
+        -------
+        numpy.ndarray
+            Three dimensional array of selected metrics, factors/groups and outputs.
+            Metrics are ordered: :math:`\\mu`, :math:`\\mu^*` and :math:`\\sigma`.
+        """
+        ee = self._calculate_ee(out_index, traj_index)
 
         mu = np.mean(ee, axis=0)
         mu_star = np.mean(np.abs(ee), axis=0)
