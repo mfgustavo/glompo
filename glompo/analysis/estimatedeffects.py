@@ -55,7 +55,12 @@ class EstimatedEffects:
         .. warning::
 
            The use of groups comes at the cost of the :math:`\\mu` and :math:`\\sigma` metrics. They are unobtainable
-           in this regime because it is not possible to define . Only :math:`\\mu^*` is accessible.
+           in this regime because it is not possible to define . Only :math:`\\mu^*` is accessible. Similarly, calls to
+           functions relying on anything other than :math:`\\mu^*` will produce a warning and not be run.
+
+    include_short_range
+        If :obj:`True`, flags that the trajectories introduced to the calculation will include specially generated
+        short-range points (see :mod:`.trajectories` for more details).
 
     convergence_threshold
         See :attr:`convergence_threshold`.
@@ -107,6 +112,9 @@ class EstimatedEffects:
         The number of input factors for which sensitivity is being tested. Often referred to as :math:`k` throughout the
         documentation here to match literature. See :attr:`k`.
 
+    has_short_range : bool
+        :obj:`True` if the trajectories added to the calculation include specially generated short-range peterbations.
+
     out_dims : int
         Dimensionality of the output if one would like to investigate factor sensitivities against multiple function
         responses. Often referred to as :math:`h` in the documentation of equations. See :attr:`h`.
@@ -117,7 +125,7 @@ class EstimatedEffects:
         :attr:`r`, :attr:`g` and :attr:`h`.
 
     trajectories : numpy.ndarray
-        :math:`r \\times (g+1) \\times k` array of :math:`r` trajectories, each with :math:`g+1` points of :math:`k`
+        :math:`r \\times g+1 \\times k` array of :math:`r` trajectories, each with :math:`g+1` points of :math:`k`
         factors each. Represents the carefully sampled points in the factor space where the model will be evaluated.
         See :attr:`r`, :attr:`g` and :attr:`h`.
 
@@ -189,6 +197,8 @@ class EstimatedEffects:
 
     @property
     def mu(self) -> np.ndarray:
+        # TODO Update docs
+        # TODO Finalize what this must return in the context of near and far
         """ Shortcut access to the Estimated Effects :math:`\\mu` metric using all trajectories, for all input
         dimensions, taking the average along output dimensions. Equivalent to: :code:`ee['mu', :, 'mean', :]`
 
@@ -209,6 +219,8 @@ class EstimatedEffects:
 
     @property
     def mu_star(self) -> np.ndarray:
+        # TODO Update docs
+        # TODO Finalize what this must return in the context of near and far
         """ Shortcut access to the Estimated Effects :math:`\\mu^*` metric using all trajectories, for all input
         dimensions, taking the average along output dimensions. Equivalent to:
         :code:`ee['mu_star', :, 'mean', :]`
@@ -226,6 +238,8 @@ class EstimatedEffects:
 
     @property
     def sigma(self) -> np.ndarray:
+        # TODO Update docs
+        # TODO Finalize what this must return in the context of near and far
         """ Shortcut access to the Estimated Effects :meth:`\\sigma` metric using all trajectories, for all input
         dimensions, taking the average along output dimensions. Equivalent to: :code:`ee['sigma', :, 'mean', :]`
 
@@ -247,6 +261,7 @@ class EstimatedEffects:
     def __init__(self, input_dims: int,
                  output_dims: int,
                  groupings: Optional[np.ndarray] = None,
+                 include_short_range: bool = False,
                  convergence_threshold: float = 0,
                  cutoff_threshold: float = 0.1,
                  trajectory_style: str = 'radial'):
@@ -255,6 +270,7 @@ class EstimatedEffects:
         self.dims: int = input_dims
         self.out_dims = output_dims
         self.traj_style = trajectory_style
+        self.has_short_range = include_short_range
         self._groupings = groupings if groupings is not None else np.identity(input_dims)
         self._is_grouped = groupings is not None
         if np.sum(self._groupings) != input_dims:
@@ -268,8 +284,11 @@ class EstimatedEffects:
         self._metrics = np.array([[[]]])
 
     def __getitem__(self, item) -> np.ndarray:
+        # TODO Update docs
+        # TODO Introduce 5th axis for 'near', 'far', 'all'
+        # TODO Update what is saved in _metrics
         """ Retrieves the sensitivity metrics (:math:`\\mu, \\mu^*, \\sigma`) for a particular calculation configuration
-        The indexing is a strictly ordered set of maximum length 4:
+        The indexing is a strictly ordered set of maximum length 5:
 
         * First index (:code:`metric_index`):
             Indexes the metric. Also accepts :obj:`str` which are paired to the following corresponding :obj:`int`:
@@ -283,7 +302,7 @@ class EstimatedEffects:
             === ===
 
         * Second index (:code:`factor_index`):
-           Indexes the factor or group for which sensitivities are being calculated.
+            Indexes the factor or group for which sensitivities are being calculated.
 
         * Third index (:code:`out_index`):
             Only applicable if a multidimensional output is being investigated. Determines which metrics to use in the
@@ -295,12 +314,25 @@ class EstimatedEffects:
                * :code:`'mean'`: The metrics will be averaged across the output dimension.
 
         * Fourth Index (:code:`traj_index`):
-           Which trajectories to use in the calculation.
+            Which trajectories to use in the calculation.
+
+        * Fifth Index (:code:`distance_index`):
+            Indexes the types of points to use. Accepts only one value (not a slice) either :obj:`str` or :obj:`int`.
+            Defaults to :code:`'all'`, will be ignored unless :attr:`has_short_range` is :obj:`True`.
+
+            === ======= ===
+            int str     Description
+            === ======= ===
+            0   'short' Only analyze 'short-range' distances specially added to the trajectories by the make trajectory
+            ..          method if its parameter :code:`include_short_range=True`.
+            1   'long'  Only analyze the standard, longer-range, trajectory points.
+            2   'all'   Include all points in the calculation.
+            === ======= ===
 
         Parameters
         ----------
         item
-            Tuple of slices and indices. Maximum length of 4.
+            Tuple of slices and indices. Maximum length of 5.
 
         Returns
         -------
@@ -348,6 +380,10 @@ class EstimatedEffects:
 
         >>> ee[:, :, :, :20]
 
+        Return :math:`\\mu^*`, averaged over all factors, using only analysis of the short-range points:
+
+        >>> ee[1, :, 'mean', :, 'short']
+
         """
         if self.trajectories.size == 0:
             warnings.warn("Please add at least one trajectory before attempting to access calculations.", UserWarning)
@@ -360,6 +396,7 @@ class EstimatedEffects:
         k = self._expand_index('factor', item[1])
         h = self._expand_index('output', item[2])
         t = self._expand_index('trajec', item[3])
+        d = self._expand_index('prange', item[4])
 
         if self.is_grouped and any([i in m for i in [0, 2]]):
             raise ValueError('Cannot access mu and sigma metrics if groups are being used')
@@ -396,6 +433,8 @@ class EstimatedEffects:
         return metrics
 
     def add_trajectory(self, trajectory: np.ndarray, outputs: np.ndarray):
+        # TODO Update docs
+        # TODO Update dim checks for near and far
         """ Add a trajectory of points and their corresponding model output to the calculation.
 
         Parameters
@@ -454,6 +493,8 @@ class EstimatedEffects:
     def elementary_effects(self,
                            out_index: SpecialSlice = None,
                            traj_index: Union[int, slice, List[int]] = None) -> np.ndarray:
+        # TODO Update docs
+        # TODO Introduce near far all option
         """ Returns the raw elementary effects for a given calculation configuration.
 
         Parameters
@@ -474,6 +515,8 @@ class EstimatedEffects:
         return ee
 
     def position_factor(self, i: int, j: int, out_index: SpecialSlice = 'mean') -> np.ndarray:
+        # TODO Update docs
+        # TODO Introduce near far all option
         """ Returns the position factor metric.
         This is a measure of convergence. Measures the changes between the factor rankings obtained when using `i`
         trajectories and `j` trajectories.  Where `i` and `j` are a number of trajectories such that
@@ -522,6 +565,8 @@ class EstimatedEffects:
     def order_factors(self,
                       out_index: SpecialSlice = 'mean',
                       traj_index: SpecialSlice = None) -> np.ndarray:
+        # TODO Update docs
+        # TODO Introduce near far all option
         """ Returns factor indices in descending order of their influence on the outputs.
         The *positions* in the array are the rankings, the *contents* of the array are the factor / group indices. This
         is the inverse of :meth:`ranking`.
@@ -554,6 +599,8 @@ class EstimatedEffects:
         return metric.argsort(1)[:, -1::-1].squeeze().T
 
     def ranking(self, out_index: SpecialSlice = 'mean', traj_index: SpecialSlice = None) -> np.ndarray:
+        # TODO Update docs
+        # TODO Introduce near far all option
         """ Returns the ranking of each factor being analyzed.
         The *positions* in the array are the factor or group indices, the *contents* of the array are rankings such that
         1 is the most influential factor / group and :math:`g+1` is the least influential. This is the inverse of
@@ -576,6 +623,9 @@ class EstimatedEffects:
         return np.squeeze(np.atleast_2d(self.order_factors(out_index, traj_index)).argsort(1) + 1)
 
     def classification(self, n_cats: int, out_index: Union[int, str] = 'mean') -> Dict[str, np.ndarray]:
+        # TODO Update docs
+        # TODO Introduce near far all option
+        # TODO Update classification rules to include comparions of near and far if all is used?
         """ Returns a dictionary with each factor index classified according to its effect on the function outputs.
 
         Parameters
@@ -680,6 +730,8 @@ class EstimatedEffects:
         return classi
 
     def relevance_factor(self, category: str, out_index: Union[int, str] = 'mean') -> np.ndarray:
+        # TODO Update docs
+        # TODO Introduce near far all option
         """ Measure of the fraction of factors which have an influence on the outputs.
         Calculated as:
 
@@ -709,6 +761,8 @@ class EstimatedEffects:
                           metric_index: SpecialSlice = None,
                           factor_index: SpecialSlice = None,
                           out_index: SpecialSlice = None) -> Tuple[np.ndarray, np.ndarray]:
+        # TODO Update docs
+        # TODO Introduce near far all option
         """ Calculates sensitivity metrics with a confidence interval based on resampling bootstrapping.
 
         Parameters
@@ -736,6 +790,8 @@ class EstimatedEffects:
                            factor_labels: Optional[Sequence[str]] = None,
                            out_labels: Optional[Sequence[str]] = None,
                            log_scale: bool = False):
+        # TODO Update docs
+        # TODO Introduce near far all option, multiple allowed plotted as rows.
         """ Saves a sensitivity plot.
         Produces two side-by-side scatter plots. The first is :math:`\\mu^*` versus :math:`\\sigma`, the second is
         :math:`\\mu^*` versus :math:`\\sigma/\\mu^*`. Defined dividers are included to classify factors into:
@@ -789,6 +845,8 @@ class EstimatedEffects:
                       factor_labels: Optional[Sequence[str]] = None,
                       out_labels: Optional[Sequence[str]] = None,
                       log_scale: bool = False):
+        # TODO Update docs
+        # TODO Introduce near far all option. Multiple allowed plotted on same axes, semi-transparent ordered by first in list
         """ Saves the factor rankings as a plot.
         Plots the ordered :math:`\\mu^*` values against their corresponding parameter indices.
 
@@ -806,6 +864,8 @@ class EstimatedEffects:
                          out_index: SpecialSlice = 'mean',
                          step_size: int = 10,
                          out_labels: Optional[Sequence[str]] = None):
+        # TODO Update docs
+        # TODO Introduce near far all option. Multiple allowed on new figure rows.
         """ Plots the evolution of the Position Factor (:math:`PF_{r_i \\to r_j}`) metric as a function of increasing
         number of trajectories.
 
@@ -863,6 +923,8 @@ class EstimatedEffects:
                                log_scale: bool = False,
                                out_labels: Optional[Sequence[str]] = None,
                                factor_labels: Optional[Sequence[str]] = None):
+        # TODO Update docs. Include example or better description of what is in the plot
+        # TODO Introduce near far all option. Multiple allowed on new rows?
         """ Plots and saves results of a boostrap analysis.
 
         Parameters
@@ -1185,7 +1247,8 @@ class EstimatedEffects:
         full = {'metric': 3,
                 'factor': self.g,
                 'output': self.h,
-                'trajec': self.r}[index_type]
+                'trajec': self.r,
+                'prange': (int(self.has_short_range) + 1) * self.g + 1}[index_type]
 
         key_map = {'mu': 0,
                    'mu_star': 1,
@@ -1196,6 +1259,14 @@ class EstimatedEffects:
 
         if index is None or index == 'all' or index == slice(None):
             return list(range(full))
+
+        if index_type == 'prange':
+            if index == 0 or index == 'short':
+                return list(range(self.g + 1, full[index_type]))
+            elif index == 1 or index == 'long':
+                return list(range(1, self.g + 1))
+            else:
+                raise ValueError(f"Cannot parse {index} for index_type=='prange'. Only one value allowed.")
 
         if isinstance(index, slice):
             return list(range(full))[index]
