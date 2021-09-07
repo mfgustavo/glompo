@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, Tuple
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 __all__ = ("BaseSummarizer",
@@ -113,5 +114,31 @@ class ResidualAnalysis:
         # TODO Implement
 
     def invariable(self) -> np.ndarray:
+        """ Returns an array of residual indices which have the same value for every point added to the calculation. """
+        return np.all(self.residuals[0][:, None].T == self.residuals[1:], axis=0).squeeze()
+
+    def plot_contribution_contours(self, path):
         """  """
-        # TODO Implement
+        fig, ax = plt.subplots(figsize=(6.7, 15))
+        fig: plt.Figure
+        ax: plt.Axes
+
+        ms = ax.matshow((self.residuals / self.residuals.sum(1, keepdims=True)).T,
+                        aspect='auto',
+                        cmap='Reds',
+                        vmin=0,
+                        vmax=0.01)
+        plt.colorbar(ms, ax=ax)
+        fig.savefig(path)
+
+    def contribution_outliers(self) -> Tuple[np.ndarray, np.ndarray]:
+        print('the following have occured 3stds outside of the overall average')
+        m = self.residuals.mean()
+        s = self.residuals.std()
+        i_bad = np.argwhere(np.any((self.residuals < m - 3 * s) | (self.residuals > m + 3 * s), 0)).ravel()
+        print(i_bad)
+        print(len(i_bad))
+
+        i = np.argwhere(~np.any((self.residuals < m - 3 * s) | (self.residuals > m + 3 * s), 0)).ravel()
+
+        return i_bad, i
