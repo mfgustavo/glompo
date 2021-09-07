@@ -6,8 +6,11 @@ import numpy as np
 from ..common.helpers import unravel
 
 
-def make_winding_stair_trajectory(k: int, levels: int, groupings: Optional[np.ndarray] = None,
-                                  base_pt: Optional[np.ndarray] = None) -> np.ndarray:
+def make_winding_stair_trajectory(k: int,
+                                  levels: int,
+                                  groupings: Optional[np.ndarray] = None,
+                                  base_pt: Optional[np.ndarray] = None,
+                                  include_short_range: bool = False) -> np.ndarray:
     """ Produces a Manhattan-style trajectory through unit space.
     Generates a set of `k`-dimensional points starting at :math:`\\mathbf{a}` (`base_pt`) and ends at
     :math:`\\mathbf{b}`:
@@ -20,6 +23,12 @@ def make_winding_stair_trajectory(k: int, levels: int, groupings: Optional[np.nd
                               &     &\\vdots &  \\\\
                           b_1 & b_2 & ... & b_k \\\\
                      \\end{bmatrix}
+
+    The figure below shows an example of a winding stairs trajectory in three-dimensions. The base point is in red, the
+    points in the actual trajectory are in black, and optional short-range points in blue.
+
+    .. image:: ../_static/stairs.png
+       :align: center
 
 
     Parameters
@@ -34,12 +43,15 @@ def make_winding_stair_trajectory(k: int, levels: int, groupings: Optional[np.nd
         Optional `k` length vector representing the trajectory starting point. Must be in the lower quadrant of the grid
         such that the addition of the step size in any dimension results in a point which is, itself, in the grid.
         Randomly generated in the grid if not supplied. **Not** included in the final trajectory set.
+    include_short_range
+        If :obj:`True`, the trajectory will be extended by a further :math:`g` points located at 1% of the distance
+        between adjacent points in the trajectory.
 
     Returns
     -------
     numpy.ndarray
-        Sequence of :math:`g + 1` vectors in `k` dimensional unit space representing a Manhattan style trajectory
-        through it. Where :math:`g \\leq k` is the number of factor groups given by `groupings`.
+        Sequence of :math:`g + 1` or :math:`2g + 1` vectors in `k` dimensional unit space representing a Manhattan style
+        trajectory through it. Where :math:`g \\leq k` is the number of factor groups given by `groupings`.
 
     Notes
     -----
@@ -49,6 +61,12 @@ def make_winding_stair_trajectory(k: int, levels: int, groupings: Optional[np.nd
 
     Note that `base_pt` is **not** included in the returned set. This is the opposite behaviour to
     :func:`make_radial_trajectory` but was chosen this way to match literature.
+
+    Including short range points doubles the expense of evaluating the trajectory but provides valuable sensitivity
+    information about the smoothness of the surrounding function. Large differences between long-range and short-range
+    can indicate an especially pathological function.
+
+    Including short-range analyses can also be critical in residual analyses (see :class:`ResidualAnalysis`).
 
     References
     ----------
@@ -85,6 +103,9 @@ def make_winding_stair_trajectory(k: int, levels: int, groupings: Optional[np.nd
 
     assert np.all((0 <= traj) & (traj <= 1))
 
+    if include_short_range:
+        traj = np.concatenate([traj, 0.99 * traj[:-1] + 0.01 * traj[1:]])
+
     return traj
 
 
@@ -92,7 +113,8 @@ def make_radial_trajectory(k: int,
                            groupings: Optional[np.ndarray] = None,
                            base_pt: Optional[np.ndarray] = None,
                            aux_pt: Optional[np.ndarray] = None,
-                           min_dist: float = 0.1) -> np.ndarray:
+                           min_dist: float = 0.1,
+                           include_short_range: bool = False) -> np.ndarray:
     """ Produces a radial sample set.
     Generates a set of `k`-dimensional points constructed from `base_pt` (:math:`\\mathbf{a}`) and
     `aux_pt` (:math:`\\mathbf{b}`):
@@ -106,6 +128,12 @@ def make_radial_trajectory(k: int,
                               &     &\\vdots &  \\\\
                           a_1 & a_2 & ... & b_k \\\\
                      \\end{bmatrix}
+
+    The figure below shows an example of a radial trajectory in three-dimensions. The base point is in red,
+    the auxiliary in green, points in the trajectory are in black, and optional short-range points in blue.
+
+    .. image:: ../_static/radial.png
+       :align: center
 
     Parameters
     ----------
@@ -122,12 +150,16 @@ def make_radial_trajectory(k: int,
     min_dist
         The minimum distance distance between `base_pt` and `aux_pt` along each axis. Used only if `base_pt` and
         `aux_pt` have not been provided.
+    include_short_range
+        If :obj:`True`, the trajectory will be extended by a further :math:`g` points located at 1% of the distance
+        between :math:`\\mathbf{a}` and :math:`\\mathbf{b}` along each axis.
 
     Returns
     -------
     numpy.ndarray
-        Sequence of :math:`g + 1` vectors in `k` dimensional unit space representing a collection of points sampled
-        around a central point. Where :math:`g \\leq k` is the number of factor groups given by `groupings`.
+        Sequence of :math:`g + 1` or :math:`2g + 1` vectors in `k` dimensional unit space representing a collection of
+        points sampled around a central point. Where :math:`g \\leq k` is the number of factor groups given by
+        `groupings`.
 
     Notes
     -----
@@ -138,6 +170,12 @@ def make_radial_trajectory(k: int,
     Note that `base_pt` is, itself, included in the return. It is the center point to which all other points are
     compared. `aux_pt` is not included in the set and will not be evaluated. This is the opposite behaviour to
     :func:`make_winding_stair_trajectory` but was chosen this way to match literature.
+
+    Including short range points doubles the expense of evaluating the trajectory but provides valuable sensitivity
+    information about the smoothness of the surrounding function. Large differences between long-range and short-range
+    can indicate an especially pathological function.
+
+    Including short-range analyses can also be critical in residual analyses (see :class:`ResidualAnalysis`).
 
     References
     ----------
@@ -165,50 +203,18 @@ def make_radial_trajectory(k: int,
 
     A = np.concatenate(([a], A), axis=0)
 
+    if include_short_range:
+        A = np.concatenate([A, 0.99 * A[0] + 0.01 * A[1:]])
+
     return A
 
 
-def make_radial_trajectory_set(r: int, k: int, groupings: Optional[np.ndarray] = None) -> np.ndarray:
-    """ Returns a set of radial trajectories that are spaced using Latin Hypercube Sampling.
-
-    Parameters
-    ----------
-    r
-        Number of spaced trajectories to generate.
-    Inherited, k groupings min_dist
-        See :func:`make_radial_trajectory`.
-
-    Returns
-    -------
-    numpy.ndarray
-        :math:`r \\times g + 1 \\times k` set of trajectories as generated by :func:`make_radial_trajectory`.
-
-    Notes
-    -----
-    Literature references generate :math:`\\mathbf{a}` and :math:`\\mathbf{b}` from
-    `Sobol Sequences <https://en.wikipedia.org/wiki/Sobol_sequence>`_, however, no Python package (compatible with v3.6)
-    is capable to generating Sobol sequences above 40 dimensions. This implementation makes use of Latin-Hypercube
-    Sampling instead.
-
-    This function is distinct from multiple calls to :func:`make_radial_trajectory`, since the trajectories are spread
-    in space relative to one another, rather than randomly dispersed.
-    """
-    r2 = 2 * r
-
-    lhs = np.tile(np.arange(r2, dtype=float), (k, 1))
-    np.apply_along_axis(np.random.shuffle, 1, lhs)
-    lhs += np.random.random(lhs.shape)
-    lhs /= r2
-    lhs = lhs.T
-
-    part = lambda a: make_radial_trajectory(k, groupings, a[:k], a[k:])
-    trajs = np.apply_along_axis(part, 1, np.concatenate([lhs[0::2], lhs[1::2]], 1))
-
-    return trajs
-
-
-def make_winding_stair_trajectory_set(r: int, set_size: int, k: int, levels: int,
-                                      groupings: Optional[np.ndarray] = None) -> np.ndarray:
+def make_winding_stair_trajectory_set(r: int,
+                                      set_size: int,
+                                      k: int,
+                                      levels: int,
+                                      groupings: Optional[np.ndarray] = None,
+                                      include_short_range: bool = False) -> np.ndarray:
     """ Returns a set of well-spaced winding-stair trajectories.
     Samples `set_size` winding-stair trajectories and returns a subset of `r` trajectories which are well-dispersed
     throughout the space.
@@ -220,7 +226,7 @@ def make_winding_stair_trajectory_set(r: int, set_size: int, k: int, levels: int
     set_size
         Number of winding-stair trajectories to sample. Higher values increase the chances of having a well dispersed
         set but analyzing its subsets is more expensive.
-    Inherited, k levels groupings
+    Inherited, k levels groupings include_short_range
         See :func:`make_winding_stair_trajectory`.
 
     Returns
@@ -245,7 +251,8 @@ def make_winding_stair_trajectory_set(r: int, set_size: int, k: int, levels: int
     application of the Morris method to systems with many input factors. *Environmental Modelling & Software*, 37,
     103–109. https://doi.org/10.1016/J.ENVSOFT.2012.03.008.
     """
-    M = np.array([make_winding_stair_trajectory(k, levels, groupings) for _ in range(set_size)])
+    M = np.array([make_winding_stair_trajectory(k, levels, groupings, include_short_range=include_short_range)
+                  for _ in range(set_size)])
 
     # Eq (2)
     DM = np.zeros((set_size, set_size))
@@ -291,6 +298,48 @@ def make_winding_stair_trajectory_set(r: int, set_size: int, k: int, levels: int
         Dr[tuple(sorted(loc))] = Dik1_max
 
     return M[list(max(Dr, key=Dr.get))]
+
+
+def make_radial_trajectory_set(r: int,
+                               k: int,
+                               groupings: Optional[np.ndarray] = None,
+                               include_short_range: bool = False) -> np.ndarray:
+    """ Returns a set of radial trajectories that are spaced using Latin Hypercube Sampling.
+
+    Parameters
+    ----------
+    r
+        Number of spaced trajectories to generate.
+    Inherited, k groupings min_dist include_short_range
+        See :func:`make_radial_trajectory`.
+
+    Returns
+    -------
+    numpy.ndarray
+        :math:`r \\times g + 1 \\times k` set of trajectories as generated by :func:`make_radial_trajectory`.
+
+    Notes
+    -----
+    Literature references generate :math:`\\mathbf{a}` and :math:`\\mathbf{b}` from
+    `Sobol Sequences <https://en.wikipedia.org/wiki/Sobol_sequence>`_, however, no Python package (compatible with v3.6)
+    is capable to generating Sobol sequences above 40 dimensions. This implementation makes use of Latin-Hypercube
+    Sampling instead.
+
+    This function is distinct from multiple calls to :func:`make_radial_trajectory`, since the trajectories are spread
+    in space relative to one another, rather than randomly dispersed.
+    """
+    r2 = 2 * r
+
+    lhs = np.tile(np.arange(r2, dtype=float), (k, 1))
+    np.apply_along_axis(np.random.shuffle, 1, lhs)
+    lhs += np.random.random(lhs.shape)
+    lhs /= r2
+    lhs = lhs.T
+
+    part = lambda a: make_radial_trajectory(k, groupings, a[:k], a[k:], include_short_range=include_short_range)
+    trajs = np.apply_along_axis(part, 1, np.concatenate([lhs[0::2], lhs[1::2]], 1))
+
+    return trajs
 
 
 def traj_distance(t1: np.ndarray, t2: np.ndarray) -> float:
