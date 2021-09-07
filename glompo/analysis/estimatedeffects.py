@@ -26,6 +26,11 @@ __all__ = ('EstimatedEffects',)
 SpecialSlice = Union[None, int, str, List, slice, np.ndarray]
 
 
+# TODO Provide 'near' and 'far' analysis
+# TODO 'near' and 'far' should be accepted in the init settings
+# TODO Change g+1 limitations to g+1 or 2g+1
+# TODO provide comparisons and mixtures of near and far
+# TODO provide analysis on differences between distributions of near and far analyses
 class EstimatedEffects:
     """ Implementation of Morris screening strategy.
     Based on the original work of `Morris (1991) <https://doi.org/10.1080/00401706.1991.10484804>`_ but includes
