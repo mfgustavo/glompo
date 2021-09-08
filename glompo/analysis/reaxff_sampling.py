@@ -1,23 +1,26 @@
 import os
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
-from multiprocessing.sharedctypes import Value
-from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import RLock
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 
 import numpy as np
 
 from .trajectories import make_radial_trajectory_set
 
+__all__ = ("unstable_radial_sampling_strategy",)
+
 
 class _CallsValidatorCounter:
     """ Automatically counts each evaluation of a function. """
 
-    def __init__(self, func: Callable, eval_counter: Value):
-        self.eval_counter = eval_counter
+    def __init__(self, func: Callable):
+        self._lock = RLock()
+        self.eval_counter = 0
         self.func = func
 
     def __call__(self, *args, **kwargs) -> Tuple[bool, Any]:
-        with self.eval_counter.get_lock():
-            self.eval_counter.value += 1
+        with self._lock:
+            self.eval_counter += 1
         try:
             y = self.func(*args, **kwargs)
             if np.isfinite(y).all():
@@ -32,9 +35,8 @@ def unstable_radial_sampling_strategy(func: Callable[[Sequence[float]], Sequence
                                       r: int,
                                       k: int,
                                       groupings: Optional[np.ndarray] = None,
-                                      include_short_range: bool = False,
-                                      parallelization: str = 'threads') -> Tuple[
-    np.ndarray, np.ndarray, np.ndarray, float]:
+                                      include_short_range: bool = False) -> \
+        Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
     """ Some functions may be unstable and crash when evaluated at a point. To minimize wasted evaluations, generation
     and evaluation can be meshed.
 
@@ -44,78 +46,80 @@ def unstable_radial_sampling_strategy(func: Callable[[Sequence[float]], Sequence
         A tuple of the trajectories and outputs in a form that can be directly added to ee.addtraj
         Also returns crashed and the evaluation efficiency.
     """
-    eval_counter = Value(int, 0, lock=True)
-    func = _CallsValidatorCounter(func, eval_counter)
-
-    g = groupings.shape[1]
-    l = 2 if include_short_range else 1
-    l *= g
-    l += 1  # Number of vectors per trajectory
+    func = _CallsValidatorCounter(func)
 
     crashed = []
-
     final_trajs = []
     final_outs = []
 
-    futs = set()
-
-    executor = ThreadPoolExecutor if parallelization == 'threads' else ProcessPoolExecutor
-    executor = executor(os.cpu_count())
+    executor = ThreadPoolExecutor(os.cpu_count())
 
     while len(final_trajs) < r:
         gen_trajs = make_radial_trajectory_set(r - len(final_trajs), k, groupings, include_short_range)
 
+        futs = set()
         for t in gen_trajs:
-            ft = executor.submit(_validate_radial_trajectory, func, t, include_short_range)
+            ft = executor.submit(_validate_radial_trajectory, func, t.copy(), include_short_range)
             futs.add(ft)
 
         for ft in as_completed(futs):
             res = ft.result()
 
             if res['valid'] is True:
-                final_trajs.append(res['traj'])
-                final_outs.append(res['out'])
+                final_trajs.append(res['x_valid'])
+                final_outs.append(res['y'])
+                assert len(final_trajs) <= r
 
-            else:
-                for t in res['traj']:
-                    crashed.append(t)
+            for x in res['x_crashed']:
+                crashed.append(x)
 
     final_trajs = np.array(final_trajs)
-    final_outs = np.array(final_outs)
+    final_outs = np.atleast_3d(final_outs)
     crashed = np.array(crashed)
 
-    return final_trajs, final_outs, crashed, func.eval_count / np.prod(final_outs.shape[:2])
+    executor.shutdown()
+
+    return final_trajs, final_outs, crashed, np.prod(final_outs.shape[:2]) / func.eval_counter
 
 
 def _validate_radial_trajectory(func: Callable[[Sequence[float]], Sequence[float]],
                                 t: np.ndarray,
-                                include_short_range: bool) -> Dict[str, Union[bool, np.ndarray]]:
+                                include_short_range: bool) -> Dict[str, Any]:
     """  """
 
-    outs = []
+    valid_pts = []
+    valid_outs = []
+    crashed = []
 
     # Validate the base point
     valid, y = func(t[0])
     if not valid:
-        return {'valid': False, 'traj': t[0, None]}
-    outs.append(y)
+        return {'valid': False, 'x_crashed': t[0, None]}
+    valid_pts.append(t[0])
+    valid_outs.append(y)
 
     # Validate or move auxiliary points several times
-    g = t.shape[1] - 1
-    g /= 2 if include_short_range else 1
+    g = t.shape[0] - 1
+    g //= 2 if include_short_range else 1
 
-    aux_pts = []
-    for i, x in enumerate(t[1:]):
-        moveable_axes = np.argwhere(t[0] - x)
+    for i, x in enumerate(t[1:], 1):
+        moveable_axes = np.argwhere(t[0] - x).ravel()
         pt_type = 'aux' if i <= g else 'short'
 
-        valid, x, y = _validate_or_move(pt_type, func, x, t[0], moveable_axes, max_moves=5)
+        result = _validate_or_move(pt_type, func, x, t[0], moveable_axes, max_moves=5)
 
-        if not valid:
-            return {'valid': False, 'traj': x}
+        if not result['valid']:
+            return result
 
-        aux_pts.append(x)
-        outs.append(y)
+        valid_pts.append(result['x_valid'])
+        valid_outs.append(result['y'])
+        for x_ in result['x_crashed']:
+            crashed.append(x_)
+
+    return {'valid': True,
+            'x_valid': np.array(valid_pts),
+            'y': np.array(valid_outs),
+            'x_crashed': crashed}
 
 
 def _validate_or_move(pt_type: str,
@@ -123,20 +127,23 @@ def _validate_or_move(pt_type: str,
                       x: np.ndarray,
                       base_pt: np.ndarray,
                       moveable_axes: np.ndarray,
-                      max_moves: int = 5) -> Tuple[bool, Optional[np.array], Optional[np.ndarray]]:
+                      max_moves: int = 5) -> Dict[str, Any]:
     """ Evaluates an auxillary point. Returns if valid, moves it a maximum of `max_moves` times before returning a fail.
     """
     crashed = []
     for i in range(2, max_moves + 2):
         valid, y = func(x)
         if valid:
-            return True, x, y
+            return {'valid': True,
+                    'x_valid': x,
+                    'x_crashed': crashed,
+                    'y': y}
 
-        crashed.append(x)
+        crashed.append(x.copy())
 
         if pt_type == 'aux':
             x[moveable_axes] = np.random.random(moveable_axes.size)
         else:
-            x = (1 - i / 100) * base_pt + (i / 100) * x
+            x += (x - base_pt) / (i - 1)
 
-    return False, crashed, None
+    return {'valid': False, 'x_crashed': crashed}
