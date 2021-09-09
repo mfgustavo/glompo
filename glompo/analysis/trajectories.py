@@ -5,6 +5,11 @@ import numpy as np
 
 from ..common.helpers import unravel
 
+__all__ = ("make_winding_stair_trajectory",
+           "make_radial_trajectory",
+           "make_winding_stair_trajectory_set",
+           "make_radial_trajectory_set",)
+
 
 def make_winding_stair_trajectory(k: int,
                                   levels: int,
