@@ -113,7 +113,7 @@ class EstimatedEffects:
         documentation here to match literature. See :attr:`k`.
 
     has_short_range : bool
-        :obj:`True` if the trajectories added to the calculation include specially generated short-range peterbations.
+        :obj:`True` if the trajectories added to the calculation include specially generated short-range perturbations.
 
     out_dims : int
         Dimensionality of the output if one would like to investigate factor sensitivities against multiple function
@@ -197,10 +197,8 @@ class EstimatedEffects:
 
     @property
     def mu(self) -> np.ndarray:
-        # TODO Update docs
-        # TODO Finalize what this must return in the context of near and far
         """ Shortcut access to the Estimated Effects :math:`\\mu` metric using all trajectories, for all input
-        dimensions, taking the average along output dimensions. Equivalent to: :code:`ee['mu', :, 'mean', :]`
+        dimensions, taking the average along output dimensions. Equivalent to: :code:`ee['mu', :, 'mean', :, 'all']`
 
         Returns
         -------
@@ -219,11 +217,9 @@ class EstimatedEffects:
 
     @property
     def mu_star(self) -> np.ndarray:
-        # TODO Update docs
-        # TODO Finalize what this must return in the context of near and far
         """ Shortcut access to the Estimated Effects :math:`\\mu^*` metric using all trajectories, for all input
         dimensions, taking the average along output dimensions. Equivalent to:
-        :code:`ee['mu_star', :, 'mean', :]`
+        :code:`ee['mu_star', :, 'mean', :, 'all']`
 
         Returns
         -------
@@ -238,10 +234,8 @@ class EstimatedEffects:
 
     @property
     def sigma(self) -> np.ndarray:
-        # TODO Update docs
-        # TODO Finalize what this must return in the context of near and far
         """ Shortcut access to the Estimated Effects :meth:`\\sigma` metric using all trajectories, for all input
-        dimensions, taking the average along output dimensions. Equivalent to: :code:`ee['sigma', :, 'mean', :]`
+        dimensions, taking the average along output dimensions. Equivalent to: :code:`ee['sigma', :, 'mean', :, 'all']`
 
         Returns
         -------
@@ -315,7 +309,7 @@ class EstimatedEffects:
         * Fourth Index (:code:`traj_index`):
             Which trajectories to use in the calculation.
 
-        * Fifth Index (:code:`distance_index`):
+        * Fifth Index (:code:`range_key`):
             Indexes the types of points to use. Accepts only one :obj:`str` value. Defaults to :code:`'all'`, will be
             ignored unless :attr:`has_short_range` is :obj:`True`.
 
@@ -434,20 +428,19 @@ class EstimatedEffects:
         return metrics
 
     def add_trajectory(self, trajectory: np.ndarray, outputs: np.ndarray):
-        # TODO Update docs
-        # TODO Update dim checks for near and far
         """ Add a trajectory of points and their corresponding model output to the calculation.
 
         Parameters
         ----------
         trajectory
             One or several trajectories of points as produced by one of the trajectory generation functions
-            (see :mod:`.trajectories`). Should have a shape of :math:`n \\times (g+1) \\times k` where :math:`k`
+            (see :mod:`.trajectories`). Should have a shape of :math:`n \\times (pg+1) \\times k` where :math:`k`
             is the number of factors / dimensions of the input and :math:`g` is the number of groups being analyzed, and
-            :math:`n` is the number of trajectories being appended.
+            :math:`n` is the number of trajectories being appended. :math:`p` is 1, or 2 if short range analysis is also
+            being conducted.
         outputs
-            :math:`n \\times (g+1) \\times h` model outputs corresponding to the points in `trajectory`. Where :math:`h`
-            is the dimensionality of the outputs.
+            :math:`n \\times (pg+1) \\times h` model outputs corresponding to the points in `trajectory`. Where
+            :math:`h` is the dimensionality of the outputs.
 
         Raises
         ------
@@ -467,42 +460,44 @@ class EstimatedEffects:
         metrics. The results of the calculation are held in memory, thus if the number of trajectories remains
         unchanged, the user may continue accessing the metrics at no further cost.
         """
-        # Clear old results
-        self._metrics = {'short': np.array([[[]]]),
-                         'long': np.array([[[]]]),
-                         'all': np.array([[[]]])}
+        p = int(self.has_short_range) + 1
 
         if trajectory.ndim != 3:
             trajectory = np.array([trajectory])
 
         if outputs.ndim != 3:
-            outputs = np.array([outputs]).reshape((-1, self.g + 1, self.h))
+            outputs = np.array([outputs]).reshape((-1, p * self.g + 1, self.h))
 
-        if trajectory.shape[1:] != (self.g + 1, self.k):
-            raise ValueError(f"Cannot parse trajectory with shape {trajectory.shape}, must be (n, {self.g + 1}, "
+        if trajectory.shape[1:] != (p * self.g + 1, self.k):
+            raise ValueError(f"Cannot parse trajectory with shape {trajectory.shape}, must be (n, {p * self.g + 1}, "
                              f"{self.k}).")
-        if self.h > 1 and outputs.shape[1:] != (self.g + 1, self.h):
-            raise ValueError(f"Cannot parse outputs with shape {outputs.shape}, must be (n, {self.g + 1}, {self.h})")
+        if self.h > 1 and outputs.shape[1:] != (p * self.g + 1, self.h):
+            raise ValueError(f"Cannot parse outputs with shape {outputs.shape}, must be (n, {p * self.g + 1}, "
+                             f"{self.h})")
 
-        if self.h == 1 and outputs.shape[1:] != (self.g + 1, self.h) and outputs.shape[1:] != (self.g + 1,):
-            raise ValueError(f"Cannot parse outputs with shape {outputs.shape}, (n, {self.g + 1}) expected.")
+        if self.h == 1 and outputs.shape[1:] != (p * self.g + 1, self.h) and outputs.shape[1:] != (p * self.g + 1,):
+            raise ValueError(f"Cannot parse outputs with shape {outputs.shape}, (n, {p * self.g + 1}) expected.")
 
         if self.h == 1:
-            outputs = outputs.reshape((-1, self.g + 1, self.h))
+            outputs = outputs.reshape((-1, p * self.g + 1, self.h))
+
+        # Clear old results
+        self._metrics = {'short': np.array([[[]]]),
+                         'long': np.array([[[]]]),
+                         'all': np.array([[[]]])}
 
         self.trajectories = np.append(self.trajectories, trajectory, axis=0)
         self.outputs = np.append(self.outputs, outputs, axis=0)
 
     def elementary_effects(self,
                            out_index: SpecialSlice = None,
-                           traj_index: Union[int, slice, List[int]] = None) -> np.ndarray:
-        # TODO Update docs
-        # TODO Introduce near far all option
+                           traj_index: Union[int, slice, List[int]] = None,
+                           range_key: str = 'all') -> np.ndarray:
         """ Returns the raw elementary effects for a given calculation configuration.
 
         Parameters
         ----------
-        Inherited, out_index traj_index
+        Inherited, out_index traj_index range_key
             See :meth:`__getitem__`.
 
         Returns
@@ -513,13 +508,11 @@ class EstimatedEffects:
         h = self._expand_index('output', out_index)
         t = self._expand_index('trajec', traj_index)
 
-        ee = self._calculate_ee(h, t)
+        ee = self._calculate_ee(h, t, range_key)
 
         return ee
 
-    def position_factor(self, i: int, j: int, out_index: SpecialSlice = 'mean') -> np.ndarray:
-        # TODO Update docs
-        # TODO Introduce near far all option
+    def position_factor(self, i: int, j: int, out_index: SpecialSlice = 'mean', range_key: str = 'all') -> np.ndarray:
         """ Returns the position factor metric.
         This is a measure of convergence. Measures the changes between the factor rankings obtained when using `i`
         trajectories and `j` trajectories.  Where `i` and `j` are a number of trajectories such that
@@ -543,7 +536,7 @@ class EstimatedEffects:
             Initial trajectory index from which to start the comparison.
         j
             Final trajectory index against which the comparison is made.
-        out_index
+        Inherited, out_index range_key
             See :meth:`__getitem__`.
 
         Returns
@@ -561,22 +554,21 @@ class EstimatedEffects:
         wastewater applications: A comprehensive comparison of different methods. Environmental Modelling & Software,
         49, 40–52. https://doi.org/10.1016/J.ENVSOFT.2013.07.009
         """
-        pos_i = np.atleast_2d(self.ranking(out_index, slice(None, i)))
-        pos_j = np.atleast_2d(self.ranking(out_index, slice(None, j)))
+        pos_i = np.atleast_2d(self.ranking(out_index, slice(None, i), range_key))
+        pos_j = np.atleast_2d(self.ranking(out_index, slice(None, j), range_key))
         return np.sum(2 * np.abs(pos_i - pos_j) / (pos_i + pos_j), axis=1).squeeze()
 
     def order_factors(self,
                       out_index: SpecialSlice = 'mean',
-                      traj_index: SpecialSlice = None) -> np.ndarray:
-        # TODO Update docs
-        # TODO Introduce near far all option
+                      traj_index: SpecialSlice = None,
+                      range_key: str = 'all') -> np.ndarray:
         """ Returns factor indices in descending order of their influence on the outputs.
         The *positions* in the array are the rankings, the *contents* of the array are the factor / group indices. This
         is the inverse of :meth:`ranking`.
 
         Parameters
         ----------
-        Inherited, out_index traj_index
+        Inherited, out_index traj_index range_key
             See :meth:`__getitem__`.
 
         Returns
@@ -598,12 +590,13 @@ class EstimatedEffects:
 
         >>> ee.order_factors(2, slice(None, 10))
         """
-        metric = np.atleast_3d(self[1, :, out_index, traj_index])
+        metric = np.atleast_3d(self[1, :, out_index, traj_index, range_key])
         return metric.argsort(1)[:, -1::-1].squeeze().T
 
-    def ranking(self, out_index: SpecialSlice = 'mean', traj_index: SpecialSlice = None) -> np.ndarray:
-        # TODO Update docs
-        # TODO Introduce near far all option
+    def ranking(self,
+                out_index: SpecialSlice = 'mean',
+                traj_index: SpecialSlice = None,
+                range_key: str = 'all') -> np.ndarray:
         """ Returns the ranking of each factor being analyzed.
         The *positions* in the array are the factor or group indices, the *contents* of the array are rankings such that
         1 is the most influential factor / group and :math:`g+1` is the least influential. This is the inverse of
@@ -611,7 +604,7 @@ class EstimatedEffects:
 
         Parameters
         ----------
-        Inherited, out_index traj_index
+        Inherited, out_index traj_index range_key
             See :meth:`__getitem__`.
 
         Returns
@@ -623,12 +616,12 @@ class EstimatedEffects:
         --------
         :meth:`order_factors`
         """
-        return np.squeeze(np.atleast_2d(self.order_factors(out_index, traj_index)).argsort(1) + 1)
+        return np.squeeze(np.atleast_2d(self.order_factors(out_index, traj_index, range_key)).argsort(1) + 1)
 
     def classification(self, n_cats: int, out_index: Union[int, str] = 'mean') -> Dict[str, np.ndarray]:
         # TODO Update docs
         # TODO Introduce near far all option
-        # TODO Update classification rules to include comparions of near and far if all is used?
+        # TODO Update classification rules to include comparisons of near and far if all is used?
         """ Returns a dictionary with each factor index classified according to its effect on the function outputs.
 
         Parameters
@@ -763,16 +756,15 @@ class EstimatedEffects:
                           n_samples: int,
                           metric_index: SpecialSlice = None,
                           factor_index: SpecialSlice = None,
-                          out_index: SpecialSlice = None) -> Tuple[np.ndarray, np.ndarray]:
-        # TODO Update docs
-        # TODO Introduce near far all option
+                          out_index: SpecialSlice = None,
+                          range_key: str = 'all') -> Tuple[np.ndarray, np.ndarray]:
         """ Calculates sensitivity metrics with a confidence interval based on resampling bootstrapping.
 
         Parameters
         ----------
         n_samples
             Number of resamples to perform.
-        Inherited, metric_index factor_index out_index
+        Inherited, metric_index factor_index out_index range_key
             See :meth:`__getitem__`
 
         Returns
@@ -783,7 +775,7 @@ class EstimatedEffects:
             The first array contains the mean value of the bootstrap, the second contains its standard deviation.
         """
         multis = np.array([self[metric_index, factor_index, out_index,
-                                np.random.choice(self.r, self.r, replace=True)] for _ in range(n_samples)])
+                                np.random.choice(self.r, self.r, replace=True), range_key] for _ in range(n_samples)])
         return multis.mean(0), multis.std(0)
 
     @needs_optional_package('matplotlib')
