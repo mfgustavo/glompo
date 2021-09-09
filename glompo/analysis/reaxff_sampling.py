@@ -31,11 +31,12 @@ class _CallsValidatorCounter:
         return False, None
 
 
-def unstable_radial_sampling_strategy(func: Callable[[Sequence[float]], Sequence[float]],
-                                      r: int,
-                                      k: int,
-                                      groupings: Optional[np.ndarray] = None,
-                                      include_short_range: bool = False) -> \
+def unstable_func_radial_sampling_strategy(func: Callable[[Sequence[float]], Sequence[float]],
+                                           r: int,
+                                           k: int,
+                                           groupings: Optional[np.ndarray] = None,
+                                           include_short_range: bool = False,
+                                           parallelize: bool = True) -> \
         Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
     """ Some functions may be unstable and crash when evaluated at a point. To minimize wasted evaluations, generation
     and evaluation can be meshed.
@@ -56,15 +57,22 @@ def unstable_radial_sampling_strategy(func: Callable[[Sequence[float]], Sequence
 
     while len(final_trajs) < r:
         gen_trajs = make_radial_trajectory_set(r - len(final_trajs), k, groupings, include_short_range)
+        results = []
 
-        futs = set()
-        for t in gen_trajs:
-            ft = executor.submit(_validate_radial_trajectory, func, t.copy(), include_short_range)
-            futs.add(ft)
+        if parallelize:
+            futs = set()
+            for t in gen_trajs:
+                ft = executor.submit(_validate_radial_trajectory, func, t, include_short_range)
+                futs.add(ft)
 
-        for ft in as_completed(futs):
-            res = ft.result()
+            for ft in as_completed(futs):
+                results.append(ft.result())
 
+        else:
+            for t in gen_trajs:
+                results.append(_validate_radial_trajectory(func, t, include_short_range))
+
+        for res in results:
             if res['valid'] is True:
                 final_trajs.append(res['x_valid'])
                 final_outs.append(res['y'])
