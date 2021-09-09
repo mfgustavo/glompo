@@ -281,12 +281,11 @@ class EstimatedEffects:
 
         self.convergence_threshold = convergence_threshold
         self.ct = cutoff_threshold
-        self._metrics = np.array([[[]]])
+        self._metrics = {'short': np.array([[[]]]),
+                         'long': np.array([[[]]]),
+                         'all': np.array([[[]]])}
 
     def __getitem__(self, item) -> np.ndarray:
-        # TODO Update docs
-        # TODO Introduce 5th axis for 'near', 'far', 'all'
-        # TODO Update what is saved in _metrics
         """ Retrieves the sensitivity metrics (:math:`\\mu, \\mu^*, \\sigma`) for a particular calculation configuration
         The indexing is a strictly ordered set of maximum length 5:
 
@@ -317,17 +316,17 @@ class EstimatedEffects:
             Which trajectories to use in the calculation.
 
         * Fifth Index (:code:`distance_index`):
-            Indexes the types of points to use. Accepts only one value (not a slice) either :obj:`str` or :obj:`int`.
-            Defaults to :code:`'all'`, will be ignored unless :attr:`has_short_range` is :obj:`True`.
+            Indexes the types of points to use. Accepts only one :obj:`str` value. Defaults to :code:`'all'`, will be
+            ignored unless :attr:`has_short_range` is :obj:`True`.
 
-            === ======= ===
-            int str     Description
-            === ======= ===
-            0   'short' Only analyze 'short-range' distances specially added to the trajectories by the make trajectory
-            ..          method if its parameter :code:`include_short_range=True`.
-            1   'long'  Only analyze the standard, longer-range, trajectory points.
-            2   'all'   Include all points in the calculation.
-            === ======= ===
+            ======= ===
+            str     Description
+            ======= ===
+            'short' Only analyze 'short-range' distances specially added to the trajectories by the make trajectory
+                    method if its parameter :code:`include_short_range=True`.
+            'long'  Only analyze the standard, longer-range, trajectory points.
+            'all'   Include all points in the calculation.
+            ======= ===
 
         Parameters
         ----------
@@ -391,12 +390,15 @@ class EstimatedEffects:
 
         if not isinstance(item, tuple):
             item = (item,)  # NOT the same as tuple(item) since you don't want to expand 'mu' to ('m', 'u')
-        item += (slice(None),) * (4 - len(item))
+        item += (None,) * (5 - len(item))
         m = self._expand_index('metric', item[0])
         k = self._expand_index('factor', item[1])
         h = self._expand_index('output', item[2])
         t = self._expand_index('trajec', item[3])
-        d = self._expand_index('prange', item[4])
+
+        range_key = item[4] if item[4] is not None else 'all'
+        if not any((range_key == allowed for allowed in ('short', 'long', 'all'))):
+            raise ValueError(f"Cannot parse '{item[4]}', only 'all', 'short', 'long' allowed.")
 
         if self.is_grouped and any([i in m for i in [0, 2]]):
             raise ValueError('Cannot access mu and sigma metrics if groups are being used')
@@ -409,14 +411,13 @@ class EstimatedEffects:
         h = all_h if spec_out else h
 
         # Attempt to access existing results
-        if t == all_t and self._metrics.size > 0:
-            metrics = self._metrics[np.ix_(m, k, h)]
-            metrics = metrics
+        if t == all_t and self._metrics[range_key].size > 0:
+            metrics = self._metrics[range_key][np.ix_(m, k, h)]
         else:
-            metrics = self._calculate_metrics(h, t)
+            metrics = self._calculate_metrics(h, t, range_key)
             if h == all_h and t == all_t:
                 # Save results to cache if a full calculation was done.
-                self._metrics = metrics
+                self._metrics[range_key] = metrics
             metrics = metrics[np.ix_(m, k)]
 
         if spec_out:
@@ -467,7 +468,9 @@ class EstimatedEffects:
         unchanged, the user may continue accessing the metrics at no further cost.
         """
         # Clear old results
-        self._metrics = np.array([[[]]])
+        self._metrics = {'short': np.array([[[]]]),
+                         'long': np.array([[[]]]),
+                         'all': np.array([[[]]])}
 
         if trajectory.ndim != 3:
             trajectory = np.array([trajectory])
@@ -1006,32 +1009,49 @@ class EstimatedEffects:
 
     def _calculate_ee(self,
                       out_index: List[int],
-                      traj_index: List[int]) -> np.ndarray:
+                      traj_index: List[int],
+                      range_key: str) -> np.ndarray:
         """ Returns an array of the Estimated Effects themselves.
 
         Parameters
         ----------
-        out_index
-            See :meth:`__getitem__`.
-        traj_index
-            See :meth:`__getitem__`.
+        Inherited, out_index traj_index
+            Parameters have the same meaning as in :meth:`__getitem__` but only processed lists of indices are accepted.
+        range_key
+            :code:`'all'`, :code:`'short'` or :code:`'long'` indicating which trajectory points to use.
 
         Returns
         -------
         numpy.ndarray
-            :math:`\\hat{r} \\times g \\times \\hat{h}` array of elementary effects for every factor/group using the
-            trajectories and outputs selected (:math:`\\hat{r}` and :math:`\\hat{h}` respectively).
+            :math:`\\hat{r} \\times \\hat{g} \\times \\hat{h}` array of elementary effects for every factor/group using
+            the trajectories, points and outputs selected (:math:`\\hat{r}`, :math:`\\hat{g}` and :math:`\\hat{h}`
+            respectively).
         """
-        pt_index = np.arange(self.g + 1)
         if self.traj_style == 'stairs':
-            x_diffs = self.trajectories[traj_index, :-1] - self.trajectories[traj_index, 1:]
-            y_diffs = self.outputs[np.ix_(traj_index, pt_index[:-1], out_index)] - \
-                      self.outputs[np.ix_(traj_index, pt_index[1:], out_index)]
+            anchors = np.arange(self.g)
+            if range_key == 'all':
+                anchors = np.tile(anchors, 2)
+                targets = np.concatenate([anchors + 1, anchors + self.g + 1])
+            elif range_key == 'long':
+                targets = anchors + 1
+            else:  # range_key == 'short'
+                targets = anchors + self.g + 1
+
+            x_diffs = self.trajectories[traj_index, anchors] - \
+                      self.trajectories[traj_index, targets]
+            y_diffs = self.outputs[np.ix_(traj_index, anchors, out_index)] - \
+                      self.outputs[np.ix_(traj_index, targets, out_index)]
 
         else:  # Radial style trajectories
-            x_diffs = self.trajectories[traj_index, 0, None] - self.trajectories[traj_index, 1:]
+            mid = self.g + 1
+            end = 2 * self.g + 1
+            comp_indices = {'all': np.arange(1, end),
+                            'short': np.arange(mid, end),
+                            'long': slice(1, mid)}[range_key]
+
+            x_diffs = self.trajectories[traj_index, 0, None] - self.trajectories[traj_index, comp_indices]
             y_diffs = self.outputs[np.ix_(traj_index, [0], out_index)] - \
-                      self.outputs[np.ix_(traj_index, pt_index[1:], out_index)]
+                      self.outputs[np.ix_(traj_index, comp_indices, out_index)]
 
         where = np.where(x_diffs @ self.groupings)[0::2]
         if not self.is_grouped:
@@ -1046,15 +1066,16 @@ class EstimatedEffects:
 
     def _calculate_metrics(self,
                            out_index: List[int],
-                           traj_index: List[int]) -> np.ndarray:
+                           traj_index: List[int],
+                           range_key: str) -> np.ndarray:
         """ Calculates the Estimated Effects metrics (:math:`\\mu`, :math:`\\mu^*` and :math:`\\sigma`).
 
         Parameters
         ----------
-        out_index
-            See :meth:`__getitem__`.
-        traj_index
-            See :meth:`__getitem__`.
+        Inherited, out_index traj_index
+            Parameters have the same meaning as in :meth:`__getitem__` but only processed lists of indices are accepted.
+        range_key
+            :code:`'all'`, :code:`'short'` or :code:`'long'` indicating which trajectory points to use.
 
         Returns
         -------
@@ -1062,7 +1083,7 @@ class EstimatedEffects:
             Three dimensional array of selected metrics, factors/groups and outputs.
             Metrics are ordered: :math:`\\mu`, :math:`\\mu^*` and :math:`\\sigma`.
         """
-        ee = self._calculate_ee(out_index, traj_index)
+        ee = self._calculate_ee(out_index, traj_index, range_key)
 
         mu = np.mean(ee, axis=0)
         mu_star = np.mean(np.abs(ee), axis=0)
@@ -1247,8 +1268,7 @@ class EstimatedEffects:
         full = {'metric': 3,
                 'factor': self.g,
                 'output': self.h,
-                'trajec': self.r,
-                'prange': (int(self.has_short_range) + 1) * self.g + 1}[index_type]
+                'trajec': self.r}[index_type]
 
         key_map = {'mu': 0,
                    'mu_star': 1,
@@ -1259,14 +1279,6 @@ class EstimatedEffects:
 
         if index is None or index == 'all' or index == slice(None):
             return list(range(full))
-
-        if index_type == 'prange':
-            if index == 0 or index == 'short':
-                return list(range(self.g + 1, full[index_type]))
-            elif index == 1 or index == 'long':
-                return list(range(1, self.g + 1))
-            else:
-                raise ValueError(f"Cannot parse {index} for index_type=='prange'. Only one value allowed.")
 
         if isinstance(index, slice):
             return list(range(full))[index]
