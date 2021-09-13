@@ -27,8 +27,6 @@ SpecialSlice = Union[None, int, str, List, slice, np.ndarray]
 
 
 # TODO Provide 'near' and 'far' analysis
-# TODO 'near' and 'far' should be accepted in the init settings
-# TODO Change g+1 limitations to g+1 or 2g+1
 # TODO provide comparisons and mixtures of near and far
 # TODO provide analysis on differences between distributions of near and far analyses
 class EstimatedEffects:
@@ -783,6 +781,7 @@ class EstimatedEffects:
     def plot_sensitivities(self,
                            path: Union[Path, str] = 'sensitivities',
                            out_index: SpecialSlice = 'mean',
+                           range_key: Union[str, List[str]] = 'all',
                            factor_labels: Optional[Sequence[str]] = None,
                            out_labels: Optional[Sequence[str]] = None,
                            log_scale: bool = False):
@@ -806,6 +805,10 @@ class EstimatedEffects:
             which the figures will be saved.
         out_index
             See :meth:`__getitem__`. If :obj:`None` or :code:`'all'`, one plot will be created for each output.
+        range_key
+            See :meth:`__getitem__`. Accepts a single key or a list of any combination of :code:`'all'`,
+            :code:`'short'`, :code:`'long'`. If multiple keys are provided, they are plotted on image rows in the order
+            provided.
         factor_labels
             Optional sequence of descriptive names for each factor to add to the figure. Defaults to the factor's
             index position.
@@ -832,7 +835,10 @@ class EstimatedEffects:
         68(PART C), 741–750. https://doi.org/10.1016/J.ENBUILD.2012.08.048
         """
         self._plotting_core(path, out_index, self._plot_sensitivities_stub,
-                            factor_labels=factor_labels, out_labels=out_labels, log_scale=log_scale)
+                            range_key=range_key,
+                            factor_labels=factor_labels,
+                            out_labels=out_labels,
+                            log_scale=log_scale)
 
     @needs_optional_package('matplotlib')
     def plot_rankings(self,
@@ -1091,31 +1097,26 @@ class EstimatedEffects:
 
         return np.array([mu, mu_star, sigma])
 
-    def _plotting_core(self, path: Union[Path, str], out_index: SpecialSlice, plot_stub: Callable[..., plt.Axes],
+    def _plotting_core(self, path: Union[Path, str],
+                       out_index: SpecialSlice,
+                       plot_stub: Callable[..., plt.Axes],
                        **kwargs):
-        """ Several plot function require the same looping and gathering of metrics, this is done here and then passed
-        to the `plot_stub` method which have the individualized plot commands.
+        """ Provides common looping and saving infrastructure for plotting routines which produce one image per output.
         """
-        if not self.is_grouped:
-            metrics = np.atleast_3d(self[:, :, out_index])
-        else:
-            metrics = np.atleast_3d(self[['mu_star'], :, out_index])
+        out_index = self._expand_index('output', out_index)
 
         path = Path(path)
         is_multi = False
-        if metrics.shape[2] > 1:
+        if len(out_index) > 1:
             path.mkdir(exist_ok=True, parents=True)
             is_multi = True
 
-        for i in range(metrics.shape[2]):
+        for i in out_index:
             fig = plt.figure()
 
-            if self.is_grouped:
-                ax = plot_stub(fig, mu_star=metrics[0, :, i], **kwargs)
-            else:
-                ax = plot_stub(fig, mu=metrics[0, :, i], mu_star=metrics[1, :, i], sigma=metrics[2, :, i], **kwargs)
+            ax = plot_stub(fig, i, **kwargs)
 
-            name = f'{i:03}'
+            name = f'{i:03}' if isinstance(i, (float, int)) else i
             if 'out_labels' in kwargs and kwargs['out_labels'] is not None:
                 name = kwargs['out_labels'][i]
                 ax.set_title(ax.get_title() + f"\n({kwargs['out_labels'][i]})")
@@ -1125,126 +1126,155 @@ class EstimatedEffects:
             plt.close(fig)
 
     def _plot_sensitivities_stub(self, fig: plt.Figure,
-                                 mu_star: Optional[np.ndarray] = None,
-                                 sigma: Optional[np.ndarray] = None,
+                                 out_index: int,
+                                 range_key: Union[str, List[str]],
                                  factor_labels: Optional[Sequence[str]] = None,
-                                 log_scale: bool = False, **kwargs) -> plt.Axes:
-        fig.set_size_inches(6.7, 3.35)
+                                 log_scale: bool = False,
+                                 **kwargs) -> plt.Axes:
+        if isinstance(range_key, str):
+            range_key = [range_key]
+        n_rows = len(range_key)
+
+        fig.set_size_inches(6.7, 3.35 * n_rows)
         cmap = cm.get_cmap('Pastel2')
 
+        hidden_ax = []
+        nice_titles = {'short': "Using only short-range parameter changes",
+                       'long': "Using only long-range parameter changes",
+                       'all': "Using all trajectory points"}
+
+        # Add Figure title
         axt: plt.Axes = fig.add_subplot(111)
-        ax0: plt.Axes = fig.add_subplot(121)
-        ax1: plt.Axes = fig.add_subplot(122)
-
-        ax0.set_ylabel("$\\sigma$")
-        ax1.set_ylabel("$\\sigma/\\mu^*$")
-
+        hidden_ax.append(axt)
         axt.set_title("Sensitivity classification of input factors" +
-                      ("(Factors with $\\sigma=\\mu^*=0$ excluded.)" if log_scale else ""))
-        axt.set_xlabel("$\\mu^*$")
-        axt.spines['top'].set_color('none')
-        axt.spines['bottom'].set_color('none')
-        axt.spines['left'].set_color('none')
-        axt.spines['right'].set_color('none')
-        axt.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
+                      ("(Factors with $\\sigma=\\mu^*=0$ excluded.)" if log_scale else "") +
+                      "\n" + nice_titles[range_key[0]])
 
         leg = []
-        labs = factor_labels if factor_labels is not None else np.arange(self.g)
-        for ax in (ax0, ax1):
-            y = sigma.copy()
-            if ax is ax1:
-                np.divide(sigma, mu_star, out=y, where=sigma != 0)
+        for n_row, row_key in enumerate(range_key):
+            if n_row >= 1:
+                axh: plt.Axes = fig.add_subplot(n_rows, 1, n_row + 1)
+                hidden_ax.append(axh)
+                axh.set_title(nice_titles[row_key])
 
-            ax.scatter(mu_star, y, marker='x', color='black', s=2)
+            ax0: plt.Axes = fig.add_subplot(n_rows, 2, 2 * n_row + 1)
+            ax1: plt.Axes = fig.add_subplot(n_rows, 2, 2 * n_row + 2)
 
-            for j, lab in enumerate(labs):
-                ax.annotate(lab, (mu_star[j], y[j]), fontsize=5)
+            ax0.set_ylabel("$\\sigma$")
+            ax1.set_ylabel("$\\sigma/\\mu^*$")
 
-            raw_xlims = ax.get_xlim()
-            raw_ylims = ax.get_ylim()
+            # Get metrics
+            metrics = self[1:, :, out_index, :, row_key]
+            mu_star = metrics[0]
+            sigma = metrics[1]
 
-            if log_scale:
-                if not np.any(mu_star > 0):
-                    warnings.warn("Data has no positive values and cannot be log-scaled. Usually occurs when an output"
-                                  "is totally insensitive to all factor changes.", RuntimeWarning)
-                    break
-                ax.set_xscale('log', nonpositive='mask')
-                ax.set_yscale('log', nonpositive='mask')
+            labs = factor_labels if factor_labels is not None else np.arange(self.g)
+            for ax in (ax0, ax1):
+                y = sigma.copy()
+                if ax is ax1:
+                    np.divide(sigma, mu_star, out=y, where=sigma != 0)
 
-                raw_xlims = 0.9 * mu_star[mu_star > 0].min(), ax.get_xlim()[1]
-                raw_ylims = 0.9 * y[y > 0].min(), ax.get_ylim()[1]
+                ax.scatter(mu_star, y, marker='x', color='black', s=2)
+
+                for j, lab in enumerate(labs):
+                    ax.annotate(lab, (mu_star[j], y[j]), fontsize=5)
+
+                raw_xlims = ax.get_xlim()
+                raw_ylims = ax.get_ylim()
+
+                if log_scale:
+                    if not np.any(mu_star > 0):
+                        warnings.warn(
+                            "Data has no positive values and cannot be log-scaled. Usually occurs when an output"
+                            "is totally insensitive to all factor changes.", RuntimeWarning)
+                        break
+                    ax.set_xscale('log', nonpositive='mask')
+                    ax.set_yscale('log', nonpositive='mask')
+
+                    raw_xlims = 0.9 * mu_star[mu_star > 0].min(), ax.get_xlim()[1]
+                    raw_ylims = 0.9 * y[y > 0].min(), ax.get_ylim()[1]
+
+                    ax.set_xlim(*raw_xlims)
+                    ax.set_ylim(*raw_ylims)
+
+                # Linear / Nonlinear Effect Line
+                xlims = ax.get_xlim()
+                y_pts = []
+                grads = np.array((0.1, 0.5, 1.0, np.sqrt(self.r) / 2))
+                for i, grad in enumerate(grads):
+                    ys = np.full(2, grad)
+                    if ax is ax0:
+                        ys *= np.array(xlims)
+                    if i < 3:
+                        ax.plot(xlims, ys,
+                                color='black',
+                                linewidth=0.5,
+                                linestyle='solid',
+                                zorder=1000)
+                        y_pts.append(ys[1])
+                    else:
+                        ax.plot(xlims, ys,
+                                color='black',
+                                linewidth=0.7,
+                                linestyle='dotted',
+                                zorder=1000)
+
+                # Influential / Non-influential Line
+                ylims = ax.get_ylim()
+                if self.ct > xlims[0]:
+                    ax.vlines(self.ct, ylims[0], ylims[1], color='black', linewidth=0.5)
+                    ni = patches.Polygon([[xlims[0], ylims[0]],
+                                          [xlims[0], ylims[1]],
+                                          [self.ct, ylims[1]],
+                                          [self.ct, ylims[0]]],
+                                         facecolor='black',
+                                         edgecolor='black',
+                                         alpha=0.3,
+                                         zorder=-1000)
+                    ax.add_patch(ni)
+
+                # Patches
+                x_min = max(self.ct, xlims[0])
+                y_min = np.array(grads)
+                if ax is ax0:
+                    y_min *= x_min
+                y_min = np.concatenate(([ylims[0]], y_min[:-1], [ylims[1]]))
+                y_pts = np.concatenate(([ylims[0]], y_pts, [ylims[1]]))
+                for i, l in enumerate(('Linear', 'Monotonic', 'Quasi-Monotonic', 'Interacting')):
+                    poly = patches.Polygon([[x_min, y_min[i]],
+                                            [xlims[1], y_pts[i]],
+                                            [xlims[1], y_pts[i + 1]],
+                                            [x_min, y_min[i + 1]]],
+                                           facecolor=cmap.colors[i],
+                                           edgecolor=cmap.colors[i],
+                                           zorder=-1000)
+                    ax.add_patch(poly)
+                    if n_row == 0 and ax is ax0:
+                        leg.append(patches.Patch(cmap.colors[i], cmap.colors[i], label=l))
 
                 ax.set_xlim(*raw_xlims)
                 ax.set_ylim(*raw_ylims)
-
-            # Linear / Nonlinear Effect Line
-            xlims = ax.get_xlim()
-            y_pts = []
-            grads = np.array((0.1, 0.5, 1.0, np.sqrt(self.r) / 2))
-            for i, grad in enumerate(grads):
-                ys = np.full(2, grad)
-                if ax is ax0:
-                    ys *= np.array(xlims)
-                if i < 3:
-                    ax.plot(xlims, ys,
-                            color='black',
-                            linewidth=0.5,
-                            linestyle='solid',
-                            zorder=1000)
-                    y_pts.append(ys[1])
-                else:
-                    ax.plot(xlims, ys,
-                            color='black',
-                            linewidth=0.7,
-                            linestyle='dotted',
-                            zorder=1000)
-
-            # Influential / Non-influential Line
-            ylims = ax.get_ylim()
-            if self.ct > xlims[0]:
-                ax.vlines(self.ct, ylims[0], ylims[1], color='black', linewidth=0.5)
-                ni = patches.Polygon([[xlims[0], ylims[0]],
-                                      [xlims[0], ylims[1]],
-                                      [self.ct, ylims[1]],
-                                      [self.ct, ylims[0]]],
-                                     facecolor='black',
-                                     edgecolor='black',
-                                     alpha=0.3,
-                                     zorder=-1000)
-                ax.add_patch(ni)
-
-            # Patches
-            x_min = max(self.ct, xlims[0])
-            y_min = np.array(grads)
-            if ax is ax0:
-                y_min *= x_min
-            y_min = np.concatenate(([ylims[0]], y_min[:-1], [ylims[1]]))
-            y_pts = np.concatenate(([ylims[0]], y_pts, [ylims[1]]))
-            for i, l in enumerate(('Linear', 'Monotonic', 'Quasi-Monotonic', 'Interacting')):
-                poly = patches.Polygon([[x_min, y_min[i]],
-                                        [xlims[1], y_pts[i]],
-                                        [xlims[1], y_pts[i + 1]],
-                                        [x_min, y_min[i + 1]]],
-                                       facecolor=cmap.colors[i],
-                                       edgecolor=cmap.colors[i],
-                                       zorder=-1000)
-                ax.add_patch(poly)
-                if ax is ax0:
-                    leg.append(patches.Patch(cmap.colors[i], cmap.colors[i], label=l))
-
-            ax.set_xlim(*raw_xlims)
-            ax.set_ylim(*raw_ylims)
 
         leg.append(patches.Patch('black', 'black', alpha=0.3, label='Non-Influential'))
         leg.append(lines.Line2D([], [], c='black', ls='dotted', lw=0.7, label='SEM'))
         fig.legend(handles=leg, loc='lower center', ncol=6)
 
+        # Hide title Axes
+        for ax in hidden_ax:
+            ax.set_xlabel("$\\mu^*$")
+            ax.spines['top'].set_color('none')
+            ax.spines['bottom'].set_color('none')
+            ax.spines['left'].set_color('none')
+            ax.spines['right'].set_color('none')
+            ax.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
+
         return axt
 
     def _plot_ranking_stub(self, fig: plt.Figure,
-                           mu_star: Optional[np.ndarray] = None,
+                           out_index: int,
                            factor_labels: Optional[Sequence[str]] = None,
-                           log_scale: bool = False, **kwargs) -> plt.Axes:
+                           log_scale: bool = False,
+                           **kwargs) -> plt.Axes:
         fig.set_size_inches(6.7, 6.7)
         ax = fig.add_subplot(111)
 
