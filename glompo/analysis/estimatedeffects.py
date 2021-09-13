@@ -311,8 +311,8 @@ class EstimatedEffects:
             Which trajectories to use in the calculation.
 
         * Fifth Index (:code:`range_key`):
-            Indexes the types of points to use. Accepts only one :obj:`str` value. Defaults to :code:`'all'`, will be
-            ignored unless :attr:`has_short_range` is :obj:`True`.
+            Indexes the types of points to use. Accepts only one :obj:`str` value. Defaults to :code:`'all'`, will raise
+            an error if anything other than :code:`'all'` is used and :attr:`has_short_range` is :obj:`False`.
 
             ======= ===
             str     Description
