@@ -270,8 +270,9 @@ class EstimatedEffects:
         if np.sum(self._groupings) != input_dims:
             raise ValueError("Invalid grouping matrix, each factor must be in exactly 1 group.")
 
-        self.trajectories = np.empty((0, self.g + 1, self.k))
-        self.outputs = np.empty((0, self.g + 1, self.h))
+        n = 2 if include_short_range else 1
+        self.trajectories = np.empty((0, n * self.g + 1, self.k))
+        self.outputs = np.empty((0, n * self.g + 1, self.h))
 
         self.convergence_threshold = convergence_threshold
         self.ct = cutoff_threshold
