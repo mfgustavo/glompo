@@ -245,16 +245,18 @@ def make_radial_trajectory(k: int,
     G = np.array(groupings) if groupings is not None else np.identity(k)
     assert G.sum(0).all() and G.sum(1).all() and G.sum() == k, "Every parameter must be in exactly one group."
 
-    R = (np.diag(b) @ G).T
-    where_R = np.where(R)
+    where = np.nonzero((np.diag(b) @ G).T)
 
-    A = np.tile(a, (G.shape[1], 1))
-    A[where_R] = R[where_R]
-
-    A = np.concatenate(([a], A), axis=0)
+    long = np.tile(a, (G.shape[1], 1))
+    long[where] = b
 
     if include_short_range:
-        A = np.concatenate([A, 0.99 * A[0] + 0.01 * A[1:]])
+        short = long.copy()
+        short[where] = 0.99 * a + 0.01 * b
+    else:
+        short = np.empty((0, k))
+
+    A = np.concatenate(([a], long, short), axis=0)
 
     return A
 
