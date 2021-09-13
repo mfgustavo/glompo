@@ -1019,6 +1019,12 @@ class EstimatedEffects:
             the trajectories, points and outputs selected (:math:`\\hat{r}`, :math:`\\hat{g}` and :math:`\\hat{h}`
             respectively).
         """
+        if not self.has_short_range:
+            if range_key == 'all':
+                range_key = 'long'
+            else:
+                raise ValueError('Range key can only be specified if trajectories include short range analysis points.')
+
         if self.traj_style == 'stairs':
             anchors = np.arange(self.g)
             if range_key == 'all':
@@ -1026,7 +1032,7 @@ class EstimatedEffects:
                 targets = np.concatenate([anchors + 1, anchors + self.g + 1])
             elif range_key == 'long':
                 targets = anchors + 1
-            else:  # range_key == 'short'
+            elif range_key == 'short':
                 targets = anchors + self.g + 1
 
             x_diffs = self.trajectories[traj_index, anchors] - \
@@ -1039,13 +1045,14 @@ class EstimatedEffects:
             end = 2 * self.g + 1
             comp_indices = {'all': np.arange(1, end),
                             'short': np.arange(mid, end),
-                            'long': slice(1, mid)}[range_key]
+                            'long': np.arange(1, mid)}[range_key]
 
-            x_diffs = self.trajectories[traj_index, 0, None] - self.trajectories[traj_index, comp_indices]
+            x_diffs = self.trajectories[traj_index, 0, None] - \
+                      self.trajectories[np.ix_(traj_index, comp_indices)]
             y_diffs = self.outputs[np.ix_(traj_index, [0], out_index)] - \
                       self.outputs[np.ix_(traj_index, comp_indices, out_index)]
 
-        where = np.where(x_diffs @ self.groupings)[0::2]
+        where = np.nonzero(x_diffs @ self.groupings)[0::2]
         if not self.is_grouped:
             x_diffs = np.sum(x_diffs, axis=2)
         else:
