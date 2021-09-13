@@ -491,20 +491,19 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
     final_trajs = []
     final_outs = []
 
-    executor = ThreadPoolExecutor(os.cpu_count())
-
     while len(final_trajs) < r:
         gen_trajs = make_radial_trajectory_set(r - len(final_trajs), k, groupings, include_short_range)
         results = []
 
         if parallelize:
-            futs = set()
-            for t in gen_trajs:
-                ft = executor.submit(_validate_radial_trajectory, func, t, include_short_range)
-                futs.add(ft)
+            with ThreadPoolExecutor(os.cpu_count()) as executor:
+                futs = set()
+                for t in gen_trajs:
+                    ft = executor.submit(_validate_radial_trajectory, func, t, include_short_range)
+                    futs.add(ft)
 
-            for ft in as_completed(futs):
-                results.append(ft.result())
+                for ft in as_completed(futs):
+                    results.append(ft.result())
 
         else:
             for t in gen_trajs:
@@ -522,8 +521,6 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
     final_trajs = np.array(final_trajs)
     final_outs = np.atleast_3d(final_outs)
     crashed = np.array(crashed)
-
-    executor.shutdown()
 
     return final_trajs, final_outs, crashed, np.prod(final_outs.shape[:2]) / func.eval_counter
 
