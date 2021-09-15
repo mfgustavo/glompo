@@ -55,7 +55,7 @@ class ScipyOptimizerWrapper(BaseOptimizer):
             return
 
         if self._results_queue:
-            self.message_manager(0, "Normal Termination")
+            self.message_manager(0, "Optimizer convergence")
 
         result = MinimizeResult()
         result.success = sp_result.success
