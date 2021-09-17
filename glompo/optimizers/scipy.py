@@ -5,7 +5,7 @@ from queue import Queue
 from typing import Callable, Sequence, Tuple, Union
 
 import numpy as np
-from scipy.optimize import minimize
+from scipy.optimize import basinhopping, dual_annealing, minimize
 
 from .baseoptimizer import BaseOptimizer, MinimizeResult
 
@@ -46,11 +46,23 @@ class ScipyOptimizerWrapper(BaseOptimizer):
                  bounds: Sequence[Tuple[float, float]],
                  callbacks: Callable = None, **kwargs) -> MinimizeResult:
         try:
-            sp_result = minimize(fun=function,
-                                 x0=np.array(x0),
-                                 method=self.opt_method,
-                                 bounds=bounds,
-                                 callback=_GloMPOCallbacksWrapper(self, callbacks), **kwargs)
+            if self.opt_method == 'basinhopping':
+                sp_result = basinhopping(func=function,
+                                         x0=x0,
+                                         callback=_GloMPOCallbacksWrapper(self, callbacks),
+                                         **kwargs)
+                sp_result = sp_result.lowest_optimization_result
+            elif self.opt_method == 'dual_annealing':
+                sp_result = dual_annealing(func=function,
+                                           bounds=bounds,
+                                           callback=_GloMPOCallbacksWrapper(self, callbacks),
+                                           **kwargs)
+            else:
+                sp_result = minimize(fun=function,
+                                     x0=np.array(x0),
+                                     method=self.opt_method,
+                                     bounds=bounds,
+                                     callback=_GloMPOCallbacksWrapper(self, callbacks), **kwargs)
         except GloMPOCallstop:
             return
 
