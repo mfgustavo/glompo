@@ -62,7 +62,7 @@ from .. import __version__, __version_info__
 
 __all__ = ("GloMPOManager",)
 
-
+# TODO Remove or Properly document and test aggresive kills
 class GloMPOManager:
     """ Provides the main interface to GloMPO. The manager runs the optimization and produces all the output.
 
@@ -291,6 +291,7 @@ class GloMPOManager:
         self._opt_checkpoints: Dict[int, OptimizerCheckpoint] = {}  # Type & slots of every opt for checkpt loading
 
         self.allow_forced_terminations: bool = None
+        self.aggressive_kill: bool = None
         self._too_long: float = None
         self.summary_files: int = None
         self.is_log_detailed: bool = None
@@ -332,6 +333,7 @@ class GloMPOManager:
               visualisation: bool = False,
               visualisation_args: Optional[Dict[str, Any]] = None,
               force_terminations_after: int = -1,
+              aggresive_kill: bool = False,
               end_timeout: Optional[int] = None,
               split_printstreams: bool = True):
         """ Generates the environment for a new globally managed parallel optimization job.
@@ -543,6 +545,7 @@ class GloMPOManager:
 
         # Save behavioural args
         self.allow_forced_terminations = force_terminations_after > 0
+        self.aggressive_kill = aggresive_kill
         self._too_long = force_terminations_after
         self.summary_files = summary_files
         self.is_log_detailed = is_log_detailed
@@ -1588,8 +1591,11 @@ class GloMPOManager:
         self.hunt_victims[opt_id] = time()
         self._graveyard.add(opt_id)
 
-        self._optimizer_packs[opt_id].signal_pipe.send(1)
-        self.logger.debug("Termination signal sent to %d", opt_id)
+        if self.aggressive_kill:
+            self._optimizer_packs[opt_id].process.terminate()
+        else:
+            self._optimizer_packs[opt_id].signal_pipe.send(1)
+            self.logger.debug("Termination signal sent to %d", opt_id)
 
         self.opt_log.put_metadata(opt_id, "t_stop", datetime.now())
         self.opt_log.put_metadata(opt_id, "end_cond", LiteralWrapper(f"GloMPO Termination\n"
