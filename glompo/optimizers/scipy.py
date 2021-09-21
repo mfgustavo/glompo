@@ -11,8 +11,6 @@ from .baseoptimizer import BaseOptimizer, MinimizeResult
 
 __all__ = ("ScipyOptimizerWrapper",)
 
-warnings.filterwarnings('error', module="glompo.optimizers.scipy")
-
 
 class GloMPOCallstop(Exception):
     """ Custom Exception used by GloMPO to stop Scipy optimizers early. """
@@ -45,6 +43,7 @@ class ScipyOptimizerWrapper(BaseOptimizer):
                  x0: Sequence[float],
                  bounds: Sequence[Tuple[float, float]],
                  callbacks: Callable = None, **kwargs) -> MinimizeResult:
+        warnings.filterwarnings('once', "Method .+ cannot handle constraints nor bounds.")  # TODO Move to better place
         try:
             if self.opt_method == 'basinhopping':
                 sp_result = basinhopping(func=function,
