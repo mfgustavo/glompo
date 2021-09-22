@@ -1,6 +1,6 @@
 import numpy as np
-from glompo.core.manager import GloMPOManager
 
+from glompo.core.manager import GloMPOManager
 from .basegenerator import BaseGenerator
 
 __all__ = ("BasinHoppingGenerator",)
@@ -17,7 +17,9 @@ class BasinHoppingGenerator(BaseGenerator):
                  factor=0.9):
         super().__init__()
         self.beta = 1.0 / temperature if temperature != 0 else float('inf')
-        self.n_accept = 0
+        self.n_accept = -1  # Counts the number of times a point has improved or is the same when generate is called.
+        self.state = {'opt_id': 0,
+                      'fx': float('inf')}
 
         # Step size related attributes
         self.step_size = step_size
@@ -38,20 +40,20 @@ class BasinHoppingGenerator(BaseGenerator):
             bnds = np.array(manager.bounds).T
             return np.random.uniform(bnds[0], bnds[1], manager.n_parms)
 
-        # Metropolis chance of accepting another optimizer that is not the best
-        # If several optimizers return True, the first is accepted
         self.logger.debug("Best value found at %f from optimizer %d", best['fx'], best['opt_id'])
-        for k, v in manager.opt_log._best_iters.items():
-            if k == best['opt_id']:
-                continue
+        if best['fx'] <= self.state['fx'] and best['opt_id'] != self.state['opt_id']:
+            # Another optimizer found the same or better minimum than the one known.
+            self.n_accept += 1
+            self.state = {'opt_id': best['opt_id'], 'fx': best['fx']}
+            self.logger.debug("Improvement detected. Number of accepted points: %d", self.n_accept)
 
-            w = np.exp(np.min([0, -(v['fx'] - best['fx']) * self.beta]))
-            rand = np.random.random()
-            if w >= rand:
-                self.logger.debug("Opt %d (%f) replacing best.", v['opt_id'], v['fx'])
-                best = v
-                self.n_accept += 1
-                break
+        # Metropolis chance of accepting another optimizer that is not the best
+        other = manager.opt_log._best_iters[np.random.choice([*manager.opt_log._best_iters])]
+        w = np.exp(np.min([0, -(other['fx'] - best['fx']) * self.beta]))
+        rand = np.random.random()
+        if w >= rand:
+            self.logger.debug("Opt %d (%f) replacing best.", other['opt_id'], other['fx'])
+            best = other
 
         # Adjust step size
         if manager.o_counter % self.interval == 0:
@@ -61,10 +63,10 @@ class BasinHoppingGenerator(BaseGenerator):
             self.logger.debug("Accept rate at %f", actual_accept_rate)
             if actual_accept_rate > self.accept_rate:
                 self.step_size /= self.factor
-                self.logger.debug("Accept rate too high, step size %f -> %f.", old_step, self.step_size)
+                self.logger.debug("Accept rate too high, step size increasing %f -> %f.", old_step, self.step_size)
             elif actual_accept_rate < self.accept_rate:
                 self.step_size *= self.factor
-                self.logger.debug("Accept rate too low, step size %f -> %f.", old_step, self.step_size)
+                self.logger.debug("Accept rate too low, step size decreasing %f -> %f.", old_step, self.step_size)
 
         # Random perturbation of the best vector based on the step size
         x = best['x'].copy()
