@@ -43,7 +43,7 @@ class ScipyOptimizerWrapper(BaseOptimizer):
                  x0: Sequence[float],
                  bounds: Sequence[Tuple[float, float]],
                  callbacks: Callable = None, **kwargs) -> MinimizeResult:
-        warnings.filterwarnings('once', "Method .+ cannot handle constraints nor bounds.")  # TODO Move to better place
+        warnings.filterwarnings('ignore', "Method .+ cannot handle constraints nor bounds.")  # TODO Move
         try:
             if self.opt_method == 'basinhopping':
                 sp_result = basinhopping(func=function,
