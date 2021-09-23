@@ -62,7 +62,7 @@ from .. import __version__, __version_info__
 
 __all__ = ("GloMPOManager",)
 
-# TODO Remove or Properly document and test aggresive kills
+
 class GloMPOManager:
     """ Provides the main interface to GloMPO. The manager runs the optimization and produces all the output.
 
@@ -78,6 +78,9 @@ class GloMPOManager:
 
     Attributes
     ----------
+    aggressive_kill
+        If :obj:`True` and :attr:`proc_backend` is :obj:`True`, child processes are forcibly terminated via
+        :code:`SIGTERM`. Otherwise, a termination message is sent to the optimizer to shut itself down.
     allow_forced_terminations : bool
         :obj:`True` if the manager is allowed to force terminate optimizers which appear non-responsive (i.e. do not
         provide feedback within a specified period of time.
@@ -333,7 +336,7 @@ class GloMPOManager:
               visualisation: bool = False,
               visualisation_args: Optional[Dict[str, Any]] = None,
               force_terminations_after: int = -1,
-              aggresive_kill: bool = False,
+              aggressive_kill: bool = False,
               end_timeout: Optional[int] = None,
               split_printstreams: bool = True):
         """ Generates the environment for a new globally managed parallel optimization job.
@@ -426,6 +429,12 @@ class GloMPOManager:
             If a value larger than zero is provided then GloMPO is allowed to force terminate optimizers that have
             either not provided results in the provided number of seconds or optimizers which were sent a kill
             signal have not shut themselves down within the provided number of seconds.
+
+        aggressive_kill
+            Ignored if `backend` is :code:`'threads'`. If :obj:`True`, child processes are forcibly terminated via
+            :code:`SIGTERM`. Else a termination message is sent to the optimizer to shut itself down. The latter option
+            is preferred and safer, but there may be circumstances where child optimizers cannot handle such messages
+            and have to be forcibly terminated.
 
         end_timeout
             The amount of time the manager will wait trying to smoothly join each child optimizer at the end of the run.
@@ -545,7 +554,7 @@ class GloMPOManager:
 
         # Save behavioural args
         self.allow_forced_terminations = force_terminations_after > 0
-        self.aggressive_kill = aggresive_kill
+        self.aggressive_kill = aggressive_kill
         self._too_long = force_terminations_after
         self.summary_files = summary_files
         self.is_log_detailed = is_log_detailed
@@ -1591,7 +1600,7 @@ class GloMPOManager:
         self.hunt_victims[opt_id] = time()
         self._graveyard.add(opt_id)
 
-        if self.aggressive_kill:
+        if self.aggressive_kill and self.proc_backend:
             self._optimizer_packs[opt_id].process.terminate()
         else:
             self._optimizer_packs[opt_id].signal_pipe.send(1)
