@@ -45,6 +45,7 @@ class ScipyOptimizerWrapper(BaseOptimizer):
                  callbacks: Callable = None, **kwargs) -> MinimizeResult:
         warnings.filterwarnings('ignore', "Method .+ cannot handle constraints nor bounds.")  # TODO Move
         try:
+            general_opt = False
             if self.opt_method == 'basinhopping':
                 sp_result = basinhopping(func=function,
                                          x0=x0,
@@ -57,6 +58,7 @@ class ScipyOptimizerWrapper(BaseOptimizer):
                                            callback=_GloMPOCallbacksWrapper(self, callbacks),
                                            **kwargs)
             else:
+                general_opt = True
                 sp_result = minimize(fun=function,
                                      x0=np.array(x0),
                                      method=self.opt_method,
@@ -69,9 +71,10 @@ class ScipyOptimizerWrapper(BaseOptimizer):
             self.message_manager(0, "Optimizer convergence")
 
         result = MinimizeResult()
-        result.success = sp_result.success
         result.x = sp_result.x
         result.fx = sp_result.fun
+        if general_opt:
+            result.success = sp_result.success
 
         return result
 
