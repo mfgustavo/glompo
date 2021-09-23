@@ -19,6 +19,7 @@ more expensive test case.
    ExpLeastSquaresCost
    Griewank
    Langermann
+   LennardJones
    Levy
    Michalewicz
    Qing
