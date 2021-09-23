@@ -602,8 +602,8 @@ class LennardJones(BaseTestCase):
     def __call__(self, x: Sequence[float]) -> float:
         x = np.array(x)
         if x.ndim == 1:
-            x = x.reshape((self.N - 1, self._dims))
-        x = np.concatenate([[[0] * self._dims], x], axis=0)
+            x = x.reshape((self.N - 1, self.d))
+        x = np.concatenate([[[0] * self.d], x], axis=0)
 
         dists = []
         for i, x0 in enumerate(x):
