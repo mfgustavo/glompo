@@ -4,15 +4,12 @@ import numpy as np
 from scipy.optimize._dual_annealing import EnergyState, ObjectiveFunWrapper, StrategyChain, VisitingDistribution
 
 from .basegenerator import BaseGenerator
-from ..common.helpers import is_bounds_valid
-from ..core.manager import GloMPOManager  # TODO Remove
 
 __all__ = ("AnnealingGenerator",)
 
 
-# TODO Incorporate counter for not_improved steps?
-# TODO Temperature update wrong
-# TODO No points ever accepted
+# TODO Document
+# TODO Remove print statements
 class AnnealingGenerator(BaseGenerator):
     """ Wrapper around the annealing core of :meth:`scipy.optimize.dual_annealing`.
 
@@ -36,23 +33,26 @@ class AnnealingGenerator(BaseGenerator):
                  task,
                  qa: float = -5.0,
                  qv: float = 2.62,
-                 initial_temperature: float = 5230,
+                 initial_temp: float = 5230,
+                 restart_temp_ratio: float = 2e-5,
                  seed: Union[None, int, np.ndarray, Iterable, float] = None):
         super().__init__()
 
-        if is_bounds_valid(bounds):
-            self.lb, self.ub = np.array(bounds).T
-
+        self.lb, self.ub = np.array(bounds).T
         self.rand_state = np.random.RandomState(seed)
 
         self.n_params = len(bounds)
         self.current_fx = float('inf')
         self.current_x = []
+        self.iter = -1
+        self.last = np.empty(self.n_params)
 
-        self.initial_temperature = initial_temperature
-        self.temperature = initial_temperature
+        self.initial_temperature = initial_temp
+        self.temperature = initial_temp
+        self.restart_temperature = initial_temp * restart_temp_ratio
         self.qv = qv
         self.qa = qa
+        self.t1 = np.exp((self.qv - 1) * np.log(2)) - 1
 
         # Scipy Internals
         self.obj_wrapper = ObjectiveFunWrapper(task)
@@ -68,107 +68,49 @@ class AnnealingGenerator(BaseGenerator):
         Procedure:
 
            Copy the procedure from scipy almost exactly with LOCAL function evaluations and only start optimizers when a
-           local searach is run.
+           local search is run.
         """
-        print('---------------------')
-        step = manager.o_counter - 1  # Decrease by one to match scipy counting notation
-        mod_step = step % (2 * self.n_params)
-        print(step + 1, step, mod_step)
+        self.iter += 1
 
-        # Update temperature
-        if mod_step == 0:
-            t1 = np.exp((self.qv - 1) * np.log(2)) - 1
-            t2 = np.exp((self.qv - 1) * np.log(step / (2 * self.n_params) + 2)) - 1
-            self.temperature = self.initial_temperature * t1 / t2
-            print('temperature update')
-            print('   t1', t1)
-            print('   t2', t2)
-            print('   new temp', self.temperature)
+        # Update with results from children
+        best = manager.opt_log.get_best_iter()
+        if best['fx'] < self.state.current_energy:
+            self.logger.debug("State updated from children.")
+            self.state.update_best(best['fx'], best['x'].copy(), None)
+            self.state.update_current(best['fx'], best['x'].copy())
 
-        self.chain.run(mod_step, self.temperature)
+        reps = 0
+        while True:
+            reps += 1
 
-        print('returning ', self.state.current_location)
+            # Update temperature
+            t2 = np.exp((self.qv - 1) * np.log(self.iter + 2)) - 1
+            self.temperature = self.initial_temperature * self.t1 / t2
+            self.logger.debug("Temperature updated to %f", self.temperature)
+            if self.temperature < self.restart_temperature:
+                self.logger.debug("Temperature below restart temperature, resetting.")
+                self.reset_temperature()
 
+            # Run the internal annealing chain and update the number of function evaluations used to the manager
+            # DANGER ZONE! Adjusting manager properties can have unforeseen consequences!
+            evals_0 = self.obj_wrapper.nfev
+            self.chain.run(self.iter, self.temperature)
+            manager.f_counter += self.obj_wrapper.nfev - evals_0
+            manager.opt_log._f_counter += self.obj_wrapper.nfev - evals_0
+
+            if np.all(np.isclose(self.state.current_location, self.last)):
+                self.logger.debug("Current location too close to previous one, reannealing.")
+                if reps >= 5:
+                    self.logger.debug("To many reannealings without a location update, resetting temperature.")
+                    self.reset_temperature()
+                    reps = 0
+            else:
+                break
+
+        self.last = self.state.current_location.copy()
         return self.state.current_location
 
-    # def generate(self, manager: 'GloMPOManager') -> np.ndarray:
-    #     """
-    #     Procedure:
-    #
-    #        #. Determine current location:
-    #
-    #           #. If new, select random location.
-    #
-    #           #. If established, select best of previous optimizer and run accept_reject on it.
-    #
-    #        #. Update temperature with the same frequency as dual_annealing method.
-    #
-    #        #. Generate new point and return this as the starting point of a new optimizer.
-    #     """
-    #     print('---------------------')
-    #     step = manager.o_counter - 1  # Decrease by one to match scipy counting notation
-    #     mod_step = step % (2 * self.n_params)
-    #     print(step + 1, step, mod_step)
-    #
-    #     # Determine current location (try get best of previous opt, otherwise choose random location)
-    #     # Look backward through previous optimizers to find one with a valid return
-    #     best_previous_opt = {'x': [], 'fx': float('inf')}
-    #     # for i in range(step, 0, -1):
-    #     #     best_previous_opt = manager.opt_log.get_best_iter(i)
-    #     #     print('looking at ', i, ' it has an fx of ', best_previous_opt['fx'])
-    #     #     if best_previous_opt['fx'] < float('inf'):
-    #     #         print('selecting ', i)
-    #     #         break
-    #     best_previous_opt = manager.opt_log.get_best_iter()
-    #     print(best_previous_opt)
-    #     if best_previous_opt['x'] != []:
-    #         if self.current_x is None or best_previous_opt['fx'] < self.current_fx:
-    #             print('currents accepted')
-    #             self.current_x = best_previous_opt['x']
-    #             self.current_fx = best_previous_opt['fx']
-    #         else:
-    #             print('accept_reject previous point')
-    #             self.accept_reject(best_previous_opt['x'], best_previous_opt['fx'], mod_step)
-    #     else:
-    #         print('returning random point')
-    #         rand_x = self.lb + (self.ub - self.lb) * self.rand_state.random(self.n_params)
-    #         return rand_x
-    #
-    #     # Update temperature
-    #     # if mod_step == 0:
-    #     #     t1 = np.exp((self.qv - 1) * np.log(2)) - 1
-    #     #     t2 = np.exp((self.qv - 1) * np.log(step / (2 * self.n_params) + 2)) - 1
-    #     #     self.temperature = self.initial_temperature * t1 / t2
-    #     #     print('temperature update')
-    #     #     print('   t1', t1)
-    #     #     print('   t2', t2)
-    #     #     print('   new temp', self.temperature)
-    #     if mod_step == 0:
-    #         self.temperature /= 2
-    #     print('temperature update ', self.temperature)
-    #
-    #     # Generate new point
-    #     new_x = self.visiting_dist.visiting(np.array(self.current_x), mod_step, self.temperature)
-    #     print('current x: ', self.current_x)
-    #     print('returning x: ', new_x)
-    #     print('======================')
-    #     return new_x
-
-    def accept_reject(self, x: Sequence[float], fx: float, step):
-        """
-        Adapted from scipy.optimize._dual_annealing.StrategyChain.accept_reject
-        """
-        temp_step = self.temperature / float(step + 1)
-        r = self.rand_state.random_sample()
-        pqv_temp = (self.qa - 1.0) * (fx - self.current_fx) / (temp_step + 1)
-        if pqv_temp <= 0.:
-            pqv = 0.
-        else:
-            pqv = np.exp(np.log(pqv_temp) / (1. - self.qa))
-
-        if r <= pqv:
-            print('point accepted')
-            self.current_x = x
-            self.current_fx = fx
-        else:
-            print('point rejected')
+    def reset_temperature(self):
+        self.state.reset(self.obj_wrapper, self.rand_state)
+        self.iter = 0
+        self.temperature = self.initial_temperature
