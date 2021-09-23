@@ -14,6 +14,7 @@ __all__ = ("BaseTestCase",
            "ExpLeastSquaresCost",
            "Griewank",
            "Langermann",
+           "LennardJones",
            "Levy",
            "Michalewicz",
            "Qing",
@@ -531,6 +532,112 @@ class ExpLeastSquaresCost(BaseTestCase):
     @property
     def bounds(self) -> Sequence[Tuple[float, float]]:
         return [list(self.p_range)] * self.dims
+
+
+class LennardJones(BaseTestCase):
+    """ Lennard-Jones energy potential function.
+    Designed to predict the energy for clusters of atoms, this potential energy surface is characterized by steep 
+    cliffs, infinite values, and degenerate local and global minima.
+    
+    The input vector :math:`\\mathbf{x}` is reshaped into an :math:`N \\times d` array (:math:`X`) of 
+    :math:`d`-dimensional Cartesian coordinates for :math:`N` particles. 
+
+    .. math::
+       f(X) = 4\\epsilon\\sum_{i<j}{\\left[\\left(\\frac{\\sigma}{r_{ij}}\\right)^{12} -
+       \\left(\\frac{\\sigma}{r_{ij}}\\right)^6\\right]}
+    
+    where :math:`\\epsilon` and :math:`\\sigma` are parameters and :math:`r_{ij}` is the Euclidean distance between
+    particles :math:`i` and :math:`j`.
+    
+    Recommended bounds: :math:`x_i \\in [-2^{-1/6}\\sigma\\sqrt[3]{\\frac{\\pi}{3N}}, 2^{-1/6}\\sigma\\sqrt[3]{\\frac{\\pi}{3N}}]`
+
+    Global minimum: Estimated from :math:`N` and :math:`d`
+
+    .. image:: /_static/lennardjones.png
+       :align: center
+       :alt: Global minima sandwiched between infinite values, flat surfaces and many local minima.
+
+    Parameters
+    ----------
+    atoms
+        The number of particles (:math:`N`).
+    dims
+        The number of Cartesian spatial dimensions (:math:`d`).
+    eps
+        The magnitude parameter (:math:`\\epsilon`).
+    sigma
+        The shape parameter (:math:`\\sigma`).
+
+    Attributes
+    ----------
+    dims
+        The number of adjustable parameters in the optimization problem is :math:`d(N - 1)`. One less than the number of
+        particles is used because the first particle is fixed at the origin to remove translation degeneracies and allow
+        for the imposition of bounds.
+
+    Notes
+    -----
+    The `x` parameter for the call method may be a :math:`d(N - 1)` length vector or a :math:`(N - 1) \\times d` array.
+    """
+
+    def __init__(self, atoms: int, dims: int, eps: float = 1, sigma: float = 1, *, delay=None):
+        super().__init__((atoms - 1) * dims, delay=delay)
+        self.N = atoms
+        self.d = dims
+
+        self.global_min_fitting_coefficients = np.array([-4.11622788900031E-11,
+                                                         2.73806188513917E-08,
+                                                         -7.29613541449689E-06,
+                                                         0.000981156639160743,
+                                                         -0.0747067533967315,
+                                                         -3.00175089914711,
+                                                         7.06759211566204])
+
+        self.eps = sigma
+        self.sig = eps
+
+        bnd = self.sig * np.cbrt(np.pi / 3 / np.sqrt(2) * self.N)
+        self._bounds = [(-bnd, bnd)] * self.dims
+
+    def __call__(self, x: Sequence[float]) -> float:
+        x = np.array(x)
+        if x.ndim == 1:
+            x = x.reshape((self.N - 1, self.d))
+        x = np.concatenate([[[0] * self.d], x], axis=0)
+
+        dists = []
+        for i, x0 in enumerate(x):
+            for x1 in x[i + 1:]:
+                dist = np.sqrt(np.sum((x0 - x1) ** 2))
+                dists.append(dist)
+                if dist == 0:
+                    return np.inf
+
+        calc = (self.sig / np.array(dists)) ** 6
+        calc = calc ** 2 - calc
+        calc = calc.sum()
+        calc *= 4 * self.eps
+
+        return calc
+
+    @property
+    def min_x(self) -> Sequence[float]:
+        warnings.warn("Location of minima unknown.")
+        return [0] * self.dims
+
+    @property
+    def min_fx(self) -> float:
+        if self._dims == 3:
+            warnings.warn("Energy minimum estimate only.")
+            energy = self.global_min_fitting_coefficients * self.N ** np.arange(6, -1, -1)
+            return energy.sum()
+        else:
+            warnings.warn("Energy minimum estimate only provided in 3D space.")
+            return np.nan
+
+    @property
+    def bounds(self) -> Sequence[Tuple[float, float]]:
+        return self._bounds
 
 
 class Levy(BaseTestCase):
