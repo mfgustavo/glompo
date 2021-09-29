@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from glompo.common.namedtuples import Bound, Result
+from glompo.generators.basinhopping import BasinHoppingGenerator
 from glompo.generators.best import IncumbentGenerator
 from glompo.generators.exploit_explore import ExploitExploreGenerator
 from glompo.generators.random import RandomGenerator
@@ -171,3 +172,64 @@ class TestSingle:
         call = gen.generate(None)
 
         assert np.all(np.isclose(call, out))
+
+
+class TestBasinHopping:
+
+    @pytest.fixture(scope='function')
+    def manager(self, request):
+        n_parms = 3
+
+        class OptLog:
+            def __init__(self):
+                self._best_iters = {0: {'opt_id': 0, 'x': [], 'fx': float('inf'), 'type': '', 'call_id': 0}}
+                for i in range(1, request.param + 1):
+                    self._best_iters[i] = {'opt_id': i,
+                                           'x': np.array([1 / i] * n_parms),
+                                           'fx': 100 / i,
+                                           'type': 'FakeOptimizer',
+                                           'call_id': 30 * i}
+
+                self._best_iter = self._best_iters[request.param]
+
+            def get_best_iter(self):
+                return self._best_iter
+
+        class Manager:
+            def __init__(self):
+                self.n_parms = n_parms
+                self.bounds = [(0, 1)] * self.n_parms
+                self.o_counter = request.param + 1
+                self.opt_log = OptLog()
+
+        return Manager()
+
+    @pytest.fixture(scope='function')
+    def generator(self):
+        return BasinHoppingGenerator(interval=4)
+
+    @pytest.mark.parametrize("manager", [0], indirect=["manager"])
+    def test_random_generate(self, manager, generator, caplog):
+        caplog.set_level('DEBUG', logger='glompo.generator')
+        generator.generate(manager)
+        assert "Iteration history not found, returning random start location." in caplog.messages
+
+    @pytest.mark.parametrize("manager", [1], indirect=["manager"])
+    def test_improve(self, manager, generator):
+        generator.generate(manager)
+        assert generator.state == {'opt_id': 1, 'fx': 100}
+
+    @pytest.mark.parametrize("manager", [2], indirect=["manager"])
+    def test_monte_carlo_accept(self, manager, generator, monkeypatch):
+        monkeypatch.setattr('numpy.random.random', lambda: 0)
+        generator.step_size = 0  # Force return of location 1
+        ret = generator.generate(manager)
+        assert generator.state == {'opt_id': 2, 'fx': 50}
+        assert np.all(ret == [1] * manager.n_parms)
+
+    @pytest.mark.parametrize("manager", [3], indirect=["manager"])
+    def test_step_adjust(self, manager, generator):
+        for i in range(3):
+            generator.n_accept += 1
+            generator.generate(manager)
+            assert generator.step_size == [0.45, 0.45, 0.5][i]
