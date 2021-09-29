@@ -114,4 +114,5 @@ intersphinx_mapping = {
     'matplotlib': ('http://matplotlib.sourceforge.net/', None),
     'numpy': ('http://docs.scipy.org/doc/numpy/', None),
     'scm': ('https://www.scm.com/doc/params/', None),
+    'scipy': ('http://docs.scipy.org/doc/scipy/reference/', None),
 }

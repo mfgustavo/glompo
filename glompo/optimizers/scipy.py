@@ -2,27 +2,44 @@ import warnings
 from multiprocessing import Event
 from multiprocessing.connection import Connection
 from queue import Queue
-from typing import Callable, Sequence, Tuple, Union
+from typing import Callable, Sequence, Tuple
 
-import numpy as np
-from scipy.optimize import basinhopping, dual_annealing, minimize
+from scipy.optimize import basinhopping, differential_evolution, dual_annealing, minimize, shgo
 
 from .baseoptimizer import BaseOptimizer, MinimizeResult
 
-__all__ = ("ScipyOptimizerWrapper",)
+__all__ = ("ScipyOptimizeWrapper",)
+
+AVAILABLE_OPTS = {'basinhopping': basinhopping,
+                  'dual_annealing': dual_annealing,
+                  'shgo': shgo,
+                  'differential_evolution': differential_evolution}
 
 
-class GloMPOCallstop(Exception):
-    """ Custom Exception used by GloMPO to stop Scipy optimizers early. """
+class ScipyOptimizeWrapper(BaseOptimizer):
+    """ Wrapper around :func:`scipy.optimize.minimize`, :func:`scipy.optimize.basinhopping`,
+    :func:`scipy.optimize.differential_evolution`, :func:`scipy.optimize.shgo`, and
+    :func:`scipy.optimize.dual_annealing`.
 
+    .. warning::
 
-class ScipyOptimizerWrapper(BaseOptimizer):
-    """ Very rough wrapper around scipy optimizers.
-    However, the code is very impregnable so only the simplest GloMPO functionality is supported (i.e. early termination
-    from the manager). Other things like checkpointing are not supported.
+       This is quite a rough wrapper around SciPy's optimizers since the code is quite impenetrable to outside code, and
+       callbacks do not function consistently. Therefore, most GloMPO functionality like checkpointing and information
+       sharing is not available. Users are advised to try :class:`.Nevergrad` instead which offers an interface to the
+       SciPy optimizers with full GloMPO functionality.
 
-    Also take note of the various scipy limitations of which methods can be combined with bounds. This class
-    automatically raises warnings to catch these incompatibilities.
+    .. attention::
+
+       **Must** be used with :attr:`.GloMPOManager.aggressive_kill` as :obj:`True`.
+
+    Parameters
+    ----------
+    Inherited, _opt_id _signal_pipe _results_queue _pause_flag workers backend is_log_detailed
+        See :class:`.BaseOptimizer`.
+    method
+        Accepts :code:`'basinhopping'`, :code:`'dual_annealing'`, :code:`'differential_evolution'`, and :code:`'shgo'`
+        which will run the :mod:`scipy.optimize` function of the same name. Also accepts all the allowed methods to
+        :func:`scipy.optimize.minimize`.
     """
 
     def __init__(self,
@@ -35,37 +52,38 @@ class ScipyOptimizerWrapper(BaseOptimizer):
                  is_log_detailed: bool = False,
                  method: str = 'Nelder-Mead'):
         super().__init__(_opt_id, _signal_pipe, _results_queue, _pause_flag, workers, backend, is_log_detailed)
-        self.stop = False
-        self.opt_method = method
+
+        self.opt_name = method
+        self.opt_meth = AVAILABLE_OPTS.get(self.opt_name, minimize)
 
     def minimize(self,
                  function: Callable[[Sequence[float]], float],
                  x0: Sequence[float],
                  bounds: Sequence[Tuple[float, float]],
                  callbacks: Callable = None, **kwargs) -> MinimizeResult:
-        warnings.filterwarnings('ignore', "Method .+ cannot handle constraints nor bounds.")  # TODO Move
-        try:
-            general_opt = False
-            if self.opt_method == 'basinhopping':
-                sp_result = basinhopping(func=function,
-                                         x0=x0,
-                                         callback=_GloMPOCallbacksWrapper(self, callbacks),
-                                         **kwargs)
-                sp_result = sp_result.lowest_optimization_result
-            elif self.opt_method == 'dual_annealing':
-                sp_result = dual_annealing(func=function,
-                                           bounds=bounds,
-                                           callback=_GloMPOCallbacksWrapper(self, callbacks),
-                                           **kwargs)
-            else:
-                general_opt = True
-                sp_result = minimize(fun=function,
-                                     x0=np.array(x0),
-                                     method=self.opt_method,
-                                     bounds=bounds,
-                                     callback=_GloMPOCallbacksWrapper(self, callbacks), **kwargs)
-        except GloMPOCallstop:
-            return
+        warnings.filterwarnings('ignore', "Method .+ cannot handle constraints nor bounds.")
+        general_opt = False
+
+        def callback(*args, **kwargs):
+            ret = None
+            if callbacks:
+                for cb in callbacks:
+                    r = cb(*args, **kwargs)
+                    if r is not None:
+                        ret = r
+            return ret
+
+        if self.opt_meth is not basinhopping:
+            kwargs['bounds'] = bounds
+
+        if self.opt_meth is minimize:
+            kwargs['method'] = self.opt_name
+
+        sp_result = self.opt_meth(func=function,
+                                  x0=x0,
+                                  callback=callback,
+                                  **kwargs)
+        sp_result = sp_result.lowest_optimization_result
 
         if self._results_queue:
             self.message_manager(0, "Optimizer convergence")
@@ -79,46 +97,4 @@ class ScipyOptimizerWrapper(BaseOptimizer):
         return result
 
     def callstop(self, *args):
-        self.stop = True
-
-
-class _GloMPOCallbacksWrapper:
-    """ Wraps all the components needed by GloMPO to be called after each iteration into a single object which can be
-        registered as a callback.
-    """
-
-    def __init__(self,
-                 parent: BaseOptimizer,
-                 callbacks: Union[None,
-                                  Callable[..., bool],
-                                  Sequence[Callable[..., bool]]] = None):
-        self.parent = parent
-        self.n_calls = 0
-
-        if callable(callbacks):
-            self.callbacks = [callbacks]
-        elif callbacks is None:
-            self.callbacks = []
-
-    def __call__(self, *args, **kwargs):
-        self.n_calls += 1
-
-        stop_cond = None
-
-        # User sent callbacks
-        if any([cb(*args, **kwargs) for cb in self.callbacks]):
-            stop_cond = "Direct user callbacks"
-        self.parent.logger.debug("Stop = %s at user callbacks (iter: %d)", bool(stop_cond), self.n_calls)
-
-        # GloMPO specific callbacks
-        if self.parent._results_queue:
-            self.parent._pause_signal.wait()
-            self.parent.check_messages()
-            if not stop_cond and self.parent.stop:
-                stop_cond = "GloMPO termination signal."
-            self.parent.logger.debug("Stop = %s after message check from manager", bool(stop_cond))
-
-        if stop_cond:
-            self.parent.logger.debug("Stop is True so shutting down optimizer.")
-            self.parent.message_manager(0, stop_cond)
-            raise GloMPOCallstop
+        pass
