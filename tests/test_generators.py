@@ -10,6 +10,7 @@ from glompo.generators.single import SinglePointGenerator
 
 try:
     from glompo.generators.peterbation import PerturbationGenerator
+    from glompo.generators.annealing import AnnealingGenerator
     HAS_SCIPY = True
 except ModuleNotFoundError:
     HAS_SCIPY = False
@@ -233,3 +234,48 @@ class TestBasinHopping:
             generator.n_accept += 1
             generator.generate(manager)
             assert generator.step_size == [0.45, 0.45, 0.5][i]
+
+
+class TestAnnealing:
+
+    @pytest.fixture(scope='function')
+    def manager(self):
+        class OptLog:
+            def __init__(self):
+                self._best_iters = {0: {'opt_id': 0, 'x': [], 'fx': float('inf'), 'type': '', 'call_id': 0},
+                                    1: {'opt_id': 1,
+                                        'x': np.array([100] * 5),
+                                        'fx': 500,
+                                        'type': 'FakeOptimizer',
+                                        'call_id': 9}}
+                self._best_iter = self._best_iters[1]
+                self._f_counter = 9
+
+            def get_best_iter(self):
+                return self._best_iter
+
+        class Manager:
+            def __init__(self):
+                self.f_counter = 9
+                self.opt_log = OptLog()
+
+        return Manager()
+
+    @pytest.fixture()
+    def generator(self):
+        return AnnealingGenerator([(0, 100)] * 5, lambda x: np.sum(x))
+
+    def test_generate(self, manager, generator):
+        generator.iter += 1
+        generator.generate(manager)
+
+        assert generator.state.current_energy < 500
+        assert np.all(generator.state.current_location < 100)
+        assert generator.temperature < 5230
+        assert manager.f_counter == manager.opt_log._f_counter == 19
+
+    def test_reset(self, generator):
+        generator.reset_temperature()
+
+        assert generator.iter == 0
+        assert generator.temperature == 5230

@@ -23,4 +23,6 @@ Advanced Generators
 
 GloMPO also comes bundled with two more advanced sampling strategies.
 
+.. autoclass:: glompo.generators.annealing.AnnealingGenerator
+
 .. autoclass:: glompo.generators.basinhopping.BasinHoppingGenerator
