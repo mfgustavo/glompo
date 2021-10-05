@@ -83,7 +83,10 @@ class ScipyOptimizeWrapper(BaseOptimizer):
                                   x0=x0,
                                   callback=callback,
                                   **kwargs)
-        sp_result = sp_result.lowest_optimization_result
+        try:
+            sp_result = sp_result.lowest_optimization_result
+        except AttributeError:
+            pass
 
         if self._results_queue:
             self.message_manager(0, "Optimizer convergence")
