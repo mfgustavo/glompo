@@ -79,11 +79,14 @@ class ScipyOptimizeWrapper(BaseOptimizer):
         if self.opt_meth is minimize:
             kwargs['method'] = self.opt_name
 
-        sp_result = self.opt_meth(func=function,
+        sp_result = self.opt_meth(function,
                                   x0=x0,
                                   callback=callback,
                                   **kwargs)
-        sp_result = sp_result.lowest_optimization_result
+        try:
+            sp_result = sp_result.lowest_optimization_result
+        except AttributeError:
+            pass
 
         if self._results_queue:
             self.message_manager(0, "Optimizer convergence")
