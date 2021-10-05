@@ -571,17 +571,15 @@ class LennardJones(BaseTestCase):
     Attributes
     ----------
     dims
-        The number of adjustable parameters in the optimization problem is :math:`d(N - 1)`. One less than the number of
-        particles is used because the first particle is fixed at the origin to remove translation degeneracies and allow
-        for the imposition of bounds.
+        The number of adjustable parameters in the optimization problem is :math:`Nd`.
 
     Notes
     -----
-    The `x` parameter for the call method may be a :math:`d(N - 1)` length vector or a :math:`(N - 1) \\times d` array.
+    The `x` parameter for the call method may be a :math:`Nd` length vector or a :math:`N \\times d` array.
     """
 
     def __init__(self, atoms: int, dims: int, eps: float = 1, sigma: float = 1, *, delay=None):
-        super().__init__((atoms - 1) * dims, delay=delay)
+        super().__init__(atoms * dims, delay=delay)
         self.N = atoms
         self.d = dims
 
@@ -593,32 +591,74 @@ class LennardJones(BaseTestCase):
                                                          -3.00175089914711,
                                                          7.06759211566204])
 
-        self.eps = sigma
-        self.sig = eps
+        self.eps = eps
+        self.sig = sigma
 
         bnd = self.sig * np.cbrt(np.pi / 3 / np.sqrt(2) * self.N)
         self._bounds = [(-bnd, bnd)] * self.dims
 
+        # Pre-calculation shortcuts
+        self._triu_indices = np.triu_indices(atoms, 1)
+        self._sig2 = sigma ** 2
+        self._sig5 = sigma ** 5
+        self._sig11 = sigma ** 11
+
     def __call__(self, x: Sequence[float]) -> float:
-        x = np.array(x)
-        if x.ndim == 1:
-            x = x.reshape((self.N - 1, self.d))
-        x = np.concatenate([[[0] * self.d], x], axis=0)
+        x, delta, dists_sq = self._common_calc(x)
 
-        dists = []
-        for i, x0 in enumerate(x):
-            for x1 in x[i + 1:]:
-                dist = np.sqrt(np.sum((x0 - x1) ** 2))
-                dists.append(dist)
-                if dist == 0:
-                    return np.inf
-
-        calc = (self.sig / np.array(dists)) ** 6
-        calc = calc ** 2 - calc
+        calc = self._sig2 / np.array(dists_sq)
+        calc = calc ** 6 - calc ** 3
         calc = calc.sum()
         calc *= 4 * self.eps
 
         return calc
+
+    def jacobian(self, x: Sequence[float]) -> np.ndarray:
+        """ Returns the gradient (first derivative) of the function in all directions, calculated analytically.
+        Parameters
+        ----------
+        x
+            Vector in parameter space where the function will be evaluated.
+
+        Returns
+        -------
+        numpy.ndarray
+            Vector of derivatives for each dimension in `x`.
+        """
+        x, delta, dists_sq = self._common_calc(x)
+
+        energy_grads = np.einsum(
+            "n,nd->nd",
+            -24 * self.eps * (2 * self._sig11 * dists_sq ** -7 - self._sig5 * dists_sq ** -4),
+            delta
+        )
+
+        gradient = np.zeros_like(x)
+        np.add.at(gradient, self._triu_indices[0], energy_grads)
+        np.add.at(gradient, self._triu_indices[1], -energy_grads)
+        return gradient.ravel()
+
+    def _common_calc(self, x: Sequence[float]) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """ Core calculation components used by both the core function and its derivative.
+
+        Returns
+        -------
+        numpy.ndarray
+            Processed and correctly shaped `x'.
+        numpy.ndarray
+            Array of differences between points in `x`.
+        numpy.ndarray
+            Array of square distances between points in `x`.
+        """
+        x = np.array(x)
+        if x.ndim == 1:
+            x = x.reshape((self.N, self.d))
+
+        delta = x[self._triu_indices[0]] - x[self._triu_indices[1]]
+        dists_sq = np.einsum("nd,nd->n", delta, delta)
+        dists_sq[dists_sq == 0] = np.inf
+
+        return x, delta, dists_sq
 
     @property
     def min_x(self) -> Sequence[float]:
