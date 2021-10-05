@@ -79,7 +79,7 @@ class ScipyOptimizeWrapper(BaseOptimizer):
         if self.opt_meth is minimize:
             kwargs['method'] = self.opt_name
 
-        sp_result = self.opt_meth(func=function,
+        sp_result = self.opt_meth(function,
                                   x0=x0,
                                   callback=callback,
                                   **kwargs)
