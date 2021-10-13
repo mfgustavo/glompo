@@ -101,6 +101,7 @@ class BasinHoppingGenerator(BaseGenerator):
             if w >= rand:
                 self.logger.debug("Opt %d (%f) replacing best.", other['opt_id'], other['fx'])
                 best = other
+                self.n_accept += 1
 
         # Adjust step size
         if manager.o_counter % self.interval == 0:
