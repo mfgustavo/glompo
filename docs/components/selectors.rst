@@ -12,10 +12,7 @@ Abstract Base Selector
 Spawn Control
 =============
 
-As seen above, spawning new optimizers can be stopped without shutting down the entire optimization. This can be used to
-make sure that functioning optimizers are given time to explore, and function evaluations are not wasted on new
-optimizers towards the end of an optimization when they will be unlikely to have enough time to develop. GloMPO comes
-bundled with a couple of simple convenient controllers.
+As seen above, spawning new optimizers can be stopped without shutting down the entire optimization. This can be used to make sure that functioning optimizers are given time to explore, and function evaluations are not wasted on new optimizers towards the end of an optimization when they will be unlikely to have enough time to develop. GloMPO comes bundled with a couple of simple convenient controllers.
 
 The :meth:`__call__` method of these classes is expected to be implemented as follows:
 

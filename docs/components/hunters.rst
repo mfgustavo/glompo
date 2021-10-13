@@ -13,8 +13,7 @@ Abstract Base Hunter
 Combining Base Hunters
 ======================
 
-:class:`.BaseHunter` is based on the same structure as :class:`.BaseChecker`. Thus, simple conditions can also be
-combined into more sophisticated termination conditions. See :ref:`Combining Base Checkers`.
+:class:`.BaseHunter` is based on the same structure as :class:`.BaseChecker`. Thus, simple conditions can also be combined into more sophisticated termination conditions. See :ref:`Combining Base Checkers`.
 
 Included Hunters
 =================
