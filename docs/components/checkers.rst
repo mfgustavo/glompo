@@ -13,10 +13,7 @@ Abstract Base Checker
 Combining Base Checkers
 =======================
 
-Instances of :class:`.BaseChecker` can be combined with :code:`&` and :code:`|` boolean operations. This allows
-individual checkers to be very simple, but be combined into more sophisticated conditions. Combining checkers in this
-way produces a new :class:`.BaseChecker` object which itself can be further combined. This allows conditions to be as
-deeply nested as one desires. For example:
+Instances of :class:`.BaseChecker` can be combined with :code:`&` and :code:`|` boolean operations. This allows individual checkers to be very simple, but be combined into more sophisticated conditions. Combining checkers in this way produces a new :class:`.BaseChecker` object which itself can be further combined. This allows conditions to be as deeply nested as one desires. For example:
 
    >>> a = CheckerA()
    >>> b = CheckerB()
@@ -35,8 +32,7 @@ The order of evaluation is :code:`&` before :code:`|`, thus the above would be e
       #. :code:`a & b` will not evaluate :code:`b` if :code:`a` is :obj:`False`
       #. :code:`a | b` will not evaluate :code:`b` if :code:`a` is :obj:`True`
 
-Lazy evaluation ensures a faster return, and explains the presence of :obj:`None` when a hunt evaluation statement is
-printed. For example:
+Lazy evaluation ensures a faster return, and explains the presence of :obj:`None` when a hunt evaluation statement is printed. For example:
 
    >>> combi(...)
    True
@@ -51,8 +47,7 @@ printed. For example:
      CheckerD() = None
     ]'
 
-Make sure to structure your nesting in the correct order. For example, if you want to make sure a certain
-checker is always evaluated, place it first. If a checker is slow to evaluate, place it last.
+Make sure to structure your nesting in the correct order. For example, if you want to make sure a certain checker is always evaluated, place it first. If a checker is slow to evaluate, place it last.
 
 All of the above holds true for :ref:`Hunters` too as they share a common hidden base.
 
