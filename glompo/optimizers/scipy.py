@@ -30,7 +30,8 @@ class ScipyOptimizeWrapper(BaseOptimizer):
 
     .. attention::
 
-       **Must** be used with :attr:`.GloMPOManager.aggressive_kill` as :obj:`True`.
+       **Must** be used with :attr:`.GloMPOManager.aggressive_kill` as :obj:`True`, this also implies that this
+       optimizer can **only** be used with a multiprocessing backend; threads are incompatible.
 
     Parameters
     ----------
