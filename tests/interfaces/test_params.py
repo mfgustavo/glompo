@@ -27,6 +27,7 @@ from glompo.common.namedtuples import Result
 from glompo.core.optimizerlogger import BaseLogger
 
 from scm.params.common._version import __version__ as PARAMS_VERSION
+PARAMS_VERSION_INFO = tuple(map(int, PARAMS_VERSION.split('.')))
 
 
 class FakeLossEvaluator(_LossEvaluator):
@@ -349,3 +350,8 @@ class TestReaxFFError:
     def test_reweigh_residuals_warning(self, task):
         with pytest.raises(ValueError, match="new_weight cannot be None if resids is a sequence of names or indices."):
             task.reweigh_residuals([0, 1, 2])
+
+
+@pytest.mark.skipif(PARAMS_VERSION_INFO <= (0, 5, 0))
+class TestOptimizationWrapper:
+    pass
