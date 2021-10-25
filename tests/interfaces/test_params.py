@@ -34,8 +34,14 @@ class FakeLossEvaluator(_LossEvaluator):
         pass
 
     def __call__(self, x):
-        return EvaluatorReturn(100, x, self.name, self.ncalled, self.interface,
-                               None, [5, 2, -1, -9], [0.10, 0.25, 0.30, 0.35], 0)
+        if PARAMS_VERSION_INFO == (0, 5, 0):
+            er = EvaluatorReturn(100, x, self.name, self.ncalled, self.interface,
+                                 None, [5, 2, -1, -9], [0.10, 0.25, 0.30, 0.35], 0)
+        else:
+            er = EvaluatorReturn(100, x, self.name, self.ncalled, self.interface,
+                                 None, [5, 2, -1, -9], [0.10, 0.25, 0.30, 0.35], 0, 'sse')
+
+        return er
 
 
 class FakeStep(_Step):

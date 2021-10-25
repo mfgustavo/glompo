@@ -139,6 +139,9 @@ class GlompoParamsWrapper(BaseOptimizer):
 
         return params_res
 
+    def reset(self):
+        self.manager = GloMPOManager()
+
 
 class BaseParamsError:
     """ Base error function instance from which other classes derive depending on the engine used e.g. ReaxFF, xTB etc.
@@ -802,7 +805,8 @@ def setup_reax_from_classic(path: Union[Path, str]) -> Tuple[DataSet, JobCollect
 
     # Setup the job collection depending on the types of data in the training set
     settings = reaxff_control_to_settings(str(path / 'control'))
-    if dat_set.forces():
+    if (PARAMS_VERSION_INFO == (0, 5, 0) and dat_set.forces()) or \
+            (PARAMS_VERSION_INFO == (0, 5, 1) and dat_set.from_extractors('forces')):
         settings.input.ams.properties.gradients = True
     job_col = geo_to_params(str(path / 'geo'), settings)
 
