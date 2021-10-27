@@ -1,4 +1,3 @@
-import logging
 import os
 import warnings
 from datetime import datetime
@@ -11,11 +10,11 @@ from scm.params.common._version import __version__ as PARAMS_VERSION
 from scm.params.common.helpers import plams_initsettings
 from scm.params.common.parallellevels import ParallelLevels
 from scm.params.common.reaxff_converter import geo_to_params, trainset_to_params
+from scm.params.core.callbacks import Callback
 from scm.params.core.dataset import DataSet, SSE
 from scm.params.core.jobcollection import JobCollection
 from scm.params.core.lossfunctions import LOSSDICT, Loss
-from scm.params.core.opt_components import SCALER_DICT, _LossEvaluator, _Step
-from scm.params.core.parameteroptimization import Optimization
+from scm.params.core.opt_components import LinearParameterScaler, _LossEvaluator, _Step
 from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
 from scm.params.parameterinterfaces.base import BaseParameters, Constraint
 from scm.params.parameterinterfaces.reaxff import ReaxParams  # Instead of ReaxFFParameters for backward compatibility
@@ -151,8 +150,7 @@ class GlompoParamsWrapper(BaseOptimizer):
         self.manager = GloMPOManager()
 
 
-# todo reintroduce callbacks?
-class Optimization(Optimization):
+class Optimization:
     """
     Parameters
     ----------
@@ -164,18 +162,23 @@ class Optimization(Optimization):
         data set will be interpreted as the training set, the second as a validation set.
     parameterinterface
         The interface to the parameters that are to be optimized.
+    optimizer
+        IGNORED.
     title : optional, str
         The working directory for this optimization. Once :meth:`optimize` is called, will switch to it.
-    plams_workdir_path
+        (see `glompo_kwargs`)
+    plams_workdir_path : optional, str
         The folder in which the PLAMS working directory is created. By default the PLAMS working directory is created
         inside of `$SCM_TMPDIR` or `/tmp` if the former is not defined. When running on a compute cluster this variable
         can be set to a local directory of the machine where the jobs are running, avoiding a potentially slow PLAMS
         working directory that is mounted over the network.
     validation
-        If the passed value is :code:`0<float<1`, a validation set will be created from a `validation` percentage of the first
-        data set in `datasets`. If the passed value is :code:`1<float<len(datasets[0])`, will create a validation set with
-        `validation` entries taken from the first data set in `datasets`. If you would like to pass a
+        If the passed value is :code:`0<float<1`, a validation set will be created from a `validation` percentage of the
+        first data set in `datasets`. If the passed value is :code:`1<float<len(datasets[0])`, will create a validation
+        set with `validation` entries taken from the first data set in `datasets`. If you would like to pass a
         :class:`~scm.params.core.dataset.DataSet` instance instead, you can do so in the `datasets` parameter.
+    callbacks
+        IGNORED.
     constraints
         Additional constraints for candidate solutions of :math:`\\mathbf{x}^*`. If the any of these return
         :obj:`False`, the solution will not be considered.
@@ -190,6 +193,8 @@ class Optimization(Optimization):
         non-finite loss is probably due to bad :class:`.plams.Settings` of an entry in the `jobcollectgion``. However,
         if it is not known if the initial parameters can be trusted or raising an error is not desired for other
         reasons, this parameter can be set to :obj:`True` to skip the initial evaluation.
+    logger_every
+        See `every_n_iter` in :class:`~scm.params.core.callbacks.Logger`. This option is ignored if a Logger is provided in the callbacks.
 
     :Per Data Set Parameters:
 
@@ -206,13 +211,13 @@ class Optimization(Optimization):
     batch_size
         The number of entries to be evaluated per epoch. If :obj:`None`, all entries will be evaluated.
 
-        .. note:
+        .. note::
 
-            One job calculation can have multiple property entries in a training set (`e.g. Energy and Forces), thus,
-            this parameter is not the same as as `maxjobs`.
+           One job calculation can have multiple property entries in a training set (`e.g. Energy and Forces), thus,
+           this parameter is not the same as as `maxjobs`.
 
-            If both, `maxjobs` and `batch_size` are set, the former will be applied first.  If the resulting set is
-            still larger than `batch_size`, will apply filtering by `batch_size`.
+           If both, `maxjobs` and `batch_size` are set, the former will be applied first.  If the resulting set is
+           still larger than `batch_size`, will apply filtering by `batch_size`.
 
     use_pipe
         Whether to use the :class:`~.AMSWorker` interface for suitable jobs.
@@ -232,16 +237,48 @@ class Optimization(Optimization):
         Whether to limit each Data Set evaluation to a subset of maximum `maxjobs`. Igonored if :obj:`None`.
     maxjobs_shuffle
         If `maxjobs` is set, will generate a new subset of the Data Set with `maxjobs` at every evaluation.
+    **glompo_kwargs
+        GloMPO related arguments sent to :meth:`GloMPOManager.setup()`.
+
+        The following extra keywords are allowed:
+
+        :code:`'scaler'`
+           Extra keyword which specifies the type of scaling used by function. Defaults to a linear scaling of all
+           parameters between 0 and 1.
+
+        The following keywords will be ignored if provided:
+
+        :code:`'bounds'`
+           Automatically extracted from `parameterinterface`.
+
+        :code:`'task'`
+           It is constructed within this class from `jobcollection`, `dataset`, `parameterinterface`.
+
+        :code:`'working_dir'`
+           `title` will be used as this parameter.
+
+        :code:`'overwrite_existing'`
+           No overwriting allowed according to ParAMS behavior. `title` will be incremented until a non-existent
+           directory is found.
+
+        :code:`'max_jobs'`
+           Will be calculated from `parallel`.
+
+        :code:`'backend'`
+           Only :code:`'threads'` are allowed within ParAMS.
+
+
     """
 
     def __init__(self,
                  jobcollection: JobCollection,
                  datasets: Union[DataSet, Sequence[DataSet]],
                  parameterinterface: BaseParameters,
-                 scaler: str = 'linear',
+                 optimizer: BaseOptimizer,
                  title: str = 'opt',
-                 plams_workdir_path: str = None,
-                 validation: float = None,
+                 plams_workdir_path: Optional[str] = None,
+                 validation: Optional[float] = None,
+                 callbacks: Sequence[Callback] = None,
                  constraints: Sequence[Constraint] = None,
                  parallel: ParallelLevels = None,
                  verbose: bool = True,
@@ -256,9 +293,6 @@ class Optimization(Optimization):
                  maxjobs: Union[None, Sequence[int]] = None,
                  maxjobs_shuffle: Union[bool, Sequence[bool]] = False,
                  **glompo_kwargs):
-        # todo add params logger to documentation
-        self.logger = logging.getLogger('glompo.params')
-
         assert isinstance(jobcollection,
                           JobCollection), f"JobCollection instance not understood: {type(jobcollection)}."
         self.jobcollection = jobcollection
@@ -276,9 +310,14 @@ class Optimization(Optimization):
                 f"The ranges or value of {repr(p)} are ill-defined. " \
                 f"Please make sure that `range[0] <= value <= range[1]`."
 
-        # Enforce [0,1] scaling by default, other scalers can be requested with the `optimizer._scaler` attribute
-        # (should be a key in `SCALER_DICT`)
-        self.scaler = SCALER_DICT[scaler](self.interface.active.range)
+        # Warnings about GloMPO / ParAMS interface differences
+        if callbacks:
+            print("WARNING: Callbacks are ignored.")
+        print("WARNING: The 'optimizer' argument is ignored. Please send optimizer related arguments to glompo_kwargs")
+
+        # Scaler must be GloMPO-wide.
+        # Enforce [0,1] scaling by default, other scalers can be requested in glompo_kwargs['scaler']
+        self.scaler = LinearParameterScaler(self.interface.active.range)
 
         # Check loss
         def checkloss(loss, pre=''):
@@ -294,8 +333,8 @@ class Optimization(Optimization):
             assert all(isinstance(i, (Constraint, Constraint._Operator)) for i in constraints), \
                 f"Unexpected constraints class provided: {', '.join([str(i.__class__) for i in constraints])}."
             if not all(c(self.interface) for c in constraints):
-                self.logger.warning("Initial interface violates constraints! This might result in undesired optimizer "
-                                    "behaviour.")
+                print("WARNING: Initial interface violates constraints! This might result in undesired optimizer "
+                      "behaviour.")
         self.constraints = constraints
 
         if parallel is None:
@@ -314,11 +353,16 @@ class Optimization(Optimization):
         self.verbose = verbose
 
         self.glompo = GloMPOManager()
-        self.glompo.setup(**glompo_kwargs)
 
     def optimize(self) -> MinimizeResult:
         """ Start the optimization given the initial parameters. """
         working_dir = Path(self.title)
+        if working_dir.exists():
+            i = 1
+            while working_dir.with_suffix(f"{i:03}").exists():
+                i += 1
+            print(f"'{working_dir}' already exists. Will use '{working_dir.with_suffix(f'{i:03}')}' instead.")
+            working_dir = working_dir.with_suffix(f'{i:03}')
 
         idir = working_dir / 'settings_and_initial_data'
         idir.mkdir(parents=True, exist_ok=True)
@@ -336,8 +380,13 @@ class Optimization(Optimization):
         # All parallel parameter vectors share the same job runner, so the total number of jobs we want to have
         # running is the product of the parallelism at both optimizer and job collection level! (Like this we get
         # dynamic load balancing between different parameter vectors for free.)
+        # todo figure out job runner within glompo context
         config.default_jobrunner = JobRunner(parallel=True,
-                                             maxjobs=self.parallel.parametervectors * self.parallel.jobs)
+                                             maxjobs=self.parallel.optimizations *
+                                                     self.parallel.parametervectors *
+                                                     self.parallel.jobs)
+
+        # todo setup manager here
 
         # Single evaluation with the initial parameters
         fx0 = float('inf')
@@ -350,7 +399,6 @@ class Optimization(Optimization):
         x0 = self.scaler.real2scaled(self.interface.active.x)
         bnds = self.scaler.bounds  # Scaler determines the bounds
         f = _Step(self.objective, None, verbose=self.verbose)  # make one callable function
-
         self.glompo.start_manager()
 
         if self.result.success:
@@ -395,7 +443,7 @@ class Optimization(Optimization):
         par.jobs = self.parallel.jobs * self.parallel.parametervectors
         r = [i.evaluate(e, parallel=par, delete_failed_jobs=False) for i in self.objective]
         fx = r[0][0]  # fx value of the training set
-        if not isfinite(fx):
+        if not np.isfinite(fx):
             print("\n\nAborting Optimization due to initial parameters producing an infinite loss function value.")
             print("This usually indicates bad settings of a JobCollection entry causing a job to crash.")
             print("You can override this behavior by setting 'skip_x0=True' at init.\n")
@@ -414,35 +462,10 @@ class Optimization(Optimization):
             print()
             raise ValueError("Initial evaluation of f(x0) failed.")
 
-        printnow(f"Initial loss: {fx:.3e}")
-
-        # If a Logger is present, store the initial results
-        logger = self.callbacks[0]
-        if isinstance(logger, Logger):
-            for (fxi, ds, resids, contribution), (name, loss) in zip(r, [(i.name, i.loss) for i in self.objective]):
-                #        fx, x, name, ncalled, interface, dataset, residuals, contrib, seconds = evalret
-                dummy = EvaluatorReturn(fxi, self.interface.active.x, name, 0, self.interface, ds, resids, contribution,
-                                        0, loss)
-                logger(dummy, initial_eval=True)
-        elif isinstance(logger, OldLogger):
-            logger = OldLogger(path=logger.path, writefreq_history=0, writefreq_bestparams=0, writefreq_datafiles=1)
-            for (fxi, ds, resids, contribution), name in zip(r, [i.name for i in self.objective]):
-                dummy = (fx, 0, name, 0, 0, ds, resids, contribution, 0, 0)
-                logger(dummy)
+        print(f"Initial loss: {fx:.3e}")
+        self.glompo.opt_log.put_manager_metadata('initial_parameter_results', {'x': self.interface.active.x, 'fx': fx})
 
         return fx
-
-    @staticmethod
-    def mkdirs(t):
-        title = t
-        cnt = 1
-        while os.path.exists(title):
-            title = t + f'.{cnt:03d}'
-            cnt += 1
-        if cnt > 1:
-            printnow(f'Directory \'{t}\' already exists. Will use \'{title}\' instead.')
-        os.makedirs(title)
-        return title
 
     # def __str__(self):
     #     s = f"{self.__class__.__name__}() Instance Settings:\n"
@@ -547,11 +570,6 @@ class Optimization(Optimization):
             objective.append(evaluator)
 
         return objective
-
-    def delete(self):
-        ''' Remove the working directory from disk '''
-        if os.path.exists(self.title):
-            rmtree(self.title)
 
 
 class BaseParamsError:
