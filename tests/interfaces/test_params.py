@@ -20,13 +20,15 @@ from scm.params.core.opt_components import _Step
 from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
 from scm.params.parameterinterfaces.reaxff import ReaxParams
 
-from glompo.interfaces.params import _FunctionWrapper, ReaxFFError, GlompoParamsWrapper, setup_reax_from_classic
+from glompo.interfaces.params import ReaxFFError, GlompoParamsWrapper, setup_reax_from_classic
+from glompo.interfaces.params.glompo_opt import _FunctionWrapper
 from glompo.opt_selectors.baseselector import BaseSelector
 from glompo.optimizers.baseoptimizer import BaseOptimizer
 from glompo.common.namedtuples import Result
 from glompo.core.optimizerlogger import BaseLogger
 
 from scm.params.common._version import __version__ as PARAMS_VERSION
+
 PARAMS_VERSION_INFO = tuple(map(int, PARAMS_VERSION.split('.')))
 
 
