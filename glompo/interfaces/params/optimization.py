@@ -1,9 +1,11 @@
-import numpy as np
 import os
 from datetime import datetime
 from pathlib import Path
+from typing import List, Optional, Sequence, Union
+
+import numpy as np
+import psutil
 from scm.params.common.helpers import plams_initsettings, printnow, strpad
-from scm.params.common.parallellevels import ParallelLevels
 from scm.params.core.callbacks import Callback
 from scm.params.core.dataset import DataSet
 from scm.params.core.jobcollection import JobCollection
@@ -13,8 +15,109 @@ from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
 from scm.params.parameterinterfaces.base import BaseParameters, Constraint
 from scm.plams.core.functions import config, finish, init
 from scm.plams.core.jobrunner import JobRunner
-from typing import List, Optional, Sequence, Union
+
+from ...convergence.nconv import NOptConverged
 from ...core.manager import GloMPOManager
+from ...generators.random import RandomGenerator
+from ...opt_selectors.cycle import CycleSelector
+from ...optimizers.cmawrapper import CMAOptimizer
+
+
+class ParallelLevels:
+    """Specification of how to use parallelism at the different levels involved in a ParAMS optimization.
+
+    Note that the parallel levels are layered in the order of the arguments
+    to this method, e.g. setting `parametervectors=2` and `jobs=4` would
+    result in two parameter vectors tried in parallel, with the |JC| for
+    each one being run with 4 jobs in parallel, resulting in a total of 8
+    jobs running concurrently. Overall this means that for fully using a
+    machine the product of the parallelism at all levels should equal the
+    number of (physical) CPU cores of that machine. It is generally more
+    efficient to parallelize at a higher level, especially when
+    parameterizing a very fast engine like ReaxFF.
+
+    All parameters of this method are optional. Parameters not specified
+    will be assigned a sensible default value resulting in the use of the
+    entire machine.
+
+    :Parameters:
+
+        optimizations: optional, int > 0
+            How many independent optimizations to run in parallel. This is
+            a placeholder for the future. ParAMS currently does not support
+            optimization level parallelism yet.
+        parametervectors: optional, int > 0
+            How many parameter vectors to try in parallel. This level of
+            parallelism can only be used with parallel ref:`optimizers
+            <Optimizers>`.
+        jobs: optional, int > 0
+            How many jobs from the |JC| to run in parallel.
+        processes: optional, int
+            How many processes (MPI ranks) to spawn for each job. This
+            effectively sets the NSCM environment variable for each job.
+            A value of `-1` will disable explicit setting of related variables.
+        threads: optional, int
+            How many threads to use for each of the processes. This
+            effectively set the OMP_NUM_THREADS environment variable. Note
+            that most AMS engines do not use threads, so the value of this
+            variable would not have any effect. We recommend leaving it at
+            the default value of ``1``. Please consult the manual of the
+            engine you are parameterizing.
+            A value of `-1` will disable explicit setting of related variables.
+
+    :Attributes:
+
+        workers: `int`
+            The product of all parameters
+    """
+
+    def __init__(self, optimizations: int = 1, parametervectors: int = None, jobs: int = None, processes: int = 1,
+                 threads: int = 1):
+        self.optimizations = optimizations
+        self.parametervectors = parametervectors
+        self.jobs = jobs
+        self.processes = processes
+        self.threads = threads
+
+        # Reasonable defaults for parallelization at levels not set by the user.
+        num_cores = psutil.cpu_count(logical=False)  # Total number of *physical* CPU cores in this machine.
+        if (self.parametervectors is None) and (self.jobs is None):
+            # Parallelization at the parameter vector level is likely more efficient.
+            self.parametervectors = int(
+                num_cores / (self.optimizations * max(1, self.processes) * max(1, self.threads)))
+            self.jobs = 1
+        elif self.parametervectors is None:
+            self.parametervectors = max(
+                int(num_cores / (self.optimizations * self.jobs * max(1, self.processes) * max(1, self.threads))), 1)
+        elif self.jobs is None:
+            self.jobs = max(int(num_cores / (
+                        self.optimizations * self.parametervectors * max(1, self.processes) * max(1, self.threads))), 1)
+
+        # Make sure all are ints
+        for i in ['optimizations', 'parametervectors', 'jobs', 'processes', 'threads']:
+            v = getattr(self, i)
+            setattr(self, i, int(v))
+
+    def __str__(self):
+        args = ', '.join(
+            f"{i}={getattr(self, i)}" for i in ['optimizations', 'parametervectors', 'jobs', 'processes', 'threads'])
+        return f"{self.__class__.__name__}({args})"
+
+    def __repr__(self):
+        return str(self)
+
+    def copy(self):
+        return self.__class__(
+            optimizations=self.optimizations,
+            parametervectors=self.parametervectors,
+            jobs=self.jobs,
+            processes=self.processes,
+            threads=self.threads
+        )
+
+    @property
+    def workers(self):
+        return self.optimizations * self.parametervectors * self.jobs * max(1, self.processes) * max(1, self.threads)
 
 
 class Optimization:
@@ -224,13 +327,33 @@ class Optimization:
         self.working_dir = Path(title)
         if self.working_dir.exists():
             i = 1
-            while self.working_dir.with_suffix(f"{i:03}").exists():
+            while self.working_dir.with_suffix(f".{i:03}").exists():
                 i += 1
-            print(f"'{self.working_dir}' already exists. Will use '{self.working_dir.with_suffix(f'{i:03}')}' instead.")
-            self.working_dir = self.working_dir.with_suffix(f'{i:03}')
+            print(
+                f"'{self.working_dir}' already exists. Will use '{self.working_dir.with_suffix(f'.{i:03}')}' instead.")
+            self.working_dir = self.working_dir.with_suffix(f'.{i:03}')
 
         self.glompo = GloMPOManager()
-        self.glompo_kwargs = glompo_kwargs
+        # todo discuss and review
+        glompo_default_config = {'opt_selector': CycleSelector((CMAOptimizer,
+                                                                {'workers': self.parallel.workers //
+                                                                            self.parallel.optimizations},
+                                                                {'sigma0': 0.5})),
+                                 'convergence_checker': NOptConverged(self.parallel.optimizations),
+                                 'x0_generator': RandomGenerator(self.scaler.bounds),
+                                 'killing_conditions': None,
+                                 'share_best_solutions': False,
+                                 'hunt_frequency': 999999999,
+                                 'checkpoint_control': None,
+                                 'summary_files': 3,
+                                 'is_log_detailed': False,
+                                 'visualisation': False,
+                                 'visualisation_args': None,
+                                 'force_terminations_after': -1,
+                                 'aggressive_kill': False,
+                                 'end_timeout': None,
+                                 'split_printstreams': True}
+        self.glompo_kwargs = {**glompo_default_config, **glompo_kwargs}
         for ignore in ('bounds', 'task', 'working_dir', 'overwrite_existing', 'max_jobs', 'backend'):
             if ignore in glompo_kwargs:
                 del glompo_kwargs[ignore]
@@ -238,6 +361,8 @@ class Optimization:
     def optimize(self) -> MinimizeResult:
         """ Start the optimization given the initial parameters. """
         printnow(f'Starting parameter optimization. Dim = {len(self.interface.active)}')
+
+        self.working_dir.mkdir(parents=True, exist_ok=False)
 
         sum_file = self.working_dir / 'summary.txt'
         self.summary(file=sum_file)
@@ -252,7 +377,7 @@ class Optimization:
 
         (idir / 'datasets').mkdir(parents=True, exist_ok=True)
         for obj in self.objective:
-            obj.dataset.store(str(idir / 'datasets' / obj.name + '.yaml.gz'))
+            obj.dataset.store(str(idir / 'datasets' / obj.name) + '.yaml.gz')
 
         init(config_settings=plams_initsettings, path=self.plams_workdir_path)
         # All parallel parameter vectors share the same job runner, so the total number of jobs we want to have
@@ -282,8 +407,9 @@ class Optimization:
                           backend='threads',
                           **self.glompo_kwargs)
 
-        if not self.skip_x0:
-            self.glompo.opt_log.put_manager_metadata('initial_parameter_results', {'x': x0, 'fx': fx0})
+        # todo cannot easily save initial eval into log
+        # if not self.skip_x0:
+        #     self.glompo.opt_log.put_manager_metadata('initial_parameter_results', {'x': x0, 'fx': fx0})
 
         # Optimization
         self.result = self.glompo.start_manager()
