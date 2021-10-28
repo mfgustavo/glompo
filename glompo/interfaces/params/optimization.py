@@ -1,8 +1,8 @@
+import numpy as np
 import os
+from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Sequence, Union
-
-from scm.params.common.helpers import plams_initsettings
+from scm.params.common.helpers import plams_initsettings, printnow, strpad
 from scm.params.common.parallellevels import ParallelLevels
 from scm.params.core.callbacks import Callback
 from scm.params.core.dataset import DataSet
@@ -13,7 +13,7 @@ from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
 from scm.params.parameterinterfaces.base import BaseParameters, Constraint
 from scm.plams.core.functions import config, finish, init
 from scm.plams.core.jobrunner import JobRunner
-
+from typing import List, Optional, Sequence, Union
 from ...core.manager import GloMPOManager
 
 
@@ -57,11 +57,12 @@ class Optimization:
         Before an optimization process starts, a DataSet will be evaluated with the initial parameters
         :math:`\\mathbf{x}_0`. If this initial evaluation returns an infinite loss function value, will raise an error
         by default. This behavior is expecting that the initial parameters are generally valid and the cause of the
-        non-finite loss is probably due to bad :class:`.plams.Settings` of an entry in the `jobcollectgion``. However,
+        non-finite loss is probably due to bad :class:`.plams.Settings` of an entry in the `jobcollection``. However,
         if it is not known if the initial parameters can be trusted or raising an error is not desired for other
         reasons, this parameter can be set to :obj:`True` to skip the initial evaluation.
     logger_every
-        See `every_n_iter` in :class:`~scm.params.core.callbacks.Logger`. This option is ignored if a Logger is provided in the callbacks.
+        See `every_n_iter` in :class:`~scm.params.core.callbacks.Logger`. This option is ignored if a Logger is provided
+        in the callbacks.
 
     :Per Data Set Parameters:
 
@@ -160,6 +161,8 @@ class Optimization:
                  maxjobs: Union[None, Sequence[int]] = None,
                  maxjobs_shuffle: Union[bool, Sequence[bool]] = False,
                  **glompo_kwargs):
+        self.result = None
+
         assert isinstance(jobcollection,
                           JobCollection), f"JobCollection instance not understood: {type(jobcollection)}."
         self.jobcollection = jobcollection
@@ -187,12 +190,12 @@ class Optimization:
         self.scaler = LinearParameterScaler(self.interface.active.range)
 
         # Check loss
-        def checkloss(loss, pre=''):
-            if isinstance(loss, str):
-                assert loss.lower() in LOSSDICT, f"The requested loss '{loss}' is not known."
-                loss = LOSSDICT[loss.lower()]()
-            assert isinstance(loss, Loss), f"{pre} Loss argument must be a subclass of the `Loss` class."
-            return loss
+        def checkloss(loss_, pre=''):
+            if isinstance(loss_, str):
+                assert loss_.lower() in LOSSDICT, f"The requested loss '{loss_}' is not known."
+                loss_ = LOSSDICT[loss_.lower()]()
+            assert isinstance(loss_, Loss), f"{pre} Loss argument must be a subclass of the `Loss` class."
+            return loss_
 
         loss = [checkloss(i) for i in loss] if isinstance(loss, List) else checkloss(loss)
 
@@ -215,45 +218,51 @@ class Optimization:
                                              eval_every, maxjobs, maxjobs_shuffle)
 
         self.plams_workdir_path = plams_workdir_path or os.getenv('SCM_TMPDIR', '/tmp')
-        self.title = self.mkdirs(title)
         self.skip_x0 = skip_x0
         self.verbose = verbose
 
+        self.working_dir = Path(title)
+        if self.working_dir.exists():
+            i = 1
+            while self.working_dir.with_suffix(f"{i:03}").exists():
+                i += 1
+            print(f"'{self.working_dir}' already exists. Will use '{self.working_dir.with_suffix(f'{i:03}')}' instead.")
+            self.working_dir = self.working_dir.with_suffix(f'{i:03}')
+
         self.glompo = GloMPOManager()
+        self.glompo_kwargs = glompo_kwargs
+        for ignore in ('bounds', 'task', 'working_dir', 'overwrite_existing', 'max_jobs', 'backend'):
+            if ignore in glompo_kwargs:
+                del glompo_kwargs[ignore]
 
     def optimize(self) -> MinimizeResult:
         """ Start the optimization given the initial parameters. """
-        working_dir = Path(self.title)
-        if working_dir.exists():
-            i = 1
-            while working_dir.with_suffix(f"{i:03}").exists():
-                i += 1
-            print(f"'{working_dir}' already exists. Will use '{working_dir.with_suffix(f'{i:03}')}' instead.")
-            working_dir = working_dir.with_suffix(f'{i:03}')
+        printnow(f'Starting parameter optimization. Dim = {len(self.interface.active)}')
 
-        idir = working_dir / 'settings_and_initial_data'
+        sum_file = self.working_dir / 'summary.txt'
+        self.summary(file=sum_file)
+        with sum_file.open('a') as f:
+            print(f"Start time: {datetime.now()}", file=f)
+
+        idir = self.working_dir / 'settings_and_initial_data'
         idir.mkdir(parents=True, exist_ok=True)
 
-        self.interface.pickle_dump(idir / 'initial_parameter_interface.pkl')
-        self.jobcollection.pickle_dump(idir / 'jobcollection.pkl.gz')
-        self.jobcollection.store(idir / 'jobcollection.yaml.gz')
+        self.interface.pickle_dump(str(idir / 'initial_parameter_interface.pkl'))
+        self.jobcollection.store(str(idir / 'jobcollection.yaml.gz'))
 
         (idir / 'datasets').mkdir(parents=True, exist_ok=True)
         for obj in self.objective:
-            obj.dataset.pickle_dump(idir / 'datasets' / obj.name + '.pkl.gz')
-            obj.dataset.store(idir / 'datasets' / obj.name + '.yaml.gz')
+            obj.dataset.store(str(idir / 'datasets' / obj.name + '.yaml.gz'))
 
         init(config_settings=plams_initsettings, path=self.plams_workdir_path)
         # All parallel parameter vectors share the same job runner, so the total number of jobs we want to have
         # running is the product of the parallelism at both optimizer and job collection level! (Like this we get
         # dynamic load balancing between different parameter vectors for free.)
-        # todo figure out job runner within glompo context
+        # todo change parallellevels docs to show that optimizations is now used.
         config.default_jobrunner = JobRunner(parallel=True,
                                              maxjobs=self.parallel.optimizations *
                                                      self.parallel.parametervectors *
                                                      self.parallel.jobs)
-
-        # todo setup manager here
 
         # Single evaluation with the initial parameters
         fx0 = float('inf')
@@ -262,45 +271,40 @@ class Optimization:
         for i in self.objective:
             i.constraints = self.constraints  # do not include constraints in initial evaluation
 
-        # Optimization
         x0 = self.scaler.real2scaled(self.interface.active.x)
-        bnds = self.scaler.bounds  # Scaler determines the bounds
         f = _Step(self.objective, None, verbose=self.verbose)  # make one callable function
-        self.glompo.start_manager()
 
-        if self.result.success:
-            self.result.x = self.scaler.scaled2real(self.result.x)
+        self.glompo.setup(task=f,
+                          bounds=self.scaler.bounds,
+                          working_dir=self.working_dir,
+                          overwrite_existing=False,
+                          max_jobs=self.parallel.workers,
+                          backend='threads',
+                          **self.glompo_kwargs)
+
+        if not self.skip_x0:
+            self.glompo.opt_log.put_manager_metadata('initial_parameter_results', {'x': x0, 'fx': fx0})
+
+        # Optimization
+        self.result = self.glompo.start_manager()
+        self.result.x = self.scaler.scaled2real(self.result.x)
 
         finish()
 
-        # get the smallest trainingset fx and corresponding x, in order of priority:
-        # first the initial parameters, then the ones suggested by the optimizer, then the ones that the Logger
-        # logged as being the best
-        fx_min = fx0
-        x_min = self.scaler.scaled2real(x0)
-        if self.result.fx < fx_min:
-            fx_min = self.result.fx
-            x_min = self.result.x
-        if len(self.callbacks) > 0 and isinstance(self.callbacks[0], Logger):
-            fx_min = self.callbacks[0].fx_dict.get('trainingset', self.result.fx)
-            x_min = self.callbacks[0].x_dict.get('trainingset', self.result.x)
+        self.interface.active.x = self.scaler.scaled2real(self.result.x)
 
-        if self.callbacks:
-            [cb.on_end() for cb in self.callbacks]
-
-        if self.result.success:
-            printnow(f"Optimization done after {t()}")
-            self.result.fx = fx_min
-            self.result.x = x_min.copy()
-            self.interface.active.x = x_min.copy()
-        else:
-            printerr(f"WARNING: Optimization unsuccessful after {t()}")
-
-        with open('summary.txt', 'a') as f:
+        with sum_file.open('a') as f:
             print(f"End time:   {datetime.now()}", file=f)
 
-        os.chdir(root)
         printnow(f"Final loss: {self.result.fx:.3e}")
+
+        # todo how to define 'success' from GloMPO result.
+        # Swap from GloMPO Result to ParAMS MinimizeResult
+        mr = MinimizeResult(None,
+                            self.result.x,
+                            self.result.fx)
+        self.result = mr
+
         return self.result
 
     def initial_eval(self):
@@ -329,38 +333,41 @@ class Optimization:
             print()
             raise ValueError("Initial evaluation of f(x0) failed.")
 
-        print(f"Initial loss: {fx:.3e}")
-        self.glompo.opt_log.put_manager_metadata('initial_parameter_results', {'x': self.interface.active.x, 'fx': fx})
+        printnow(f"Initial loss: {fx:.3e}")
 
         return fx
 
-    # def __str__(self):
-    #     s = f"{self.__class__.__name__}() Instance Settings:\n"
-    #     l = len(s) - 1
-    #     s += l * '=' + '\n'
-    #     s += strpad(os.path.abspath(self.title), 35, "Workdir:")
-    #     s += strpad(len(self.jobcollection), 35, "JobCollection size:")
-    #     s += strpad(self.interface.__class__.__name__, 35, "Interface:")
-    #     s += strpad(len(self.interface.active), 35, "Active parameters:")
-    #     s += strpad(self.optimizer.__class__.__name__, 35, "Optimizer:")
-    #     s += strpad(self.parallel, 35, "Parallelism:")
-    #     s += strpad(self.verbose, 35, "Verbose:")
-    #     if self.callbacks:
-    #         s += strpad(self.callbacks[0].__class__.__name__, 35, "Callbacks:")
-    #         if len(self.callbacks) > 1:
-    #             for cb in self.callbacks[1:]:
-    #                 s += strpad(cb.__class__.__name__, 35)
-    #     if self.constraints:
-    #         s += strpad(repr(self.constraints[0]), 35, "Constraints:")
-    #         if len(self.constraints) > 1:
-    #             for cb in self.constraints[1:]:
-    #                 s += strpad(repr(cb), 35)
-    #     s += strpad(self.plams_workdir_path, 35, "PLAMS workdir path:")
-    #     s += '\nEvaluators:\n'
-    #     s += '-----------\n'
-    #     s += ''.join(str(i) for i in self.objective)
-    #     s += '==='
-    #     return s
+    def summary(self, file=None):
+        """ Prints a summary of the current instance """
+        if file:
+            with Path(file).open('w') as f:
+                print(self, file=f)
+        else:
+            print(self)
+
+    def __str__(self):
+        s = f"{self.__class__.__name__}() Instance Settings:\n"
+        l = len(s) - 1
+        s += l * '=' + '\n'
+        s += strpad(os.path.abspath(self.working_dir), 35, "Workdir:")
+        s += strpad(len(self.jobcollection), 35, "JobCollection size:")
+        s += strpad(self.interface.__class__.__name__, 35, "Interface:")
+        s += strpad(len(self.interface.active), 35, "Active parameters:")
+        # todo fix optimizer info
+        s += strpad('GloMPO', 35, "Optimizer:")
+        s += strpad(self.parallel, 35, "Parallelism:")
+        s += strpad(self.verbose, 35, "Verbose:")
+        if self.constraints:
+            s += strpad(repr(self.constraints[0]), 35, "Constraints:")
+            if len(self.constraints) > 1:
+                for cb in self.constraints[1:]:
+                    s += strpad(repr(cb), 35)
+        s += strpad(self.plams_workdir_path, 35, "PLAMS workdir path:")
+        s += '\nEvaluators:\n'
+        s += '-----------\n'
+        s += ''.join(str(i) for i in self.objective)
+        s += '==='
+        return s
 
     def _wrap_datasets(self, datasets, validation, loss, batch_size, use_pipe, dataset_names, eval_every, maxjobs,
                        maxjobs_shuffle) -> List[_LossEvaluator]:
@@ -380,8 +387,8 @@ class Optimization:
         # Insert a validation set at index 1
         if validation:
             if validation > 1:
-                assert validation < len(datasets[
-                                            0]), f"Requested validation set {validation} is larger than the training set {len(datasets[0])}"
+                assert validation < len(datasets[0]), \
+                    f"Requested validation set {validation} is larger than the training set {len(datasets[0])}"
                 validation /= len(datasets[0])
             datasets[0], valset = datasets[0].split(1 - validation, validation)
             datasets.insert(1, valset)
@@ -413,11 +420,9 @@ class Optimization:
 
         # Now wrap
         objective = []
-        for num, (
-                _ds, _loss, _batch_size, _use_pipe, _name, _eval_every, _maxjobs, _maxjobs_shuffle,
-                _use_pipe) in enumerate(
-            zip(datasets, loss, batch_size, use_pipe, dataset_names, eval_every, maxjobs, maxjobs_shuffle,
-                use_pipe), 1):
+        for num, (_ds, _loss, _batch_size, _use_pipe, _name, _eval_every, _maxjobs, _maxjobs_shuffle, _use_pipe) in \
+                enumerate(zip(datasets, loss, batch_size, use_pipe, dataset_names, eval_every, maxjobs, maxjobs_shuffle,
+                              use_pipe), 1):
             evaluator = _LossEvaluator(name=_name,
                                        jobcol=self.jobcollection,
                                        dataset=_ds,
@@ -432,8 +437,9 @@ class Optimization:
                                        eval_every=_eval_every,
                                        constraints=None,  # will be set after initial_eval() is called
                                        )
-            assert all(i is not None for i in _ds.get(
-                'reference')), f"\n\nNot all entries in {_name} have a reference value. Please set or calculate it before starting the optimization.\nSee https://www.scm.com/doc/params/components/dataset/dataset.html for help.\n"
+            assert all(i is not None for i in _ds.get('reference')), \
+                f"\n\nNot all entries in {_name} have a reference value. Please set or calculate it before starting " \
+                f"the optimization.\nSee https://www.scm.com/doc/params/components/dataset/dataset.html for help.\n"
             objective.append(evaluator)
 
         return objective
