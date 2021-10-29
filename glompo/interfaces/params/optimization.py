@@ -1,27 +1,34 @@
-import tables as tb
-
-import numpy as np
 import os
-import psutil
 import traceback
 from datetime import datetime
 from pathlib import Path
+from typing import Dict, List, NamedTuple, Optional, Sequence, Union
+
+import numpy as np
+import psutil
+import tables as tb
 from scm.params.common.helpers import plams_initsettings, printnow, strpad
 from scm.params.core.callbacks import Callback
 from scm.params.core.dataset import DataSet
 from scm.params.core.jobcollection import JobCollection
 from scm.params.core.lossfunctions import LOSSDICT, Loss
-from scm.params.core.opt_components import LinearParameterScaler, _LossEvaluator, _Step
+from scm.params.core.opt_components import EvaluatorReturn, LinearParameterScaler, _LossEvaluator, _Step
 from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
 from scm.params.parameterinterfaces.base import BaseParameters, Constraint
 from scm.plams.core.functions import config, finish, init
 from scm.plams.core.jobrunner import JobRunner
-from typing import List, Optional, Sequence, Union
+
 from ...convergence.nconv import NOptConverged
 from ...core.manager import GloMPOManager
 from ...generators.random import RandomGenerator
 from ...opt_selectors.cycle import CycleSelector
 from ...optimizers.cmawrapper import CMAOptimizer
+
+
+class _GloMPOEvaluatorReturn(NamedTuple):
+    fx: float
+    residuals: np.ndarray
+    time: float
 
 
 class ParallelLevels:
@@ -126,8 +133,29 @@ class _GloMPOStep(_Step):
         super().__init__(*args, **kwargs)
         self.workers = workers  # Bury inside _Step so workers arg not needed in call
 
+    def __call__(self, x: Sequence[float], workers=1, full=False, _force=False) -> Union[float, _GloMPOEvaluatorReturn]:
+        """ GloMPO cannot handle a full EvaluatorReturn """
+        # todo cannot handle multiple x values. need to change in glompo wrapper.
+        call = super().__call__(x, workers, full, _force)
+
+        if not full:
+            return call
+
+        call: List[EvaluatorReturn]
+        ret = tuple(i for ev in call for i in (ev.fx, ev.residuals, ev.time))
+        return ret
+
     def detailed_call(self, x: Sequence) -> Sequence[float]:
         return self(x, self.workers, True, False)
+
+    def headers(self) -> Dict[str, tb.Col]:
+        heads = {}
+        for i, loss_eval in enumerate(self.datasets):
+            heads[loss_eval.name + '_fx'] = tb.Float64Col(pos=3 * i + 0)
+            heads[loss_eval.name + '_residuals'] = tb.Float64Col((1, len(loss_eval.dataset)), pos=3 * i + 1)
+            heads[loss_eval.name + '_time'] = tb.Float16Col(pos=3 * i + 2)
+
+        return heads
 
 
 class Optimization:
@@ -332,6 +360,7 @@ class Optimization:
 
         self.plams_workdir_path = plams_workdir_path or os.getenv('SCM_TMPDIR', '/tmp')
         self.skip_x0 = skip_x0
+        # todo implement verbose
         self.verbose = verbose
 
         self.working_dir = Path(title)
@@ -363,10 +392,10 @@ class Optimization:
                                  'aggressive_kill': False,
                                  'end_timeout': None,
                                  'split_printstreams': True}
-        self.glompo_kwargs = {**glompo_default_config, **glompo_kwargs}
         for ignore in ('bounds', 'task', 'working_dir', 'overwrite_existing', 'max_jobs', 'backend'):
             if ignore in glompo_kwargs:
                 del glompo_kwargs[ignore]
+        self.glompo_kwargs = {**glompo_default_config, **glompo_kwargs}
 
     def optimize(self) -> MinimizeResult:
         """ Start the optimization given the initial parameters. """
