@@ -19,7 +19,7 @@ class Nevergrad(BaseOptimizer):
 
     Parameters
     ----------
-    Inherited, _opt_id _signal_pipe _results_queue _pause_flag workers backend is_log_detailed
+    Inherited, _opt_id _signal_pipe _results_queue _pause_flag _is_log_detailed workers backend
         See :class:`.BaseOptimizer`.
     optimizer
         String key to the desired optimizer. See nevergrad documentation for a list of available algorithms.
@@ -32,12 +32,12 @@ class Nevergrad(BaseOptimizer):
                  _signal_pipe: Connection = None,
                  _results_queue: Queue = None,
                  _pause_flag: Event = None,
+                 _is_log_detailed: bool = False,
                  workers: int = 1,
                  backend: str = 'processes',
-                 is_log_detailed: bool = False,
                  optimizer: str = 'TBPSA',
                  zero: float = -float('inf')):
-        super().__init__(_opt_id, _signal_pipe, _results_queue, _pause_flag, workers, backend, is_log_detailed)
+        super().__init__(_opt_id, _signal_pipe, _results_queue, _pause_flag, _is_log_detailed, workers, backend)
 
         self.opt_algo = ng.optimizers.registry[optimizer]
         self.optimizer = None

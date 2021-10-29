@@ -15,7 +15,7 @@ class RandomOptimizer(BaseOptimizer):
 
     Parameters
     ----------
-    Inherited, _opt_id _signal_pipe _results_queue _pause_flag workers backend is_log_detailed
+    Inherited, _opt_id _signal_pipe _results_queue _pause_flag _is_log_detailed workers backend
         See :class:`.BaseOptimizer`.
     iters
         Number of function evaluations the optimizer will execute before terminating.
@@ -26,11 +26,11 @@ class RandomOptimizer(BaseOptimizer):
                  _signal_pipe: Connection = None,
                  _results_queue: Queue = None,
                  _pause_flag: Event = None,
+                 _is_log_detailed: bool = False,
                  workers: int = 1,
                  backend: str = 'processes',
-                 is_log_detailed: bool = False,
                  iters: int = 100):
-        super().__init__(_opt_id, _signal_pipe, _results_queue, _pause_flag, workers, backend, is_log_detailed)
+        super().__init__(_opt_id, _signal_pipe, _results_queue, _pause_flag, _is_log_detailed, workers, backend)
         self.max_iters = iters
         self.used_iters = 0
         self.result = MinimizeResult()
