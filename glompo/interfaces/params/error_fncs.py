@@ -194,12 +194,11 @@ class BaseParamsError:
         """ Returns a the column headers for the :meth:`detailed_call` return.
         See :meth:`.BaseFunction.headers`.
         """
-        heads = {'fx': tb.Float64Col(pos=0),
-                 'resids_ts': tb.Float64Col((1, len(self.dat_set)), pos=1)}
+        heads = {'resids_ts': tb.Float64Col((1, len(self.dat_set)), pos=0)}
 
         if self.val_set:
-            heads['fx_vs'] = tb.Float64Col(pos=2)
-            heads['resids_vs'] = tb.Float64Col((1, len(self.val_set)), pos=3)
+            heads['fx_vs'] = tb.Float64Col(pos=1)
+            heads['resids_vs'] = tb.Float64Col((1, len(self.val_set)), pos=2)
 
         return heads
 

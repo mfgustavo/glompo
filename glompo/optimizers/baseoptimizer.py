@@ -148,6 +148,9 @@ class BaseOptimizer(ABC):
     _pause_flag
         Event flag which can be used to pause the optimizer between iterations.
 
+    _is_log_detailed
+        See :attr:`is_log_detailed`.
+
     workers
         The number of concurrent calculations used by the optimizer. Defaults to one. The manager will only start
         the optimizer if there are sufficient slots available for it.
@@ -156,9 +159,6 @@ class BaseOptimizer(ABC):
         The type of concurrency used by the optimizers (processes or threads). This is not necessarily applicable to
         all optimizers. This will default to :code:`'threads'` unless forced to use :code:`'processes'` (see
         :meth:`.GloMPOManager.setup` and :ref:`Parallelism`).
-
-    is_log_detailed
-        See :attr:`is_log_detailed`.
 
     **kwargs
         Optimizer specific initialization arguments.
@@ -176,9 +176,9 @@ class BaseOptimizer(ABC):
                            _signal_pipe,
                            _results_queue,
                            _pause_flag,
+                           _is_log_detailed
                            workers,
-                           backend,
-                           is_log_detailed)
+                           backend)
 
     Attributes
     ----------
@@ -254,9 +254,10 @@ class BaseOptimizer(ABC):
                  _signal_pipe: Optional[Connection] = None,
                  _results_queue: Optional[ChunkingQueue] = None,
                  _pause_flag: Optional[Event] = None,
+                 _is_log_detailed: bool = False,
                  workers: int = 1,
                  backend: str = 'threads',
-                 is_log_detailed: bool = False, **kwargs):
+                 **kwargs):
         self.logger = logging.getLogger(f'glompo.optimizers.opt{_opt_id}')
         self._opt_id = _opt_id
         self._signal_pipe = _signal_pipe
@@ -272,7 +273,7 @@ class BaseOptimizer(ABC):
                                           4: self.inject}
         self.workers = workers
         self.incumbent = {'x': None, 'fx': None}
-        self.is_log_detailed = is_log_detailed
+        self.is_log_detailed = _is_log_detailed
 
     @abstractmethod
     def minimize(self,

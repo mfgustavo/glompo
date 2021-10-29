@@ -26,7 +26,7 @@ class CMAOptimizer(BaseOptimizer):
 
     Parameters
     ----------
-    Inherited, _opt_id _signal_pipe _results_queue _pause_flag workers backend is_log_detailed
+    Inherited, _opt_id _signal_pipe _results_queue _pause_flag _is_log_detailed workers backend
         See :class:`.BaseOptimizer`.
     sampler
         Allows the use of :code:`'GaussVDSampler'` and :code:`'GaussVkDSampler'` settings.
@@ -63,16 +63,16 @@ class CMAOptimizer(BaseOptimizer):
                  _signal_pipe: Optional[Connection] = None,
                  _results_queue: Optional[Queue] = None,
                  _pause_flag: Optional[Event] = None,
+                 _is_log_detailed: bool = False,
                  workers: int = 1,
                  backend: str = 'threads',
-                 is_log_detailed: bool = False,
                  sampler: str = 'full',
                  verbose: bool = True,
                  keep_files: bool = False,
                  force_injects: Optional[bool] = None,
                  injection_frequency: Optional[int] = None,
                  **cmasettings):
-        super().__init__(_opt_id, _signal_pipe, _results_queue, _pause_flag, workers, backend, is_log_detailed)
+        super().__init__(_opt_id, _signal_pipe, _results_queue, _pause_flag, _is_log_detailed, workers, backend)
 
         self.verbose = verbose
         self.es = None

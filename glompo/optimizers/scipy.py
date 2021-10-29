@@ -35,7 +35,7 @@ class ScipyOptimizeWrapper(BaseOptimizer):
 
     Parameters
     ----------
-    Inherited, _opt_id _signal_pipe _results_queue _pause_flag workers backend is_log_detailed
+    Inherited, _opt_id _signal_pipe _results_queue _pause_flag _is_log_detailed workers backend
         See :class:`.BaseOptimizer`.
     method
         Accepts :code:`'basinhopping'`, :code:`'dual_annealing'`, :code:`'differential_evolution'`, and :code:`'shgo'`
@@ -48,11 +48,11 @@ class ScipyOptimizeWrapper(BaseOptimizer):
                  _signal_pipe: Connection = None,
                  _results_queue: Queue = None,
                  _pause_flag: Event = None,
+                 _is_log_detailed: bool = False,
                  workers: int = 1,
                  backend: str = 'processes',
-                 is_log_detailed: bool = False,
                  method: str = 'Nelder-Mead'):
-        super().__init__(_opt_id, _signal_pipe, _results_queue, _pause_flag, workers, backend, is_log_detailed)
+        super().__init__(_opt_id, _signal_pipe, _results_queue, _pause_flag, _is_log_detailed, workers, backend)
 
         self.opt_name = method
         self.opt_meth = AVAILABLE_OPTS.get(self.opt_name, minimize)
