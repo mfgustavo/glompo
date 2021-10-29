@@ -23,7 +23,7 @@ class GFLSOptimizer(BaseOptimizer):
 
     Parameters
     ----------
-    Inherited, _opt_id _signal_pipe _results_queue _pause_flag workers backend is_log_detailed
+    Inherited, _opt_id _signal_pipe _results_queue _pause_flag _is_log_detailed workers backend
         See :class:`.BaseOptimizer`.
     logger
         If :obj:`True` a :class:`!optsam.Logger` will be run along with the optimization and saved after the
@@ -65,14 +65,14 @@ class GFLSOptimizer(BaseOptimizer):
                  _signal_pipe: Optional[Connection] = None,
                  _results_queue: Optional[Queue] = None,
                  _pause_flag: Optional[Event] = None,
+                 _is_log_detailed: bool = False,
                  workers: int = 1,
                  backend: str = 'threads',
-                 is_log_detailed: bool = False,
                  logger: bool = False,
                  verbose: bool = False,
                  other_hooks: Optional[Sequence[Hook]] = None,
                  **gfls_algo_kwargs):
-        super().__init__(_opt_id, _signal_pipe, _results_queue, _pause_flag, workers, backend, is_log_detailed)
+        super().__init__(_opt_id, _signal_pipe, _results_queue, _pause_flag, _is_log_detailed, workers, backend)
         self.gfls = None
         self.result = None
         self.stopcond = None

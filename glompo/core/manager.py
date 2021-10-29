@@ -1342,8 +1342,8 @@ class GloMPOManager:
                              _signal_pipe=child_pipe,
                              _results_queue=self.optimizer_queue,
                              _pause_flag=event,
+                             _is_log_detailed=self.is_log_detailed,
                              backend=backend,
-                             is_log_detailed=self.is_log_detailed,
                              **init_kwargs)
 
         self.opt_log.add_optimizer(self.o_counter, type(optimizer).__name__, datetime.now())
