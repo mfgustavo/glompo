@@ -1,10 +1,11 @@
-import os
-from datetime import datetime
-from pathlib import Path
-from typing import List, Optional, Sequence, Union
+import tables as tb
 
 import numpy as np
+import os
 import psutil
+import traceback
+from datetime import datetime
+from pathlib import Path
 from scm.params.common.helpers import plams_initsettings, printnow, strpad
 from scm.params.core.callbacks import Callback
 from scm.params.core.dataset import DataSet
@@ -15,7 +16,7 @@ from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
 from scm.params.parameterinterfaces.base import BaseParameters, Constraint
 from scm.plams.core.functions import config, finish, init
 from scm.plams.core.jobrunner import JobRunner
-
+from typing import List, Optional, Sequence, Union
 from ...convergence.nconv import NOptConverged
 from ...core.manager import GloMPOManager
 from ...generators.random import RandomGenerator
@@ -118,6 +119,15 @@ class ParallelLevels:
     @property
     def workers(self):
         return self.optimizations * self.parametervectors * self.jobs * max(1, self.processes) * max(1, self.threads)
+
+
+class _GloMPOStep(_Step):
+    def __init__(self, *args, workers, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.workers = workers  # Bury inside _Step so workers arg not needed in call
+
+    def detailed_call(self, x: Sequence) -> Sequence[float]:
+        return self(x, self.workers, True, False)
 
 
 class Optimization:
@@ -346,7 +356,7 @@ class Optimization:
                                  'hunt_frequency': 999999999,
                                  'checkpoint_control': None,
                                  'summary_files': 3,
-                                 'is_log_detailed': False,
+                                 'is_log_detailed': True,
                                  'visualisation': False,
                                  'visualisation_args': None,
                                  'force_terminations_after': -1,
@@ -397,7 +407,8 @@ class Optimization:
             i.constraints = self.constraints  # do not include constraints in initial evaluation
 
         x0 = self.scaler.real2scaled(self.interface.active.x)
-        f = _Step(self.objective, None, verbose=self.verbose)  # make one callable function
+        f = _GloMPOStep(self.objective, None,
+                        workers=self.parallel.parametervectors, verbose=self.verbose)  # make one callable function
 
         self.glompo.setup(task=f,
                           bounds=self.scaler.bounds,
@@ -407,29 +418,35 @@ class Optimization:
                           backend='threads',
                           **self.glompo_kwargs)
 
-        # todo cannot easily save initial eval into log
-        # if not self.skip_x0:
-        #     self.glompo.opt_log.put_manager_metadata('initial_parameter_results', {'x': x0, 'fx': fx0})
-
         # Optimization
-        self.result = self.glompo.start_manager()
-        self.result.x = self.scaler.scaled2real(self.result.x)
+        mr = MinimizeResult()
+
+        try:
+            result = self.glompo.start_manager()
+
+            mr.success = True
+            mr.x = self.scaler.scaled2real(result.x)
+            mr.fx = result.fx
+
+            # Add initial eval to log
+            g_log = self.working_dir / 'glompo_log.h5'
+            if g_log.exists():
+                with tb.open_file(g_log, 'a') as file:
+                    file.root._v_attrs.initial_parameter_results = {'x': x0, 'fx': fx0}
+        except Exception:
+            traceback.print_exc()
+            mr.success = False
+        finally:
+            self.result = mr
 
         finish()
 
-        self.interface.active.x = self.scaler.scaled2real(self.result.x)
+        self.interface.active.x = self.result.x
 
         with sum_file.open('a') as f:
             print(f"End time:   {datetime.now()}", file=f)
 
         printnow(f"Final loss: {self.result.fx:.3e}")
-
-        # todo how to define 'success' from GloMPO result.
-        # Swap from GloMPO Result to ParAMS MinimizeResult
-        mr = MinimizeResult(None,
-                            self.result.x,
-                            self.result.fx)
-        self.result = mr
 
         return self.result
 
