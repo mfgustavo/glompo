@@ -205,7 +205,6 @@ class CMAOptimizer(BaseOptimizer):
                     self.injection_frequency and i - self.injection_counter > self.injection_frequency:
                 self.injection_counter = i
                 self.es.inject([self.incumbent['x']], force=self.force_injects)
-                print("Incumbent solution injected.")
 
         self.logger.debug("Exited optimization loop")
 
