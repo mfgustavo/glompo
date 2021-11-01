@@ -142,7 +142,7 @@ class _GloMPOStep(_Step):
             return call
 
         call: List[EvaluatorReturn]
-        ret = tuple(i for ev in call for i in (ev.fx, ev.residuals, ev.time))
+        ret = tuple(i for ev in call for i in (ev.fx, ev.time))
         return ret
 
     def detailed_call(self, x: Sequence) -> Sequence[float]:
@@ -151,9 +151,7 @@ class _GloMPOStep(_Step):
     def headers(self) -> Dict[str, tb.Col]:
         heads = {}
         for i, loss_eval in enumerate(self.datasets):
-            heads[loss_eval.name + '_fx'] = tb.Float64Col(pos=3 * i + 0)
-            heads[loss_eval.name + '_residuals'] = tb.Float64Col((1, len(loss_eval.dataset)), pos=3 * i + 1)
-            heads[loss_eval.name + '_time'] = tb.Float16Col(pos=3 * i + 2)
+            heads[loss_eval.name + '_time'] = tb.Float16Col(pos=i + len(self.datasets))
 
         return heads
 
