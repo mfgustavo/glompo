@@ -238,7 +238,7 @@ class Optimization(Optimization):
                                  'share_best_solutions': False,
                                  'hunt_frequency': 999999999,
                                  'checkpoint_control': None,
-                                 'summary_files': 0,
+                                 'summary_files': 3,
                                  'is_log_detailed': True,
                                  'visualisation': False,
                                  'visualisation_args': None,
