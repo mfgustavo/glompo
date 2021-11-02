@@ -49,7 +49,7 @@ class _GloMPOStep(_Step):
             return call
 
         call: List[EvaluatorReturn]
-        ret = tuple(i for ev in call for i in (ev.fx, ev.time))
+        ret = tuple(ev.fx for ev in call)
         return ret
 
     def detailed_call(self, x: Sequence) -> Sequence[float]:
@@ -57,8 +57,8 @@ class _GloMPOStep(_Step):
 
     def headers(self) -> Dict[str, tb.Col]:
         heads = {}
-        for i, loss_eval in enumerate(self.datasets):
-            heads[loss_eval.name + '_time'] = tb.Float16Col(pos=i + len(self.datasets))
+        for i, loss_eval in enumerate(self.datasets[1:]):
+            heads[loss_eval.name] = tb.FloatCol(pos=i)
 
         return heads
 
@@ -238,7 +238,7 @@ class Optimization(Optimization):
                                  'share_best_solutions': False,
                                  'hunt_frequency': 999999999,
                                  'checkpoint_control': None,
-                                 'summary_files': 3,
+                                 'summary_files': 0,
                                  'is_log_detailed': True,
                                  'visualisation': False,
                                  'visualisation_args': None,
@@ -250,6 +250,10 @@ class Optimization(Optimization):
             if ignore in glompo_kwargs:
                 del glompo_kwargs[ignore]
         self.glompo_kwargs = {**glompo_default_config, **glompo_kwargs}
+        if self.glompo_kwargs['summary_files'] < 2:  # Must be at least 2 to make ParAMS results files
+            self.del_glog = self.glompo_kwargs['summary_files'] == 0
+            self.del_gfig = self.glompo_kwargs['summary_files'] < 2
+            self.glompo_kwargs['summary_files'] = 2
 
         # The following are only set for compatibility with methods that we choose not to override for now.
         self.title = str(self.working_dir)
@@ -337,4 +341,18 @@ class Optimization(Optimization):
 
         printnow(f"Final loss: {self.result.fx:.3e}")
 
+        if self.del_glog:
+            (self.working_dir / 'glompo_manager_log.yml').unlink()
+
+        if self.del_gfig:
+            for suff in ('', '_log'):
+                loc = (self.working_dir / ('trajectories' + suff + '.png'))
+                if loc.exists():
+                    loc.unlink()
+
+        self._make_params_out_txts()
+
         return self.result
+
+    def _make_params_out_txts(self):
+        dir = self.working_dir / 'trainingset_results'
