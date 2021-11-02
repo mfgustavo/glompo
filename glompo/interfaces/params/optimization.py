@@ -1,4 +1,6 @@
+import logging
 import os
+import sys
 import traceback
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +25,7 @@ from ...convergence.nconv import NOptConverged
 from ...core.manager import GloMPOManager
 from ...generators.random import RandomGenerator
 from ...opt_selectors.cycle import CycleSelector
+from ...opt_selectors.spawncontrol import NOptimizersSpawnStop
 from ...optimizers.cmawrapper import CMAOptimizer
 
 
@@ -216,7 +219,9 @@ class Optimization(Optimization):
         glompo_default_config = {'opt_selector': CycleSelector((CMAOptimizer,
                                                                 {'workers': self.parallel.workers //
                                                                             self.parallel.optimizations},
-                                                                {'sigma0': 0.5})),
+                                                                {'sigma0': 0.5}),
+                                                               allow_spawn=NOptimizersSpawnStop(
+                                                                   self.parallel.optimizations)),
                                  'convergence_checker': NOptConverged(self.parallel.optimizations),
                                  'x0_generator': RandomGenerator(self.scaler.bounds),
                                  'killing_conditions': None,
