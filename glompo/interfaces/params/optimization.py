@@ -1,13 +1,12 @@
 import logging
 import os
 import sys
-import traceback
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, NamedTuple, Optional, Sequence, Union
 
 import numpy as np
 import tables as tb
+import traceback
 from scm.params.common.helpers import plams_initsettings, printerr, printnow
 from scm.params.common.parallellevels import ParallelLevels
 from scm.params.core.callbacks import Callback
@@ -20,6 +19,7 @@ from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
 from scm.params.parameterinterfaces.base import BaseParameters, Constraint
 from scm.plams.core.functions import config, finish, init
 from scm.plams.core.jobrunner import JobRunner
+from typing import Dict, List, NamedTuple, Optional, Sequence, Union
 
 from ...convergence.nconv import NOptConverged
 from ...core.manager import GloMPOManager
@@ -250,9 +250,9 @@ class Optimization(Optimization):
             if ignore in glompo_kwargs:
                 del glompo_kwargs[ignore]
         self.glompo_kwargs = {**glompo_default_config, **glompo_kwargs}
+        self.del_glog = self.glompo_kwargs['summary_files'] == 0
+        self.del_gfig = self.glompo_kwargs['summary_files'] < 2
         if self.glompo_kwargs['summary_files'] < 2:  # Must be at least 2 to make ParAMS results files
-            self.del_glog = self.glompo_kwargs['summary_files'] == 0
-            self.del_gfig = self.glompo_kwargs['summary_files'] < 2
             self.glompo_kwargs['summary_files'] = 2
 
         # The following are only set for compatibility with methods that we choose not to override for now.
