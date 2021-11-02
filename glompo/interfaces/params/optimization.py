@@ -202,8 +202,18 @@ class Optimization(Optimization):
 
         self.plams_workdir_path = plams_workdir_path or os.getenv('SCM_TMPDIR', '/tmp')
         self.skip_x0 = skip_x0
-        # todo implement verbose
+
         self.verbose = verbose
+        if verbose:
+            formatter = logging.Formatter("%(asctime)s :: %(message)s")
+
+            handler = logging.StreamHandler(sys.stdout)
+            handler.setFormatter(formatter)
+            handler.setLevel('INFO')
+
+            logger = logging.getLogger('glompo.manager')
+            logger.setLevel('INFO')
+            logger.addHandler(handler)
 
         self.working_dir = Path(title)
         if self.working_dir.exists():
@@ -283,6 +293,7 @@ class Optimization(Optimization):
             i.constraints = self.constraints  # do not include constraints in initial evaluation
 
         x0 = self.scaler.real2scaled(self.interface.active.x)
+        # Unclear why verbose is sent to _Step???
         f = _GloMPOStep(self.objective, None,
                         workers=self.parallel.parametervectors, verbose=self.verbose)  # make one callable function
 
