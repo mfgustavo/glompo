@@ -7,7 +7,7 @@ from typing import Dict, List, NamedTuple, Optional, Sequence, Union
 import numpy as np
 import psutil
 import tables as tb
-from scm.params.common.helpers import plams_initsettings, printnow
+from scm.params.common.helpers import plams_initsettings, printerr, printnow
 from scm.params.core.callbacks import Callback
 from scm.params.core.dataset import DataSet
 from scm.params.core.jobcollection import JobCollection
@@ -396,6 +396,7 @@ class Optimization(Optimization):
             mr.success = True
             mr.x = self.scaler.scaled2real(result.x)
             mr.fx = result.fx
+            printnow(f"Optimization done.")
 
             # Add initial eval to log
             g_log = self.working_dir / 'glompo_log.h5'
@@ -405,6 +406,7 @@ class Optimization(Optimization):
         except Exception:
             traceback.print_exc()
             mr.success = False
+            printerr(f"WARNING: Optimization unsuccessful.")
         finally:
             self.result = mr
 
