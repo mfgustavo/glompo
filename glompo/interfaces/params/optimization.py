@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import Dict, List, NamedTuple, Optional, Sequence, Union
 
 import numpy as np
-import psutil
 import tables as tb
 from scm.params.common.helpers import plams_initsettings, printerr, printnow
+from scm.params.common.parallellevels import ParallelLevels
 from scm.params.core.callbacks import Callback
 from scm.params.core.dataset import DataSet
 from scm.params.core.jobcollection import JobCollection
@@ -30,103 +30,6 @@ class _GloMPOEvaluatorReturn(NamedTuple):
     fx: float
     residuals: np.ndarray
     time: float
-
-
-class ParallelLevels:
-    """Specification of how to use parallelism at the different levels involved in a ParAMS optimization.
-
-    Note that the parallel levels are layered in the order of the arguments
-    to this method, e.g. setting `parametervectors=2` and `jobs=4` would
-    result in two parameter vectors tried in parallel, with the |JC| for
-    each one being run with 4 jobs in parallel, resulting in a total of 8
-    jobs running concurrently. Overall this means that for fully using a
-    machine the product of the parallelism at all levels should equal the
-    number of (physical) CPU cores of that machine. It is generally more
-    efficient to parallelize at a higher level, especially when
-    parameterizing a very fast engine like ReaxFF.
-
-    All parameters of this method are optional. Parameters not specified
-    will be assigned a sensible default value resulting in the use of the
-    entire machine.
-
-    :Parameters:
-
-        optimizations: optional, int > 0
-            How many independent optimizations to run in parallel. This is
-            a placeholder for the future. ParAMS currently does not support
-            optimization level parallelism yet.
-        parametervectors: optional, int > 0
-            How many parameter vectors to try in parallel. This level of
-            parallelism can only be used with parallel ref:`optimizers
-            <Optimizers>`.
-        jobs: optional, int > 0
-            How many jobs from the |JC| to run in parallel.
-        processes: optional, int
-            How many processes (MPI ranks) to spawn for each job. This
-            effectively sets the NSCM environment variable for each job.
-            A value of `-1` will disable explicit setting of related variables.
-        threads: optional, int
-            How many threads to use for each of the processes. This
-            effectively set the OMP_NUM_THREADS environment variable. Note
-            that most AMS engines do not use threads, so the value of this
-            variable would not have any effect. We recommend leaving it at
-            the default value of ``1``. Please consult the manual of the
-            engine you are parameterizing.
-            A value of `-1` will disable explicit setting of related variables.
-
-    :Attributes:
-
-        workers: `int`
-            The product of all parameters
-    """
-
-    def __init__(self, optimizations: int = 1, parametervectors: int = None, jobs: int = None, processes: int = 1,
-                 threads: int = 1):
-        self.optimizations = optimizations
-        self.parametervectors = parametervectors
-        self.jobs = jobs
-        self.processes = processes
-        self.threads = threads
-
-        # Reasonable defaults for parallelization at levels not set by the user.
-        num_cores = psutil.cpu_count(logical=False)  # Total number of *physical* CPU cores in this machine.
-        if (self.parametervectors is None) and (self.jobs is None):
-            # Parallelization at the parameter vector level is likely more efficient.
-            self.parametervectors = int(
-                num_cores / (self.optimizations * max(1, self.processes) * max(1, self.threads)))
-            self.jobs = 1
-        elif self.parametervectors is None:
-            self.parametervectors = max(
-                int(num_cores / (self.optimizations * self.jobs * max(1, self.processes) * max(1, self.threads))), 1)
-        elif self.jobs is None:
-            self.jobs = max(int(num_cores / (
-                        self.optimizations * self.parametervectors * max(1, self.processes) * max(1, self.threads))), 1)
-
-        # Make sure all are ints
-        for i in ['optimizations', 'parametervectors', 'jobs', 'processes', 'threads']:
-            v = getattr(self, i)
-            setattr(self, i, int(v))
-
-    def __str__(self):
-        args = ', '.join(
-            f"{i}={getattr(self, i)}" for i in ['optimizations', 'parametervectors', 'jobs', 'processes', 'threads'])
-        return f"{self.__class__.__name__}({args})"
-
-    def __repr__(self):
-        return str(self)
-
-    def copy(self):
-        return self.__class__(
-            optimizations=self.optimizations,
-            parametervectors=self.parametervectors,
-            jobs=self.jobs,
-            processes=self.processes,
-            threads=self.threads
-        )
-
-    @property
-    def workers(self):
-        return self.optimizations * self.parametervectors * self.jobs * max(1, self.processes) * max(1, self.threads)
 
 
 class _GloMPOStep(_Step):
@@ -362,7 +265,6 @@ class Optimization(Optimization):
         # All parallel parameter vectors share the same job runner, so the total number of jobs we want to have
         # running is the product of the parallelism at both optimizer and job collection level! (Like this we get
         # dynamic load balancing between different parameter vectors for free.)
-        # todo change parallellevels docs to show that optimizations is now used.
         config.default_jobrunner = JobRunner(parallel=True,
                                              maxjobs=self.parallel.optimizations *
                                                      self.parallel.parametervectors *
