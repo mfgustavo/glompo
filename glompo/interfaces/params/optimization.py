@@ -350,9 +350,4 @@ class Optimization(Optimization):
                 if loc.exists():
                     loc.unlink()
 
-        self._make_params_out_txts()
-
         return self.result
-
-    def _make_params_out_txts(self):
-        dir = self.working_dir / 'trainingset_results'
