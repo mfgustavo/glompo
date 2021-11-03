@@ -908,6 +908,8 @@ class EstimatedEffects:
         ax.plot(pf, marker='.')
         if pf.shape[1] > 1:
             labs = out_labels if out_labels is not None else [f'Output {i}' for i in range(pf.shape[1])]
+            assert len(labs) == pf.shape[1], \
+                "Number of out labels does not match the number of out indices to be plotted."
             ax.legend(labels=labs)
 
         ax.set_xticks([i for i, _ in enumerate(steps)])
@@ -957,6 +959,14 @@ class EstimatedEffects:
 
         factor_index = self._expand_index('factor', factor_index)
         out_index = self._expand_index('output', out_index)
+
+        if factor_labels:
+            assert len(factor_labels) == len(factor_index), \
+                "Number of factor labels does not match the number of factor indices to be plotted."
+
+        if out_labels:
+            assert len(out_labels) == len(out_index), \
+                "Number of out labels does not match the number of out indices to be plotted."
 
         boot_m, boot_s = self.bootstrap_metrics(n_samples, metric_index, factor_index, out_index)
         metrics = self[metric_index, factor_index, out_index]
@@ -1113,15 +1123,20 @@ class EstimatedEffects:
             path.mkdir(exist_ok=True, parents=True)
             is_multi = True
 
-        for i in out_index:
+        is_custom_labs = 'out_labels' in kwargs and kwargs['out_labels'] is not None
+        if is_custom_labs:
+            assert len(out_index) == len(kwargs['out_labels']), \
+                "Number of out labels does not match the number of out indices to be plotted."
+
+        for i, index in enumerate(out_index):
             fig = plt.figure()
 
-            ax = plot_stub(fig, i, **kwargs)
+            ax = plot_stub(fig, index, **kwargs)
 
-            name = f'{i:03}' if isinstance(i, (float, int)) else i
-            if 'out_labels' in kwargs and kwargs['out_labels'] is not None:
+            name = f'{index:03}' if isinstance(index, (float, int)) else index
+            if is_custom_labs:
                 name = kwargs['out_labels'][i]
-                ax.set_title(ax.get_title() + f"\n({kwargs['out_labels'][i]})")
+                ax.set_title(ax.get_title() + f"\n({name})")
 
             fig.tight_layout()
             fig.savefig(path / name if is_multi else path)
