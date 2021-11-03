@@ -724,7 +724,7 @@ class EstimatedEffects:
         assert sum([c.size for c in classi.values()]) == self.g
         return classi
 
-    def relevance_factor(self, category: str, out_index: Union[int, str] = 'mean') -> np.ndarray:
+    def relevance_factor(self, n_cats: int, category: str, out_index: Union[int, str] = 'mean') -> np.ndarray:
         # TODO Update docs
         # TODO Introduce near far all option
         """ Measure of the fraction of factors which have an influence on the outputs.
@@ -738,6 +738,8 @@ class EstimatedEffects:
 
         Parameters
         ----------
+        n_cats
+            See :meth:`classification`.
         category
             Classification key (see :meth:`classification`) to calculate the factor for.
         out_index
@@ -749,7 +751,7 @@ class EstimatedEffects:
         wastewater applications: A comprehensive comparison of different methods. Environmental Modelling & Software,
         49, 40–52. https://doi.org/10.1016/J.ENVSOFT.2013.07.009
         """
-        return self.classification(out_index)[category] / self.g
+        return self.classification(n_cats, out_index)[category].size / self.g
 
     def bootstrap_metrics(self,
                           n_samples: int,
