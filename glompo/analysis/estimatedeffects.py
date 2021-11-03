@@ -1285,6 +1285,7 @@ class EstimatedEffects:
         ax.set_ylabel("$\\mu^*$")
         ax.tick_params(axis='x', rotation=90)
 
+        mu_star = self[1, :, out_index].squeeze()
         i_sort = np.argsort(mu_star)
         if factor_labels is None:
             labs = i_sort.astype(str)
