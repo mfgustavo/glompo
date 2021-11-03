@@ -1054,8 +1054,8 @@ class EstimatedEffects:
             elif range_key == 'short':
                 targets = anchors + self.g + 1
 
-            x_diffs = self.trajectories[traj_index, anchors] - \
-                      self.trajectories[traj_index, targets]
+            x_diffs = self.trajectories[np.ix_(traj_index, anchors)] - \
+                      self.trajectories[np.ix_(traj_index, targets)]
             y_diffs = self.outputs[np.ix_(traj_index, anchors, out_index)] - \
                       self.outputs[np.ix_(traj_index, targets, out_index)]
 
