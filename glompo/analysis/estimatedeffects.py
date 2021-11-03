@@ -191,7 +191,7 @@ class EstimatedEffects:
         """
         if self.r < 10:
             return np.full(self.h, False)
-        return np.squeeze(np.abs(self.position_factor(self.r - 10, self.r, 'all')) < self.convergence_threshold)
+        return np.squeeze(np.abs(self.position_factor(self.r - 10, self.r, 'all')) <= self.convergence_threshold)
 
     @property
     def mu(self) -> np.ndarray:
