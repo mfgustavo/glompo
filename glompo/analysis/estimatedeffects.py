@@ -1,11 +1,9 @@
 import copy
 import logging
+import numpy as np
 import warnings
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
-
-import numpy as np
-
 from ..common.wrappers import needs_optional_package
 
 try:
@@ -189,7 +187,7 @@ class EstimatedEffects:
             Array of length :math:`h` with boolean values indicating if the sensitivity metrics for that output have
             converged.
         """
-        if self.r < 10:
+        if self.r <= 10:
             return np.full(self.h, False)
         return np.squeeze(np.abs(self.position_factor(self.r - 10, self.r, 'all')) <= self.convergence_threshold)
 
@@ -1071,7 +1069,7 @@ class EstimatedEffects:
             y_diffs = self.outputs[np.ix_(traj_index, [0], out_index)] - \
                       self.outputs[np.ix_(traj_index, comp_indices, out_index)]
 
-        where = np.nonzero(x_diffs @ self.groupings)[0::2]
+        where = np.nonzero(np.abs(x_diffs) @ self.groupings)[0::2]
         if not self.is_grouped:
             x_diffs = np.sum(x_diffs, axis=2)
         else:
