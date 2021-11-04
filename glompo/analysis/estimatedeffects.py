@@ -1166,6 +1166,9 @@ class EstimatedEffects:
                       "\n" + nice_titles[range_key[0]])
 
         leg = []
+        axes = []
+        lims = [[float('inf'), -float('inf'), float('inf'), -float('inf')],
+                [float('inf'), -float('inf'), float('inf'), -float('inf')]]  # Widest limits for two plot types
         for n_row, row_key in enumerate(range_key):
             if n_row >= 1:
                 axh: plt.Axes = fig.add_subplot(n_rows, 1, n_row + 1)
@@ -1174,6 +1177,7 @@ class EstimatedEffects:
 
             ax0: plt.Axes = fig.add_subplot(n_rows, 2, 2 * n_row + 1)
             ax1: plt.Axes = fig.add_subplot(n_rows, 2, 2 * n_row + 2)
+            axes += [ax0, ax1]
 
             ax0.set_ylabel("$\\sigma$")
             ax1.set_ylabel("$\\sigma/\\mu^*$")
@@ -1184,15 +1188,15 @@ class EstimatedEffects:
             sigma = metrics[1]
 
             labs = factor_labels if factor_labels is not None else np.arange(self.g)
-            for ax in (ax0, ax1):
+            for j, ax in enumerate((ax0, ax1)):
                 y = sigma.copy()
                 if ax is ax1:
                     np.divide(sigma, mu_star, out=y, where=sigma != 0)
 
                 ax.scatter(mu_star, y, marker='x', color='black', s=2)
 
-                for j, lab in enumerate(labs):
-                    ax.annotate(lab, (mu_star[j], y[j]), fontsize=5)
+                for k, lab in enumerate(labs):
+                    ax.annotate(lab, (mu_star[k], y[k]), fontsize=5)
 
                 raw_xlims = ax.get_xlim()
                 raw_ylims = ax.get_ylim()
@@ -1209,11 +1213,16 @@ class EstimatedEffects:
                     raw_xlims = 0.9 * mu_star[mu_star > 0].min(), ax.get_xlim()[1]
                     raw_ylims = 0.9 * y[y > 0].min(), ax.get_ylim()[1]
 
-                    ax.set_xlim(*raw_xlims)
-                    ax.set_ylim(*raw_ylims)
+                lims[j][0] = min(lims[j][0], raw_xlims[0])
+                lims[j][1] = max(lims[j][1], raw_xlims[1])
+                lims[j][2] = min(lims[j][2], raw_ylims[0])
+                lims[j][3] = max(lims[j][3], raw_ylims[1])
 
+        for n_row, row_key in enumerate(range_key):  # Second loop so axis limits can be shared by all ranges.
+            ax0, ax1 = axes[2 * n_row: 2 * n_row + 2]
+            for j, ax in enumerate((ax0, ax1)):
                 # Linear / Nonlinear Effect Line
-                xlims = ax.get_xlim()
+                xlims = lims[j][:2]
                 y_pts = []
                 grads = np.array((0.1, 0.5, 1.0, np.sqrt(self.r) / 2))
                 for i, grad in enumerate(grads):
@@ -1235,7 +1244,7 @@ class EstimatedEffects:
                                 zorder=1000)
 
                 # Influential / Non-influential Line
-                ylims = ax.get_ylim()
+                ylims = lims[j][2:]
                 if self.ct > xlims[0]:
                     ax.vlines(self.ct, ylims[0], ylims[1], color='black', linewidth=0.5)
                     ni = patches.Polygon([[xlims[0], ylims[0]],
@@ -1267,8 +1276,8 @@ class EstimatedEffects:
                     if n_row == 0 and ax is ax0:
                         leg.append(patches.Patch(cmap.colors[i], cmap.colors[i], label=l))
 
-                ax.set_xlim(*raw_xlims)
-                ax.set_ylim(*raw_ylims)
+                ax.set_xlim(*xlims)
+                ax.set_ylim(*ylims)
 
         leg.append(patches.Patch('black', 'black', alpha=0.3, label='Non-Influential'))
         leg.append(lines.Line2D([], [], c='black', ls='dotted', lw=0.7, label='SEM'))
