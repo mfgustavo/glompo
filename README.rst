@@ -76,7 +76,7 @@ This will not copy the source code and GloMPO will be read directly from the dir
 
 .. install-end
 
-The installation will only install core GloMPO dependencies. Packages required for optional features must be installed manually. These features and their dependencies can be consulted in the `documentation <https://glompo.readthedocs.io/installation.html>`_.
+The installation will only install core GloMPO dependencies. Packages required for optional features must be installed manually. These features and their dependencies can be consulted in the `documentation <https://glompo.readthedocs.io/en/latest/installation.html>`_.
 
 To install GloMPO with optional dependencies:
 
@@ -143,7 +143,7 @@ GloMPO includes a set of common multidimensional global optimization test functi
 
    print(f"Minimum found: {result.fx}")
 
-For a more detailed explanation of GloMPO's use, please consult the ``examples`` folder and the `documentation <unknown>`_.
+For a more detailed explanation of GloMPO's use, please consult the ``examples`` folder and the `documentation <https://glompo.readthedocs.io/en/latest/examples.html>`_.
 
 Structure
 #########
@@ -235,12 +235,12 @@ GloMPO is licensed under `GPL-3.0 <https://opensource.org/licenses/GPL-3.0>`_.
 
 .. license-end
 
-########
-Citation
-########
+.. ########
+.. Citation
+.. ########
 
 .. citation-start
 
-If you find GloMPO useful, please consider citing the follow article in your work:
+.. If you find GloMPO useful, please consider citing the follow article in your work:
 
 .. citation-end
