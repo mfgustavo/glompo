@@ -1064,8 +1064,8 @@ class EstimatedEffects:
         if self.traj_style == 'stairs':
             anchors = np.arange(self.g)
             if range_key == 'all':
-                anchors = np.tile(anchors, 2)
                 targets = np.concatenate([anchors + 1, anchors + self.g + 1])
+                anchors = np.tile(anchors, 2)
             elif range_key == 'long':
                 targets = anchors + 1
             elif range_key == 'short':
