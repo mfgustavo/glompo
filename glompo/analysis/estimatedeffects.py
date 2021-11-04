@@ -850,18 +850,34 @@ class EstimatedEffects:
                       factor_labels: Optional[Sequence[str]] = None,
                       out_labels: Optional[Sequence[str]] = None,
                       log_scale: bool = False):
-        # TODO Update docs
-        # TODO Introduce near far all option. Multiple allowed plotted on same axes, semi-transparent ordered by first in list
         """ Saves the factor rankings as a plot.
-        Plots the ordered :math:`\\mu^*` values against their corresponding parameter indices.
+        If a single `range_key` is used then the method plots the ordered :math:`\\mu^*` values against their
+        corresponding parameter indices.
+
+        If two `range_keys` are provided then :math:`\\mu^*` for each are plotted against one another. Points which do
+        not lie on the diagonal identify outliers which behave differently over short and long distances.
 
         Parameters
         ----------
         Inherited, path out_index factor_labels out_labels log_scale
             See :meth:`plot_sensitivities`.
+        range_key
+            Accepts either one or two of the allowed range keys: :code:`'all'`, :code:`'short'` and :code:`'long'`.
         """
-        self._plotting_core(path, out_index, self._plot_ranking_stub,
-                            factor_labels=factor_labels, out_labels=out_labels, log_scale=log_scale)
+        if isinstance(range_key, str) or len(range_key) == 1:
+            self._plotting_core(path, out_index, self._plot_single_ranking_stub,
+                                factor_labels=factor_labels,
+                                out_labels=out_labels,
+                                log_scale=log_scale,
+                                range_key=range_key)
+        elif len(range_key) == 2:
+            self._plotting_core(path, out_index, self._plot_double_ranking_stub,
+                                factor_labels=factor_labels,
+                                out_labels=out_labels,
+                                log_scale=log_scale,
+                                range_key=range_key)
+        else:
+            raise ValueError("Only 1 or 2 range keys can be plotted at the same time.")
 
     @needs_optional_package('matplotlib')
     def plot_convergence(self,
@@ -1308,6 +1324,7 @@ class EstimatedEffects:
                                   factor_labels: Optional[Sequence[str]] = None,
                                   log_scale: bool = False,
                                   **kwargs) -> plt.Axes:
+        """ Makes the rankings bar plot when one range key is requested. """
         fig.set_size_inches(6.7, 6.7)
         ax = fig.add_subplot(111)
 
@@ -1316,7 +1333,7 @@ class EstimatedEffects:
         ax.set_ylabel("$\\mu^*$")
         ax.tick_params(axis='x', rotation=90)
 
-        mu_star = self[1, :, out_index].squeeze()
+        mu_star = self[1, :, out_index, :, range_key].squeeze()
         i_sort = np.argsort(mu_star)
         if factor_labels is None:
             labs = i_sort.astype(str)
@@ -1329,31 +1346,30 @@ class EstimatedEffects:
 
     def _plot_double_ranking_stub(self, fig: plt.Figure,
                                   out_index: int,
-                                  range_key: Sequence[str, str],
+                                  range_key: Sequence[str],
                                   factor_labels: Optional[Sequence[str]] = None,
                                   log_scale: bool = False,
                                   **kwargs) -> plt.Axes:
+        """ Makes the :math:`\\mu^*` v :math:`\\mu^*` scatter ranking plot when two range keys are requested. """
         fig.set_size_inches(6.7, 6.7)
-        ax = fig.add_subplot(111)
-
-        nice_labels = {'short': 'Ranking (using short-range points)',
-                       'long': 'Ranking (using long-range points)'}
+        ax: plt.Axes = fig.add_subplot(111)
 
         ax.set_title("Parameter Ranking")
-        ax.set_xlabel(nice_labels[range_key[0]])
-        ax.set_ylabel(nice_labels[range_key[1]])
-        ax.axline((0, 0), slope=1, color='k')
+        ax.set_xlabel(rf"$\mu^*$ (Using {range_key[0] + ('-range' if range_key[0] != 'all' else '')} points)")
+        ax.set_ylabel(rf"$\mu^*$ (Using {range_key[1] + ('-range' if range_key[1] != 'all' else '')} points)")
+        ax.axline((0, 0), slope=1, color='gray', linewidth=0.8, zorder=-500)
 
-        first = self[1, :, out_index, range_key].squeeze()
-        second = self[1, :, out_index, range_key].squeeze()
+        first = self[1, :, out_index, :, range_key[0]].squeeze()
+        second = self[1, :, out_index, :, range_key[1]].squeeze()
+        ax.scatter(first, second, marker='x', s=2)
 
         labs = np.arange(self.g) if not factor_labels else factor_labels
-        if factor_labels is None:
-            labs = i_sort.astype(str)
-        else:
-            labs = np.array(factor_labels)[i_sort]
-        ax.bar(labs, mu_star[i_sort])
+        for k, lab in enumerate(labs):
+            ax.annotate(lab, (first[k], second[k]), fontsize=5)
+
         ax.set_yscale('log' if log_scale else 'linear')
+        ax.set_xscale('log' if log_scale else 'linear')
+        ax.set_aspect('equal', 'datalim')
 
         return ax
 
