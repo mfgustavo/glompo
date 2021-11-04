@@ -1,9 +1,11 @@
 import copy
 import logging
-import numpy as np
 import warnings
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
+
+import numpy as np
+
 from ..common.wrappers import needs_optional_package
 
 try:
@@ -844,6 +846,7 @@ class EstimatedEffects:
     def plot_rankings(self,
                       path: Union[Path, str] = 'ranking',
                       out_index: SpecialSlice = 'mean',
+                      range_key: Union[str, List[str]] = 'all',
                       factor_labels: Optional[Sequence[str]] = None,
                       out_labels: Optional[Sequence[str]] = None,
                       log_scale: bool = False):
@@ -1121,10 +1124,15 @@ class EstimatedEffects:
             path.mkdir(exist_ok=True, parents=True)
             is_multi = True
 
-        is_custom_labs = 'out_labels' in kwargs and kwargs['out_labels'] is not None
-        if is_custom_labs:
+        is_custom_out_labs = 'out_labels' in kwargs and kwargs['out_labels'] is not None
+        if is_custom_out_labs:
             assert len(out_index) == len(kwargs['out_labels']), \
                 "Number of out labels does not match the number of out indices to be plotted."
+
+        is_custom_fact_labs = 'factor_labels' in kwargs and kwargs['factor_labels'] is not None
+        if is_custom_fact_labs:
+            assert self.g == len(kwargs['factor_labels']), \
+                "Number of factor labels does not match the number of factor indices to be plotted."
 
         for i, index in enumerate(out_index):
             fig = plt.figure()
@@ -1132,7 +1140,7 @@ class EstimatedEffects:
             ax = plot_stub(fig, index, **kwargs)
 
             name = f'{index:03}' if isinstance(index, (float, int)) else index
-            if is_custom_labs:
+            if is_custom_out_labs:
                 name = kwargs['out_labels'][i]
                 ax.set_title(ax.get_title() + f"\n({name})")
 
@@ -1294,11 +1302,12 @@ class EstimatedEffects:
 
         return axt
 
-    def _plot_ranking_stub(self, fig: plt.Figure,
-                           out_index: int,
-                           factor_labels: Optional[Sequence[str]] = None,
-                           log_scale: bool = False,
-                           **kwargs) -> plt.Axes:
+    def _plot_single_ranking_stub(self, fig: plt.Figure,
+                                  out_index: int,
+                                  range_key: str,
+                                  factor_labels: Optional[Sequence[str]] = None,
+                                  log_scale: bool = False,
+                                  **kwargs) -> plt.Axes:
         fig.set_size_inches(6.7, 6.7)
         ax = fig.add_subplot(111)
 
@@ -1309,6 +1318,36 @@ class EstimatedEffects:
 
         mu_star = self[1, :, out_index].squeeze()
         i_sort = np.argsort(mu_star)
+        if factor_labels is None:
+            labs = i_sort.astype(str)
+        else:
+            labs = np.array(factor_labels)[i_sort]
+        ax.bar(labs, mu_star[i_sort])
+        ax.set_yscale('log' if log_scale else 'linear')
+
+        return ax
+
+    def _plot_double_ranking_stub(self, fig: plt.Figure,
+                                  out_index: int,
+                                  range_key: Sequence[str, str],
+                                  factor_labels: Optional[Sequence[str]] = None,
+                                  log_scale: bool = False,
+                                  **kwargs) -> plt.Axes:
+        fig.set_size_inches(6.7, 6.7)
+        ax = fig.add_subplot(111)
+
+        nice_labels = {'short': 'Ranking (using short-range points)',
+                       'long': 'Ranking (using long-range points)'}
+
+        ax.set_title("Parameter Ranking")
+        ax.set_xlabel(nice_labels[range_key[0]])
+        ax.set_ylabel(nice_labels[range_key[1]])
+        ax.axline((0, 0), slope=1, color='k')
+
+        first = self[1, :, out_index, range_key].squeeze()
+        second = self[1, :, out_index, range_key].squeeze()
+
+        labs = np.arange(self.g) if not factor_labels else factor_labels
         if factor_labels is None:
             labs = i_sort.astype(str)
         else:
