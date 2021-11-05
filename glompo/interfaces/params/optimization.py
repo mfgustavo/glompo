@@ -1,3 +1,8 @@
+from scm.params.common._version import __version__
+
+assert tuple(map(int, __version__.split('.'))) > (0, 5, 0), \
+    f"Optimization wrapper is not compatible with ParAMS v{__version__}. >= v0.5.1 required."
+
 import logging
 import os
 import sys
