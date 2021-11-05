@@ -617,9 +617,8 @@ class EstimatedEffects:
         """
         return np.squeeze(np.atleast_2d(self.order_factors(out_index, traj_index, range_key)).argsort(1) + 1)
 
-    def classification(self, n_cats: int, out_index: Union[int, str] = 'mean') -> Dict[str, np.ndarray]:
-        # TODO Update docs
-        # TODO Introduce near far all option
+    def classification(self, n_cats: int, out_index: Union[int, str] = 'mean',
+                       range_key: str = 'all') -> Dict[str, np.ndarray]:
         # TODO Update classification rules to include comparisons of near and far if all is used?
         """ Returns a dictionary with each factor index classified according to its effect on the function outputs.
 
@@ -663,6 +662,9 @@ class EstimatedEffects:
         out_index
             Output dimension along which to do the classification.
 
+        range_key
+            See :meth:`__getitem__`.
+
         Returns
         -------
         Dict[str, numpy.ndarray]
@@ -685,7 +687,7 @@ class EstimatedEffects:
         -----
         `out_index` supports :code:`'mean'` (averages metrics over the outputs) and integer indices. Unlike most other
         methods, however, it does not support slices and combinations of outputs. Only one classification can be
-        generated at a time.
+        generated at a time. The same is true for `range_key` where only one choice is supported at a time.
 
         References
         ----------
@@ -699,7 +701,7 @@ class EstimatedEffects:
         """
         if out_index != 'mean' and not isinstance(out_index, int):
             raise ValueError('Classification can only be done on a single output at a time.')
-        mu, ms, sd = self[:, :, out_index, :].squeeze()
+        mu, ms, sd = self[:, :, out_index, :, range_key].squeeze()
 
         fr = np.zeros_like(mu)
         np.divide(sd, ms, out=fr, where=sd != 0)
@@ -724,9 +726,8 @@ class EstimatedEffects:
         assert sum([c.size for c in classi.values()]) == self.g
         return classi
 
-    def relevance_factor(self, n_cats: int, category: str, out_index: Union[int, str] = 'mean') -> np.ndarray:
-        # TODO Update docs
-        # TODO Introduce near far all option
+    def relevance_factor(self, n_cats: int, category: str, out_index: Union[int, str] = 'mean',
+                         range_key: str = 'all') -> np.ndarray:
         """ Measure of the fraction of factors which have an influence on the outputs.
         Calculated as:
 
@@ -744,6 +745,8 @@ class EstimatedEffects:
             Classification key (see :meth:`classification`) to calculate the factor for.
         out_index
             See :meth:`classification`.
+        range_key
+            See :meth:`classification`.
 
         References
         ----------
@@ -751,7 +754,7 @@ class EstimatedEffects:
         wastewater applications: A comprehensive comparison of different methods. Environmental Modelling & Software,
         49, 40–52. https://doi.org/10.1016/J.ENVSOFT.2013.07.009
         """
-        return self.classification(n_cats, out_index)[category].size / self.g
+        return self.classification(n_cats, out_index, range_key)[category].size / self.g
 
     def bootstrap_metrics(self,
                           n_samples: int,
@@ -783,12 +786,10 @@ class EstimatedEffects:
     def plot_sensitivities(self,
                            path: Union[Path, str] = 'sensitivities',
                            out_index: SpecialSlice = 'mean',
-                           range_key: Union[str, List[str]] = 'all',
+                           range_key: Union[str, Sequence[str]] = 'all',
                            factor_labels: Optional[Sequence[str]] = None,
                            out_labels: Optional[Sequence[str]] = None,
                            log_scale: bool = False):
-        # TODO Update docs
-        # TODO Introduce near far all option, multiple allowed plotted as rows.
         """ Saves a sensitivity plot.
         Produces two side-by-side scatter plots. The first is :math:`\\mu^*` versus :math:`\\sigma`, the second is
         :math:`\\mu^*` versus :math:`\\sigma/\\mu^*`. Defined dividers are included to classify factors into:
@@ -846,7 +847,7 @@ class EstimatedEffects:
     def plot_rankings(self,
                       path: Union[Path, str] = 'ranking',
                       out_index: SpecialSlice = 'mean',
-                      range_key: Union[str, List[str]] = 'all',
+                      range_key: Union[str, Sequence[str]] = 'all',
                       factor_labels: Optional[Sequence[str]] = None,
                       out_labels: Optional[Sequence[str]] = None,
                       log_scale: bool = False):
@@ -883,10 +884,9 @@ class EstimatedEffects:
     def plot_convergence(self,
                          path: Union[Path, str] = 'sensi_convergence',
                          out_index: SpecialSlice = 'mean',
+                         range_key: Union[str, Sequence[str]] = 'all',
                          step_size: int = 10,
                          out_labels: Optional[Sequence[str]] = None):
-        # TODO Update docs
-        # TODO Introduce near far all option. Multiple allowed on new figure rows.
         """ Plots the evolution of the Position Factor (:math:`PF_{r_i \\to r_j}`) metric as a function of increasing
         number of trajectories.
 
@@ -896,6 +896,8 @@ class EstimatedEffects:
             Path to file into which the plot should be saved.
         out_index
             See :meth:`__getitem__`. If multiple output dimensions are selected, they will be included on the same plot
+        range_key
+            See :meth:`__getitem__`.
         step_size
             The step size in number of trajectories when calculating the position factor.
         out_labels
@@ -913,21 +915,38 @@ class EstimatedEffects:
         --------
         :meth:`position_factor`
         """
-        steps = np.clip([(i, i + step_size) for i in range(1, self.r, step_size)], 1, self.r)
-        pf = np.array([np.atleast_1d(self.position_factor(*pair, out_index)) for pair in steps])
-
+        cmap = plt.get_cmap('tab10')
         fig, ax = plt.subplots()
 
         ax.set_title('Convergence of sensitivity rankings ($PF$ v $r$)')
         ax.set_xlabel('Trajectories Compared ($i \\to j$)')
         ax.set_ylabel('Position Factor ($PF_{i \\to j}$)')
 
-        ax.plot(pf, marker='.')
-        if pf.shape[1] > 1:
-            labs = out_labels if out_labels is not None else [f'Output {i}' for i in range(pf.shape[1])]
-            assert len(labs) == pf.shape[1], \
-                "Number of out labels does not match the number of out indices to be plotted."
-            ax.legend(labels=labs)
+        steps = np.clip([(i, i + step_size) for i in range(1, self.r, step_size)], 1, self.r)
+
+        if isinstance(range_key, str):
+            range_key = [range_key]
+
+        labs = []
+        for rk in range_key:
+            pf = np.array([np.atleast_1d(self.position_factor(*pair, out_index, rk)) for pair in steps])
+            lines = ax.plot(pf,
+                            marker={'all': '.', 'long': 'x', 'short': 'd'}[rk],
+                            linestyle={'all': '-', 'long': '--', 'short': ':'}[rk])
+            for i, l in enumerate(lines):
+                l.set_color(cmap(i))
+
+            if pf.shape[1] > 1 or len(range_key) > 1:
+                if out_labels:
+                    out_labels = [out_labels] if isinstance(out_labels, str) else out_labels
+                    l = [f'{ol} ({rk})' for ol in out_labels]
+                    assert len(l) == pf.shape[1], \
+                        "Number of out labels does not match the number of out indices to be plotted."
+                    labs += l
+                else:
+                    labs += [f'Output {i} ({rk})' for i in range(pf.shape[1])]
+
+        ax.legend(labels=labs)
 
         ax.set_xticks([i for i, _ in enumerate(steps)])
         ax.set_xticklabels([f'{s[0]}$\\to${s[1]}' for s in steps], rotation=45)
@@ -937,17 +956,17 @@ class EstimatedEffects:
 
         plt.close(fig)
 
+    @needs_optional_package('matplotlib')
     def plot_bootstrap_metrics(self,
                                path: Union[Path, str] = 'sensi_booststrap',
                                n_samples: int = 10,
                                metric_index: SpecialSlice = None,
                                factor_index: SpecialSlice = None,
                                out_index: SpecialSlice = None,
+                               range_key: str = 'all',
                                log_scale: bool = False,
                                out_labels: Optional[Sequence[str]] = None,
                                factor_labels: Optional[Sequence[str]] = None):
-        # TODO Update docs. Include example or better description of what is in the plot
-        # TODO Introduce near far all option. Multiple allowed on new rows?
         """ Plots and saves results of a boostrap analysis.
 
         Parameters
@@ -958,6 +977,8 @@ class EstimatedEffects:
             See :meth:`bootstrap_metrics`.
         Inherited, metric_index factor_index out_index
             See :meth:`__getitem__`.
+        range_key
+            See :meth:`__getitem__`. Only a single key is allowed at a time.
         log_scale
             If :obj:`True` the metric axis will be plotted on a log scale.
         out_labels
@@ -967,6 +988,9 @@ class EstimatedEffects:
             Optional list of names to gives the factors. Will be used in the axes labels. Must be equal in length to
             `factor_index`.
         """
+        assert any([range_key == rk for rk in ('all', 'short', 'long')]), \
+            "Only a single choice of 'all', 'short' or 'long' is supported."
+
         if self.is_grouped and metric_index is None:
             metric_index = 'mu_star'
             met_map = {0: '$\\mu^*$'}
@@ -985,8 +1009,8 @@ class EstimatedEffects:
             assert len(out_labels) == len(out_index), \
                 "Number of out labels does not match the number of out indices to be plotted."
 
-        boot_m, boot_s = self.bootstrap_metrics(n_samples, metric_index, factor_index, out_index)
-        metrics = self[metric_index, factor_index, out_index]
+        boot_m, boot_s = self.bootstrap_metrics(n_samples, metric_index, factor_index, out_index, range_key)
+        metrics = self[metric_index, factor_index, out_index, :, range_key]
 
         valid = [False, False]
         for lab_var, ind_var, v, str_ in ((factor_labels, factor_index, 0, 'factor'),
@@ -1029,7 +1053,8 @@ class EstimatedEffects:
             if valid[1]:
                 ax[0].set_title(out_labels[o])
                 name = out_labels[o]
-            ax[0].set_title(ax[0].get_title() + f"\n(Number of resamples: {n_samples})")
+            ax[0].set_title(
+                ax[0].get_title() + f"\n(Number of resamples: {n_samples})" + f"\n(Using {range_key} points)")
 
             fig.tight_layout()
             fig.savefig(path / name if is_multi else path)
@@ -1166,7 +1191,7 @@ class EstimatedEffects:
 
     def _plot_sensitivities_stub(self, fig: plt.Figure,
                                  out_index: int,
-                                 range_key: Union[str, List[str]],
+                                 range_key: Union[str, Sequence[str]],
                                  factor_labels: Optional[Sequence[str]] = None,
                                  log_scale: bool = False,
                                  **kwargs) -> plt.Axes:
