@@ -3,15 +3,16 @@ from scm.params.common._version import __version__
 assert tuple(map(int, __version__.split('.'))) > (0, 5, 0), \
     f"Optimization wrapper is not compatible with ParAMS v{__version__}. >= v0.5.1 required."
 
+from datetime import datetime
 import logging
 import os
-import sys
-from datetime import datetime
 from pathlib import Path
+import sys
+import traceback
+from typing import Dict, List, NamedTuple, Optional, Sequence, Union
 
 import numpy as np
 import tables as tb
-import traceback
 from scm.params.common.helpers import plams_initsettings, printerr, printnow
 from scm.params.common.parallellevels import ParallelLevels
 from scm.params.core.callbacks import Callback
@@ -24,7 +25,6 @@ from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
 from scm.params.parameterinterfaces.base import BaseParameters, Constraint
 from scm.plams.core.functions import config, finish, init
 from scm.plams.core.jobrunner import JobRunner
-from typing import Dict, List, NamedTuple, Optional, Sequence, Union
 
 from ...convergence.nconv import NOptConverged
 from ...core.manager import GloMPOManager
@@ -62,7 +62,7 @@ class _GloMPOStep(_Step):
 
     def headers(self) -> Dict[str, tb.Col]:
         heads = {}
-        for i, loss_eval in enumerate(self.datasets[1:]):
+        for i, loss_eval in enumerate(self.data_sets[1:]):
             heads[loss_eval.name] = tb.FloatCol(pos=i)
 
         return heads
@@ -202,8 +202,8 @@ class Optimization(Optimization):
             self.parallel = parallel
 
         # Sets self.objective
-        self._wrap_datasets(datasets, validation, loss, batch_size, use_pipe, dataset_names, eval_every, maxjobs,
-                            maxjobs_shuffle)
+        self._wrap_data_sets(datasets, validation, loss, batch_size, use_pipe, dataset_names, eval_every, maxjobs,
+                             maxjobs_shuffle)
 
         self.plams_workdir_path = plams_workdir_path or os.getenv('SCM_TMPDIR', '/tmp')
         self.skip_x0 = skip_x0

@@ -1,16 +1,16 @@
 import warnings
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple, Union
-
-import numpy as np
-import tables as tb
+from scm.params.common._version import __version__
 from scm.params.common.parallellevels import ParallelLevels
 from scm.params.core.dataset import DataSet
 from scm.params.core.jobcollection import JobCollection
 from scm.params.core.lossfunctions import SSE
 from scm.params.parameterinterfaces.base import BaseParameters
 from scm.plams.core.errors import ResultsError
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
+import numpy as np
+import tables as tb
 from .params_builders import setup_reax_from_classic, setup_reax_from_params, setup_xtb_from_params
 
 try:
@@ -18,6 +18,8 @@ try:
 except ImportError:
     # Different versions of ParAMSs raise different error types.
     DataSetEvaluationError = ResultsError
+
+PARAMS_VERSION_INFO = tuple(map(int, __version__.split('.')))
 
 
 class BaseParamsError:
@@ -572,9 +574,11 @@ class ReaxFFError(BaseParamsError):
         behaviours. Others can only take very specific values based on which atoms are present. This method will ignore
         and warn about attempts to activate such parameters unless `force` is used.
         """
-        # todo _get_active is ReaxFF only.
         if toggle is True or toggle == 'on':
-            allowed = np.array(self.par_eng._get_active())
+            if PARAMS_VERSION_INFO == (0, 5, 0):
+                allowed = np.array(self.par_eng._get_active())
+            else:
+                allowed = np.array([p.expose and p.name not in p.blacklist for p in self.par_eng])
 
             activating = np.full(self.n_all_parms, False)
             activating[[self.par_eng[i]._id for i in parameters]] = True
