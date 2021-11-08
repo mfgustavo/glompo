@@ -32,3 +32,4 @@ scipy~=1.2.1:            perturbation_generator, annealing, scipy_optimizer
 scm~=1.3.0:              params
 sphinx==1.8.5:           docs
 sphinx-rtd-theme~=0.5.2: docs
+tqdm~=4.48               analysis
