@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+
 import inspect
 import numpy as np
 import os
@@ -5,7 +7,6 @@ import pickle
 import pytest
 import shutil
 import threading
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, Tuple, Type, Union
 
@@ -19,7 +20,8 @@ from scm.params.core.opt_components import _Step
 from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
 from scm.params.parameterinterfaces.reaxff import ReaxParams
 
-from glompo.interfaces.params import _FunctionWrapper, ReaxFFError, GlompoParamsWrapper, setup_reax_from_classic
+from glompo.interfaces.params import ReaxFFError, GlompoParamsWrapper, setup_reax_from_classic
+from glompo.interfaces.params.glompo_opt import _FunctionWrapper
 from glompo.opt_selectors.baseselector import BaseSelector
 from glompo.optimizers.baseoptimizer import BaseOptimizer
 from glompo.common.namedtuples import Result
@@ -34,13 +36,13 @@ class FakeLossEvaluator(_LossEvaluator):
     def check(self):
         pass
 
-    def __call__(self, x):
+    def __call__(self, x, _ncalled=None):
         if PARAMS_VERSION_INFO == (0, 5, 0):
             er = EvaluatorReturn(100, x, self.name, self.ncalled, self.interface,
                                  None, [5, 2, -1, -9], [0.10, 0.25, 0.30, 0.35], 0)
         else:
             er = EvaluatorReturn(100, x, self.name, self.ncalled, self.interface,
-                                 None, [5, 2, -1, -9], [0.10, 0.25, 0.30, 0.35], 0, 'sse')
+                                 None, [5, 2, -1, -9], [0.10, 0.25, 0.30, 0.35], 0, 'sse', [])
 
         return er
 
@@ -305,6 +307,9 @@ class TestReaxFFError:
         task.toggle_parameter(range(701), toggle='off')
         assert task.n_parms == 0
 
+        if PARAMS_VERSION_INFO >= (0, 5, 1) and isinstance(activate[0], str):
+            activate = tuple(name.split(';;')[0] for name in activate)
+
         task.toggle_parameter(activate, toggle='on')
         assert task.n_parms == len(activate)
 
@@ -312,10 +317,14 @@ class TestReaxFFError:
     def test_toggle_parameter_notallowed(self, task, force):
         task.toggle_parameter(range(701), False)
         with pytest.warns(UserWarning, match="The following parameters should never be activated:"):
-            task.toggle_parameter(('O.H.S:-p_hb2;;18;;Hydrogen bond/bond order',
-                                   '0.O.S.0:n/a 1;;n/a;;n/a',
-                                   '0.H.S.0:n/a 1;;n/a;;n/a',
-                                   'C.S.S.C:V_3;;16a;;V3-torsion barrier',),
+            activate = ('O.H.S:-p_hb2;;18;;Hydrogen bond/bond order',
+                        '0.O.S.0:n/a 1;;n/a;;n/a',
+                        '0.H.S.0:n/a 1;;n/a;;n/a',
+                        'C.S.S.C:V_3;;16a;;V3-torsion barrier',)
+            if PARAMS_VERSION_INFO >= (0, 5, 1):
+                activate = tuple(name.split(';;')[0] for name in activate)
+
+            task.toggle_parameter(activate,
                                   toggle='on',
                                   force=force)
         assert task.n_parms == 4 if force else 2
@@ -350,3 +359,9 @@ class TestReaxFFError:
     def test_reweigh_residuals_warning(self, task):
         with pytest.raises(ValueError, match="new_weight cannot be None if resids is a sequence of names or indices."):
             task.reweigh_residuals([0, 1, 2])
+
+
+@pytest.mark.skipif(PARAMS_VERSION_INFO <= (0, 5, 0))
+class TestOptimizationWrapper:
+    pass
+    # todo create tests once Optimization is more complete

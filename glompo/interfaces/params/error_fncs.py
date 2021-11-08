@@ -1,24 +1,17 @@
 import warnings
 from pathlib import Path
+from scm.params.common._version import __version__
+from scm.params.common.parallellevels import ParallelLevels
+from scm.params.core.dataset import DataSet
+from scm.params.core.jobcollection import JobCollection
+from scm.params.core.lossfunctions import SSE
+from scm.params.parameterinterfaces.base import BaseParameters
+from scm.plams.core.errors import ResultsError
 from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import tables as tb
-from scm.params.common._version import __version__ as PARAMS_VERSION
-from scm.params.common.parallellevels import ParallelLevels
-from scm.params.common.reaxff_converter import geo_to_params, trainset_to_params
-from scm.params.core.dataset import DataSet, SSE
-from scm.params.core.jobcollection import JobCollection
-from scm.params.core.opt_components import _Step
-from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
-from scm.params.parameterinterfaces.base import BaseParameters
-from scm.params.parameterinterfaces.reaxff import ReaxParams  # Instead of ReaxFFParameters for backward compatibility
-from scm.params.parameterinterfaces.xtb import XTBParams
-from scm.plams.core.errors import ResultsError
-from scm.plams.interfaces.adfsuite.reaxff import reaxff_control_to_settings
-
-from ..core.manager import GloMPOManager
-from ..opt_selectors.baseselector import BaseSelector
+from .params_builders import setup_reax_from_classic, setup_reax_from_params, setup_xtb_from_params
 
 try:
     from scm.params.core.dataset import DataSetEvaluationError
@@ -26,121 +19,7 @@ except ImportError:
     # Different versions of ParAMSs raise different error types.
     DataSetEvaluationError = ResultsError
 
-__all__ = ("GlompoParamsWrapper",
-           "ReaxFFError",
-           "XTBError",
-           "setup_reax_from_classic",
-           "setup_reax_from_params",
-           "setup_xtb_from_params",)
-
-PARAMS_VERSION_INFO = tuple(map(int, PARAMS_VERSION.split('.')))
-
-
-class _FunctionWrapper:
-    """ Wraps function produced by ParAMS internals (instance of :class:`scm.params.core.opt_components._Step`) to
-    match the API required by the :attr:`.GloMPOManager.task`. Can be modified to achieve compatibility with other
-    optimizers.
-    """
-
-    def __init__(self, func: _Step):
-        self.func = func
-        if self.func.cbs:
-            warnings.warn("Callbacks provided through the Optimization class are ignored. Callbacks to individual "
-                          "optimizers can be passed to GloMPO through BaseSelector objects. Callbacks to control the "
-                          "manager itself are passed using GloMPO BaseChecker objects, some conditions should be sent "
-                          "as BaseHunter objects.", UserWarning)
-            self.func.cbs = None
-
-    def __call__(self, pars) -> float:
-        return self.func(pars)
-
-
-class GlompoParamsWrapper(BaseOptimizer):
-    """ Wraps the GloMPO manager into a ParAMS :class:`~scm.params.optimizers.base.BaseOptimizer`.
-    This is not the recommended way to make use of the GloMPO interface, it is preferable to make use of the
-    :class:`.BaseParamsError` classes. This class is only applicable in cases where the ParAMS
-    :class:`~scm.params.core.parameteroptimization.Optimization` class interface is preferred.
-
-    Parameters
-    ----------
-    opt_selector
-        Initialised :class:`.BaseSelector` object which specifies how optimizers are selected and initialised.
-    **manager_kwargs
-        Optional arguments to the :class:`.GloMPOManager` initialisation function.
-
-    Notes
-    -----
-    `manager_kwargs` accepts all arguments of :meth:`.GloMPOManager.setup` but required GloMPO arguments
-    :attr:`~.GloMPOManager.task` and :attr:`~.GloMPOManager.bounds` will be overwritten as they are passed by the
-    :meth:`minimize` function in accordance with ParAMS API.
-    """
-
-    def __init__(self, opt_selector: BaseSelector, **manager_kwargs):
-        self.manager = GloMPOManager()
-        self.manager_kwargs = manager_kwargs
-        for kw in ['task', 'bounds']:
-            if kw in self.manager_kwargs:
-                del self.manager_kwargs[kw]
-
-        self.selector = opt_selector
-
-    def minimize(self,
-                 function: _Step,
-                 x0: Sequence[float],
-                 bounds: Sequence[Tuple[float, float]],
-                 workers: int = 1) -> MinimizeResult:
-        """
-        Passes 'function' to GloMPO to be minimized. Returns an instance of MinimizeResult.
-
-        Parameters
-        ----------
-        function
-            Function to be minimized, this is passed as GloMPO's :attr:`~.GloMPOManager.task` parameter.
-        x0
-            Ignored by GloMPO, the correct way to control the optimizer starting points is by using GloMPO
-            :class:`.BaseGenerator` objects.
-        bounds
-            Sequence of (min, max) pairs used to bound the search area for every parameter. The 'bounds' parameter is
-            passed to GloMPO as its :attr:`~.GloMPOManager.bounds` parameter.
-        workers
-            Represents the maximum number of optimizers run in parallel. Passed to GloMPO as its
-            :attr:`~.GloMPOManager.max_jobs` parameter if it has not been sent during initialisation via
-            `manager_kwargs` otherwise ignored. If allowed to default this will usually result in the number of
-            optimizers as there are cores available.
-
-        Notes
-        -----
-        GloMPO is not currently compatible with using multiple :class:`~scm.params.core.dataset.DataSet` and only the
-        first one will be considered.
-
-        By default ParAMS shifts and scales all parameters to the interval (0, 1). GloMPO will work in this space and be
-        blind to the true bounds, thus results from the GloMPO logs cannot be applied directly to the function.
-        """
-
-        warnings.warn("The x0 parameter is ignored by GloMPO. To control the starting locations of optimizers within "
-                      "GloMPO make use of its BaseGenerator objects.", RuntimeWarning)
-
-        if 'max_jobs' not in self.manager_kwargs:
-            self.manager_kwargs['max_jobs'] = workers
-
-        # Silence function printing
-        function.v = False
-
-        self.manager.setup(task=_FunctionWrapper(function), bounds=bounds, opt_selector=self.selector,
-                           **self.manager_kwargs)
-
-        result = self.manager.start_manager()
-
-        # Reshape glompo.common.namedtuples.Result into scm.params.optimizers.base.MinimizeResult
-        params_res = MinimizeResult()
-        params_res.x = result.x
-        params_res.fx = result.fx
-        params_res.success = self.manager.converged and len(result.x) > 0
-
-        return params_res
-
-    def reset(self):
-        self.manager = GloMPOManager()
+PARAMS_VERSION_INFO = tuple(map(int, __version__.split('.')))
 
 
 class BaseParamsError:
@@ -182,7 +61,7 @@ class BaseParamsError:
     job_col : ~scm.params.core.jobcollection.JobCollection
         Represents the jobs from which model results will be extracted and compared to the training set.
 
-    loss : Union[str, ~scm.params.core.dataset.Loss]
+    loss : Union[str, ~scm.params.core.lossfunctions.Loss]
         Method by which individual errors are grouped into a single error function value.
 
     par_eng : ~scm.params.parameterinterfaces.base.BaseParameters
@@ -239,9 +118,9 @@ class BaseParamsError:
 
         See Also
         --------
-        :meth:`active_names`
+        :attr:`active_names`
         :meth:`convert_indices_abs2rel`
-        :meth:`convert_rel2abs_indices`
+        :meth:`convert_indices_rel2abs`
         """
         return [p._id for p in self.par_eng.active]
 
@@ -251,9 +130,9 @@ class BaseParamsError:
 
         See Also
         --------
-        :meth:`active_abs_indices`
+        :attr:`active_abs_indices`
         :meth:`convert_indices_abs2rel`
-        :meth:`convert_rel2abs_indices`
+        :meth:`convert_indices_rel2abs`
         """
         return self.par_eng.active.names
 
@@ -445,7 +324,7 @@ class BaseParamsError:
 
         Suppose you attempted to convert a parameter which was not active:
 
-        err.convert_indices_abs2rel([23, 57, 1])
+        >>> err.convert_indices_abs2rel([23, 57, 1])
         [1, 2, None]
         """
         asked_names = [self.par_eng[i].name for i in indices]
@@ -549,7 +428,7 @@ class BaseParamsError:
         --------
         :attr:`active_abs_indices`
         :attr:`convert_indices_abs2rel`
-        :attr:`convert_rel2abs_indices`
+        :attr:`convert_indices_rel2abs`
         :meth:`set_parameters`
         """
 
@@ -696,7 +575,10 @@ class ReaxFFError(BaseParamsError):
         and warn about attempts to activate such parameters unless `force` is used.
         """
         if toggle is True or toggle == 'on':
-            allowed = np.array(self.par_eng._get_active())
+            if PARAMS_VERSION_INFO == (0, 5, 0):
+                allowed = np.array(self.par_eng._get_active())
+            else:
+                allowed = np.array([p.expose and p.name not in p.blacklist for p in self.par_eng])
 
             activating = np.full(self.n_all_parms, False)
             activating[[self.par_eng[i]._id for i in parameters]] = True
@@ -731,7 +613,7 @@ class XTBError(BaseParamsError):
         ----------
         path
             Path to directory containing ParAMS data set, job collection and ReaxFF engine files (see
-            :func:`setup_reax_from_params`).
+            :func:`.setup_reax_from_params`).
         """
         dat_set, job_col, rxf_eng = setup_xtb_from_params(path)
         return cls(dat_set, job_col, rxf_eng, **kwargs)
@@ -744,199 +626,3 @@ class XTBError(BaseParamsError):
         self.dat_set.pickle_dump(str(path / 'data_set.pkl'))
         self.job_col.pickle_dump(str(path / 'job_collection.pkl'))
         self.par_eng.write(str(path))
-
-
-def setup_reax_from_classic(path: Union[Path, str]) -> Tuple[DataSet, JobCollection, ReaxParams]:
-    """ Parses classic ReaxFF force field and configuration files into instances which can be evaluated by AMS.
-
-    Parameters
-    ----------
-    path
-        Path to directory containing classic ReaxFF configuration files:
-
-    Notes
-    -----
-    `path` must contain:
-
-        ``trainset.in``: Contains the description of the items in the training set.
-
-        ``control``: Contains ReaxFF settings.
-
-        ``geo``: Contains the geometries of the items used in the training set, will make the
-        :class:`~scm.params.core.jobcollection.JobCollection` along with the ``control`` file.
-
-        ``ffield``: A force field file which contains values for all the parameters. By default almost all parameters
-        are activated and given ranges of :math:`\\pm 20%` if non-zero and [-1, 1] otherwise. See
-        :class:`~scm.params.parameterinterfaces.reaxff.ReaxParams` for details.
-
-    Optionally, the directory may contain:
-
-        ``params``: File which describes which parameters to optimize and their ranges.
-
-    Or, alternatively:
-
-        ``ffield_bool``: A force field file with all parameters set to 0 or 1. 1 indicates it will be adjusted during
-        optimization. 0 indicates it will not be changed during optimization.
-
-        ``ffield_max``: A force field file where the active parameters are set to their maximum value (value of other
-        parameters is ignored).
-
-        ``ffield_min``: A force field file where the active parameters are set to their maximum value (value of other
-        parameters is ignored).
-
-    The method will ignore ``ffield_bool``, ``ffield_min`` and ``ffield_max`` if ``params`` is also present.
-
-    .. caution::
-
-       ``params`` files are not supported in ParAMS <v0.5.1. In this case the file will be ignored and the method will
-       directly look for ``ffield_bool``, ``ffield_min`` and ``ffield_max``.
-
-    Returns
-    -------
-    Tuple[~scm.params.core.dataset.DataSet, ~scm.params.core.jobcollection.JobCollection, ~scm.params.parameterinterfaces.reaxff.ReaxParams]
-        ParAMS reparameterization objects: job collection, training set and engine.
-    """
-
-    path = Path(path).resolve(True)
-
-    # Setup the dataset
-    dat_set = trainset_to_params(str(path / 'trainset.in'))
-
-    # Setup the job collection depending on the types of data in the training set
-    settings = reaxff_control_to_settings(str(path / 'control'))
-    if (PARAMS_VERSION_INFO == (0, 5, 0) and dat_set.forces()) or \
-            (PARAMS_VERSION_INFO == (0, 5, 1) and dat_set.from_extractors('forces')):
-        settings.input.ams.properties.gradients = True
-    job_col = geo_to_params(str(path / 'geo'), settings)
-
-    # Setup the Engine and parameters
-    rxf_eng = ReaxParams(str(path / 'ffield'), bounds_scale=1.2)
-
-    # Look for optional extras files
-    params_path = path / 'params'
-    bool_path = path / 'ffield_bool'
-    min_path = path / 'ffield_min'
-    max_path = path / 'ffield_max'
-
-    if params_path.exists() and PARAMS_VERSION_INFO > (0, 5, 0):
-        rxf_eng.read_paramsfile(str(params_path))
-    elif all(extra.exists() for extra in (bool_path, min_path, max_path)):
-        bool_eng = ReaxParams(str(path / 'ffield_bool'))
-        max_eng = ReaxParams(str(path / 'ffield_max'))
-        min_eng = ReaxParams(str(path / 'ffield_min'))
-
-        rxf_eng.is_active = [bool(val) for val in bool_eng.x]
-
-        for p in rxf_eng:
-            if p.is_active:
-                if min_eng[p.name].value < max_eng[p.name].value:
-                    p.range = (min_eng[p.name].value, max_eng[p.name].value)
-                else:
-                    p.x = min_eng[p.name].value
-                    p.is_active = False
-                    print(f"WARNING: '{p.name}' deactivated due to bounds min >= max.")
-
-    # Consistency Checks
-
-    # Parameter value between bounds
-    for p in rxf_eng.active:
-        if not p.range[0] < p.value < p.range[1]:
-            p.value = (p.range[0] + p.range[1]) / 2
-            warnings.warn(f"'{p.name}' starting value out of bounds moving to midpoint.")
-
-    # Remove training set entries not in job collection
-    remove_ids = dat_set.check_consistency(job_col)
-    if remove_ids:
-        print('The following jobIDs are not in the JobCollection, their respective training set entries will be '
-              'removed:')
-        print('\n'.join({s for e in [dat_set[i] for i in remove_ids] for s in e.jobids}))
-        del dat_set[remove_ids]
-
-    return dat_set, job_col, rxf_eng
-
-
-def _setup_collections_from_params(path: Union[Path, str]) -> Tuple[DataSet, JobCollection]:
-    """ Loads ParAMS produced ReaxFF files into ParAMS objects.
-
-    Parameters
-    ----------
-    path
-        Path to folder containing:
-            ``data_set.yml`` OR ``data_set.pkl``
-                Contains the description of the items in the training set. A YAML file must be of the form produced by
-                :meth:`~scm.params.core.dataset.DataSet.store`, a pickle file must be of the form produced by
-                :meth:`~scm.params.core.dataset.DataSet.pickle_dump`. If both files are present, the pickle is given
-                priority.
-            ``job_collection.yml`` OR ``job_collection.pkl``
-                Contains descriptions of the AMS jobs to evaluate. A YAML file must be of the form produced by
-                :meth:`~scm.params.core.jobcollection.JobCollection.store`, a pickle file must be of the form produced
-                by :meth:`scm.params.core.jobcollection.JobCollection.pickle_dump`.  If both files are present, the
-                pickle is given priority.
-    """
-    dat_set = DataSet()
-    job_col = JobCollection()
-
-    for name, params_obj in {'data_set': dat_set, 'job_collection': job_col}.items():
-        built = False
-        for suffix, loader in {'.pkl': 'pickle_load', '.yml': 'load'}.items():
-            file = Path(path, name + suffix)
-            if file.exists():
-                getattr(params_obj, loader)(str(file))
-                built = True
-        if not built:
-            raise FileNotFoundError(f"No {name.replace('_', ' ')} data found")
-
-    return dat_set, job_col
-
-
-def setup_reax_from_params(path: Union[Path, str]) -> Tuple[DataSet, JobCollection, ReaxParams]:
-    """ Loads ParAMS produced ReaxFF files into ParAMS objects.
-
-    Parameters
-    ----------
-    path
-        Path to folder containing:
-            ``data_set.yml`` OR ``data_set.pkl``
-                Contains the description of the items in the training set. A YAML file must be of the form produced by
-                :meth:`~scm.params.core.dataset.DataSet.store`, a pickle file must be of the form produced by
-                :meth:`~scm.params.core.dataset.DataSet.pickle_dump`. If both files are present, the pickle is given
-                priority.
-            ``job_collection.yml`` OR ``job_collection.pkl``
-                Contains descriptions of the AMS jobs to evaluate. A YAML file must be of the form produced by
-                :meth:`~scm.params.core.jobcollection.JobCollection.store`, a pickle file must be of the form produced
-                by :meth:`~scm.params.core.jobcollection.JobCollection.pickle_dump`.  If both files are present, the
-                pickle is given priority.
-            ``reax_params.pkl``
-                Pickle produced by :meth:`~scm.params.parameterinterfaces.base.BaseParameters.pickle_dump`, representing
-                the force field, active parameters and their ranges.
-    """
-    dat_set, job_col = _setup_collections_from_params(path)
-    rxf_eng = ReaxParams.pickle_load(str(Path(path, 'reax_params.pkl')))
-
-    return dat_set, job_col, rxf_eng
-
-
-def setup_xtb_from_params(path: Union[Path, str]) -> Tuple[DataSet, JobCollection, XTBParams]:
-    """ Loads ParAMS produced ReaxFF files into ParAMS objects.
-
-    Parameters
-    ----------
-    path
-        Path to folder containing:
-            ``data_set.yml`` OR ``data_set.pkl``
-                Contains the description of the items in the training set. A YAML file must be of the form produced by
-                :meth:`~scm.params.core.dataset.DataSet.store`, a pickle file must be of the form produced by
-                :meth:`~scm.params.core.dataset.DataSet.pickle_dump`. If both files are present, the pickle is given
-                priority.
-            ``job_collection.yml`` OR ``job_collection.pkl``
-                Contains descriptions of the AMS jobs to evaluate. A YAML file must be of the form produced by
-                :meth:`~scm.params.core.jobcollection.JobCollection.store`, a pickle file must be of the form produced
-                by :meth:`~scm.params.core.jobcollection.JobCollection.pickle_dump`.  If both files are present, the
-                pickle is given priority.
-            ``elements.xtbpar``, ``basis.xtbpar``, ``globals.xtbpar``, ``additional_parameters.yaml``, ``metainfo.yaml``, ``atomic_configurations.xtbpar``, ``metals.xtbpar``
-                Classic xTB parameter files.
-    """
-    dat_set, job_col = _setup_collections_from_params(path)
-    xtb_eng = XTBParams(str(path))
-
-    return dat_set, job_col, xtb_eng
