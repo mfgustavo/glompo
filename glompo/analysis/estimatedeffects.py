@@ -1,11 +1,9 @@
 import copy
-import logging
 import warnings
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
-
 from ..common.wrappers import needs_optional_package
 
 try:
@@ -257,8 +255,6 @@ class EstimatedEffects:
                  convergence_threshold: float = 0,
                  cutoff_threshold: float = 0.1,
                  trajectory_style: str = 'radial'):
-        self.logger = logging.getLogger('glompo.analyzer')
-
         self.dims: int = input_dims
         self.out_dims = output_dims
         self.traj_style = trajectory_style

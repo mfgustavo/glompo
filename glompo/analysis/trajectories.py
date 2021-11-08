@@ -1,10 +1,13 @@
 import itertools
 import os
+import traceback
+import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import RLock
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 
 import numpy as np
+from tqdm import tqdm
 
 from ..common.helpers import unravel
 
@@ -50,8 +53,8 @@ class _CallsValidatorCounter:
             y = self.func(*args, **kwargs)
             if np.isfinite(y).all():
                 return True, y
-        except:
-            pass
+        except Exception as e:
+            warnings.warn("Function evaluation raised the following error:\n" + traceback.format_exc(), UserWarning)
 
         return False, None
 
@@ -421,7 +424,8 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
                                         k: int,
                                         groupings: Optional[np.ndarray] = None,
                                         include_short_range: bool = False,
-                                        parallelize: bool = True) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+                                        parallelize: bool = True,
+                                        verbose: int = 0) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
     """ Unique iterative strategy for unstable functions.
     Some functions may produce non-finite values or errors at specific combinations of the values in input space (e.g.
     :class:`ReaxFFError`). Such points should not be accepted into the sensitivity analysis as they are liable to
@@ -456,6 +460,11 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
     parallelize
         If :obj:`True` the trajectories will be validated in parallel using threads, otherwise they will be validated
         sequentially.
+    verbose
+        Controls the number of print statements produced by the function. Accepts 0, 1 or 2.
+        0 produces no output.
+        1 produces a small amount of output suitable for outputs to file.
+        2 produces slightly more output suitable for real-time updates via the console.
 
     Returns
     -------
@@ -487,6 +496,11 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
     :meth:`.make_radial_trajectory_set`. However, since the candidate trajectories are still generated in this way, they
     can still be expected to be a close approximation.
     """
+
+    def optional_print(mess, *args, **kwargs):
+        if verbose:
+            print(mess, *args, **kwargs)
+
     func = _CallsValidatorCounter(func)
 
     crashed = []
@@ -494,32 +508,65 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
     final_outs = []
 
     while len(final_trajs) < r:
+        optional_print(f"{len(final_trajs)} / {r} valid trajectories found so far.")
         gen_trajs = make_radial_trajectory_set(r - len(final_trajs), k, groupings, include_short_range)
         results = []
+
+        optional_print("---------------------------")
+        optional_print(f"{len(gen_trajs)} New trajectories generated.")
+        optional_print("Beginning validation...")
+
+        pbar = None
+        pfix = {str(i): 'Queued'.ljust(15, '.') for i, _ in enumerate(gen_trajs)}
+        print_lots = verbose == 2
+        if verbose:
+            pbar = tqdm(total=gen_trajs.shape[0] * (gen_trajs.shape[1] - 1),
+                        leave=True,
+                        postfix=pfix)
 
         if parallelize:
             with ThreadPoolExecutor(os.cpu_count()) as executor:
                 futs = set()
-                for t in gen_trajs:
-                    ft = executor.submit(_validate_radial_trajectory, func, t, include_short_range)
+                for i, t in enumerate(gen_trajs):
+                    ft = executor.submit(_validate_radial_trajectory, i, func, t, include_short_range, pbar, print_lots)
                     futs.add(ft)
 
-                for ft in as_completed(futs):
+                for i, ft in enumerate(as_completed(futs)):
+                    if pbar:
+                        pfix = dict((s.split('=') for s in pbar.postfix.split(', ')))
+                        pfix[str(i)] = ft.result()['pbar_message']
+                        pbar.set_postfix(pfix)
+
                     results.append(ft.result())
 
         else:
-            for t in gen_trajs:
-                results.append(_validate_radial_trajectory(func, t, include_short_range))
+            for i, t in enumerate(gen_trajs):
+                res = _validate_radial_trajectory(i, func, t, include_short_range, pbar, print_lots)
+                if pbar:
+                    pfix = dict((s.split('=') for s in pbar.postfix.split(', ')))
+                    pfix[str(i)] = res['pbar_message']
+                    pbar.set_postfix(pfix)
 
+                results.append(res)
+
+        if pbar:
+            pbar.close()
+
+        optional_print("Validation cycle complete...")
+        n_accept = 0
         for res in results:
             if res['valid'] is True:
                 final_trajs.append(res['x_valid'])
                 final_outs.append(res['y'])
+                n_accept += 1
                 assert len(final_trajs) <= r
 
             for x in res['x_crashed']:
                 crashed.append(x)
 
+        optional_print(f"{n_accept} / {len(results)} accepted as valid trajectories.")
+
+    optional_print("Requested number of trajectories found.")
     final_trajs = np.array(final_trajs)
     final_outs = np.atleast_3d(final_outs)
     crashed = np.array(crashed)
@@ -527,26 +574,35 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
     return final_trajs, final_outs, crashed, np.prod(final_outs.shape[:2]) / func.eval_counter
 
 
-def _validate_radial_trajectory(func: Callable[[Sequence[float]], Sequence[float]],
+def _validate_radial_trajectory(traj_id: int,
+                                func: Callable[[Sequence[float]], Sequence[float]],
                                 t: np.ndarray,
-                                include_short_range: bool) -> Dict[str, Any]:
+                                include_short_range: bool,
+                                pbar: Optional[tqdm],
+                                print_lots: bool) -> Dict[str, Any]:
     """ Performs the validation procedure for an entire trajectory. """
+    if pbar:
+        pfix = dict((s.split('=') for s in pbar.postfix.split(', ')))
+        pfix[str(traj_id)] = "Building...".ljust(15, '.')
+        pbar.set_postfix(pfix)
 
     valid_pts = []
     valid_outs = []
     crashed = []
 
+    g = t.shape[0] - 1
+    g //= 2 if include_short_range else 1
+
     # Validate the base point
     valid, y = func(t[0])
     if not valid:
-        return {'valid': False, 'x_crashed': t[0, None]}
+        if pbar:
+            pbar.update(t.shape[0] - 1)
+        return {'valid': False, 'x_crashed': t[0, None], 'pbar_message': "Base pt fail".ljust(15, '.')}
     valid_pts.append(t[0])
     valid_outs.append(y)
 
     # Validate or move auxiliary points several times
-    g = t.shape[0] - 1
-    g //= 2 if include_short_range else 1
-
     for i, x in enumerate(t[1:], 1):
         moveable_axes = np.argwhere(t[0] - x).ravel()
         pt_type = 'aux' if i <= g else 'short'
@@ -554,17 +610,26 @@ def _validate_radial_trajectory(func: Callable[[Sequence[float]], Sequence[float
         result = _validate_or_move(pt_type, func, x, t[0], moveable_axes, max_moves=5)
 
         if not result['valid']:
+            result['pbar_message'] = "Max moves fail".ljust(15, '.')
+            if pbar:
+                pbar.update(t.shape[0] - (i if print_lots else 1))
             return result
 
+        if pbar and print_lots:
+            pbar.update(1)
         valid_pts.append(result['x_valid'])
         valid_outs.append(result['y'])
         for x_ in result['x_crashed']:
             crashed.append(x_)
 
+    if pbar and not print_lots:
+        pbar.update(t.shape[0] - 1)
+
     return {'valid': True,
             'x_valid': np.array(valid_pts),
             'y': np.array(valid_outs),
-            'x_crashed': crashed}
+            'x_crashed': crashed,
+            'pbar_message': "Success".ljust(15, '.')}
 
 
 def _validate_or_move(pt_type: str,
