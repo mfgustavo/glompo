@@ -61,7 +61,7 @@ class BaseParamsError:
     job_col : ~scm.params.core.jobcollection.JobCollection
         Represents the jobs from which model results will be extracted and compared to the training set.
 
-    loss : Union[str, ~scm.params.core.dataset.Loss]
+    loss : Union[str, ~scm.params.core.lossfunctions.Loss]
         Method by which individual errors are grouped into a single error function value.
 
     par_eng : ~scm.params.parameterinterfaces.base.BaseParameters
@@ -118,9 +118,9 @@ class BaseParamsError:
 
         See Also
         --------
-        :meth:`active_names`
+        :attr:`active_names`
         :meth:`convert_indices_abs2rel`
-        :meth:`convert_rel2abs_indices`
+        :meth:`convert_indices_rel2abs`
         """
         return [p._id for p in self.par_eng.active]
 
@@ -130,9 +130,9 @@ class BaseParamsError:
 
         See Also
         --------
-        :meth:`active_abs_indices`
+        :attr:`active_abs_indices`
         :meth:`convert_indices_abs2rel`
-        :meth:`convert_rel2abs_indices`
+        :meth:`convert_indices_rel2abs`
         """
         return self.par_eng.active.names
 
@@ -324,7 +324,7 @@ class BaseParamsError:
 
         Suppose you attempted to convert a parameter which was not active:
 
-        err.convert_indices_abs2rel([23, 57, 1])
+        >>> err.convert_indices_abs2rel([23, 57, 1])
         [1, 2, None]
         """
         asked_names = [self.par_eng[i].name for i in indices]
@@ -428,7 +428,7 @@ class BaseParamsError:
         --------
         :attr:`active_abs_indices`
         :attr:`convert_indices_abs2rel`
-        :attr:`convert_rel2abs_indices`
+        :attr:`convert_indices_rel2abs`
         :meth:`set_parameters`
         """
 
@@ -613,7 +613,7 @@ class XTBError(BaseParamsError):
         ----------
         path
             Path to directory containing ParAMS data set, job collection and ReaxFF engine files (see
-            :func:`setup_reax_from_params`).
+            :func:`.setup_reax_from_params`).
         """
         dat_set, job_col, rxf_eng = setup_xtb_from_params(path)
         return cls(dat_set, job_col, rxf_eng, **kwargs)

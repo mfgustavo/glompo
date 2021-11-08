@@ -1,6 +1,8 @@
 from scm.params.common._version import __version__
 
-assert tuple(map(int, __version__.split('.'))) > (0, 5, 0), \
+from sphinx.ext.autodoc.importer import _MockObject  # Ensure docs build
+
+assert tuple(map(int, __version__.split('.'))) > (0, 5, 0) or isinstance(__version__, _MockObject), \
     f"Optimization wrapper is not compatible with ParAMS v{__version__}. >= v0.5.1 required."
 
 from datetime import datetime
@@ -83,7 +85,7 @@ class Optimization(Optimization):
     optimizer
         IGNORED.
 
-    title : optional, str
+    title
         The working directory for this optimization. Once :meth:`optimize` is called, will *NOT* switch to it.
         (see `glompo_kwargs`)
 
@@ -97,7 +99,7 @@ class Optimization(Optimization):
         IGNORED.
 
     **glompo_kwargs
-        GloMPO related arguments sent to :meth:`GloMPOManager.setup()`.
+        GloMPO related arguments sent to :meth:`.GloMPOManager.setup()`.
 
         The following extra keywords are allowed:
 

@@ -1,9 +1,8 @@
 import warnings
-from selectors import BaseSelector
-from typing import Sequence, Tuple
-
 from scm.params.core.opt_components import _Step
 from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
+from selectors import BaseSelector
+from typing import Sequence, Tuple
 
 from ...core.manager import GloMPOManager
 
@@ -82,9 +81,6 @@ class GlompoParamsWrapper(BaseOptimizer):
 
         Notes
         -----
-        GloMPO is not currently compatible with using multiple :class:`~scm.params.core.dataset.DataSet` and only the
-        first one will be considered.
-
         By default ParAMS shifts and scales all parameters to the interval (0, 1). GloMPO will work in this space and be
         blind to the true bounds, thus results from the GloMPO logs cannot be applied directly to the function.
         """

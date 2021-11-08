@@ -3,7 +3,7 @@ Interfaces
 ==========
 
 .. toctree::
-    :maxdepth: 4
-    :caption: Table of Contents
+   :maxdepth: 4
+   :caption: Table of Contents
 
-    params
+   params
