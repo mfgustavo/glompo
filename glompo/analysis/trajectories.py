@@ -428,13 +428,13 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
                                         verbose: int = 0) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
     """ Unique iterative strategy for unstable functions.
     Some functions may produce non-finite values or errors at specific combinations of the values in input space (e.g.
-    :class:`ReaxFFError`). Such points should not be accepted into the sensitivity analysis as they are liable to
-    significantly skew the results. This method is an iterative wrapper around :meth:`.make_radial_trajectory_set`
+    :class:`.ReaxFFError`). Such points should not be accepted into the sensitivity analysis as they are liable to
+    significantly skew the results. This method is an iterative wrapper around :meth:`make_radial_trajectory_set`
     which evaluates trajectory points and only returns validated trajectories for analysis.
 
     The strategy is as follows:
 
-       #. Generate a selection of trajectories using :meth:`.make_radial_trajectory_set`.
+       #. Generate a selection of trajectories using :meth:`make_radial_trajectory_set`.
 
        #. For each trajectory, evaluate the base point.
 
@@ -456,7 +456,7 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
         performed. Must accept a :math:`k` length :class:`numpy.ndarray` when called and return an :math:`h` long vector
         of function outputs.
     Inherited, r k groupings include_short_range
-        See :meth:`.make_radial_trajectory_set`.
+        See :meth:`make_radial_trajectory_set`.
     parallelize
         If :obj:`True` the trajectories will be validated in parallel using threads, otherwise they will be validated
         sequentially.
@@ -493,7 +493,7 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
     -----
     Due to the possibility of rejecting trajectories and moving points, the returned set of trajectories is no longer
     guaranteed to contain a Latin Hypercube Sample of points within the inputs space as produced by
-    :meth:`.make_radial_trajectory_set`. However, since the candidate trajectories are still generated in this way, they
+    :meth:`make_radial_trajectory_set`. However, since the candidate trajectories are still generated in this way, they
     can still be expected to be a close approximation.
     """
 
