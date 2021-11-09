@@ -1,9 +1,11 @@
 import itertools
 import os
+import sys
 import traceback
 import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import RLock
+from time import sleep
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 
 import numpy as np
@@ -499,7 +501,7 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
 
     def optional_print(mess, *args, **kwargs):
         if verbose:
-            print(mess, *args, **kwargs)
+            print(mess, *args, **kwargs, flush=True)
 
     func = _CallsValidatorCounter(func)
 
@@ -522,7 +524,8 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
         if verbose:
             pbar = tqdm(total=gen_trajs.shape[0] * (gen_trajs.shape[1] - 1),
                         leave=True,
-                        postfix=pfix)
+                        postfix=pfix,
+                        file=sys.stdout)
 
         if parallelize:
             with ThreadPoolExecutor(os.cpu_count()) as executor:
@@ -531,11 +534,15 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
                     ft = executor.submit(_validate_radial_trajectory, i, func, t, include_short_range, pbar, print_lots)
                     futs.add(ft)
 
+                if verbose == 1:
+                    sleep(0.01)
+                    pbar.refresh()
+
                 for i, ft in enumerate(as_completed(futs)):
                     if pbar:
                         pfix = dict((s.split('=') for s in pbar.postfix.split(', ')))
                         pfix[f'{i:02}'] = ft.result()['pbar_message']
-                        pbar.set_postfix(pfix)
+                        pbar.set_postfix(pfix, refresh=(i + 1) < len(futs))
 
                     results.append(ft.result())
 
@@ -545,7 +552,7 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
                 if pbar:
                     pfix = dict((s.split('=') for s in pbar.postfix.split(', ')))
                     pfix[f'{i:02}'] = res['pbar_message']
-                    pbar.set_postfix(pfix)
+                    pbar.set_postfix(pfix, refresh=(i + 1) < len(futs))
 
                 results.append(res)
 
@@ -581,10 +588,19 @@ def _validate_radial_trajectory(traj_id: int,
                                 pbar: Optional[tqdm],
                                 print_lots: bool) -> Dict[str, Any]:
     """ Performs the validation procedure for an entire trajectory. """
+
+    def update_progress(n):
+        if pbar:
+            if print_lots:
+                pbar.update(n)
+            else:
+                with pbar.get_lock():
+                    pbar.n += n
+
     if pbar:
         pfix = dict((s.split('=') for s in pbar.postfix.split(', ')))
         pfix[f'{traj_id:02}'] = "Building...".ljust(15, '.')
-        pbar.set_postfix(pfix)
+        pbar.set_postfix(pfix, refresh=print_lots)
 
     valid_pts = []
     valid_outs = []
@@ -596,8 +612,7 @@ def _validate_radial_trajectory(traj_id: int,
     # Validate the base point
     valid, y = func(t[0])
     if not valid:
-        if pbar:
-            pbar.update(t.shape[0] - 1)
+        update_progress(t.shape[0] - 1)
         return {'valid': False, 'x_crashed': t[0, None], 'pbar_message': "Base pt fail".ljust(15, '.')}
     valid_pts.append(t[0])
     valid_outs.append(y)
@@ -611,8 +626,7 @@ def _validate_radial_trajectory(traj_id: int,
 
         if not result['valid']:
             result['pbar_message'] = "Max moves fail".ljust(15, '.')
-            if pbar:
-                pbar.update(t.shape[0] - (i if print_lots else 1))
+            update_progress(t.shape[0] - (i if print_lots else 1))
             return result
 
         if pbar and print_lots:
@@ -623,7 +637,7 @@ def _validate_radial_trajectory(traj_id: int,
             crashed.append(x_)
 
     if pbar and not print_lots:
-        pbar.update(t.shape[0] - 1)
+        pbar.n += t.shape[0] - 1
 
     return {'valid': True,
             'x_valid': np.array(valid_pts),
