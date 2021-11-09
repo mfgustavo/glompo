@@ -517,7 +517,7 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
         optional_print("Beginning validation...")
 
         pbar = None
-        pfix = {str(i): 'Queued'.ljust(15, '.') for i, _ in enumerate(gen_trajs)}
+        pfix = {f'{i:02}': 'Queued'.ljust(15, '.') for i, _ in enumerate(gen_trajs)}
         print_lots = verbose == 2
         if verbose:
             pbar = tqdm(total=gen_trajs.shape[0] * (gen_trajs.shape[1] - 1),
@@ -534,7 +534,7 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
                 for i, ft in enumerate(as_completed(futs)):
                     if pbar:
                         pfix = dict((s.split('=') for s in pbar.postfix.split(', ')))
-                        pfix[str(i)] = ft.result()['pbar_message']
+                        pfix[f'{i:02}'] = ft.result()['pbar_message']
                         pbar.set_postfix(pfix)
 
                     results.append(ft.result())
@@ -544,7 +544,7 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
                 res = _validate_radial_trajectory(i, func, t, include_short_range, pbar, print_lots)
                 if pbar:
                     pfix = dict((s.split('=') for s in pbar.postfix.split(', ')))
-                    pfix[str(i)] = res['pbar_message']
+                    pfix[f'{i:02}'] = res['pbar_message']
                     pbar.set_postfix(pfix)
 
                 results.append(res)
@@ -583,7 +583,7 @@ def _validate_radial_trajectory(traj_id: int,
     """ Performs the validation procedure for an entire trajectory. """
     if pbar:
         pfix = dict((s.split('=') for s in pbar.postfix.split(', ')))
-        pfix[str(traj_id)] = "Building...".ljust(15, '.')
+        pfix[f'{traj_id:02}'] = "Building...".ljust(15, '.')
         pbar.set_postfix(pfix)
 
     valid_pts = []
