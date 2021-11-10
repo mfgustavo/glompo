@@ -110,7 +110,7 @@ class Optimization(Optimization):
         The following keywords will be ignored if provided:
 
         :code:`'bounds'`
-           Automatically extracted from `parameterinterface`.
+           Automatically extracted from `parameter_interface`.
 
         :code:`'task'`
            It is constructed within this class from `job_collection`, `data_set`, `parameter_interface`.
@@ -281,11 +281,11 @@ class Optimization(Optimization):
         idir.mkdir(parents=True, exist_ok=True)
 
         self.interface.pickle_dump(str(idir / 'initial_parameter_interface.pkl'))
-        self.job_collection.store(str(idir / 'jobcollection.yaml.gz'))
+        self.job_collection.store(str(idir / 'job_collection.yaml.gz'))
 
-        (idir / 'datasets').mkdir(parents=True, exist_ok=True)
+        (idir / 'data_sets').mkdir(parents=True, exist_ok=True)
         for obj in self.objective:
-            obj.dataset.store(str(idir / 'datasets' / obj.name) + '.yaml.gz')
+            obj.data_set.store(str(idir / 'data_sets' / obj.name) + '.yaml.gz')
 
         init(config_settings=plams_initsettings, path=self.plams_workdir_path)
         # All parallel parameter vectors share the same job runner, so the total number of jobs we want to have
