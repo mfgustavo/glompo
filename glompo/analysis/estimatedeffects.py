@@ -1,9 +1,9 @@
 import copy
+import numpy as np
 import warnings
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
-import numpy as np
 from ..common.wrappers import needs_optional_package
 
 try:
@@ -948,7 +948,7 @@ class EstimatedEffects:
         ax.set_xticklabels([f'{s[0]}$\\to${s[1]}' for s in steps], rotation=45)
 
         fig.tight_layout()
-        fig.savefig(path)
+        fig.savefig(path, transparent=False, facecolor='white')
 
         plt.close(fig)
 
@@ -1053,7 +1053,7 @@ class EstimatedEffects:
                 ax[0].get_title() + f"\n(Number of resamples: {n_samples})" + f"\n(Using {range_key} points)")
 
             fig.tight_layout()
-            fig.savefig(path / name if is_multi else path)
+            fig.savefig(path / name if is_multi else path, transparent=False, facecolor='white')
             plt.close(fig)
 
     def _calculate_ee(self,
@@ -1182,7 +1182,7 @@ class EstimatedEffects:
                 ax.set_title(ax.get_title() + f"\n({name})")
 
             fig.tight_layout()
-            fig.savefig(path / name if is_multi else path)
+            fig.savefig(path / name if is_multi else path, transparent=False, facecolor='white')
             plt.close(fig)
 
     def _plot_sensitivities_stub(self, fig: plt.Figure,
