@@ -546,7 +546,10 @@ class ReaxFFError(BaseParamsError):
         return cls(dat_set, job_col, rxf_eng, validation_dataset, scale_residuals)
 
     @classmethod
-    def from_params_files(cls, path: Union[Path, str], **kwargs) -> 'ReaxFFError':
+    def from_params_files(cls,
+                          path: Union[Path, str],
+                          validation_dataset: Optional[DataSet] = None,
+                          scale_residuals: bool = False, ) -> 'ReaxFFError':
         """ Initializes the error function from ParAMS data files.
 
         Parameters
@@ -554,9 +557,11 @@ class ReaxFFError(BaseParamsError):
         path
             Path to directory containing ParAMS data set, job collection and ReaxFF engine files (see
             :func:`.setup_reax_from_params`).
+        Inherited, validation_dataset scale_residuals
+            See :class:`.BaseParamsError`.
         """
         dat_set, job_col, rxf_eng = setup_reax_from_params(path)
-        return cls(dat_set, job_col, rxf_eng, **kwargs)
+        return cls(dat_set, job_col, rxf_eng, validation_dataset, scale_residuals)
 
     def toggle_parameter(self, parameters: Union[Sequence[int], Sequence[str]], toggle: Union[str, bool] = None,
                          force: bool = False):
@@ -615,17 +620,22 @@ class XTBError(BaseParamsError):
     """ GFN-xTB error function. """
 
     @classmethod
-    def from_params_files(cls, path: Union[Path, str], **kwargs) -> 'XTBError':
+    def from_params_files(cls,
+                          path: Union[Path, str],
+                          validation_dataset: Optional[DataSet] = None,
+                          scale_residuals: bool = False, ) -> 'XTBError':
         """ Initializes the error function from ParAMS data files.
 
         Parameters
         ----------
         path
-            Path to directory containing ParAMS data set, job collection and ReaxFF engine files (see
-            :func:`.setup_reax_from_params`).
+            Path to directory containing ParAMS data set, job collection and parameter engine files (see
+            :func:`.setup_xtb_from_params`).
+        Inherited, validation_dataset scale_residuals
+            See :class:`.BaseParamsError`.
         """
         dat_set, job_col, rxf_eng = setup_xtb_from_params(path)
-        return cls(dat_set, job_col, rxf_eng, **kwargs)
+        return cls(dat_set, job_col, rxf_eng, validation_dataset, scale_residuals)
 
     def checkpoint_save(self, path: Union[Path, str]):
         """ Used to store files into a GloMPO checkpoint (at path) suitable to reconstruct the task when the checkpoint
