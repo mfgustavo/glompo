@@ -130,9 +130,9 @@ class Optimization(Optimization):
     """
 
     def __init__(self,
-                 jobcollection: JobCollection,
-                 datasets: Union[DataSet, Sequence[DataSet]],
-                 parameterinterface: BaseParameters,
+                 job_collection: JobCollection,
+                 data_sets: Union[DataSet, Sequence[DataSet]],
+                 parameter_interface: BaseParameters,
                  optimizer: BaseOptimizer,
                  title: str = 'opt',
                  plams_workdir_path: Optional[str] = None,
@@ -143,24 +143,24 @@ class Optimization(Optimization):
                  verbose: bool = True,
                  skip_x0: bool = False,
                  logger_every: Union[dict, int] = None,
-                 # Per dataset settings
+                 # Per data_set settings
                  loss: Union[Loss, Sequence[Loss]] = 'sse',
                  batch_size: Union[int, Sequence[int]] = None,
                  use_pipe: Union[bool, Sequence[bool]] = True,
-                 dataset_names: Sequence[str] = None,
+                 data_set_names: Sequence[str] = None,
                  eval_every: Union[int, Sequence[int]] = 1,
                  maxjobs: Union[None, Sequence[int]] = None,
                  maxjobs_shuffle: Union[bool, Sequence[bool]] = False,
                  **glompo_kwargs):
         self.result = None
 
-        assert isinstance(jobcollection,
-                          JobCollection), f"JobCollection instance not understood: {type(jobcollection)}."
-        self.jobcollection = jobcollection
+        assert isinstance(job_collection,
+                          JobCollection), f"JobCollection instance not understood: {type(job_collection)}."
+        self.jobcollection = job_collection
 
-        assert issubclass(parameterinterface.__class__,
-                          BaseParameters), f"Parameter interface type not understood: {type(parameterinterface)}. Must be a subclass of BaseParameters."
-        self.interface = parameterinterface
+        assert issubclass(parameter_interface.__class__,
+                          BaseParameters), f"Parameter interface type not understood: {type(parameter_interface)}. Must be a subclass of BaseParameters."
+        self.interface = parameter_interface
         assert len(
             self.interface.active) > 0, "The parameter interface does not contain any parameters marked for optimization. Check the `interface.is_active` attribute and make sure that at least one parameter is marked as active."
         for p in self.interface.active:
@@ -200,11 +200,11 @@ class Optimization(Optimization):
             self.parallel = ParallelLevels()
         else:
             assert isinstance(parallel,
-                              ParallelLevels), f"Type of the parallel argument is{type(parameterinterface)}, but should be ParallelLevels."
+                              ParallelLevels), f"Type of the parallel argument is{type(parameter_interface)}, but should be ParallelLevels."
             self.parallel = parallel
 
         # Sets self.objective
-        self._wrap_data_sets(datasets, validation, loss, batch_size, use_pipe, dataset_names, eval_every, maxjobs,
+        self._wrap_data_sets(data_sets, validation, loss, batch_size, use_pipe, data_set_names, eval_every, maxjobs,
                              maxjobs_shuffle)
 
         self.plams_workdir_path = plams_workdir_path or os.getenv('SCM_TMPDIR', '/tmp')
