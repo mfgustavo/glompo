@@ -113,7 +113,7 @@ class Optimization(Optimization):
            Automatically extracted from `parameterinterface`.
 
         :code:`'task'`
-           It is constructed within this class from `jobcollection`, `dataset`, `parameterinterface`.
+           It is constructed within this class from `job_collection`, `data_set`, `parameter_interface`.
 
         :code:`'working_dir'`
            `title` will be used as this parameter.
@@ -156,7 +156,7 @@ class Optimization(Optimization):
 
         assert isinstance(job_collection,
                           JobCollection), f"JobCollection instance not understood: {type(job_collection)}."
-        self.jobcollection = job_collection
+        self.job_collection = job_collection
 
         assert issubclass(parameter_interface.__class__,
                           BaseParameters), f"Parameter interface type not understood: {type(parameter_interface)}. Must be a subclass of BaseParameters."
@@ -281,7 +281,7 @@ class Optimization(Optimization):
         idir.mkdir(parents=True, exist_ok=True)
 
         self.interface.pickle_dump(str(idir / 'initial_parameter_interface.pkl'))
-        self.jobcollection.store(str(idir / 'jobcollection.yaml.gz'))
+        self.job_collection.store(str(idir / 'jobcollection.yaml.gz'))
 
         (idir / 'datasets').mkdir(parents=True, exist_ok=True)
         for obj in self.objective:
