@@ -47,13 +47,15 @@ def _setup_collections_from_params(path: Union[Path, str]) -> Tuple[DataSet, Job
     return dat_set, job_col
 
 
-def setup_reax_from_classic(path: Union[Path, str]) -> Tuple[DataSet, JobCollection, ReaxParams]:
+def setup_reax_from_classic(path: Union[Path, str], **kwargs) -> Tuple[DataSet, JobCollection, ReaxParams]:
     """ Parses classic ReaxFF force field and configuration files into instances which can be evaluated by AMS.
 
     Parameters
     ----------
     path
         Path to directory containing classic ReaxFF configuration files:
+    **kwargs
+        Extra arguments passed to :func:`~scm.params.common.reaxff_converter.trainset_to_params`.
 
     Notes
     -----
@@ -101,7 +103,7 @@ def setup_reax_from_classic(path: Union[Path, str]) -> Tuple[DataSet, JobCollect
     path = Path(path).resolve(True)
 
     # Setup the dataset
-    dat_set = trainset_to_params(str(path / 'trainset.in'))
+    dat_set = trainset_to_params(str(path / 'trainset.in'), **kwargs)
 
     # Setup the job collection depending on the types of data in the training set
     settings = reaxff_control_to_settings(str(path / 'control'))

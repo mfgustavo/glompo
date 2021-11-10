@@ -1,5 +1,9 @@
 import warnings
 from pathlib import Path
+from typing import Dict, List, Optional, Sequence, Tuple, Union
+
+import numpy as np
+import tables as tb
 from scm.params.common._version import __version__
 from scm.params.common.parallellevels import ParallelLevels
 from scm.params.core.dataset import DataSet
@@ -7,10 +11,7 @@ from scm.params.core.jobcollection import JobCollection
 from scm.params.core.lossfunctions import SSE
 from scm.params.parameterinterfaces.base import BaseParameters
 from scm.plams.core.errors import ResultsError
-from typing import Dict, List, Optional, Sequence, Tuple, Union
 
-import numpy as np
-import tables as tb
 from .params_builders import setup_reax_from_classic, setup_reax_from_params, setup_xtb_from_params
 
 try:
@@ -525,16 +526,24 @@ class ReaxFFError(BaseParamsError):
     """ ReaxFF error function. """
 
     @classmethod
-    def from_classic_files(cls, path: Union[Path, str], **kwargs) -> 'ReaxFFError':
+    def from_classic_files(cls,
+                           path: Union[Path, str],
+                           validation_dataset: Optional[DataSet] = None,
+                           scale_residuals: bool = False,
+                           **kwargs) -> 'ReaxFFError':
         """ Initializes the error function from classic ReaxFF files.
 
         Parameters
         ----------
         path
             Path to classic ReaxFF files, passed to :func:`.setup_reax_from_classic`.
+        Inherited, validation_dataset scale_residuals
+            See :class:`.BaseParamsError`.
+        **kwargs
+            Passed to :func:`.setup_reax_from_classic`.
         """
-        dat_set, job_col, rxf_eng = setup_reax_from_classic(path)
-        return cls(dat_set, job_col, rxf_eng, **kwargs)
+        dat_set, job_col, rxf_eng = setup_reax_from_classic(path, **kwargs)
+        return cls(dat_set, job_col, rxf_eng, validation_dataset, scale_residuals)
 
     @classmethod
     def from_params_files(cls, path: Union[Path, str], **kwargs) -> 'ReaxFFError':
