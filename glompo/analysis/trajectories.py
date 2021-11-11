@@ -1,9 +1,8 @@
 import itertools
-import os
 import sys
 import traceback
 import warnings
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from threading import RLock
 from time import sleep
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple
@@ -55,7 +54,7 @@ class _CallsValidatorCounter:
             y = self.func(*args, **kwargs)
             if np.isfinite(y).all():
                 return True, y
-        except Exception as e:
+        except Exception:
             warnings.warn("Function evaluation raised the following error:\n" + traceback.format_exc(), UserWarning)
 
         return False, None
@@ -393,7 +392,9 @@ def make_radial_trajectory_set(r: int,
     lhs /= r2
     lhs = lhs.T
 
-    part = lambda a: make_radial_trajectory(k, groupings, a[:k], a[k:], include_short_range=include_short_range)
+    def part(a):
+        return make_radial_trajectory(k, groupings, a[:k], a[k:], include_short_range=include_short_range)
+
     trajs = np.apply_along_axis(part, 1, np.concatenate([lhs[0::2], lhs[1::2]], 1))
 
     return trajs
@@ -426,7 +427,7 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
                                         k: int,
                                         groupings: Optional[np.ndarray] = None,
                                         include_short_range: bool = False,
-                                        parallelize: bool = True,
+                                        max_threads: int = 1,
                                         verbose: int = 0) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
     """ Unique iterative strategy for unstable functions.
     Some functions may produce non-finite values or errors at specific combinations of the values in input space (e.g.
@@ -459,9 +460,9 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
         of function outputs.
     Inherited, r k groupings include_short_range
         See :meth:`make_radial_trajectory_set`.
-    parallelize
-        If :obj:`True` the trajectories will be validated in parallel using threads, otherwise they will be validated
-        sequentially.
+    max_threads
+        The maximum number of parallel threads employed in the search for trajectories.
+        Default is 1, the search is done sequentially (no extra threads are used).
     verbose
         Controls the number of print statements produced by the function. Accepts 0, 1 or 2.
         0 produces no output.
@@ -499,9 +500,19 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
     can still be expected to be a close approximation.
     """
 
-    def optional_print(mess, *args, **kwargs):
-        if verbose:
-            print(mess, *args, **kwargs, flush=True)
+    def update_result(result):
+        final_trajs.append(result['x_valid'])
+        final_outs.append(result['y'])
+        assert len(final_trajs) <= r
+
+        for vec in result['x_crashed']:
+            crashed.append(vec)
+
+    def update_status(_tid, _message):
+        if pbar:
+            pfix = dict((s.split('=') for s in pbar.postfix.split(', ')))
+            pfix[_tid] = _message
+            pbar.set_postfix(pfix)
 
     func = _CallsValidatorCounter(func)
 
@@ -509,71 +520,68 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
     final_trajs = []
     final_outs = []
 
-    while len(final_trajs) < r:
-        optional_print(f"{len(final_trajs)} / {r} valid trajectories found so far.")
-        gen_trajs = make_radial_trajectory_set(r - len(final_trajs), k, groupings, include_short_range)
-        results = []
+    gen_trajs = make_radial_trajectory_set(r, k, groupings, include_short_range)
 
-        optional_print("---------------------------")
-        optional_print(f"{len(gen_trajs)} New trajectories generated.")
-        optional_print("Beginning validation...")
+    pbar = None
+    print_lots = verbose == 2
+    if verbose:
+        pbar = tqdm(total=gen_trajs.shape[0] * (gen_trajs.shape[1] - 1),
+                    leave=True,
+                    postfix={f'{i:02}': 'Queued'.ljust(15, '.') for i in range(r)},
+                    file=sys.stdout)
 
-        pbar = None
-        pfix = {f'{i:02}': 'Queued'.ljust(15, '.') for i, _ in enumerate(gen_trajs)}
-        print_lots = verbose == 2
-        if verbose:
-            pbar = tqdm(total=gen_trajs.shape[0] * (gen_trajs.shape[1] - 1),
-                        leave=True,
-                        postfix=pfix,
-                        file=sys.stdout)
+    if max_threads > 1:
+        thread_pool = ThreadPoolExecutor(max_threads)
 
-        if parallelize:
-            with ThreadPoolExecutor(os.cpu_count()) as executor:
-                futs = set()
-                for i, t in enumerate(gen_trajs):
-                    ft = executor.submit(_validate_radial_trajectory, i, func, t, include_short_range, pbar, print_lots)
+        futs = set()
+        for i, t in enumerate(gen_trajs):
+            tid = f'{i:02}'
+            ft = thread_pool.submit(_validate_radial_trajectory, tid, func, t, include_short_range, pbar, print_lots)
+            ft.traj_id = tid
+            futs.add(ft)
+
+        if verbose == 1:
+            sleep(0.01)
+            pbar.refresh()
+
+        while futs:
+            done, _ = wait(futs, return_when=FIRST_COMPLETED)
+            for finished_job in done:
+                res = finished_job.result()
+                tid = finished_job.traj_id
+                futs.remove(finished_job)
+
+                update_status(tid, res['pbar_message'])
+
+                if res['valid'] is True:
+                    update_result(res)
+
+                else:
+                    t = make_radial_trajectory(k, groupings, include_short_range=include_short_range)
+                    ft = thread_pool.submit(_validate_radial_trajectory, tid, func, t,
+                                            include_short_range, pbar, print_lots)
+                    ft.traj_id = tid
                     futs.add(ft)
 
-                if verbose == 1:
-                    sleep(0.01)
-                    pbar.refresh()
+        thread_pool.shutdown()
 
-                for i, ft in enumerate(as_completed(futs)):
-                    if pbar:
-                        pfix = dict((s.split('=') for s in pbar.postfix.split(', ')))
-                        pfix[f'{i:02}'] = ft.result()['pbar_message']
-                        pbar.set_postfix(pfix, refresh=(i + 1) < len(futs))
+    else:
+        gen_trajs = make_radial_trajectory_set(r, k, groupings, include_short_range)
+        for i in range(r):
+            tid = f'{i:02}'
+            t = gen_trajs[i]
 
-                    results.append(ft.result())
+            res = {'valid': False}
+            while res['valid'] is False:
+                res = _validate_radial_trajectory(tid, func, t, include_short_range, pbar, print_lots)
+                t = make_radial_trajectory(k, groupings, include_short_range=include_short_range)
+                update_status(tid, res['pbar_message'])
 
-        else:
-            for i, t in enumerate(gen_trajs):
-                res = _validate_radial_trajectory(i, func, t, include_short_range, pbar, print_lots)
-                if pbar:
-                    pfix = dict((s.split('=') for s in pbar.postfix.split(', ')))
-                    pfix[f'{i:02}'] = res['pbar_message']
-                    pbar.set_postfix(pfix, refresh=(i + 1) < len(futs))
+            update_result(res)
 
-                results.append(res)
+    if pbar:
+        pbar.close()
 
-        if pbar:
-            pbar.close()
-
-        optional_print("Validation cycle complete...")
-        n_accept = 0
-        for res in results:
-            if res['valid'] is True:
-                final_trajs.append(res['x_valid'])
-                final_outs.append(res['y'])
-                n_accept += 1
-                assert len(final_trajs) <= r
-
-            for x in res['x_crashed']:
-                crashed.append(x)
-
-        optional_print(f"{n_accept} / {len(results)} accepted as valid trajectories.")
-
-    optional_print("Requested number of trajectories found.")
     final_trajs = np.array(final_trajs)
     final_outs = np.atleast_3d(final_outs)
     crashed = np.array(crashed)
@@ -581,7 +589,7 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
     return final_trajs, final_outs, crashed, np.prod(final_outs.shape[:2]) / func.eval_counter
 
 
-def _validate_radial_trajectory(traj_id: int,
+def _validate_radial_trajectory(traj_id: str,
                                 func: Callable[[Sequence[float]], Sequence[float]],
                                 t: np.ndarray,
                                 include_short_range: bool,
@@ -599,7 +607,7 @@ def _validate_radial_trajectory(traj_id: int,
 
     if pbar:
         pfix = dict((s.split('=') for s in pbar.postfix.split(', ')))
-        pfix[f'{traj_id:02}'] = "Building...".ljust(15, '.')
+        pfix[traj_id] = "Building...".ljust(15, '.')
         pbar.set_postfix(pfix, refresh=print_lots)
 
     valid_pts = []
@@ -612,7 +620,7 @@ def _validate_radial_trajectory(traj_id: int,
     # Validate the base point
     valid, y = func(t[0])
     if not valid:
-        update_progress(t.shape[0] - 1)
+        update_progress(0)
         return {'valid': False, 'x_crashed': t[0, None], 'pbar_message': "Base pt fail".ljust(15, '.')}
     valid_pts.append(t[0])
     valid_outs.append(y)
@@ -626,7 +634,7 @@ def _validate_radial_trajectory(traj_id: int,
 
         if not result['valid']:
             result['pbar_message'] = "Max moves fail".ljust(15, '.')
-            update_progress(t.shape[0] - (i if print_lots else 1))
+            update_progress(1 - i if print_lots else 0)
             return result
 
         if pbar and print_lots:
