@@ -4,7 +4,6 @@ import traceback
 import warnings
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from threading import RLock
-from time import sleep
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 
 import numpy as np
@@ -541,7 +540,9 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
             futs.add(ft)
 
         if verbose == 1:
-            sleep(0.01)
+            # Capture the initial set of 'building' statuses simultaneously
+            while sum([f.running() for f in futs]) < max_threads:
+                pass
             pbar.refresh()
 
         while futs:
@@ -559,7 +560,7 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
                 else:
                     t = make_radial_trajectory(k, groupings, include_short_range=include_short_range)
                     ft = thread_pool.submit(_validate_radial_trajectory, tid, func, t,
-                                            include_short_range, pbar, print_lots)
+                                            include_short_range, pbar, print_lots, False)
                     ft.traj_id = tid
                     futs.add(ft)
 
@@ -573,7 +574,7 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
 
             res = {'valid': False}
             while res['valid'] is False:
-                res = _validate_radial_trajectory(tid, func, t, include_short_range, pbar, print_lots)
+                res = _validate_radial_trajectory(tid, func, t, include_short_range, pbar, print_lots, True)
                 t = make_radial_trajectory(k, groupings, include_short_range=include_short_range)
                 update_status(tid, res['pbar_message'])
 
@@ -594,7 +595,8 @@ def _validate_radial_trajectory(traj_id: str,
                                 t: np.ndarray,
                                 include_short_range: bool,
                                 pbar: Optional[tqdm],
-                                print_lots: bool) -> Dict[str, Any]:
+                                print_lots: bool,
+                                linear: bool) -> Dict[str, Any]:
     """ Performs the validation procedure for an entire trajectory. """
 
     def update_progress(n):
@@ -607,8 +609,8 @@ def _validate_radial_trajectory(traj_id: str,
 
     if pbar:
         pfix = dict((s.split('=') for s in pbar.postfix.split(', ')))
-        pfix[traj_id] = "Building...".ljust(15, '.')
-        pbar.set_postfix(pfix, refresh=print_lots)
+        pfix[traj_id] = "Building".ljust(15, '.')
+        pbar.set_postfix(pfix, refresh=print_lots or linear)
 
     valid_pts = []
     valid_outs = []
