@@ -166,7 +166,7 @@ def make_radial_trajectory(k: int,
                            groupings: Optional[np.ndarray] = None,
                            base_pt: Optional[np.ndarray] = None,
                            aux_pt: Optional[np.ndarray] = None,
-                           min_dist: float = 0.1,
+                           min_dist: float = 0,
                            include_short_range: bool = False) -> np.ndarray:
     """ Produces a radial sample set.
     Generates a set of `k`-dimensional points constructed from `base_pt` (:math:`\\mathbf{a}`) and
@@ -235,15 +235,23 @@ def make_radial_trajectory(k: int,
     Campolongo, F., Saltelli, A., & Cariboni, J. (2011). From screening to quantitative sensitivity analysis. A unified
     approach. *Computer Physics Communications*, 182(4), 978–988. https://doi.org/10.1016/J.CPC.2010.12.039
     """
-    a = np.array(base_pt) if base_pt is not None else np.random.random(k)
+    assert 0 <= min_dist < 1, "min_dist must be between 0 and 1."
 
-    while aux_pt is None:
-        b = np.random.random(k)
-        if np.all(np.abs(a - b) > min_dist):
-            # Accept a candidate for b only if it is sufficiently far away from a
-            break
+    a = np.array(base_pt) if base_pt is not None else np.random.random(k)
+    b = np.array(aux_pt) if aux_pt is not None else np.random.random(k)
+
+    if base_pt is not None and aux_pt is not None and np.any(np.abs(base_pt - aux_pt) < min_dist):
+        warnings.warn(
+            f"base_pt {base_pt} and aux_pt {aux_pt} provided which violates the provided min_dist {min_dist}. "
+            f"Ignoring min_dist requirement.", UserWarning)
     else:
-        b = aux_pt
+        while True:
+            dists = np.abs(a - b)
+            where_close = dists < min_dist
+            b[where_close] = np.random.random(where_close.sum())
+            if np.all(dists > min_dist):
+                # Accept a candidate for b only if it is sufficiently far away from a
+                break
 
     G = np.array(groupings) if groupings is not None else np.identity(k)
     assert G.sum(0).all() and G.sum(1).all() and G.sum() == k, "Every parameter must be in exactly one group."
@@ -365,7 +373,7 @@ def make_radial_trajectory_set(r: int,
     ----------
     r
         Number of spaced trajectories to generate.
-    Inherited, k groupings min_dist include_short_range
+    Inherited, k groupings include_short_range
         See :func:`make_radial_trajectory`.
 
     Returns
@@ -392,7 +400,7 @@ def make_radial_trajectory_set(r: int,
     lhs = lhs.T
 
     def part(a):
-        return make_radial_trajectory(k, groupings, a[:k], a[k:], include_short_range=include_short_range)
+        return make_radial_trajectory(k, groupings, a[:k], a[k:], 0, include_short_range)
 
     trajs = np.apply_along_axis(part, 1, np.concatenate([lhs[0::2], lhs[1::2]], 1))
 
@@ -424,6 +432,7 @@ def traj_distance(t1: np.ndarray, t2: np.ndarray) -> float:
 def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequence[float]],
                                         r: int,
                                         k: int,
+                                        min_dist: float = 0,
                                         groupings: Optional[np.ndarray] = None,
                                         include_short_range: bool = False,
                                         max_threads: int = 1,
@@ -457,8 +466,8 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
         The function for which the trajectory is being generated, and on which the sensitivity analysis will be
         performed. Must accept a :math:`k` length :class:`numpy.ndarray` when called and return an :math:`h` long vector
         of function outputs.
-    Inherited, r k groupings include_short_range
-        See :meth:`make_radial_trajectory_set`.
+    Inherited, r k min_dist groupings include_short_range
+        See :meth:`make_radial_trajectory`.
     max_threads
         The maximum number of parallel threads employed in the search for trajectories.
         Default is 1, the search is done sequentially (no extra threads are used).
@@ -499,12 +508,12 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
     can still be expected to be a close approximation.
     """
 
-    def update_result(result):
-        final_trajs.append(result['x_valid'])
-        final_outs.append(result['y'])
+    def update_result(_result):
+        final_trajs.append(_result['x_valid'])
+        final_outs.append(_result['y'])
         assert len(final_trajs) <= r
 
-        for vec in result['x_crashed']:
+        for vec in _result['x_crashed']:
             crashed.append(vec)
 
     def update_status(_tid, _message):
@@ -536,15 +545,9 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
         for i, t in enumerate(gen_trajs):
             tid = f'{i:02}'
             ft = thread_pool.submit(_validate_radial_trajectory, tid, func, t,
-                                    include_short_range, pbar, print_lots, False)
+                                    include_short_range, pbar, print_lots)
             ft.traj_id = tid
             futs.add(ft)
-
-        if verbose == 1:
-            # Capture the initial set of 'building' statuses simultaneously
-            while sum([f.running() for f in futs]) < max_threads:
-                pass
-            pbar.refresh()
 
         while futs:
             done, _ = wait(futs, return_when=FIRST_COMPLETED)
@@ -559,9 +562,10 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
                     update_result(res)
 
                 else:
-                    t = make_radial_trajectory(k, groupings, include_short_range=include_short_range)
+                    t = make_radial_trajectory(k, groupings, min_dist=min_dist, include_short_range=include_short_range)
                     ft = thread_pool.submit(_validate_radial_trajectory, tid, func, t,
-                                            include_short_range, pbar, print_lots, False)
+                                            include_short_range, pbar, print_lots)
+                    update_status(tid, 'Queued'.ljust(15, '.'))
                     ft.traj_id = tid
                     futs.add(ft)
 
@@ -575,7 +579,7 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
 
             res = {'valid': False}
             while res['valid'] is False:
-                res = _validate_radial_trajectory(tid, func, t, include_short_range, pbar, print_lots, True)
+                res = _validate_radial_trajectory(tid, func, t, include_short_range, pbar, print_lots)
                 t = make_radial_trajectory(k, groupings, include_short_range=include_short_range)
                 update_status(tid, res['pbar_message'])
 
@@ -596,8 +600,7 @@ def _validate_radial_trajectory(traj_id: str,
                                 t: np.ndarray,
                                 include_short_range: bool,
                                 pbar: Optional[tqdm],
-                                print_lots: bool,
-                                linear: bool) -> Dict[str, Any]:
+                                print_lots: bool) -> Dict[str, Any]:
     """ Performs the validation procedure for an entire trajectory. """
 
     def update_progress(n):
@@ -611,7 +614,7 @@ def _validate_radial_trajectory(traj_id: str,
     if pbar:
         pfix = dict((s.split('=') for s in pbar.postfix.split(', ')))
         pfix[traj_id] = "Building".ljust(15, '.')
-        pbar.set_postfix(pfix, refresh=print_lots or linear)
+        pbar.set_postfix(pfix)
 
     valid_pts = []
     valid_outs = []
