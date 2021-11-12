@@ -535,7 +535,8 @@ def unstable_func_radial_trajectory_set(func: Callable[[Sequence[float]], Sequen
         futs = set()
         for i, t in enumerate(gen_trajs):
             tid = f'{i:02}'
-            ft = thread_pool.submit(_validate_radial_trajectory, tid, func, t, include_short_range, pbar, print_lots)
+            ft = thread_pool.submit(_validate_radial_trajectory, tid, func, t,
+                                    include_short_range, pbar, print_lots, False)
             ft.traj_id = tid
             futs.add(ft)
 
