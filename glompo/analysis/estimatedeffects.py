@@ -1,8 +1,9 @@
 import copy
-import numpy as np
 import warnings
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
+
+import numpy as np
 
 from ..common.wrappers import needs_optional_package
 
@@ -24,9 +25,6 @@ __all__ = ('EstimatedEffects',)
 SpecialSlice = Union[None, int, str, List, slice, np.ndarray]
 
 
-# TODO Provide 'near' and 'far' analysis
-# TODO provide comparisons and mixtures of near and far
-# TODO provide analysis on differences between distributions of near and far analyses
 class EstimatedEffects:
     """ Implementation of Morris screening strategy.
     Based on the original work of `Morris (1991) <https://doi.org/10.1080/00401706.1991.10484804>`_ but includes
