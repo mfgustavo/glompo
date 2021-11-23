@@ -1089,9 +1089,9 @@ class Shubert(BaseTestCase):
     """ Implementation of the Shubert Type-I, Type-III and Type-IV optimization test functions [a]_.
 
     .. math::
-       f_I(x) & = & \\sum^2_{i=1}\\sum^5_{j=1} j \\cos\\left[(j+1)x_i+j\\right]\\\\
-       f_{III}(x) & = & \\sum^5_{i=1}\\sum^5_{j=1} j \\sin\\left[(j+1)x_i+j\\right]\\\\
-       f_{IV}(x) & = & \\sum^5_{i=1}\\sum^5_{j=1} j \\cos\\left[(j+1)x_i+j\\right]\\\\
+       f_I(x) & = & \\prod^d_{i=1}\\sum^5_{j=1} j \\cos\\left[(j+1)x_i+j\\right]\\\\
+       f_{III}(x) & = & \\sum^d_{i=1}\\sum^5_{j=1} j \\sin\\left[(j+1)x_i+j\\right]\\\\
+       f_{IV}(x) & = & \\sum^d_{i=1}\\sum^5_{j=1} j \\cos\\left[(j+1)x_i+j\\right]\\\\
 
     Recommended bounds: :math:`x_i \\in [-10, 10]`
 
@@ -1102,7 +1102,7 @@ class Shubert(BaseTestCase):
     Parameters
     ----------
     style
-        Selection between the Shubert01, Shubert03 & Shubert04 functions. Each more oscillatory than the previous.
+        Selection between the Shubert01, Shubert03 & Shubert04 functions.
     shift_positive
         Shifts the entire function such that the global minimum falls at 0.
     """
@@ -1115,42 +1115,20 @@ class Shubert(BaseTestCase):
     def __call__(self, x) -> float:
         super().__call__(x)
 
-        if self.style == 1:
-            x = np.array(x).reshape((-1, 1))
-            j = np.arange(1, 6)
+        x = np.array(x).reshape((-1, 1))
+        j = np.arange(1, 6)
 
-            calc = (j + 1) * x + j
-            calc = np.cos(calc)
-            calc = j * calc
-            calc = np.sum(calc, axis=1)
+        calc = (j + 1) * x + j
+        calc = {1: np.cos, 3: np.sin, 4: np.cos}[self.style](calc)
+        calc = j * calc
+
+        calc = np.sum(calc, axis={1: 1, 3: None, 4: None}[self.style])
+
+        if self.style == 1:
             calc = np.prod(calc)
 
-            if self.shift_positive:
-                calc += 186.731
-
-        elif self.style == 3:
-            x = np.reshape(x, (-1, 1))
-            j = np.arange(1, 6)
-
-            calc = (j + 1) * x + j
-            calc = np.sin(calc)
-            calc = j * calc
-            calc = np.sum(calc)
-
-            if self.shift_positive:
-                calc += 24.062499
-
-        else:
-            x = np.reshape(x, (-1, 1))
-            j = np.arange(1, 6)
-
-            calc = (j + 1) * x + j
-            calc = np.cos(calc)
-            calc = j * calc
-            calc = np.sum(calc)
-
-            if self.shift_positive:
-                calc += 29.016015
+        if self.shift_positive:
+            calc += {1: 186.731, 3: 24.062499, 4: 29.016015}[self.style]
 
         return calc
 
