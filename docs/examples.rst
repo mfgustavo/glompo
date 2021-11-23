@@ -2,7 +2,10 @@
 Examples
 ********
 
-GloMPO comes bundled with several examples to get you started. They can all be found in the ``examples`` directory of the package. After working through the examples, the user is encouraged to read further in the documentation to get a proper understanding of all of GloMPO's components.
+GloMPO comes bundled with several examples to get you started. They can all be found in the ``examples`` directory of the package. The examples are best done in the order presented here. After working them, the user is encouraged to read further in the documentation to get a proper understanding of all of GloMPO's components.
+
+.. contents:: Contents
+   :local:
 
 Minimal
 *******
@@ -231,3 +234,142 @@ The hunting must be reconfigured slightly to better suit the new optimization be
    :linenos:
    :lineno-match:
    :lines: 39
+
+Managing Two-Level Algorithms
+*****************************
+
+The :download:`twolevel <../examples/twolevel.py>` script provides a simple demonstration of GloMPO managing a popular two-level algorithm; basin-hopping. By 'two-level' algorithm we mean metaheuristics which include periodic local searches such as SciPy's `basin-hopping <https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.basinhopping.html#scipy-optimize-basinhopping>`_ or `dual annealing <https://docs.scipy.org/doc/scipy//reference/reference/generated/scipy.optimize.dual_annealing.html#scipy-optimize-dual-annealing>`_ algorithms.
+
+These algorithms typically have an upper level routine (usually a Monte-Carlo jump) which selects points to evaluate. Local search routines are then started at these points. One can configure GloMPO to manage the overall strategy by launching instances of routines as its children (see :class:`.ScipyOptimizeWrapper`).
+
+In this example, however, we demonstrate a different approach. Here the 'upper' level algorithm (which chooses where optimizers are started) is used as the :ref:`Generator <Generators>`, while the local searches are started as its children.
+
+This is a proof of concept, showing how GloMPO's management and supervision aspects can be brought into existing optimization strategies without requiring a large amount of reimplementation.
+
+.. literalinclude:: ../examples/twolevel.py
+   :linenos:
+
+In this example, we will use the :class:`.LennardJones` problem. The minimization problem seeks to optimally arrange :math:`N` atoms in :math:`d`-dimensional space which minimizes the overall energy (balances attractive and repulsive forces). We use a shifted and version so that all values are postive and can be conveniently displayed on the output plots.
+
+.. literalinclude:: ../examples/twolevel.py
+   :linenos:
+   :lineno-match:
+   :lines: 18-20
+
+.. literalinclude:: ../examples/twolevel.py
+   :linenos:
+   :lineno-match:
+   :lines: 33
+
+The optimization will be terminated when the minimum is found or the function has been called 4000 times:
+
+.. literalinclude:: ../examples/twolevel.py
+   :linenos:
+   :lineno-match:
+   :lines: 35-36
+
+We will use the :class:`.BasinHoppingGenerator` to pick points in the same way that the `basin-hopping <https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.basinhopping.html#scipy-optimize-basinhopping>`_ algorithm does.
+
+.. literalinclude:: ../examples/twolevel.py
+   :linenos:
+   :lineno-match:
+   :lines: 38
+
+The managed optimizers will be instances of the BFGS algorithm used by the full routine:
+
+.. literalinclude:: ../examples/twolevel.py
+   :linenos:
+   :lineno-match:
+   :lines: 40-42
+
+We can use a simple hunting scheme in this example which simply terminates optimizers which are stagnating at levels worse than those previously seen.
+
+.. literalinclude:: ../examples/twolevel.py
+   :linenos:
+   :lineno-match:
+   :lines: 46
+
+The rest of the script follows the pattern of the previous examples. The components can now be given to the manager and run.
+
+ReaxFF
+******
+
+.. attention::
+
+   This example requires the `Amsterdam Modelling Suite <www.scm.com>`_ be present on your system with licenses for ReaxAMS and ParAMS.
+
+   This example is also quite expensive and should be performed on an HPC node.
+
+The :download:`reaxff <../examples/reaxff.py>` script provides an example of GloMPO configured to manage several parallel CMA-ES reparameterizations of the disulfide training set designed by `Muller et al. (2015) <https://doi.org/10.1002/jcc.23966>`_.
+
+.. literalinclude:: ../examples/reaxff.py
+   :linenos:
+
+We begin by setting up the cost function from the `trainset.in`, `geo` and `ffield` files published with the paper. These are included in GloMPO's `tests/_test_inputs` directory:
+
+.. literalinclude:: ../examples/reaxff.py
+   :linenos:
+   :lineno-match:
+   :lines: 32
+
+The optimization will be time-limited in this case to 24hrs:
+
+.. literalinclude:: ../examples/reaxff.py
+   :linenos:
+   :lineno-match:
+   :lines: 38
+
+Resource balancing is critically important in this case since the optimization is expensive. Generally the cost function evaluation time is a function of the parameters being tested since geometry optimizations take longer to converge for some parameter combinations.
+
+Thus, one can set:
+
+   ``workers = popsize``
+      This evaluates very quickly, but has the worst computational efficiency as many cores remain idle while waiting for the slowest evaluation.
+
+   ``workers = 1``
+      This evaluates the cost function sequentially and is the most computationally efficient (no idling time), but requires the most wall time since there is no parallelization.
+
+It is often best to choose a balance between these considerations and factor in the availability of computational resources and the number of parallel optimizations one would like to run.
+
+In this example, we assume a 24 core machine and would like to run 6 optimizers in parallel. This suggests that each optimizer should run 4 function evaluations in parallel; a suitable load balancing compromise. We select a population size of 12 (multiple of 4) to further optimize computational efficiency.
+
+We use the CMA-ES algorithm which has been shown to perform well on ReaxFF reparameterizations, and select a moderate :math:`\sigma` value.
+
+.. literalinclude:: ../examples/reaxff.py
+   :linenos:
+   :lineno-match:
+   :lines: 40-45
+
+.. attention::
+
+   It is important that you rebalance these parameters according to your available resources before running the example.
+
+We will keep hunting simple in this example, and shutdown optimizers which begin to converge towards points which are worse than those already seen. You could also consider including conditions based on the status of a validation set, or some other measure of overfitting. If you are testing a different training set, it may be helpful to include a condition to terminate optimizers which do not start to converge after a long time.
+
+.. literalinclude:: ../examples/reaxff.py
+   :linenos:
+   :lineno-match:
+   :lines: 47
+
+In this example, we will look for parameter sets near the incumbent, as other good values are likely in the same region. It is possible to do a more exploratory search by using :class:`.RandomGenerator` and larger :math:`\sigma` value as was done in the :ref:`Customized` example. This creates the possibility of finding very different parameter sets, but may end up being more expensive as the optimizers explore non-physical and instable parameters.
+
+.. literalinclude:: ../examples/reaxff.py
+   :linenos:
+   :lineno-match:
+   :lines: 49-51
+
+``'threads'`` must be used for the ``backend`` when working with ParAMS since it does not support multiprocessing at this level. However, actual evaluations of the cost functions will be spun off by processes at the PLAMS level and not be subject to the `Python GIL <https://docs.python.org/3.6/glossary.html#term-global-interpreter-lock>`_.
+
+.. literalinclude:: ../examples/reaxff.py
+   :linenos:
+   :lineno-match:
+   :lines: 53
+
+A checkpoint is configured for the end of the optimization. If you would like to continue the optimization further, this file can be used to restart the optimization for the final state.
+
+.. literalinclude:: ../examples/reaxff.py
+   :linenos:
+   :lineno-match:
+   :lines: 55-57
+
+The rest of the script follows the pattern of the previous examples. The components can now be given to the manager and run.
