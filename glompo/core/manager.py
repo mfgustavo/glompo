@@ -63,6 +63,7 @@ from .. import __version__, __version_info__
 __all__ = ("GloMPOManager",)
 
 
+# todo more details needed in log file.
 class GloMPOManager:
     """ Provides the main interface to GloMPO. The manager runs the optimization and produces all the output.
 
