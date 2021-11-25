@@ -26,7 +26,6 @@ try:
 except (ModuleNotFoundError, ImportError, TypeError):  # TypeError caught for building docs
     pass
 
-
 __all__ = ('EstimatedEffects',)
 
 SpecialSlice = Union[None, int, str, List, slice, np.ndarray]
@@ -798,7 +797,7 @@ class EstimatedEffects:
                            factor_labels: Optional[Sequence[str]] = None,
                            out_labels: Optional[Sequence[str]] = None,
                            log_scale: bool = False):
-        """ Saves a sensitivity plot.
+        """ Produces a sensitivity plot.
         Produces two side-by-side scatter plots. The first is :math:`\\mu^*` versus :math:`\\sigma`, the second is
         :math:`\\mu^*` versus :math:`\\sigma/\\mu^*`. Defined dividers are included to classify factors into:
 
@@ -870,7 +869,7 @@ class EstimatedEffects:
                       factor_labels: Optional[Sequence[str]] = None,
                       out_labels: Optional[Sequence[str]] = None,
                       log_scale: bool = False):
-        """ Saves the factor rankings as a plot.
+        """ Produces the factor rankings as a plot.
         If a single `range_key` is used then the method plots the ordered :math:`\\mu^*` values against their
         corresponding parameter indices.
 
@@ -979,7 +978,6 @@ class EstimatedEffects:
         if path:
             fig.savefig(path, transparent=False, facecolor='white')
 
-
     @needs_optional_package('matplotlib')
     def plot_bootstrap_metrics(self,
                                path: Union[None, Path, str] = None,
@@ -991,7 +989,7 @@ class EstimatedEffects:
                                log_scale: bool = False,
                                out_labels: Optional[Sequence[str]] = None,
                                factor_labels: Optional[Sequence[str]] = None):
-        """ Plots and saves results of a boostrap analysis.
+        """ Plots the results of a boostrap analysis on the metrics.
 
         Parameters
         ----------
