@@ -1083,6 +1083,89 @@ class EstimatedEffects:
             if path:
                 fig.savefig(path / name if is_multi else path, transparent=False, facecolor='white')
 
+    def plot_bootstrap_rankings(self,
+                                path: Union[None, Path, str] = None,
+                                n_samples: int = 10,
+                                out_index: SpecialSlice = None,
+                                range_key: str = 'all',
+                                out_labels: Optional[Sequence[str]] = None,
+                                factor_labels: Optional[Sequence[str]] = None):
+        """ Plots the results of a boostrap analysis on the factor rankings.
+
+        Parameters
+        ----------
+        path
+            See :meth:`plot_sensitivities`.
+        n_samples
+            See :meth:`bootstrap_metrics`.
+        out_index
+            See :meth:`__getitem__`.
+        range_key
+            See :meth:`__getitem__`. Only a single key is allowed at a time.
+        out_labels
+            Optional list of names to give to the outputs, if multiple are selected. Will be used in the figure title
+            and as the filename. Must be equal in length to `out_index`.
+        factor_labels
+            Optional list of names of length :attr:`g` to gives the factors. Will be used in the axes labels.
+        """
+        assert any([range_key == rk for rk in ('all', 'short', 'long')]), \
+            "Only a single choice of 'all', 'short' or 'long' is supported."
+
+        out_index = self._expand_index('output', out_index)
+
+        if factor_labels:
+            assert len(factor_labels) == self.g, \
+                "Number of factor labels does not match the number of factors."
+
+        if out_labels:
+            assert len(out_labels) == len(out_index), \
+                "Number of out labels does not match the number of out indices to be plotted."
+
+        ranks = np.array([self.ranking(out_index, np.random.choice(self.r, self.r, replace=True), range_key)
+                          for _ in range(n_samples)])
+        if ranks.ndim == 2:
+            ranks = ranks[:, None, :]
+
+        stats = np.quantile(ranks, 0.5, 0)
+        ranks = np.moveaxis(np.apply_along_axis(np.bincount, 0, ranks, minlength=self.g + 1)[1:].T, 1, 0)
+
+        is_multi = False
+        if path:
+            path = Path(path)
+            if ranks.shape[1] > 1:
+                path.mkdir(exist_ok=True, parents=True)
+                is_multi = True
+
+        for o, oname in enumerate(out_index):
+            fig, ax = plt.subplots(figsize=(WIDTH, HEIGHT))
+            fig: plt.Figure
+            ax: plt.Axes
+
+            # order = np.argsort(np.mean(ranks[o] * np.arange(1, self.g + 1), 1) / n_samples)
+            order = np.argsort(stats[o], 0)
+
+            ax.matshow(ranks[o, order], extent=[0.5, self.g + 0.5, self.g - 0.5, -0.5], cmap='gist_heat_r')
+            ax.set_xlabel("Ranking")
+            ax.set_ylabel("Factor")
+
+            ax.xaxis.get_major_locator().set_params(integer=True)
+
+            ax.set_yticks(range(self.g))
+            if factor_labels:
+                ax.set_yticklabels([factor_labels[i] for i in order])
+            else:
+                ax.set_yticklabels(np.arange(self.g)[order])
+
+            name = oname if not isinstance(oname, int) else f'{oname:03}'
+            if out_labels:
+                ax.set_title(out_labels[o])
+                name = out_labels[o]
+            ax.set_title(ax.get_title() + f"\n(Number of resamples: {n_samples})" + f"\n(Using {range_key} points)")
+
+            fig.tight_layout()
+            if path:
+                fig.savefig(path / name if is_multi else path, transparent=False, facecolor='white')
+
     def _calculate_ee(self,
                       out_index: List[int],
                       traj_index: List[int],
