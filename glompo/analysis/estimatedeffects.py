@@ -948,7 +948,6 @@ class EstimatedEffects:
         fig.tight_layout()
         fig.savefig(path, transparent=False, facecolor='white')
 
-        plt.close(fig)
 
     @needs_optional_package('matplotlib')
     def plot_bootstrap_metrics(self,
@@ -1052,7 +1051,6 @@ class EstimatedEffects:
 
             fig.tight_layout()
             fig.savefig(path / name if is_multi else path, transparent=False, facecolor='white')
-            plt.close(fig)
 
     def _calculate_ee(self,
                       out_index: List[int],
@@ -1181,7 +1179,6 @@ class EstimatedEffects:
 
             fig.tight_layout()
             fig.savefig(path / name if is_multi else path, transparent=False, facecolor='white')
-            plt.close(fig)
 
     def _plot_sensitivities_stub(self, fig: plt.Figure,
                                  out_index: int,
