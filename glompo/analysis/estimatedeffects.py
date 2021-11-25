@@ -279,6 +279,13 @@ class EstimatedEffects:
                          'long': np.array([[[]]]),
                          'all': np.array([[[]]])}
 
+        # Detect operating context
+        try:
+            __IPYTHON__
+            self._is_ipython = True
+        except NameError:
+            self._is_ipython = False
+
     def __getitem__(self, item) -> np.ndarray:
         """ Retrieves the sensitivity metrics (:math:`\\mu, \\mu^*, \\sigma`) for a particular calculation configuration
         The indexing is a strictly ordered set of maximum length 5:
@@ -785,7 +792,7 @@ class EstimatedEffects:
 
     @needs_optional_package('matplotlib')
     def plot_sensitivities(self,
-                           path: Union[Path, str] = 'sensitivities',
+                           path: Union[None, Path, str] = None,
                            out_index: SpecialSlice = 'mean',
                            range_key: Union[str, Sequence[str]] = 'all',
                            factor_labels: Optional[Sequence[str]] = None,
@@ -804,8 +811,16 @@ class EstimatedEffects:
         Parameters
         ----------
         path
-            If one plot is being produced (see `out_index`) this is interpreted as the filename with which to save the
-            figure. If multiple plots are produced for all the outputs then this is interpreted as a directory into
+            Optional path to which the plot will be saved. Default is None, whose behavior is context dependent:
+
+               * If in an interactive IPython or Jupyter context, plots will be shown and not saved.
+
+               * Otherwise, the plot is saved with the default name.
+
+            If a path is provided and one plot is being produced (see `out_index`) this is interpreted as the filename
+            with which to save the figure.
+
+            If multiple plots are produced for all the outputs then this is interpreted as a directory into
             which the figures will be saved.
         out_index
             See :meth:`__getitem__`. If :obj:`None` or :code:`'all'`, one plot will be created for each output.
@@ -838,6 +853,9 @@ class EstimatedEffects:
         building energy simulations: Combining first- and second-order elementary effects methods. Energy and Buildings,
         68(PART C), 741–750. https://doi.org/10.1016/J.ENBUILD.2012.08.048
         """
+        if not self._is_ipython and path is None:
+            path = 'sensitivities'
+
         self._plotting_core(path, out_index, self._plot_sensitivities_stub,
                             range_key=range_key,
                             factor_labels=factor_labels,
@@ -846,7 +864,7 @@ class EstimatedEffects:
 
     @needs_optional_package('matplotlib')
     def plot_rankings(self,
-                      path: Union[Path, str] = 'ranking',
+                      path: Union[None, Path, str] = None,
                       out_index: SpecialSlice = 'mean',
                       range_key: Union[str, Sequence[str]] = 'all',
                       factor_labels: Optional[Sequence[str]] = None,
@@ -867,23 +885,24 @@ class EstimatedEffects:
             Accepts either one or two of the allowed range keys: :code:`'all'`, :code:`'short'` and :code:`'long'`.
         """
         if isinstance(range_key, str) or len(range_key) == 1:
-            self._plotting_core(path, out_index, self._plot_single_ranking_stub,
-                                factor_labels=factor_labels,
-                                out_labels=out_labels,
-                                log_scale=log_scale,
-                                range_key=range_key)
+            stub = self._plot_single_ranking_stub
         elif len(range_key) == 2:
-            self._plotting_core(path, out_index, self._plot_double_ranking_stub,
-                                factor_labels=factor_labels,
-                                out_labels=out_labels,
-                                log_scale=log_scale,
-                                range_key=range_key)
+            stub = self._plot_double_ranking_stub
         else:
             raise ValueError("Only 1 or 2 range keys can be plotted at the same time.")
 
+        if not self._is_ipython and path is None:
+            path = 'ranking'
+
+        self._plotting_core(path, out_index, stub,
+                            factor_labels=factor_labels,
+                            out_labels=out_labels,
+                            log_scale=log_scale,
+                            range_key=range_key)
+
     @needs_optional_package('matplotlib')
     def plot_convergence(self,
-                         path: Union[Path, str] = 'sensi_convergence',
+                         path: Union[None, Path, str] = None,
                          out_index: SpecialSlice = 'mean',
                          range_key: Union[str, Sequence[str]] = 'all',
                          step_size: int = 10,
@@ -894,7 +913,11 @@ class EstimatedEffects:
         Parameters
         ----------
         path
-            Path to file into which the plot should be saved.
+            Optional path to which the plot will be saved. Default is None, whose behavior is context dependent:
+
+               * If in an interactive IPython or Jupyter context, plots will be shown and not saved.
+
+               * Otherwise, the plot is saved with the default name.
         out_index
             See :meth:`__getitem__`. If multiple output dimensions are selected, they will be included on the same plot
         range_key
@@ -953,12 +976,13 @@ class EstimatedEffects:
         ax.set_xticklabels([f'{s[0]}$\\to${s[1]}' for s in steps], rotation=45)
 
         fig.tight_layout()
-        fig.savefig(path, transparent=False, facecolor='white')
+        if path:
+            fig.savefig(path, transparent=False, facecolor='white')
 
 
     @needs_optional_package('matplotlib')
     def plot_bootstrap_metrics(self,
-                               path: Union[Path, str] = 'sensi_booststrap',
+                               path: Union[None, Path, str] = None,
                                n_samples: int = 10,
                                metric_index: SpecialSlice = None,
                                factor_index: SpecialSlice = None,
@@ -1022,11 +1046,12 @@ class EstimatedEffects:
                     warnings.warn(f"The number of {str_} labels does not match the number of factors calculated. "
                                   f"Ignoring the labels provided.", UserWarning)
 
-        path = Path(path)
         is_multi = False
-        if boot_m.shape[2] > 1:
-            path.mkdir(exist_ok=True, parents=True)
-            is_multi = True
+        if path:
+            path = Path(path)
+            if boot_m.shape[2] > 1:
+                path.mkdir(exist_ok=True, parents=True)
+                is_multi = True
 
         for o, oname in enumerate(out_index):
             fig, ax = plt.subplots(boot_m.shape[0], 1, figsize=(WIDTH, HEIGHT * boot_m.shape[0]))
@@ -1057,7 +1082,8 @@ class EstimatedEffects:
                 ax[0].get_title() + f"\n(Number of resamples: {n_samples})" + f"\n(Using {range_key} points)")
 
             fig.tight_layout()
-            fig.savefig(path / name if is_multi else path, transparent=False, facecolor='white')
+            if path:
+                fig.savefig(path / name if is_multi else path, transparent=False, facecolor='white')
 
     def _calculate_ee(self,
                       out_index: List[int],
@@ -1150,7 +1176,7 @@ class EstimatedEffects:
 
         return np.array([mu, mu_star, sigma])
 
-    def _plotting_core(self, path: Union[Path, str],
+    def _plotting_core(self, path: Union[None, Path, str],
                        out_index: SpecialSlice,
                        plot_stub: Callable[..., plt.Axes],
                        **kwargs):
@@ -1158,11 +1184,12 @@ class EstimatedEffects:
         """
         out_index = self._expand_index('output', out_index)
 
-        path = Path(path)
         is_multi = False
-        if len(out_index) > 1:
-            path.mkdir(exist_ok=True, parents=True)
-            is_multi = True
+        if path:
+            path = Path(path)
+            if len(out_index) > 1:
+                path.mkdir(exist_ok=True, parents=True)
+                is_multi = True
 
         is_custom_out_labs = 'out_labels' in kwargs and kwargs['out_labels'] is not None
         if is_custom_out_labs:
@@ -1185,7 +1212,8 @@ class EstimatedEffects:
                 ax.set_title(ax.get_title() + f"\n({name})")
 
             fig.tight_layout()
-            fig.savefig(path / name if is_multi else path, transparent=False, facecolor='white')
+            if path:
+                fig.savefig(path / name if is_multi else path, transparent=False, facecolor='white')
 
     def _plot_sensitivities_stub(self, fig: plt.Figure,
                                  out_index: int,
