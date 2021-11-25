@@ -567,7 +567,8 @@ class EstimatedEffects:
     def order_factors(self,
                       out_index: SpecialSlice = 'mean',
                       traj_index: SpecialSlice = None,
-                      range_key: str = 'all') -> np.ndarray:
+                      range_key: str = 'all',
+                      n_bootstrap_samples: int = 1) -> np.ndarray:
         """ Returns factor indices in descending order of their influence on the outputs.
         The *positions* in the array are the rankings, the *contents* of the array are the factor / group indices. This
         is the inverse of :meth:`ranking`.
@@ -576,6 +577,9 @@ class EstimatedEffects:
         ----------
         Inherited, out_index traj_index range_key
             See :meth:`__getitem__`.
+        n_bootstrap_samples
+            Optional. If greater than 1 the rankings will be generated multiple times using a bootstrap resampling
+            method, otherwise the raw data will be used. Supersedes `traj_index` if also supplied.
 
         Returns
         -------
@@ -596,13 +600,18 @@ class EstimatedEffects:
 
         >>> ee.order_factors(2, slice(None, 10))
         """
-        metric = np.atleast_3d(self[1, :, out_index, traj_index, range_key])
+        if n_bootstrap_samples > 1:
+            metric = np.array([self[1, :, out_index, np.random.choice(self.r, self.r, replace=True), range_key]
+                               for _ in range(n_bootstrap_samples)]).mean(0)
+        else:
+            metric = np.atleast_3d(self[1, :, out_index, traj_index, range_key])
         return metric.argsort(1)[:, -1::-1].squeeze().T
 
     def ranking(self,
                 out_index: SpecialSlice = 'mean',
                 traj_index: SpecialSlice = None,
-                range_key: str = 'all') -> np.ndarray:
+                range_key: str = 'all',
+                n_bootstrap_samples: int = 1) -> np.ndarray:
         """ Returns the ranking of each factor being analyzed.
         The *positions* in the array are the factor or group indices, the *contents* of the array are rankings such that
         1 is the most influential factor / group and :math:`g+1` is the least influential. This is the inverse of
@@ -612,6 +621,8 @@ class EstimatedEffects:
         ----------
         Inherited, out_index traj_index range_key
             See :meth:`__getitem__`.
+        n_bootstrap_samples
+            See :meth:`order_factors`
 
         Returns
         -------
@@ -621,8 +632,10 @@ class EstimatedEffects:
         See Also
         --------
         :meth:`order_factors`
+        :meth:`plot_bootstrap_rankings`
         """
-        return np.squeeze(np.atleast_2d(self.order_factors(out_index, traj_index, range_key)).argsort(1) + 1)
+        order_factors = self.order_factors(out_index, traj_index, range_key, n_bootstrap_samples)
+        return np.squeeze(np.atleast_2d(order_factors).argsort(1) + 1)
 
     def classification(self, n_cats: int, out_index: Union[int, str] = 'mean',
                        range_key: str = 'all') -> Dict[str, np.ndarray]:
