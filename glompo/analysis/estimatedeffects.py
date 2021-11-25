@@ -1167,6 +1167,8 @@ class EstimatedEffects:
                 ax.set_yticklabels([factor_labels[i] for i in order])
             else:
                 ax.set_yticklabels(np.arange(self.g)[order])
+            for t in ax.yaxis.get_major_ticks()[1::2]:
+                t.set_pad(20)
 
             name = oname if not isinstance(oname, int) else f'{oname:03}'
             if out_labels:
@@ -1484,8 +1486,12 @@ class EstimatedEffects:
         else:
             labs = np.array(factor_labels)[i_sort]
         ax.bar(range(i_sort.size), mu_star[i_sort])
+
         ax.set_xticks(range(i_sort.size))
         ax.set_xticklabels(labs)
+        for t in ax.xaxis.get_major_ticks()[1::2]:
+            t.set_pad(20)
+
         ax.set_yscale('log' if log_scale else 'linear')
 
         return ax
