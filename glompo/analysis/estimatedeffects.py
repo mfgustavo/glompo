@@ -13,10 +13,11 @@ try:
     from matplotlib import patches
     from matplotlib import cm
 
-    plt.rcParams['font.size'] = 6
+    plt.rcParams['font.size'] = 8
     plt.rcParams['mathtext.fontset'] = 'cm'
     plt.rcParams['savefig.format'] = 'svg'
-    plt.rcParams['figure.figsize'] = 6.7, 3.35
+    plt.rcParams['figure.figsize'] = 14, 7
+
 except (ModuleNotFoundError, ImportError, TypeError):  # TypeError caught for building docs
     pass
 
