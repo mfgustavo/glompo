@@ -1089,8 +1089,7 @@ class EstimatedEffects:
             if valid[1]:
                 ax[0].set_title(out_labels[o])
                 name = out_labels[o]
-            ax[0].set_title(
-                ax[0].get_title() + f"\n(Number of resamples: {n_samples})" + f"\n(Using {range_key} points)")
+            ax[0].set_title(name + f"\n(Number of resamples: {n_samples})" + f"\n(Using {range_key} points)")
 
             fig.tight_layout()
             if path:
@@ -1173,7 +1172,7 @@ class EstimatedEffects:
             if out_labels:
                 ax.set_title(out_labels[o])
                 name = out_labels[o]
-            ax.set_title(ax.get_title() + f"\n(Number of resamples: {n_samples})" + f"\n(Using {range_key} points)")
+            ax.set_title(name + f"\n(Number of resamples: {n_samples})" + f"\n(Using {range_key} points)")
 
             fig.tight_layout()
             if path:
