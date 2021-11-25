@@ -1483,7 +1483,9 @@ class EstimatedEffects:
             labs = i_sort.astype(str)
         else:
             labs = np.array(factor_labels)[i_sort]
-        ax.bar(labs, mu_star[i_sort])
+        ax.bar(range(i_sort.size), mu_star[i_sort])
+        ax.set_xticks(range(i_sort.size))
+        ax.set_xticklabels(labs)
         ax.set_yscale('log' if log_scale else 'linear')
 
         return ax
