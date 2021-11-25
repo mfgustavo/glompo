@@ -7,19 +7,25 @@ import numpy as np
 
 from ..common.wrappers import needs_optional_package
 
+# Plot defaults
+WIDTH = 14
+HEIGHT = 7
+FONTSIZE = 12
+
 try:
     import matplotlib.pyplot as plt
     from matplotlib import lines
     from matplotlib import patches
     from matplotlib import cm
 
-    plt.rcParams['font.size'] = 8
+    plt.rcParams['font.size'] = FONTSIZE
     plt.rcParams['mathtext.fontset'] = 'cm'
     plt.rcParams['savefig.format'] = 'svg'
-    plt.rcParams['figure.figsize'] = 14, 7
+    plt.rcParams['figure.figsize'] = WIDTH, HEIGHT
 
 except (ModuleNotFoundError, ImportError, TypeError):  # TypeError caught for building docs
     pass
+
 
 __all__ = ('EstimatedEffects',)
 
@@ -926,7 +932,7 @@ class EstimatedEffects:
         for rk in range_key:
             pf = np.array([np.atleast_1d(self.position_factor(*pair, out_index, rk)) for pair in steps])
             lines = ax.plot(pf,
-                            marker={'all': '.', 'long': 'x', 'short': 'd'}[rk],
+                            marker={'all': 'o', 'long': 'x', 'short': 'd'}[rk],
                             linestyle={'all': '-', 'long': '--', 'short': ':'}[rk])
             for i, l in enumerate(lines):
                 l.set_color(cmap(i))
@@ -1023,17 +1029,17 @@ class EstimatedEffects:
             is_multi = True
 
         for o, oname in enumerate(out_index):
-            fig, ax = plt.subplots(boot_m.shape[0], 1, figsize=(6.7, 3.35 * boot_m.shape[0]))
+            fig, ax = plt.subplots(boot_m.shape[0], 1, figsize=(WIDTH, HEIGHT * boot_m.shape[0]))
             if boot_m.shape[0] == 1:
                 ax = [ax]
 
             for m in range(boot_m.shape[0]):
                 ax[m].errorbar(factor_index, boot_m[m, :, o],
-                               yerr=boot_s[m, :, o], fmt='.', ecolor='k', label='Bootstrap')
+                               yerr=boot_s[m, :, o], fmt='o', ecolor='k', label='Bootstrap')
                 ax[m].scatter(factor_index, metrics[m, :, o],
-                              color='r', marker='_', s=10, zorder=1000, label='Raw Result')
+                              color='r', marker='_', zorder=1000, label='Raw Result')
                 ax[m].set_xlabel("Parameter")
-                ax[m].set_ylabel(met_map[m])
+                ax[m].set_ylabel(met_map[m], fontsize=int(1.5 * FONTSIZE))
                 ax[m].legend()
                 ax[m].set_yscale('log' if log_scale else 'linear')
 
@@ -1191,7 +1197,7 @@ class EstimatedEffects:
             range_key = [range_key]
         n_rows = len(range_key)
 
-        fig.set_size_inches(6.7, 3.35 * n_rows)
+        fig.set_size_inches(WIDTH, HEIGHT * n_rows)
         cmap = cm.get_cmap('Pastel2')
 
         hidden_ax = []
@@ -1220,8 +1226,8 @@ class EstimatedEffects:
             ax1: plt.Axes = fig.add_subplot(n_rows, 2, 2 * n_row + 2)
             axes += [ax0, ax1]
 
-            ax0.set_ylabel("$\\sigma$")
-            ax1.set_ylabel("$\\sigma/\\mu^*$")
+            ax0.set_ylabel("$\\sigma$", fontsize=int(1.5 * FONTSIZE))
+            ax1.set_ylabel("$\\sigma/\\mu^*$", fontsize=int(1.5 * FONTSIZE))
 
             # Get metrics
             metrics = self[1:, :, out_index, :, row_key]
@@ -1237,7 +1243,7 @@ class EstimatedEffects:
                 ax.scatter(mu_star, y, marker='x', color='black', s=2)
 
                 for k, lab in enumerate(labs):
-                    ax.annotate(lab, (mu_star[k], y[k]), fontsize=5)
+                    ax.annotate(lab, (mu_star[k], y[k]), fontsize=FONTSIZE / 1.5)
 
                 raw_xlims = ax.get_xlim()
                 raw_ylims = ax.get_ylim()
@@ -1326,7 +1332,7 @@ class EstimatedEffects:
 
         # Hide title Axes
         for ax in hidden_ax:
-            ax.set_xlabel("$\\mu^*$")
+            ax.set_xlabel("$\\mu^*$", fontsize=int(1.5 * FONTSIZE))
             ax.spines['top'].set_color('none')
             ax.spines['bottom'].set_color('none')
             ax.spines['left'].set_color('none')
@@ -1342,12 +1348,12 @@ class EstimatedEffects:
                                   log_scale: bool = False,
                                   **kwargs) -> plt.Axes:
         """ Makes the rankings bar plot when one range key is requested. """
-        fig.set_size_inches(6.7, 6.7)
+        fig.set_size_inches(WIDTH, HEIGHT)
         ax = fig.add_subplot(111)
 
         ax.set_title("Parameter Ranking")
         ax.set_xlabel("Parameter Index")
-        ax.set_ylabel("$\\mu^*$")
+        ax.set_ylabel("$\\mu^*$", fontsize=int(1.5 * FONTSIZE))
         ax.tick_params(axis='x', rotation=90)
 
         mu_star = self[1, :, out_index, :, range_key].squeeze()
@@ -1368,7 +1374,7 @@ class EstimatedEffects:
                                   log_scale: bool = False,
                                   **kwargs) -> plt.Axes:
         """ Makes the :math:`\\mu^*` v :math:`\\mu^*` scatter ranking plot when two range keys are requested. """
-        fig.set_size_inches(6.7, 6.7)
+        fig.set_size_inches(WIDTH, WIDTH)
         ax: plt.Axes = fig.add_subplot(111)
 
         ax.set_title("Parameter Ranking")
@@ -1382,7 +1388,7 @@ class EstimatedEffects:
 
         labs = np.arange(self.g) if not factor_labels else factor_labels
         for k, lab in enumerate(labs):
-            ax.annotate(lab, (first[k], second[k]), fontsize=5)
+            ax.annotate(lab, (first[k], second[k]), fontsize=FONTSIZE // 1.5)
 
         ax.set_yscale('log' if log_scale else 'linear')
         ax.set_xscale('log' if log_scale else 'linear')
