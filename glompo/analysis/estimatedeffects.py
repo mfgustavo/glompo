@@ -809,7 +809,7 @@ class EstimatedEffects:
                            factor_labels: Optional[Sequence[str]] = None,
                            out_labels: Optional[Sequence[str]] = None,
                            log_scale: bool = False,
-                           path: Union[None, Path, str] = None):
+                           path: Union[None, Path, str] = None) -> Union[plt.Figure, List[plt.Figure]]:
         """ Produces a sensitivity plot.
         Produces two side-by-side scatter plots. The first is :math:`\\mu^*` versus :math:`\\sigma`, the second is
         :math:`\\mu^*` versus :math:`\\sigma/\\mu^*`. Defined dividers are included to classify factors into:
@@ -849,6 +849,24 @@ class EstimatedEffects:
             If multiple plots are produced for all the outputs then this is interpreted as a directory into
             which the figures will be saved.
 
+        Returns
+        -------
+        Union[matplotlib.figure.Figure, List[matplotlib.figure.Figure]]
+            Object or objects which contains the plot/s, allowing the user to further customize them to suit their
+            needs.
+
+            .. note::
+
+               :class:`matplotlib.figure.Figure` objects are the highest level interface to the images, providing access
+               to all the lower level components. Users will most often need to access the :class:`matplotlib.axes.Axes`
+               objects to make the most common changes. Note, that most :class:`~matplotlib.figure.Figure` instances
+               contain several :class:`~matplotlib.axes.Axes` instances. See example:
+
+                >>> fig = ee.plot_sensitivities()
+                >>> ax = fig.get_axes()
+                >>> ax[0].set_title('My Custom Title')
+
+
         Warnings
         --------
         Unavailable if using groups, will raise a :obj:`ValueError`. See :attr:`groupings`.
@@ -868,13 +886,13 @@ class EstimatedEffects:
         if not self._is_ipython and path is None:
             path = 'sensitivities'
 
-        self._plotting_core(out_index=out_index,
-                            plot_stub=self._plot_sensitivities_stub,
-                            range_key=range_key,
-                            factor_labels=factor_labels,
-                            out_labels=out_labels,
-                            log_scale=log_scale,
-                            path=path)
+        return self._plotting_core(out_index=out_index,
+                                   plot_stub=self._plot_sensitivities_stub,
+                                   range_key=range_key,
+                                   factor_labels=factor_labels,
+                                   out_labels=out_labels,
+                                   log_scale=log_scale,
+                                   path=path)
 
     @needs_optional_package('matplotlib')
     def plot_rankings(self,
@@ -883,7 +901,7 @@ class EstimatedEffects:
                       factor_labels: Optional[Sequence[str]] = None,
                       out_labels: Optional[Sequence[str]] = None,
                       log_scale: bool = False,
-                      path: Union[None, Path, str] = None):
+                      path: Union[None, Path, str] = None) -> Union[plt.Figure, List[plt.Figure]]:
         """ Produces the factor rankings as a plot.
         If a single `range_key` is used then the method plots the ordered :math:`\\mu^*` values against their
         corresponding parameter indices.
@@ -897,6 +915,11 @@ class EstimatedEffects:
             See :meth:`plot_sensitivities`.
         range_key
             Accepts either one or two of the allowed range keys: :code:`'all'`, :code:`'short'` and :code:`'long'`.
+
+        Returns
+        -------
+        Union[matplotlib.figure.Figure, List[matplotlib.figure.Figure]]
+            See :meth:`plot_sensitivities`.
         """
         if isinstance(range_key, str) or len(range_key) == 1:
             stub = self._plot_single_ranking_stub
@@ -908,13 +931,13 @@ class EstimatedEffects:
         if not self._is_ipython and path is None:
             path = 'ranking'
 
-        self._plotting_core(out_index=out_index,
-                            plot_stub=stub,
-                            factor_labels=factor_labels,
-                            out_labels=out_labels,
-                            log_scale=log_scale,
-                            range_key=range_key,
-                            path=path)
+        return self._plotting_core(out_index=out_index,
+                                   plot_stub=stub,
+                                   factor_labels=factor_labels,
+                                   out_labels=out_labels,
+                                   log_scale=log_scale,
+                                   range_key=range_key,
+                                   path=path)
 
     @needs_optional_package('matplotlib')
     def plot_convergence(self,
@@ -922,7 +945,7 @@ class EstimatedEffects:
                          range_key: Union[str, Sequence[str]] = 'all',
                          step_size: int = 10,
                          out_labels: Optional[Sequence[str]] = None,
-                         path: Union[None, Path, str] = None):
+                         path: Union[None, Path, str] = None) -> plt.Figure:
         """ Plots the evolution of the Position Factor (:math:`PF_{r_i \\to r_j}`) metric as a function of increasing
         number of trajectories.
 
@@ -943,6 +966,11 @@ class EstimatedEffects:
                * If in an interactive IPython or Jupyter context, plots will be shown and not saved.
 
                * Otherwise, the plot is saved with the default name.
+
+        Returns
+        -------
+        Union[matplotlib.figure.Figure, List[matplotlib.figure.Figure]]
+            See :meth:`plot_sensitivities`
 
         Notes
         -----
@@ -995,6 +1023,9 @@ class EstimatedEffects:
         if path:
             fig.savefig(path, transparent=False, facecolor='white')
 
+        plt.close()
+        return fig
+
     @needs_optional_package('matplotlib')
     def plot_bootstrap_metrics(self,
                                n_samples: int = 10,
@@ -1005,7 +1036,7 @@ class EstimatedEffects:
                                log_scale: bool = False,
                                out_labels: Optional[Sequence[str]] = None,
                                factor_labels: Optional[Sequence[str]] = None,
-                               path: Union[None, Path, str] = None):
+                               path: Union[None, Path, str] = None) -> Union[plt.Figure, List[plt.Figure]]:
         """ Plots the results of a boostrap analysis on the metrics.
 
         Parameters
@@ -1025,6 +1056,11 @@ class EstimatedEffects:
             Optional list of names to gives the factors. Will be used in the axes labels. Must be equal in length to
             `factor_index`.
         path
+            See :meth:`plot_sensitivities`.
+
+        Returns
+        -------
+        Union[matplotlib.figure.Figure, List[matplotlib.figure.Figure]]
             See :meth:`plot_sensitivities`.
         """
         assert any([range_key == rk for rk in ('all', 'short', 'long')]), \
@@ -1068,6 +1104,7 @@ class EstimatedEffects:
                 path.mkdir(exist_ok=True, parents=True)
                 is_multi = True
 
+        figs = []
         for o, oname in enumerate(out_index):
             fig, ax = plt.subplots(boot_m.shape[0], 1, figsize=(WIDTH, HEIGHT * boot_m.shape[0]))
             if boot_m.shape[0] == 1:
@@ -1099,13 +1136,20 @@ class EstimatedEffects:
             if path:
                 fig.savefig(path / name if is_multi else path, transparent=False, facecolor='white')
 
+            plt.close()
+            figs.append(fig)
+
+        if len(figs) == 1:
+            return figs[0]
+        return figs
+
     def plot_bootstrap_rankings(self,
                                 n_samples: int = 10,
                                 out_index: SpecialSlice = None,
                                 range_key: str = 'all',
                                 out_labels: Optional[Sequence[str]] = None,
                                 factor_labels: Optional[Sequence[str]] = None,
-                                path: Union[None, Path, str] = None):
+                                path: Union[None, Path, str] = None) -> Union[plt.Figure, List[plt.Figure]]:
         """ Plots the results of a boostrap analysis on the factor rankings.
 
         Parameters
@@ -1122,6 +1166,11 @@ class EstimatedEffects:
         factor_labels
             Optional list of names of length :attr:`g` to gives the factors. Will be used in the axes labels.
         path
+            See :meth:`plot_sensitivities`.
+
+        Returns
+        -------
+        Union[matplotlib.figure.Figure, List[matplotlib.figure.Figure]]
             See :meth:`plot_sensitivities`.
         """
         assert any([range_key == rk for rk in ('all', 'short', 'long')]), \
@@ -1152,6 +1201,7 @@ class EstimatedEffects:
                 path.mkdir(exist_ok=True, parents=True)
                 is_multi = True
 
+        figs = []
         for o, oname in enumerate(out_index):
             fig, ax = plt.subplots(figsize=(WIDTH, HEIGHT))
             fig: plt.Figure
@@ -1183,6 +1233,13 @@ class EstimatedEffects:
             fig.tight_layout()
             if path:
                 fig.savefig(path / name if is_multi else path, transparent=False, facecolor='white')
+
+            plt.close()
+            figs.append(fig)
+
+        if len(figs) == 1:
+            return figs[0]
+        return figs
 
     def _calculate_ee(self,
                       out_index: List[int],
@@ -1278,7 +1335,7 @@ class EstimatedEffects:
     def _plotting_core(self, path: Union[None, Path, str],
                        out_index: SpecialSlice,
                        plot_stub: Callable[..., plt.Axes],
-                       **kwargs):
+                       **kwargs) -> Union[plt.Figure, List[plt.Figure]]:
         """ Provides common looping and saving infrastructure for plotting routines which produce one image per output.
         """
         out_index = self._expand_index('output', out_index)
@@ -1300,8 +1357,10 @@ class EstimatedEffects:
             assert self.g == len(kwargs['factor_labels']), \
                 "Number of factor labels does not match the number of factor indices to be plotted."
 
+        figs = []
         for i, index in enumerate(out_index):
             fig = plt.figure()
+            figs.append(fig)
 
             ax = plot_stub(fig, index, **kwargs)
 
@@ -1313,6 +1372,12 @@ class EstimatedEffects:
             fig.tight_layout()
             if path:
                 fig.savefig(path / name if is_multi else path, transparent=False, facecolor='white')
+
+            plt.close()
+
+        if len(figs) == 1:
+            return figs[0]
+        return figs
 
     def _plot_sensitivities_stub(self, fig: plt.Figure,
                                  out_index: int,
