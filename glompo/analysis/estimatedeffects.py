@@ -31,6 +31,7 @@ __all__ = ('EstimatedEffects',)
 SpecialSlice = Union[None, int, str, List, slice, np.ndarray]
 
 
+# noinspection PyIncorrectDocstring
 class EstimatedEffects:
     """ Implementation of Morris screening strategy.
     Based on the original work of `Morris (1991) <https://doi.org/10.1080/00401706.1991.10484804>`_ but includes
@@ -279,10 +280,9 @@ class EstimatedEffects:
                          'all': np.array([[[]]])}
 
         # Detect operating context
-        try:
-            __IPYTHON__
+        if '__IPYTHON__' in globals():
             self._is_ipython = True
-        except NameError:
+        else:
             self._is_ipython = False
 
     def __getitem__(self, item) -> np.ndarray:
@@ -997,20 +997,20 @@ class EstimatedEffects:
 
         labs = []
         for rk in range_key:
-            pf = np.array([np.atleast_1d(self.position_factor(*pair, out_index, rk)) for pair in steps])
-            lines = ax.plot(pf,
-                            marker={'all': 'o', 'long': 'x', 'short': 'd'}[rk],
-                            linestyle={'all': '-', 'long': '--', 'short': ':'}[rk])
-            for i, l in enumerate(lines):
+            pf = np.array([np.atleast_1d(self.position_factor(pair[0], pair[1], out_index, rk)) for pair in steps])
+            plot_lines = ax.plot(pf,
+                                 marker={'all': 'o', 'long': 'x', 'short': 'd'}[rk],
+                                 linestyle={'all': '-', 'long': '--', 'short': ':'}[rk])
+            for i, l in enumerate(plot_lines):
                 l.set_color(cmap(i))
 
             if pf.shape[1] > 1 or len(range_key) > 1:
                 if out_labels:
                     out_labels = [out_labels] if isinstance(out_labels, str) else out_labels
-                    l = [f'{ol} ({rk})' for ol in out_labels]
-                    assert len(l) == pf.shape[1], \
+                    lab = [f'{ol} ({rk})' for ol in out_labels]
+                    assert len(lab) == pf.shape[1], \
                         "Number of out labels does not match the number of out indices to be plotted."
-                    labs += l
+                    labs += lab
                 else:
                     labs += [f'Output {i} ({rk})' for i in range(pf.shape[1])]
 
