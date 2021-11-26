@@ -804,12 +804,12 @@ class EstimatedEffects:
 
     @needs_optional_package('matplotlib')
     def plot_sensitivities(self,
-                           path: Union[None, Path, str] = None,
                            out_index: SpecialSlice = 'mean',
                            range_key: Union[str, Sequence[str]] = 'all',
                            factor_labels: Optional[Sequence[str]] = None,
                            out_labels: Optional[Sequence[str]] = None,
-                           log_scale: bool = False):
+                           log_scale: bool = False,
+                           path: Union[None, Path, str] = None):
         """ Produces a sensitivity plot.
         Produces two side-by-side scatter plots. The first is :math:`\\mu^*` versus :math:`\\sigma`, the second is
         :math:`\\mu^*` versus :math:`\\sigma/\\mu^*`. Defined dividers are included to classify factors into:
@@ -822,18 +822,6 @@ class EstimatedEffects:
 
         Parameters
         ----------
-        path
-            Optional path to which the plot will be saved. Default is None, whose behavior is context dependent:
-
-               * If in an interactive IPython or Jupyter context, plots will be shown and not saved.
-
-               * Otherwise, the plot is saved with the default name.
-
-            If a path is provided and one plot is being produced (see `out_index`) this is interpreted as the filename
-            with which to save the figure.
-
-            If multiple plots are produced for all the outputs then this is interpreted as a directory into
-            which the figures will be saved.
         out_index
             See :meth:`__getitem__`. If :obj:`None` or :code:`'all'`, one plot will be created for each output.
         range_key
@@ -848,6 +836,18 @@ class EstimatedEffects:
             and as the filename. Must be equal in length to `out_index`.
         log_scale
             If :obj:`True` the axes will be plotted on a log scale.
+        path
+            Optional path to which the plot will be saved. Default is None, whose behavior is context dependent:
+
+               * If in an interactive IPython or Jupyter context, plots will be shown and not saved.
+
+               * Otherwise, the plot is saved with the default name.
+
+            If a path is provided and one plot is being produced (see `out_index`) this is interpreted as the filename
+            with which to save the figure.
+
+            If multiple plots are produced for all the outputs then this is interpreted as a directory into
+            which the figures will be saved.
 
         Warnings
         --------
@@ -868,20 +868,22 @@ class EstimatedEffects:
         if not self._is_ipython and path is None:
             path = 'sensitivities'
 
-        self._plotting_core(path, out_index, self._plot_sensitivities_stub,
+        self._plotting_core(out_index=out_index,
+                            plot_stub=self._plot_sensitivities_stub,
                             range_key=range_key,
                             factor_labels=factor_labels,
                             out_labels=out_labels,
-                            log_scale=log_scale)
+                            log_scale=log_scale,
+                            path=path)
 
     @needs_optional_package('matplotlib')
     def plot_rankings(self,
-                      path: Union[None, Path, str] = None,
                       out_index: SpecialSlice = 'mean',
                       range_key: Union[str, Sequence[str]] = 'all',
                       factor_labels: Optional[Sequence[str]] = None,
                       out_labels: Optional[Sequence[str]] = None,
-                      log_scale: bool = False):
+                      log_scale: bool = False,
+                      path: Union[None, Path, str] = None):
         """ Produces the factor rankings as a plot.
         If a single `range_key` is used then the method plots the ordered :math:`\\mu^*` values against their
         corresponding parameter indices.
@@ -891,7 +893,7 @@ class EstimatedEffects:
 
         Parameters
         ----------
-        Inherited, path out_index factor_labels out_labels log_scale
+        Inherited, out_index factor_labels out_labels log_scale path
             See :meth:`plot_sensitivities`.
         range_key
             Accepts either one or two of the allowed range keys: :code:`'all'`, :code:`'short'` and :code:`'long'`.
@@ -906,30 +908,26 @@ class EstimatedEffects:
         if not self._is_ipython and path is None:
             path = 'ranking'
 
-        self._plotting_core(path, out_index, stub,
+        self._plotting_core(out_index=out_index,
+                            plot_stub=stub,
                             factor_labels=factor_labels,
                             out_labels=out_labels,
                             log_scale=log_scale,
-                            range_key=range_key)
+                            range_key=range_key,
+                            path=path)
 
     @needs_optional_package('matplotlib')
     def plot_convergence(self,
-                         path: Union[None, Path, str] = None,
                          out_index: SpecialSlice = 'mean',
                          range_key: Union[str, Sequence[str]] = 'all',
                          step_size: int = 10,
-                         out_labels: Optional[Sequence[str]] = None):
+                         out_labels: Optional[Sequence[str]] = None,
+                         path: Union[None, Path, str] = None):
         """ Plots the evolution of the Position Factor (:math:`PF_{r_i \\to r_j}`) metric as a function of increasing
         number of trajectories.
 
         Parameters
         ----------
-        path
-            Optional path to which the plot will be saved. Default is None, whose behavior is context dependent:
-
-               * If in an interactive IPython or Jupyter context, plots will be shown and not saved.
-
-               * Otherwise, the plot is saved with the default name.
         out_index
             See :meth:`__getitem__`. If multiple output dimensions are selected, they will be included on the same plot
         range_key
@@ -939,6 +937,12 @@ class EstimatedEffects:
         out_labels
             Optional sequence of descriptive labels for the plot legend corresponding to the outputs selected to be
             plotted. Defaults to 'Output 0', 'Output 1', 'Output 2', ...
+        path
+            Optional path to which the plot will be saved. Default is None, whose behavior is context dependent:
+
+               * If in an interactive IPython or Jupyter context, plots will be shown and not saved.
+
+               * Otherwise, the plot is saved with the default name.
 
         Notes
         -----
@@ -993,7 +997,6 @@ class EstimatedEffects:
 
     @needs_optional_package('matplotlib')
     def plot_bootstrap_metrics(self,
-                               path: Union[None, Path, str] = None,
                                n_samples: int = 10,
                                metric_index: SpecialSlice = None,
                                factor_index: SpecialSlice = None,
@@ -1001,13 +1004,12 @@ class EstimatedEffects:
                                range_key: str = 'all',
                                log_scale: bool = False,
                                out_labels: Optional[Sequence[str]] = None,
-                               factor_labels: Optional[Sequence[str]] = None):
+                               factor_labels: Optional[Sequence[str]] = None,
+                               path: Union[None, Path, str] = None):
         """ Plots the results of a boostrap analysis on the metrics.
 
         Parameters
         ----------
-        path
-            See :meth:`plot_sensitivities`.
         n_samples
             See :meth:`bootstrap_metrics`.
         Inherited, metric_index factor_index out_index
@@ -1022,6 +1024,8 @@ class EstimatedEffects:
         factor_labels
             Optional list of names to gives the factors. Will be used in the axes labels. Must be equal in length to
             `factor_index`.
+        path
+            See :meth:`plot_sensitivities`.
         """
         assert any([range_key == rk for rk in ('all', 'short', 'long')]), \
             "Only a single choice of 'all', 'short' or 'long' is supported."
@@ -1096,18 +1100,16 @@ class EstimatedEffects:
                 fig.savefig(path / name if is_multi else path, transparent=False, facecolor='white')
 
     def plot_bootstrap_rankings(self,
-                                path: Union[None, Path, str] = None,
                                 n_samples: int = 10,
                                 out_index: SpecialSlice = None,
                                 range_key: str = 'all',
                                 out_labels: Optional[Sequence[str]] = None,
-                                factor_labels: Optional[Sequence[str]] = None):
+                                factor_labels: Optional[Sequence[str]] = None,
+                                path: Union[None, Path, str] = None):
         """ Plots the results of a boostrap analysis on the factor rankings.
 
         Parameters
         ----------
-        path
-            See :meth:`plot_sensitivities`.
         n_samples
             See :meth:`bootstrap_metrics`.
         out_index
@@ -1119,6 +1121,8 @@ class EstimatedEffects:
             and as the filename. Must be equal in length to `out_index`.
         factor_labels
             Optional list of names of length :attr:`g` to gives the factors. Will be used in the axes labels.
+        path
+            See :meth:`plot_sensitivities`.
         """
         assert any([range_key == rk for rk in ('all', 'short', 'long')]), \
             "Only a single choice of 'all', 'short' or 'long' is supported."
