@@ -1,6 +1,6 @@
 import numpy as np
-
 from glompo.core.manager import GloMPOManager
+
 from .basegenerator import BaseGenerator
 
 __all__ = ("BasinHoppingGenerator",)
@@ -91,11 +91,11 @@ class BasinHoppingGenerator(BaseGenerator):
             self.logger.debug("Improvement detected. Number of accepted points: %d", self.n_accept)
 
         # Metropolis chance of accepting another optimizer that is not the best
-        avail_keys = set(manager.opt_log._best_iters.keys())
+        avail_keys = set(manager.opt_log.best_iters.keys())
         avail_keys.remove(0)
         avail_keys.remove(manager.opt_log.get_best_iter()['opt_id'])
         if avail_keys:
-            other = manager.opt_log._best_iters[np.random.choice([*avail_keys])]
+            other = manager.opt_log.best_iters[np.random.choice([*avail_keys])]
             w = np.exp(np.min([0, -(other['fx'] - best['fx']) * self.beta]))
             rand = np.random.random()
             if w >= rand:

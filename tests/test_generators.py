@@ -71,10 +71,10 @@ class TestExploitExplore:
     def manager_with_log(self, request):
         class OptLog:
             def __init__(self, bests):
-                self._best_iters = bests
+                self.best_iters = bests
 
             def get_best_iter(self, opt_id):
-                return self._best_iters[opt_id]
+                return self.best_iters[opt_id]
 
         class Manager:
             def __init__(self, f_count, bests):
@@ -131,15 +131,15 @@ class TestBasinHopping:
 
         class OptLog:
             def __init__(self):
-                self._best_iters = {0: {'opt_id': 0, 'x': [], 'fx': float('inf'), 'type': '', 'call_id': 0}}
+                self.best_iters = {0: {'opt_id': 0, 'x': [], 'fx': float('inf'), 'type': '', 'call_id': 0}}
                 for i in range(1, request.param + 1):
-                    self._best_iters[i] = {'opt_id': i,
-                                           'x': np.array([1 / i] * n_parms),
-                                           'fx': 100 / i,
-                                           'type': 'FakeOptimizer',
-                                           'call_id': 30 * i}
+                    self.best_iters[i] = {'opt_id': i,
+                                          'x': np.array([1 / i] * n_parms),
+                                          'fx': 100 / i,
+                                          'type': 'FakeOptimizer',
+                                          'call_id': 30 * i}
 
-                self._best_iter = self._best_iters[request.param]
+                self._best_iter = self.best_iters[request.param]
 
             def get_best_iter(self):
                 return self._best_iter
@@ -190,13 +190,13 @@ class TestAnnealing:
     def manager(self):
         class OptLog:
             def __init__(self):
-                self._best_iters = {0: {'opt_id': 0, 'x': [], 'fx': float('inf'), 'type': '', 'call_id': 0},
-                                    1: {'opt_id': 1,
-                                        'x': np.array([100] * 5),
-                                        'fx': 500,
-                                        'type': 'FakeOptimizer',
-                                        'call_id': 9}}
-                self._best_iter = self._best_iters[1]
+                self.best_iters = {0: {'opt_id': 0, 'x': [], 'fx': float('inf'), 'type': '', 'call_id': 0},
+                                   1: {'opt_id': 1,
+                                       'x': np.array([100] * 5),
+                                       'fx': 500,
+                                       'type': 'FakeOptimizer',
+                                       'call_id': 9}}
+                self._best_iter = self.best_iters[1]
                 self._f_counter = 9
 
             def get_best_iter(self):

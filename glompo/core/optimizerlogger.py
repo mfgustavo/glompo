@@ -43,6 +43,16 @@ class BaseLogger:
         """ Returns the largest (finite) function evaluation processed thus far. """
         return self._max_eval
 
+    @property
+    def best_iters(self) -> Dict[int, Dict[str, Any]]:
+        """ Dictionary of the best iterations for each optimizer.
+
+        See Also
+        --------
+        :meth:`get_best_iter`
+        """
+        return self._best_iters
+
     @classmethod
     @needs_optional_package('dill')
     def checkpoint_load(cls, path: Union[Path, str]):
@@ -306,7 +316,7 @@ class BaseLogger:
             Iterable of class attributes which should not be included in the log.
         """
         block = block if block else []
-        block += ['n_optimizers', 'largest_eval']
+        block += ['n_optimizers', 'largest_eval', 'best_iters']
         dump_variables = {}
         for var in dir(self):
             if '__' not in var and not callable(getattr(self, var)) and all([var != b for b in block]):
