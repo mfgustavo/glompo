@@ -11,9 +11,7 @@ from tqdm import tqdm
 
 from ..common.helpers import unravel
 
-__all__ = ("make_winding_stair_trajectory",
-           "make_radial_trajectory",
-           "make_winding_stair_trajectory_set",
+__all__ = ("make_radial_trajectory",
            "make_radial_trajectory_set",
            "unstable_func_radial_trajectory_set",)
 

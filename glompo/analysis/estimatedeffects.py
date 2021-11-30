@@ -1,8 +1,10 @@
 import copy
+import inspect
 import warnings
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
+import dask.array as da
 import numpy as np
 
 from ..common.wrappers import needs_optional_package
@@ -69,9 +71,6 @@ class EstimatedEffects:
     cutoff_threshold
         See :attr:`ct`.
 
-    trajectory_style
-        See :attr:`traj_style`
-
     References
     ----------
     Cosenza, A., Mannina, G., Vanrolleghem, P. A., & Neumann, M. B. (2013). Global sensitivity analysis in wastewater
@@ -129,10 +128,6 @@ class EstimatedEffects:
         :math:`r \\times g+1 \\times k` array of :math:`r` trajectories, each with :math:`g+1` points of :math:`k`
         factors each. Represents the carefully sampled points in the factor space where the model will be evaluated.
         See :attr:`r`, :attr:`g` and :attr:`h`.
-
-    traj_style : str
-        The style of the trajectories which will be used in this calculation. Accepts :code:`'radial'` and
-        :code:`'stairs'`. See :mod:`.trajectories`.
     """
 
     @property
@@ -258,11 +253,9 @@ class EstimatedEffects:
                  groupings: Optional[np.ndarray] = None,
                  include_short_range: bool = False,
                  convergence_threshold: float = 0,
-                 cutoff_threshold: float = 0.1,
-                 trajectory_style: str = 'radial'):
+                 cutoff_threshold: float = 0.1):
         self.dims: int = input_dims
         self.out_dims = output_dims
-        self.traj_style = trajectory_style
         self.has_short_range = include_short_range
         self._groupings = groupings if groupings is not None else np.identity(input_dims)
         self._is_grouped = groupings is not None
@@ -1267,27 +1260,11 @@ class EstimatedEffects:
             else:
                 raise ValueError('Range key can only be specified if trajectories include short range analysis points.')
 
-        if self.traj_style == 'stairs':
-            anchors = np.arange(self.g)
-            if range_key == 'all':
-                targets = np.concatenate([anchors + 1, anchors + self.g + 1])
-                anchors = np.tile(anchors, 2)
-            elif range_key == 'long':
-                targets = anchors + 1
-            elif range_key == 'short':
-                targets = anchors + self.g + 1
-
-            x_diffs = self.trajectories[np.ix_(traj_index, anchors)] - \
-                      self.trajectories[np.ix_(traj_index, targets)]
-            y_diffs = self.outputs[np.ix_(traj_index, anchors, out_index)] - \
-                      self.outputs[np.ix_(traj_index, targets, out_index)]
-
-        else:  # Radial style trajectories
-            mid = self.g + 1
-            end = 2 * self.g + 1
-            comp_indices = {'all': np.arange(1, end),
-                            'short': np.arange(mid, end),
-                            'long': np.arange(1, mid)}[range_key]
+        mid = self.g + 1
+        end = 2 * self.g + 1
+        comp_indices = {'all': np.arange(1, end),
+                        'short': np.arange(mid, end),
+                        'long': np.arange(1, mid)}[range_key]
 
             x_diffs = self.trajectories[traj_index, 0, None] - \
                       self.trajectories[np.ix_(traj_index, comp_indices)]
