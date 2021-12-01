@@ -47,7 +47,7 @@ def pass_or_compute(func) -> Callable[..., Union[da.Array, np.ndarray]]:
 
         if filename == __file__:
             return call
-        return call.compute()
+        return call.rechunk('auto').compute()
 
     return wrapper
 
@@ -286,8 +286,8 @@ class EstimatedEffects:
             raise ValueError("Invalid grouping matrix, each factor must be in exactly 1 group.")
 
         n = 2 if include_short_range else 1
-        self.trajectories = np.empty((0, n * self.g + 1, self.k))
-        self.outputs = np.empty((0, n * self.g + 1, self.h))
+        self.trajectories = da.empty((0, n * self.g + 1, self.k))
+        self.outputs = da.empty((0, n * self.g + 1, self.h))
 
         self.convergence_threshold = convergence_threshold
         self.ct = cutoff_threshold
@@ -436,7 +436,7 @@ class EstimatedEffects:
             metrics = self._calculate_metrics(h, t, range_key)
             if h == all_h and t == all_t and metrics.nbytes < 0.3 * psutil.virtual_memory().available:
                 # Save results to cache if a full calculation was done and can fit in memory
-                self._metrics[range_key] = metrics.compute()
+                self._metrics[range_key] = metrics.rechunk('auto').compute()
             metrics = metrics[m][:, k]  # Dask 2021.3 doesn't support better slicing, >2021.3 not supported in Python3.6
 
         if spec_out:
@@ -509,8 +509,8 @@ class EstimatedEffects:
                          'long': np.array([[[]]]),
                          'all': np.array([[[]]])}
 
-        self.trajectories = np.append(self.trajectories, trajectory, axis=0)
-        self.outputs = np.append(self.outputs, outputs, axis=0)
+        self.trajectories = da.append(self.trajectories, trajectory, axis=0)
+        self.outputs = da.append(self.outputs, outputs, axis=0)
 
     @pass_or_compute
     def elementary_effects(self,
@@ -624,7 +624,7 @@ class EstimatedEffects:
                                for _ in range(n_bootstrap_samples)]).mean(0)
         else:
             metric = da.atleast_3d(self[1, :, out_index, traj_index, range_key])
-        return metric.compute().argsort(1)[:, -1::-1].squeeze().T  # Dask doesn't support search
+        return metric.rechunk('auto').compute().argsort(1)[:, -1::-1].squeeze().T  # Dask doesn't support search
 
     def ranking(self,
                 out_index: SpecialSlice = 'mean',
@@ -739,7 +739,7 @@ class EstimatedEffects:
         """
         if out_index != 'mean' and not isinstance(out_index, int):
             raise ValueError('Classification can only be done on a single output at a time.')
-        mu, ms, sd = self[:, :, out_index, :, range_key].squeeze().compute()
+        mu, ms, sd = self[:, :, out_index, :, range_key].squeeze().rechunk('auto').compute()
 
         fr = np.zeros_like(mu)
         np.divide(sd, ms, out=fr, where=sd != 0)
@@ -1017,7 +1017,7 @@ class EstimatedEffects:
         labs = []
         for rk in range_key:
             pf = da.array([da.atleast_1d(self.position_factor(pair[0], pair[1], out_index, rk)) for pair in steps])
-            pf = pf.compute()
+            pf = pf.rechunk('auto').compute()
             plot_lines = ax.plot(pf,
                                  marker={'all': 'o', 'long': 'x', 'short': 'd'}[rk],
                                  linestyle={'all': '-', 'long': '--', 'short': ':'}[rk])
@@ -1104,8 +1104,9 @@ class EstimatedEffects:
             assert len(out_labels) == len(out_index), \
                 "Number of out labels does not match the number of out indices to be plotted."
 
-        boot_m, boot_s = self.bootstrap_metrics(n_samples, metric_index, factor_index, out_index, range_key).compute()
-        metrics = self[metric_index, factor_index, out_index, :, range_key].compute()
+        boot = self.bootstrap_metrics(n_samples, metric_index, factor_index, out_index, range_key)
+        boot_m, boot_s = boot.rechunk('auto').compute()
+        metrics = self[metric_index, factor_index, out_index, :, range_key].rechunk('auto').compute()
 
         valid = [False, False]
         for lab_var, ind_var, v, str_ in ((factor_labels, factor_index, 0, 'factor'),
@@ -1211,7 +1212,7 @@ class EstimatedEffects:
         if ranks.ndim == 2:
             ranks = ranks[:, None, :]
 
-        ranks = ranks.compute()
+        ranks = ranks.rechunk('auto').compute()
         stats = np.quantile(ranks, 0.5, 0)
         ranks = np.moveaxis(np.apply_along_axis(np.bincount, 0, ranks, minlength=self.g + 1)[1:].T, 1, 0)
 
@@ -1294,10 +1295,10 @@ class EstimatedEffects:
                         'short': np.arange(mid, end),
                         'long': np.arange(1, mid)}[range_key]
 
-        x_diffs = da.subtract(self.trajectories[traj_index, 0, None],
-                              self.trajectories[np.ix_(traj_index, comp_indices)])
-        y_diffs = da.subtract(self.outputs[np.ix_(traj_index, [0], out_index)],
-                              self.outputs[np.ix_(traj_index, comp_indices, out_index)])
+        x_diffs = da.subtract(self.trajectories[traj_index][:, None, 0],
+                              self.trajectories[traj_index][:, comp_indices])
+        y_diffs = da.subtract(self.outputs[traj_index][:, [0]][:, :, out_index],
+                              self.outputs[traj_index][:, comp_indices][:, :, out_index])
 
         if not self.is_grouped:
             x_diffs = da.sum(x_diffs, axis=2)
@@ -1426,7 +1427,7 @@ class EstimatedEffects:
             ax1.set_ylabel("$\\sigma/\\mu^*$", fontsize=int(1.5 * FONTSIZE))
 
             # Get metrics
-            metrics = self[1:, :, out_index, :, row_key].compute()
+            metrics = self[1:, :, out_index, :, row_key].rechunk('auto').compute()
             mu_star = metrics[0]
             sigma = metrics[1]
 
@@ -1552,7 +1553,7 @@ class EstimatedEffects:
         ax.set_ylabel("$\\mu^*$", fontsize=int(1.5 * FONTSIZE))
         ax.tick_params(axis='x', rotation=90)
 
-        mu_star = self[1, :, out_index, :, range_key].squeeze().compute()
+        mu_star = self[1, :, out_index, :, range_key].squeeze().rechunk('auto').compute()
         i_sort = np.argsort(mu_star)
         if factor_labels is None:
             labs = i_sort.astype(str)
@@ -1584,8 +1585,8 @@ class EstimatedEffects:
         ax.set_ylabel(rf"$\mu^*$ (Using {range_key[1] + ('-range' if range_key[1] != 'all' else '')} points)")
         ax.axline((0, 0), slope=1, color='gray', linewidth=0.8, zorder=-500)
 
-        first = self[1, :, out_index, :, range_key[0]].squeeze().compute()
-        second = self[1, :, out_index, :, range_key[1]].squeeze().compute()
+        first = self[1, :, out_index, :, range_key[0]].squeeze().rechunk('auto').compute()
+        second = self[1, :, out_index, :, range_key[1]].squeeze().rechunk('auto').compute()
         ax.scatter(first, second, marker='x', s=2)
 
         labs = np.arange(self.g) if not factor_labels else factor_labels
