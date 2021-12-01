@@ -1,11 +1,13 @@
 import copy
 import inspect
 import warnings
+from functools import wraps
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Callable, Dict, List, Optional, Sequence, Union
 
 import dask.array as da
 import numpy as np
+import psutil
 
 from ..common.wrappers import needs_optional_package
 
@@ -31,6 +33,23 @@ except (ModuleNotFoundError, ImportError, TypeError):  # TypeError caught for bu
 __all__ = ('EstimatedEffects',)
 
 SpecialSlice = Union[None, int, str, List, slice, np.ndarray]
+
+
+def pass_or_compute(func) -> Callable[..., Union[da.Array, np.ndarray]]:
+    """ Wraps most methods in EstimatedEffects.
+    Allows dask.arrays to be used internally amongst class methods but always return a numpy array to end users.
+    """
+
+    @wraps(func)
+    def wrapper(*args, **kwargs) -> Union[da.Array, np.ndarray]:
+        filename = inspect.stack()[1][1]
+        call = func(*args, **kwargs)
+
+        if filename == __file__:
+            return call
+        return call.compute()
+
+    return wrapper
 
 
 # noinspection PyIncorrectDocstring
@@ -176,7 +195,8 @@ class EstimatedEffects:
         return self._is_grouped
 
     @property
-    def is_converged(self) -> np.ndarray:
+    @pass_or_compute
+    def is_converged(self) -> da.Array:
         """ Converged if the instance has enough trajectories for the factor ordering to be stable.
         Returns :obj:`True` if the change in :meth:`position_factor` over the last 10 trajectory entries is smaller
         than :attr:`convergence_threshold`.
@@ -188,11 +208,12 @@ class EstimatedEffects:
             converged.
         """
         if self.r <= 10:
-            return np.full(self.h, False)
-        return np.squeeze(np.abs(self.position_factor(self.r - 10, self.r, 'all')) <= self.convergence_threshold)
+            return da.full(self.h, False, dtype=bool)
+        return da.squeeze(da.absolute(self.position_factor(self.r - 10, self.r, 'all')) <= self.convergence_threshold)
 
     @property
-    def mu(self) -> np.ndarray:
+    @pass_or_compute
+    def mu(self) -> da.Array:
         """ Shortcut access to the Estimated Effects :math:`\\mu` metric using all trajectories, for all input
         dimensions, taking the average along output dimensions. Equivalent to: :code:`ee['mu', :, 'mean', :, 'all']`
 
@@ -212,7 +233,8 @@ class EstimatedEffects:
         return self['mu', :, 'mean', :].squeeze()
 
     @property
-    def mu_star(self) -> np.ndarray:
+    @pass_or_compute
+    def mu_star(self) -> da.Array:
         """ Shortcut access to the Estimated Effects :math:`\\mu^*` metric using all trajectories, for all input
         dimensions, taking the average along output dimensions. Equivalent to:
         :code:`ee['mu_star', :, 'mean', :, 'all']`
@@ -229,7 +251,8 @@ class EstimatedEffects:
         return self['mu_star', :, 'mean', :].squeeze()
 
     @property
-    def sigma(self) -> np.ndarray:
+    @pass_or_compute
+    def sigma(self) -> da.Array:
         """ Shortcut access to the Estimated Effects :meth:`\\sigma` metric using all trajectories, for all input
         dimensions, taking the average along output dimensions. Equivalent to: :code:`ee['sigma', :, 'mean', :, 'all']`
 
@@ -278,7 +301,8 @@ class EstimatedEffects:
         else:
             self._is_ipython = False
 
-    def __getitem__(self, item) -> np.ndarray:
+    @pass_or_compute
+    def __getitem__(self, item) -> da.Array:
         """ Retrieves the sensitivity metrics (:math:`\\mu, \\mu^*, \\sigma`) for a particular calculation configuration
         The indexing is a strictly ordered set of maximum length 5:
 
@@ -389,6 +413,8 @@ class EstimatedEffects:
         h = self._expand_index('output', item[2])
         t = self._expand_index('trajec', item[3])
 
+        assert 'all' not in h
+
         range_key = item[4] if item[4] is not None else 'all'
         if not any((range_key == allowed for allowed in ('short', 'long', 'all'))):
             raise ValueError(f"Cannot parse '{item[4]}', only 'all', 'short', 'long' allowed.")
@@ -400,29 +426,27 @@ class EstimatedEffects:
         all_h = list(range(self.h))
 
         orig_h = copy.copy(h)
-        spec_out = 'mean' in h or 'all' in h
+        spec_out = 'mean' in h
         h = all_h if spec_out else h
 
         # Attempt to access existing results
         if t == all_t and self._metrics[range_key].size > 0:
-            metrics = self._metrics[range_key][np.ix_(m, k, h)]
+            metrics = da.array(self._metrics[range_key][np.ix_(m, k, h)])
         else:
             metrics = self._calculate_metrics(h, t, range_key)
-            if h == all_h and t == all_t:
-                # Save results to cache if a full calculation was done.
-                self._metrics[range_key] = metrics
-            metrics = metrics[np.ix_(m, k)]
+            if h == all_h and t == all_t and metrics.nbytes < 0.3 * psutil.virtual_memory().available:
+                # Save results to cache if a full calculation was done and can fit in memory
+                self._metrics[range_key] = metrics.compute()
+            metrics = metrics[m][:, k]  # Dask 2021.3 doesn't support better slicing, >2021.3 not supported in Python3.6
 
         if spec_out:
             cols = []
             for o in orig_h:
-                if o == 'all':
-                    cols += np.split(metrics, self.h, axis=2)
-                elif o == 'mean':
-                    cols.append(np.mean(metrics, 2)[:, :, None])
+                if o == 'mean':
+                    cols.append(da.mean(metrics, 2)[:, :, None])
                 else:
                     cols.append(metrics[:, :, o, None])
-            metrics = np.concatenate(cols, axis=2)
+            metrics = da.concatenate(cols, axis=2)
 
         return metrics
 
@@ -488,10 +512,11 @@ class EstimatedEffects:
         self.trajectories = np.append(self.trajectories, trajectory, axis=0)
         self.outputs = np.append(self.outputs, outputs, axis=0)
 
+    @pass_or_compute
     def elementary_effects(self,
                            out_index: SpecialSlice = None,
                            traj_index: Union[int, slice, List[int]] = None,
-                           range_key: str = 'all') -> np.ndarray:
+                           range_key: str = 'all') -> da.Array:
         """ Returns the raw elementary effects for a given calculation configuration.
 
         Parameters
@@ -511,7 +536,8 @@ class EstimatedEffects:
 
         return ee
 
-    def position_factor(self, i: int, j: int, out_index: SpecialSlice = 'mean', range_key: str = 'all') -> np.ndarray:
+    @pass_or_compute
+    def position_factor(self, i: int, j: int, out_index: SpecialSlice = 'mean', range_key: str = 'all') -> da.Array:
         """ Returns the position factor metric.
         This is a measure of convergence. Measures the changes between the factor rankings obtained when using `i`
         trajectories and `j` trajectories.  Where `i` and `j` are a number of trajectories such that
@@ -553,9 +579,9 @@ class EstimatedEffects:
         wastewater applications: A comprehensive comparison of different methods. Environmental Modelling & Software,
         49, 40–52. https://doi.org/10.1016/J.ENVSOFT.2013.07.009
         """
-        pos_i = np.atleast_2d(self.ranking(out_index, slice(None, i), range_key))
-        pos_j = np.atleast_2d(self.ranking(out_index, slice(None, j), range_key))
-        return np.sum(2 * np.abs(pos_i - pos_j) / (pos_i + pos_j), axis=1).squeeze()
+        pos_i = da.atleast_2d(self.ranking(out_index, slice(None, i), range_key))
+        pos_j = da.atleast_2d(self.ranking(out_index, slice(None, j), range_key))
+        return da.sum(2 * da.absolute(pos_i - pos_j) / (pos_i + pos_j), axis=1).squeeze()
 
     def order_factors(self,
                       out_index: SpecialSlice = 'mean',
@@ -594,11 +620,11 @@ class EstimatedEffects:
         >>> ee.order_factors(2, slice(None, 10))
         """
         if n_bootstrap_samples > 1:
-            metric = np.array([self[1, :, out_index, np.random.choice(self.r, self.r, replace=True), range_key]
+            metric = da.array([self[1, :, out_index, np.random.choice(self.r, self.r, replace=True), range_key]
                                for _ in range(n_bootstrap_samples)]).mean(0)
         else:
-            metric = np.atleast_3d(self[1, :, out_index, traj_index, range_key])
-        return metric.argsort(1)[:, -1::-1].squeeze().T
+            metric = da.atleast_3d(self[1, :, out_index, traj_index, range_key])
+        return metric.compute().argsort(1)[:, -1::-1].squeeze().T  # Dask doesn't support search
 
     def ranking(self,
                 out_index: SpecialSlice = 'mean',
@@ -628,11 +654,10 @@ class EstimatedEffects:
         :meth:`plot_bootstrap_rankings`
         """
         order_factors = self.order_factors(out_index, traj_index, range_key, n_bootstrap_samples)
-        return np.squeeze(np.atleast_2d(order_factors).argsort(1) + 1)
+        return np.squeeze(np.atleast_2d(order_factors).argsort(1) + 1)  # Dask doesn't support search
 
     def classification(self, n_cats: int, out_index: Union[int, str] = 'mean',
                        range_key: str = 'all') -> Dict[str, np.ndarray]:
-        # TODO Update classification rules to include comparisons of near and far if all is used?
         """ Returns a dictionary with each factor index classified according to its effect on the function outputs.
 
         Parameters
@@ -714,7 +739,7 @@ class EstimatedEffects:
         """
         if out_index != 'mean' and not isinstance(out_index, int):
             raise ValueError('Classification can only be done on a single output at a time.')
-        mu, ms, sd = self[:, :, out_index, :, range_key].squeeze()
+        mu, ms, sd = self[:, :, out_index, :, range_key].squeeze().compute()
 
         fr = np.zeros_like(mu)
         np.divide(sd, ms, out=fr, where=sd != 0)
@@ -769,12 +794,13 @@ class EstimatedEffects:
         """
         return self.classification(n_cats, out_index, range_key)[category].size / self.g
 
+    @pass_or_compute
     def bootstrap_metrics(self,
                           n_samples: int,
                           metric_index: SpecialSlice = None,
                           factor_index: SpecialSlice = None,
                           out_index: SpecialSlice = None,
-                          range_key: str = 'all') -> Tuple[np.ndarray, np.ndarray]:
+                          range_key: str = 'all') -> da.Array:
         """ Calculates sensitivity metrics with a confidence interval based on resampling bootstrapping.
 
         Parameters
@@ -786,14 +812,14 @@ class EstimatedEffects:
 
         Returns
         -------
-        Tuple[numpy.ndarray, numpy.ndarray]
+        numpy.ndarray
             Two three-dimensional arrays of selected metrics, factors/groups and outputs.
             Metrics are ordered: :math:`\\mu`, :math:`\\mu^*` and :math:`\\sigma`.
             The first array contains the mean value of the bootstrap, the second contains its standard deviation.
         """
-        multis = np.array([self[metric_index, factor_index, out_index,
+        multis = da.array([self[metric_index, factor_index, out_index,
                                 np.random.choice(self.r, self.r, replace=True), range_key] for _ in range(n_samples)])
-        return multis.mean(0), multis.std(0)
+        return da.array([multis.mean(0), multis.std(0)])
 
     @needs_optional_package('matplotlib')
     def plot_sensitivities(self,
@@ -990,7 +1016,8 @@ class EstimatedEffects:
 
         labs = []
         for rk in range_key:
-            pf = np.array([np.atleast_1d(self.position_factor(pair[0], pair[1], out_index, rk)) for pair in steps])
+            pf = da.array([da.atleast_1d(self.position_factor(pair[0], pair[1], out_index, rk)) for pair in steps])
+            pf = pf.compute()
             plot_lines = ax.plot(pf,
                                  marker={'all': 'o', 'long': 'x', 'short': 'd'}[rk],
                                  linestyle={'all': '-', 'long': '--', 'short': ':'}[rk])
@@ -1077,8 +1104,8 @@ class EstimatedEffects:
             assert len(out_labels) == len(out_index), \
                 "Number of out labels does not match the number of out indices to be plotted."
 
-        boot_m, boot_s = self.bootstrap_metrics(n_samples, metric_index, factor_index, out_index, range_key)
-        metrics = self[metric_index, factor_index, out_index, :, range_key]
+        boot_m, boot_s = self.bootstrap_metrics(n_samples, metric_index, factor_index, out_index, range_key).compute()
+        metrics = self[metric_index, factor_index, out_index, :, range_key].compute()
 
         valid = [False, False]
         for lab_var, ind_var, v, str_ in ((factor_labels, factor_index, 0, 'factor'),
@@ -1179,11 +1206,12 @@ class EstimatedEffects:
             assert len(out_labels) == len(out_index), \
                 "Number of out labels does not match the number of out indices to be plotted."
 
-        ranks = np.array([self.ranking(out_index, np.random.choice(self.r, self.r, replace=True), range_key)
+        ranks = da.array([self.ranking(out_index, np.random.choice(self.r, self.r, replace=True), range_key)
                           for _ in range(n_samples)])
         if ranks.ndim == 2:
             ranks = ranks[:, None, :]
 
+        ranks = ranks.compute()
         stats = np.quantile(ranks, 0.5, 0)
         ranks = np.moveaxis(np.apply_along_axis(np.bincount, 0, ranks, minlength=self.g + 1)[1:].T, 1, 0)
 
@@ -1200,7 +1228,6 @@ class EstimatedEffects:
             fig: plt.Figure
             ax: plt.Axes
 
-            # order = np.argsort(np.mean(ranks[o] * np.arange(1, self.g + 1), 1) / n_samples)
             order = np.argsort(stats[o], 0)
 
             ax.matshow(ranks[o, order], extent=[0.5, self.g + 0.5, self.g - 0.5, -0.5], cmap='gist_heat_r')
@@ -1234,10 +1261,11 @@ class EstimatedEffects:
             return figs[0]
         return figs
 
+    @pass_or_compute
     def _calculate_ee(self,
                       out_index: List[int],
                       traj_index: List[int],
-                      range_key: str) -> np.ndarray:
+                      range_key: str) -> da.Array:
         """ Returns an array of the Estimated Effects themselves.
 
         Parameters
@@ -1266,26 +1294,25 @@ class EstimatedEffects:
                         'short': np.arange(mid, end),
                         'long': np.arange(1, mid)}[range_key]
 
-            x_diffs = self.trajectories[traj_index, 0, None] - \
-                      self.trajectories[np.ix_(traj_index, comp_indices)]
-            y_diffs = self.outputs[np.ix_(traj_index, [0], out_index)] - \
-                      self.outputs[np.ix_(traj_index, comp_indices, out_index)]
+        x_diffs = da.subtract(self.trajectories[traj_index, 0, None],
+                              self.trajectories[np.ix_(traj_index, comp_indices)])
+        y_diffs = da.subtract(self.outputs[np.ix_(traj_index, [0], out_index)],
+                              self.outputs[np.ix_(traj_index, comp_indices, out_index)])
 
-        where = np.nonzero(np.abs(x_diffs) @ self.groupings)[0::2]
         if not self.is_grouped:
-            x_diffs = np.sum(x_diffs, axis=2)
+            x_diffs = da.sum(x_diffs, axis=2)
         else:
-            x_diffs = np.sqrt(np.sum(x_diffs ** 2, axis=2))
+            x_diffs = da.sqrt(da.sum(x_diffs ** 2, axis=2))
 
         ee = y_diffs / x_diffs[:, :, None]
-        ee[where] = ee.copy().ravel().reshape(-1, ee.shape[-1])
 
         return ee
 
+    @pass_or_compute
     def _calculate_metrics(self,
                            out_index: List[int],
                            traj_index: List[int],
-                           range_key: str) -> np.ndarray:
+                           range_key: str) -> da.Array:
         """ Calculates the Estimated Effects metrics (:math:`\\mu`, :math:`\\mu^*` and :math:`\\sigma`).
 
         Parameters
@@ -1303,11 +1330,11 @@ class EstimatedEffects:
         """
         ee = self._calculate_ee(out_index, traj_index, range_key)
 
-        mu = np.mean(ee, axis=0)
-        mu_star = np.mean(np.abs(ee), axis=0)
-        sigma = np.std(ee, axis=0, ddof=1) if ee.shape[0] > 1 else np.full_like(mu, np.nan)
+        mu = da.mean(ee, axis=0)
+        mu_star = da.mean(da.absolute(ee), axis=0)
+        sigma = da.std(ee, axis=0, ddof=1) if ee.shape[0] > 1 else da.full_like(mu, np.nan)
 
-        return np.array([mu, mu_star, sigma])
+        return da.array([mu, mu_star, sigma])
 
     def _plotting_core(self, path: Union[None, Path, str],
                        out_index: SpecialSlice,
@@ -1399,7 +1426,7 @@ class EstimatedEffects:
             ax1.set_ylabel("$\\sigma/\\mu^*$", fontsize=int(1.5 * FONTSIZE))
 
             # Get metrics
-            metrics = self[1:, :, out_index, :, row_key]
+            metrics = self[1:, :, out_index, :, row_key].compute()
             mu_star = metrics[0]
             sigma = metrics[1]
 
@@ -1525,7 +1552,7 @@ class EstimatedEffects:
         ax.set_ylabel("$\\mu^*$", fontsize=int(1.5 * FONTSIZE))
         ax.tick_params(axis='x', rotation=90)
 
-        mu_star = self[1, :, out_index, :, range_key].squeeze()
+        mu_star = self[1, :, out_index, :, range_key].squeeze().compute()
         i_sort = np.argsort(mu_star)
         if factor_labels is None:
             labs = i_sort.astype(str)
@@ -1557,8 +1584,8 @@ class EstimatedEffects:
         ax.set_ylabel(rf"$\mu^*$ (Using {range_key[1] + ('-range' if range_key[1] != 'all' else '')} points)")
         ax.axline((0, 0), slope=1, color='gray', linewidth=0.8, zorder=-500)
 
-        first = self[1, :, out_index, :, range_key[0]].squeeze()
-        second = self[1, :, out_index, :, range_key[1]].squeeze()
+        first = self[1, :, out_index, :, range_key[0]].squeeze().compute()
+        second = self[1, :, out_index, :, range_key[1]].squeeze().compute()
         ax.scatter(first, second, marker='x', s=2)
 
         labs = np.arange(self.g) if not factor_labels else factor_labels
