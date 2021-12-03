@@ -15,9 +15,12 @@ from ..common.wrappers import needs_optional_package
 WIDTH = 14
 HEIGHT = 7
 FONTSIZE = 12
+COLORS = ['#49DABF', '#FFBF69', '#ECC74C', '#404DEE']
 
 try:
     import matplotlib.pyplot as plt
+    import matplotlib as mpl
+    from matplotlib import colors
     from matplotlib import lines
     from matplotlib import patches
     from matplotlib import cm
@@ -26,6 +29,7 @@ try:
     plt.rcParams['mathtext.fontset'] = 'cm'
     plt.rcParams['savefig.format'] = 'svg'
     plt.rcParams['figure.figsize'] = WIDTH, HEIGHT
+    plt.rcParams['axes.prop_cycle'] = mpl.cycler(color=COLORS)
 
 except (ModuleNotFoundError, ImportError, TypeError):  # TypeError caught for building docs
     pass
@@ -1002,7 +1006,6 @@ class EstimatedEffects:
         --------
         :meth:`position_factor`
         """
-        cmap = plt.get_cmap('tab10')
         fig, ax = plt.subplots()
 
         ax.set_title('Convergence of sensitivity rankings ($PF$ v $r$)')
@@ -1022,7 +1025,7 @@ class EstimatedEffects:
                                  marker={'all': 'o', 'long': 'x', 'short': 'd'}[rk],
                                  linestyle={'all': '-', 'long': '--', 'short': ':'}[rk])
             for i, l in enumerate(plot_lines):
-                l.set_color(cmap(i))
+                l.set_color(COLORS[i])
 
             if pf.shape[1] > 1 or len(range_key) > 1:
                 if out_labels:
@@ -1135,7 +1138,7 @@ class EstimatedEffects:
                 ax[m].errorbar(factor_index, boot_m[m, :, o],
                                yerr=boot_s[m, :, o], fmt='o', ecolor='k', label='Bootstrap')
                 ax[m].scatter(factor_index, metrics[m, :, o],
-                              color='r', marker='_', zorder=1000, label='Raw Result')
+                              color=COLORS[3], marker='_', zorder=1000, label='Raw Result')
                 ax[m].set_xlabel("Parameter")
                 ax[m].set_ylabel(met_map[m], fontsize=int(1.5 * FONTSIZE))
                 ax[m].legend()
@@ -1194,6 +1197,10 @@ class EstimatedEffects:
         Union[matplotlib.figure.Figure, List[matplotlib.figure.Figure]]
             See :meth:`plot_sensitivities`.
         """
+        nodes = [0, 0.5, 0.75, 1]
+        cmap = colors.LinearSegmentedColormap.from_list("glompo",
+                                                        [*zip(nodes, ['#FFFFFF', COLORS[1], COLORS[0], COLORS[3]])])
+
         assert any([range_key == rk for rk in ('all', 'short', 'long')]), \
             "Only a single choice of 'all', 'short' or 'long' is supported."
 
@@ -1214,7 +1221,9 @@ class EstimatedEffects:
 
         ranks = ranks.rechunk('auto').compute()
         stats = np.quantile(ranks, 0.5, 0)
+
         ranks = np.moveaxis(np.apply_along_axis(np.bincount, 0, ranks, minlength=self.g + 1)[1:].T, 1, 0)
+        ranks = ranks / n_samples
 
         is_multi = False
         if path:
@@ -1231,7 +1240,7 @@ class EstimatedEffects:
 
             order = np.argsort(stats[o], 0)
 
-            ax.matshow(ranks[o, order], extent=[0.5, self.g + 0.5, self.g - 0.5, -0.5], cmap='gist_heat_r')
+            matshow = ax.matshow(ranks[o, order], extent=[0.5, self.g + 0.5, self.g - 0.5, -0.5], cmap=cmap)
             ax.set_xlabel("Ranking")
             ax.set_ylabel("Factor")
 
@@ -1250,6 +1259,8 @@ class EstimatedEffects:
                 ax.set_title(out_labels[o])
                 name = out_labels[o]
             ax.set_title(name + f"\n(Number of resamples: {n_samples})" + f"\n(Using {range_key} points)")
+
+            fig.colorbar(matshow, ax=ax)
 
             fig.tight_layout()
             if path:
@@ -1395,7 +1406,7 @@ class EstimatedEffects:
         n_rows = len(range_key)
 
         fig.set_size_inches(WIDTH, HEIGHT * n_rows)
-        cmap = cm.get_cmap('Pastel2')
+        cmap = colors.ListedColormap(COLORS)
 
         hidden_ax = []
         nice_titles = {'short': "Using only short-range parameter changes",
