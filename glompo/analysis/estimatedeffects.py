@@ -407,7 +407,7 @@ class EstimatedEffects:
         """
         if self.trajectories.size == 0:
             warnings.warn("Please add at least one trajectory before attempting to access calculations.", UserWarning)
-            return np.array([[[]]])
+            return da.array([[[]]])
 
         if not isinstance(item, tuple):
             item = (item,)  # NOT the same as tuple(item) since you don't want to expand 'mu' to ('m', 'u')
