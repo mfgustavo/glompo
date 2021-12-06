@@ -1153,6 +1153,7 @@ class EstimatedEffects:
                                 n_samples: int = 10,
                                 out_index: SpecialSlice = None,
                                 range_key: str = 'all',
+                                truncate_after: Optional[int] = None,
                                 out_labels: Union[None, Sequence[str], str] = None,
                                 factor_labels: Union[None, Sequence[str], str] = None,
                                 path: Union[None, Path, str] = None) -> Union[plt.Figure, List[plt.Figure]]:
@@ -1166,6 +1167,9 @@ class EstimatedEffects:
             See :meth:`__getitem__`.
         range_key
             See :meth:`__getitem__`. Only a single key is allowed at a time.
+        truncate_after
+            The number of factors to include in the plot. Any factors which are ranked higher than this are excluded.
+            Used to make analyses with many factors legible. Nothing is truncated by default.
         out_labels
             Optional list of names to give to the outputs, if multiple are selected. Will be used in the figure title
             and as the filename. Must be equal in length to `out_index`.
@@ -1220,6 +1224,8 @@ class EstimatedEffects:
                 path.mkdir(exist_ok=True, parents=True)
                 is_multi = True
 
+        extent = truncate_after if truncate_after else self.g
+
         figs = []
         for o, oname in enumerate(out_labels):
             fig, ax = plt.subplots(figsize=(WIDTH, HEIGHT))
@@ -1228,17 +1234,19 @@ class EstimatedEffects:
 
             order = np.argsort(stats[o], 0)
 
-            matshow = ax.matshow(ranks[o, order], extent=[0.5, self.g + 0.5, self.g - 0.5, -0.5], cmap=cmap)
+            matshow = ax.matshow(ranks[o, order][:truncate_after, :truncate_after],
+                                 extent=[0.5, extent + 0.5, extent - 0.5, -0.5],
+                                 cmap=cmap)
             ax.set_xlabel("Ranking")
             ax.set_ylabel("Factor")
 
             ax.xaxis.get_major_locator().set_params(integer=True)
 
-            ax.set_yticks(range(self.g))
+            ax.set_yticks(range(self.g)[:truncate_after])
             if factor_labels:
-                ax.set_yticklabels([factor_labels[i] for i in order])
+                ax.set_yticklabels([factor_labels[i] for i in order][:truncate_after])
             else:
-                ax.set_yticklabels(np.arange(self.g)[order])
+                ax.set_yticklabels(np.arange(self.g)[order][:truncate_after])
             for t in ax.yaxis.get_major_ticks()[1::2]:
                 t.set_pad(20)
 
