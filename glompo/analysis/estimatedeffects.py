@@ -1197,9 +1197,9 @@ class EstimatedEffects:
         Union[matplotlib.figure.Figure, List[matplotlib.figure.Figure]]
             See :meth:`plot_sensitivities`.
         """
-        nodes = [0, 0.5, 0.75, 1]
+        nodes = [0, 1 / n_samples, 1]
         cmap = colors.LinearSegmentedColormap.from_list("glompo",
-                                                        [*zip(nodes, ['#FFFFFF', COLORS[1], COLORS[0], COLORS[3]])])
+                                                        [*zip(nodes, ['#FFFFFF', COLORS[1], COLORS[3]])])
 
         assert any([range_key == rk for rk in ('all', 'short', 'long')]), \
             "Only a single choice of 'all', 'short' or 'long' is supported."
