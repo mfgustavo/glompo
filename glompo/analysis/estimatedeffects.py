@@ -914,6 +914,7 @@ class EstimatedEffects:
     def plot_rankings(self,
                       out_index: SpecialSlice = 'mean',
                       range_key: Union[str, Sequence[str]] = 'all',
+                      truncate_after: Optional[None] = None,
                       factor_labels: Union[None, Sequence[str], str] = None,
                       out_labels: Union[None, Sequence[str], str] = None,
                       log_scale: bool = False,
@@ -931,6 +932,13 @@ class EstimatedEffects:
             See :meth:`plot_sensitivities`.
         range_key
             Accepts either one or two of the allowed range keys: :code:`'all'`, :code:`'short'` and :code:`'long'`.
+        truncate_after
+            The number of factors to include in the plot. Any factors which are ranked higher than this are excluded.
+            Used to make analyses with many factors legible. Nothing is truncated by default.
+
+            .. note::
+
+               Only effects the single `range_key` plot.
 
         Returns
         -------
@@ -950,7 +958,8 @@ class EstimatedEffects:
                                    out_labels=out_labels,
                                    log_scale=log_scale,
                                    range_key=range_key,
-                                   path=path)
+                                   path=path,
+                                   truncate_after=truncate_after)
 
     @needs_optional_package('matplotlib')
     def plot_convergence(self,
@@ -1556,6 +1565,8 @@ class EstimatedEffects:
         fig.set_size_inches(WIDTH, (0.2 * self.g + 2) / 7 * HEIGHT)
         ax = fig.add_subplot(111)
 
+        truncate_after = kwargs['truncate_after']
+
         ax.set_title("Parameter Ranking")
         ax.set_xlabel("$\\mu^*$", fontsize=int(1.5 * FONTSIZE))
 
@@ -1565,10 +1576,10 @@ class EstimatedEffects:
             labs = i_sort.astype(str)
         else:
             labs = np.array(factor_labels)[i_sort]
-        ax.barh(range(i_sort.size), mu_star[i_sort])
+        ax.barh(range(i_sort.size)[:truncate_after], mu_star[i_sort][:truncate_after])
 
-        ax.set_yticks(range(i_sort.size))
-        ax.set_yticklabels(labs)
+        ax.set_yticks(range(i_sort.size)[:truncate_after])
+        ax.set_yticklabels(labs[:truncate_after])
 
         ax.set_xscale('log' if log_scale else 'linear')
 
