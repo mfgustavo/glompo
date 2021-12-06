@@ -1556,13 +1556,11 @@ class EstimatedEffects:
                                   log_scale: bool = False,
                                   **kwargs) -> plt.Axes:
         """ Makes the rankings bar plot when one range key is requested. """
-        fig.set_size_inches(WIDTH, HEIGHT)
+        fig.set_size_inches(WIDTH, (0.2 * self.g + 2) / 7 * HEIGHT)
         ax = fig.add_subplot(111)
 
         ax.set_title("Parameter Ranking")
-        ax.set_xlabel("Parameter Index")
-        ax.set_ylabel("$\\mu^*$", fontsize=int(1.5 * FONTSIZE))
-        ax.tick_params(axis='x', rotation=90)
+        ax.set_xlabel("$\\mu^*$", fontsize=int(1.5 * FONTSIZE))
 
         mu_star = self[1, :, out_index, :, range_key].squeeze().rechunk('auto').compute()
         i_sort = np.argsort(mu_star)
@@ -1570,14 +1568,21 @@ class EstimatedEffects:
             labs = i_sort.astype(str)
         else:
             labs = np.array(factor_labels)[i_sort]
-        ax.bar(range(i_sort.size), mu_star[i_sort])
+        ax.barh(range(i_sort.size), mu_star[i_sort])
 
-        ax.set_xticks(range(i_sort.size))
-        ax.set_xticklabels(labs)
-        for t in ax.xaxis.get_major_ticks()[1::2]:
-            t.set_pad(20)
+        ax.set_yticks(range(i_sort.size))
+        ax.set_yticklabels(labs)
 
-        ax.set_yscale('log' if log_scale else 'linear')
+        ax.set_xscale('log' if log_scale else 'linear')
+
+        ax.xaxis.set_ticks_position('top')
+        ax.xaxis.set_label_position('top')
+
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['bottom'].set_visible(False)
+
+        ax.margins(y=0)
 
         return ax
 
