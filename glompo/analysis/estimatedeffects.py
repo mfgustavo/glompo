@@ -1350,11 +1350,15 @@ class EstimatedEffects:
 
         is_custom_out_labs = 'out_labels' in kwargs and kwargs['out_labels'] is not None
         if is_custom_out_labs:
+            if isinstance(kwargs['out_labels'], str):
+                kwargs['out_labels'] = [kwargs['out_labels']]
             assert len(out_index) == len(kwargs['out_labels']), \
                 "Number of out labels does not match the number of out indices to be plotted."
 
         is_custom_fact_labs = 'factor_labels' in kwargs and kwargs['factor_labels'] is not None
         if is_custom_fact_labs:
+            if isinstance(kwargs['factor_labels'], str):
+                kwargs['factor_labels'] = [kwargs['factor_labels']]
             assert self.g == len(kwargs['factor_labels']), \
                 "Number of factor labels does not match the number of factor indices to be plotted."
 
