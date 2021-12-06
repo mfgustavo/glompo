@@ -860,11 +860,7 @@ class EstimatedEffects:
         log_scale
             If :obj:`True` the axes will be plotted on a log scale.
         path
-            Optional path to which the plot will be saved. Default is None, whose behavior is context dependent:
-
-               * If in an interactive IPython or Jupyter context, plots will be shown and not saved.
-
-               * Otherwise, the plot is saved with the default name.
+            Optional path to which the plot will be saved. Default is :obj:`None` which does not save the plot to disk.
 
             If a path is provided and one plot is being produced (see `out_index`) this is interpreted as the filename
             with which to save the figure.
@@ -906,9 +902,6 @@ class EstimatedEffects:
         building energy simulations: Combining first- and second-order elementary effects methods. Energy and Buildings,
         68(PART C), 741–750. https://doi.org/10.1016/J.ENBUILD.2012.08.048
         """
-        if not self._is_ipython and path is None:
-            path = 'sensitivities'
-
         return self._plotting_core(out_index=out_index,
                                    plot_stub=self._plot_sensitivities_stub,
                                    range_key=range_key,
@@ -950,9 +943,6 @@ class EstimatedEffects:
             stub = self._plot_double_ranking_stub
         else:
             raise ValueError("Only 1 or 2 range keys can be plotted at the same time.")
-
-        if not self._is_ipython and path is None:
-            path = 'ranking'
 
         return self._plotting_core(out_index=out_index,
                                    plot_stub=stub,
