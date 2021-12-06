@@ -829,8 +829,8 @@ class EstimatedEffects:
     def plot_sensitivities(self,
                            out_index: SpecialSlice = 'mean',
                            range_key: Union[str, Sequence[str]] = 'all',
-                           factor_labels: Optional[Sequence[str]] = None,
-                           out_labels: Optional[Sequence[str]] = None,
+                           factor_labels: Union[None, Sequence[str], str] = None,
+                           out_labels: Union[None, Sequence[str], str] = None,
                            log_scale: bool = False,
                            path: Union[None, Path, str] = None) -> Union[plt.Figure, List[plt.Figure]]:
         """ Produces a sensitivity plot.
@@ -914,8 +914,8 @@ class EstimatedEffects:
     def plot_rankings(self,
                       out_index: SpecialSlice = 'mean',
                       range_key: Union[str, Sequence[str]] = 'all',
-                      factor_labels: Optional[Sequence[str]] = None,
-                      out_labels: Optional[Sequence[str]] = None,
+                      factor_labels: Union[None, Sequence[str], str] = None,
+                      out_labels: Union[None, Sequence[str], str] = None,
                       log_scale: bool = False,
                       path: Union[None, Path, str] = None) -> Union[plt.Figure, List[plt.Figure]]:
         """ Produces the factor rankings as a plot.
@@ -957,7 +957,7 @@ class EstimatedEffects:
                          out_index: SpecialSlice = 'mean',
                          range_key: Union[str, Sequence[str]] = 'all',
                          step_size: int = 10,
-                         out_labels: Optional[Sequence[str]] = None,
+                         out_labels: Union[None, Sequence[str], str] = None,
                          path: Union[None, Path, str] = None) -> plt.Figure:
         """ Plots the evolution of the Position Factor (:math:`PF_{r_i \\to r_j}`) metric as a function of increasing
         number of trajectories.
@@ -1117,7 +1117,7 @@ class EstimatedEffects:
                 is_multi = True
 
         figs = []
-        for o, (oind, oname) in enumerate(zip(out_index, out_labels)):
+        for o, oname in enumerate(out_labels):
             fig, ax = plt.subplots(boot_m.shape[0], 1, figsize=(WIDTH, HEIGHT * boot_m.shape[0]))
             if boot_m.shape[0] == 1:
                 ax = [ax]
@@ -1153,8 +1153,8 @@ class EstimatedEffects:
                                 n_samples: int = 10,
                                 out_index: SpecialSlice = None,
                                 range_key: str = 'all',
-                                out_labels: Optional[Sequence[str]] = None,
-                                factor_labels: Optional[Sequence[str]] = None,
+                                out_labels: Union[None, Sequence[str], str] = None,
+                                factor_labels: Union[None, Sequence[str], str] = None,
                                 path: Union[None, Path, str] = None) -> Union[plt.Figure, List[plt.Figure]]:
         """ Plots the results of a boostrap analysis on the factor rankings.
 
@@ -1189,12 +1189,18 @@ class EstimatedEffects:
         out_index = self._expand_index('output', out_index)
 
         if factor_labels:
+            if isinstance(factor_labels, str):
+                factor_labels = [factor_labels]
             assert len(factor_labels) == self.g, \
                 "Number of factor labels does not match the number of factors."
 
         if out_labels:
+            if isinstance(out_labels, str):
+                out_labels = [out_labels]
             assert len(out_labels) == len(out_index), \
                 "Number of out labels does not match the number of out indices to be plotted."
+        else:
+            out_labels = out_index.copy()
 
         ranks = da.array([self.ranking(out_index, np.random.choice(self.r, self.r, replace=True), range_key)
                           for _ in range(n_samples)])
@@ -1210,12 +1216,12 @@ class EstimatedEffects:
         is_multi = False
         if path:
             path = Path(path)
-            if ranks.shape[1] > 1:
+            if ranks.shape[0] > 1:
                 path.mkdir(exist_ok=True, parents=True)
                 is_multi = True
 
         figs = []
-        for o, oname in enumerate(out_index):
+        for o, oname in enumerate(out_labels):
             fig, ax = plt.subplots(figsize=(WIDTH, HEIGHT))
             fig: plt.Figure
             ax: plt.Axes
@@ -1237,9 +1243,6 @@ class EstimatedEffects:
                 t.set_pad(20)
 
             name = oname if not isinstance(oname, int) else f'{oname:03}'
-            if out_labels:
-                ax.set_title(out_labels[o])
-                name = out_labels[o]
             ax.set_title(name + f"\n(Number of resamples: {n_samples})" + f"\n(Using {range_key} points)")
 
             fig.colorbar(matshow, ax=ax)
