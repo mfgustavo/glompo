@@ -1047,8 +1047,8 @@ class EstimatedEffects:
                                out_index: SpecialSlice = None,
                                range_key: str = 'all',
                                log_scale: bool = False,
-                               out_labels: Optional[Sequence[str]] = None,
-                               factor_labels: Optional[Sequence[str]] = None,
+                               out_labels: Union[None, Sequence[str], str] = None,
+                               factor_labels: Union[None, Sequence[str], str] = None,
                                path: Union[None, Path, str] = None) -> Union[plt.Figure, List[plt.Figure]]:
         """ Plots the results of a boostrap analysis on the metrics.
 
@@ -1090,26 +1090,24 @@ class EstimatedEffects:
         out_index = self._expand_index('output', out_index)
 
         if factor_labels:
+            if isinstance(factor_labels, str):
+                factor_labels = [factor_labels]
             assert len(factor_labels) == len(factor_index), \
                 "Number of factor labels does not match the number of factor indices to be plotted."
+        else:
+            factor_labels = factor_index.copy()
 
         if out_labels:
+            if isinstance(out_labels, str):
+                out_labels = [out_labels]
             assert len(out_labels) == len(out_index), \
                 "Number of out labels does not match the number of out indices to be plotted."
+        else:
+            out_labels = out_index.copy()
 
         boot = self.bootstrap_metrics(n_samples, metric_index, factor_index, out_index, range_key)
         boot_m, boot_s = boot.rechunk('auto').compute()
         metrics = self[metric_index, factor_index, out_index, :, range_key].rechunk('auto').compute()
-
-        valid = [False, False]
-        for lab_var, ind_var, v, str_ in ((factor_labels, factor_index, 0, 'factor'),
-                                          (out_labels, out_index, 1, 'out')):
-            if lab_var:
-                if len(lab_var) == len(ind_var):
-                    valid[v] = True
-                else:
-                    warnings.warn(f"The number of {str_} labels does not match the number of factors calculated. "
-                                  f"Ignoring the labels provided.", UserWarning)
 
         is_multi = False
         if path:
@@ -1119,7 +1117,7 @@ class EstimatedEffects:
                 is_multi = True
 
         figs = []
-        for o, oname in enumerate(out_index):
+        for o, (oind, oname) in enumerate(zip(out_index, out_labels)):
             fig, ax = plt.subplots(boot_m.shape[0], 1, figsize=(WIDTH, HEIGHT * boot_m.shape[0]))
             if boot_m.shape[0] == 1:
                 ax = [ax]
@@ -1134,16 +1132,10 @@ class EstimatedEffects:
                 ax[m].legend()
                 ax[m].set_yscale('log' if log_scale else 'linear')
 
-                if valid[0]:
-                    ax[m].set_xticks(range(len(factor_index)))
-                    ax[m].set_xticklabels(factor_labels, rotation=30)
-                else:
-                    ax[m].xaxis.get_major_locator().set_params(integer=True)
+                ax[m].set_xticks(factor_index)
+                ax[m].set_xticklabels(factor_labels, rotation=30)
 
             name = oname if not isinstance(oname, int) else f'{oname:03}'
-            if valid[1]:
-                ax[0].set_title(out_labels[o])
-                name = out_labels[o]
             ax[0].set_title(name + f"\n(Number of resamples: {n_samples})" + f"\n(Using {range_key} points)")
 
             fig.tight_layout()
