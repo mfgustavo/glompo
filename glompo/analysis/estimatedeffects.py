@@ -5,6 +5,7 @@ from functools import wraps
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Union
 
+import dask
 import dask.array as da
 import numpy as np
 import psutil
@@ -34,6 +35,9 @@ try:
 except (ModuleNotFoundError, ImportError, TypeError):  # TypeError caught for building docs
     pass
 
+# Dask settings
+dask.config.set(**{'array.slicing.split_large_chunks': False})
+
 __all__ = ('EstimatedEffects',)
 
 SpecialSlice = Union[None, int, str, List, slice, np.ndarray]
@@ -51,7 +55,7 @@ def pass_or_compute(func) -> Callable[..., Union[da.Array, np.ndarray]]:
 
         if filename == __file__:
             return call
-        return call.rechunk('auto').compute()
+        return call.compute()
 
     return wrapper
 
@@ -440,7 +444,7 @@ class EstimatedEffects:
             metrics = self._calculate_metrics(h, t, range_key)
             if h == all_h and t == all_t and metrics.nbytes < 0.3 * psutil.virtual_memory().available:
                 # Save results to cache if a full calculation was done and can fit in memory
-                self._metrics[range_key] = metrics.rechunk('auto').compute()
+                self._metrics[range_key] = metrics.compute()
             metrics = metrics[m][:, k]  # Dask 2021.3 doesn't support better slicing, >2021.3 not supported in Python3.6
 
         if spec_out:
@@ -624,11 +628,11 @@ class EstimatedEffects:
         >>> ee.order_factors(2, slice(None, 10))
         """
         if n_bootstrap_samples > 1:
-            metric = da.array([self[1, :, out_index, np.random.choice(self.r, self.r, replace=True), range_key]
+            metric = da.array([self[1, :, out_index, np.sort(np.random.choice(self.r, self.r, replace=True)), range_key]
                                for _ in range(n_bootstrap_samples)]).mean(0)
         else:
             metric = da.atleast_3d(self[1, :, out_index, traj_index, range_key])
-        return metric.rechunk('auto').compute().argsort(1)[:, -1::-1].squeeze().T  # Dask doesn't support search
+        return metric.compute().argsort(1)[:, -1::-1].squeeze().T  # Dask doesn't support search
 
     def ranking(self,
                 out_index: SpecialSlice = 'mean',
@@ -743,7 +747,7 @@ class EstimatedEffects:
         """
         if out_index != 'mean' and not isinstance(out_index, int):
             raise ValueError('Classification can only be done on a single output at a time.')
-        mu, ms, sd = self[:, :, out_index, :, range_key].squeeze().rechunk('auto').compute()
+        mu, ms, sd = self[:, :, out_index, :, range_key].squeeze().compute()
 
         fr = np.zeros_like(mu)
         np.divide(sd, ms, out=fr, where=sd != 0)
@@ -822,7 +826,8 @@ class EstimatedEffects:
             The first array contains the mean value of the bootstrap, the second contains its standard deviation.
         """
         multis = da.array([self[metric_index, factor_index, out_index,
-                                np.random.choice(self.r, self.r, replace=True), range_key] for _ in range(n_samples)])
+                                np.sort(np.random.choice(self.r, self.r, replace=True)),
+                                range_key] for _ in range(n_samples)])
         return da.array([multis.mean(0), multis.std(0)])
 
     @needs_optional_package('matplotlib')
@@ -1019,7 +1024,7 @@ class EstimatedEffects:
         labs = []
         for rk in range_key:
             pf = da.array([da.atleast_1d(self.position_factor(pair[0], pair[1], out_index, rk)) for pair in steps])
-            pf = pf.rechunk('auto').compute()
+            pf = pf.compute()
             plot_lines = ax.plot(pf,
                                  marker={'all': 'o', 'long': 'x', 'short': 'd'}[rk],
                                  linestyle={'all': '-', 'long': '--', 'short': ':'}[rk])
@@ -1115,8 +1120,8 @@ class EstimatedEffects:
             out_labels = out_index.copy()
 
         boot = self.bootstrap_metrics(n_samples, metric_index, factor_index, out_index, range_key)
-        boot_m, boot_s = boot.rechunk('auto').compute()
-        metrics = self[metric_index, factor_index, out_index, :, range_key].rechunk('auto').compute()
+        boot_m, boot_s = boot.compute()
+        metrics = self[metric_index, factor_index, out_index, :, range_key].compute()
 
         is_multi = False
         if path:
@@ -1215,12 +1220,12 @@ class EstimatedEffects:
         else:
             out_labels = out_index.copy()
 
-        ranks = da.array([self.ranking(out_index, np.random.choice(self.r, self.r, replace=True), range_key)
+        ranks = da.array([self.ranking(out_index, np.sort(np.random.choice(self.r, self.r, replace=True)), range_key)
                           for _ in range(n_samples)])
         if ranks.ndim == 2:
             ranks = ranks[:, None, :]
 
-        ranks = ranks.rechunk('auto').compute()
+        ranks = ranks.compute()
         stats = np.quantile(ranks, 0.5, 0)
 
         ranks = np.moveaxis(np.apply_along_axis(np.bincount, 0, ranks, minlength=self.g + 1)[1:].T, 1, 0)
@@ -1444,7 +1449,7 @@ class EstimatedEffects:
             ax1.set_ylabel("$\\sigma/\\mu^*$", fontsize=int(1.5 * FONTSIZE))
 
             # Get metrics
-            metrics = self[1:, :, out_index, :, row_key].rechunk('auto').compute()
+            metrics = self[1:, :, out_index, :, row_key].compute()
             mu_star = metrics[0]
             sigma = metrics[1]
 
@@ -1570,7 +1575,7 @@ class EstimatedEffects:
         ax.set_title("Parameter Ranking")
         ax.set_xlabel("$\\mu^*$", fontsize=int(1.5 * FONTSIZE))
 
-        mu_star = self[1, :, out_index, :, range_key].squeeze().rechunk('auto').compute()
+        mu_star = self[1, :, out_index, :, range_key].squeeze().compute()
         i_sort = np.argsort(mu_star)
         if factor_labels is None:
             labs = i_sort.astype(str)
@@ -1609,8 +1614,8 @@ class EstimatedEffects:
         ax.set_ylabel(rf"$\mu^*$ (Using {range_key[1] + ('-range' if range_key[1] != 'all' else '')} points)")
         ax.axline((0, 0), slope=1, color='gray', linewidth=0.8, zorder=-500)
 
-        first = self[1, :, out_index, :, range_key[0]].squeeze().rechunk('auto').compute()
-        second = self[1, :, out_index, :, range_key[1]].squeeze().rechunk('auto').compute()
+        first = self[1, :, out_index, :, range_key[0]].squeeze().compute()
+        second = self[1, :, out_index, :, range_key[1]].squeeze().compute()
         ax.scatter(first, second, marker='x', s=2)
 
         labs = np.arange(self.g) if not factor_labels else factor_labels
