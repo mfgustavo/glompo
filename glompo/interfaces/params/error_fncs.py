@@ -615,6 +615,87 @@ class ReaxFFError(BaseParamsError):
         self.job_col.pickle_dump(str(path / 'job_collection.pkl'))
         self.par_eng.pickle_dump(str(path / 'reax_params.pkl'))
 
+    def get_grouping_matrix(self, *,
+                            active_only: bool = False,
+                            by_atoms: bool = False,
+                            by_block: bool = False,
+                            by_block_index: bool = False,
+                            by_equation: bool = False,
+                            by_description: bool = False) -> Tuple[List[Tuple], np.ndarray]:
+        """ Returns a grouping matrix for use in the analysis tools (see :class:`.EstimatedEffects` and
+        :attr:`.EstimatedEffects.groupings`). Various default groupings are provided.
+
+        Parameters
+        ----------
+        active_only
+            If :obj:`True`, the grouping will only be done for parameters which are 'active' otherwise it will be done
+            for all parameters.
+
+        by_atoms
+            If :obj:`True`, parameter atom groups are included in the grouping.
+
+            .. note::
+
+               This groups by atom *group*, **not** atom *types*. This is because each parameter may only appear in
+               one group, and an atom type will appear in several groups. Hence, this will result in a grouping like:
+
+               >>> ['C', 'C.H', 'C.O', 'O.H', 'C.O.H', ...]
+
+               not:
+
+               >>> ['C', 'H', 'O']
+
+        by_block
+            If :obj:`True`, parameter block types are included in the grouping.
+
+        by_block_index
+            If :obj:`True`, the parameters' positions in the blocks are included in the grouping.
+
+            .. warning::
+
+               Do not use alone! Grouping by index without also grouping by block type will result in a senseless
+               grouping.
+
+        by_equation
+            If :obj:`True`, the equations in which the parameters' appear are included in the grouping.
+
+        by_description
+            If :obj:`True`, the parameter descriptions are included in the grouping.
+
+        Returns
+        -------
+        List
+            List of unique group identifier 'names'.
+        numpy.ndarray
+            :math:`n \\times g` grouping matrix.
+        """
+        if PARAMS_VERSION_INFO < (0, 5, 1):
+            raise ValueError("Method incompatible with ParAMS < v0.5.1")
+
+        maps = []
+
+        params = self.par_eng.active if active_only else self.par_eng
+
+        if by_atoms:
+            maps.append('atoms')
+        if by_block:
+            maps.append('block')
+        if by_block_index:
+            maps.append('block_index')
+        if by_equation:
+            maps.append('equation')
+        if by_description:
+            maps.append('description')
+
+        signatures = [tuple(getattr(p, name) if name != 'atoms' else p.name.split(':')[0] for name in maps)
+                      for p in params]
+
+        bins = list(set(signatures))  # Unique ordered signatures
+
+        group_matrix = np.array([[s == b for b in bins] for s in signatures], dtype=int)
+
+        return bins, group_matrix
+
 
 class XTBError(BaseParamsError):
     """ GFN-xTB error function. """
