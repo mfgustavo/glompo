@@ -294,8 +294,10 @@ class EstimatedEffects:
             raise ValueError("Invalid grouping matrix, each factor must be in exactly 1 group.")
 
         n = 2 if include_short_range else 1
-        self.trajectories = da.empty((0, n * self.g + 1, self.k))
-        self.outputs = da.empty((0, n * self.g + 1, self.h))
+        with warnings.catch_warnings():  # Catch divide by zero warning when creating empty dask array
+            warnings.simplefilter('ignore', RuntimeWarning, 2894)
+            self.trajectories = da.empty((0, n * self.g + 1, self.k))
+            self.outputs = da.empty((0, n * self.g + 1, self.h))
 
         self.convergence_threshold = convergence_threshold
         self.ct = cutoff_threshold
