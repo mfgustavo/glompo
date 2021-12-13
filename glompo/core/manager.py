@@ -540,7 +540,7 @@ class GloMPOManager:
             else:
                 raise TypeError("x0_generator not an instance of a subclass of BaseGenerator.")
         else:
-            self.x0_generator = RandomGenerator(self.bounds)
+            self.x0_generator = RandomGenerator()
             self.logger.info("x0 generator set to default: RandomGenerator()")
 
         # Save killing conditions
