@@ -8,7 +8,8 @@ import warnings
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
-from typing import Any, Callable, Optional, Sequence, Tuple
+from pathlib import Path
+from typing import Any, Callable, Optional, Sequence, Tuple, Union
 
 import cma
 import numpy as np
@@ -33,7 +34,7 @@ class CMAOptimizer(BaseOptimizer):
     verbose
         If :obj:`True`, print status messages during the optimization, else no output will be printed.
     keep_files
-        If :obj:`True` the files produced by CMA are retained otherwise they are not produced.
+        Directory in which to save a file containing extra optimizer convergence information.
     force_injects
         If :obj:`True`, injections of parameter vectors into the solver will be exact, guaranteeing that that
         solution will be in the next iteration's population. If :obj:`False`, the injection will result in a direction
@@ -68,7 +69,7 @@ class CMAOptimizer(BaseOptimizer):
                  backend: str = 'threads',
                  sampler: str = 'full',
                  verbose: bool = True,
-                 keep_files: bool = False,
+                 keep_files: Union[None, str, Path] = None,
                  force_injects: Optional[bool] = None,
                  injection_frequency: Optional[int] = None,
                  **cmasettings):
@@ -77,7 +78,7 @@ class CMAOptimizer(BaseOptimizer):
         self.verbose = verbose
         self.es = None
         self.result = None
-        self.keep_files = keep_files
+        self.keep_files = Path(keep_files)
         self.cmasettings = cmasettings
         self.popsize = cmasettings['popsize'] if 'popsize' in cmasettings else None
 
@@ -230,9 +231,11 @@ class CMAOptimizer(BaseOptimizer):
                 if self._opt_id:
                     name += f'opt{self._opt_id}_'
                 name += 'results.pkl'
-                with open(name, 'wb') as file:
+                with (self.keep_files / name).open('wb') as file:
                     self.logger.debug("Pickling results")
-                    pickle.dump(self.es.result, file)
+                    pickle.dump({key: getattr(self.es, key)
+                                 for key in ('result', 'sigma', 'B', 'C', 'D', 'popsize', 'sigma0')},
+                                file)
 
         return self.result
 
