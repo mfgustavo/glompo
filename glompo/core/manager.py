@@ -1969,7 +1969,8 @@ class GloMPOManager:
                              f"    {'Core IDs:':.<26}{cores}\n"
                              f"    {'Memory Available:':.<26}{present_memory(psutil.virtual_memory().total)}\n"
                              f"    {'Hostname:':.<26}{socket.gethostname()}\n"
-                             f"    {'Working Dir:':.<26}{Path.cwd()}\n"
+                             f"    {'Current Dir:':.<26}{Path.cwd()}\n"
+                             f"    {'Output Dir:':.<26}{self.working_dir}\n"
                              f"    {'Username:':.<26}{getpass.getuser()}")
 
     def _purge_old_results(self):
