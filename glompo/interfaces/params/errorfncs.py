@@ -12,7 +12,7 @@ from scm.params.core.lossfunctions import SSE
 from scm.params.parameterinterfaces.base import BaseParameters
 from scm.plams.core.errors import ResultsError
 
-from .params_builders import setup_reax_from_classic, setup_reax_from_params, setup_xtb_from_params
+from .paramsbuilders import setup_reax_from_classic, setup_reax_from_params, setup_xtb_from_params
 
 try:
     from scm.params.core.dataset import DataSetEvaluationError

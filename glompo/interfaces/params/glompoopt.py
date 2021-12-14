@@ -1,8 +1,9 @@
 import warnings
-from scm.params.core.opt_components import _Step
-from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
 from selectors import BaseSelector
 from typing import Sequence, Tuple
+
+from scm.params.core.opt_components import _Step
+from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
 
 from ...core.manager import GloMPOManager
 

@@ -10,7 +10,7 @@ from glompo.hunters.basehunter import BaseHunter, _AndHunter, _OrHunter
 from glompo.hunters.bestunmoving import BestUnmoving
 from glompo.hunters.evalsunmoving import EvaluationsUnmoving
 from glompo.hunters.lastptsinvalid import LastPointsInvalid
-from glompo.hunters.min_fcalls import MinFuncCalls
+from glompo.hunters.minfcalls import MinFuncCalls
 from glompo.hunters.parameterdistance import ParameterDistance
 from glompo.hunters.stepsize import StepSize
 from glompo.hunters.timeannealing import TimeAnnealing

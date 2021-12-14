@@ -1,14 +1,14 @@
-from concurrent.futures import ThreadPoolExecutor
-
 import inspect
-import numpy as np
 import os
 import pickle
-import pytest
 import shutil
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, Tuple, Type, Union
+
+import numpy as np
+import pytest
 
 pytest.importorskip('scm', reason="SCM ParAMS needed to test and use the ParAMS interface.")
 
@@ -21,7 +21,7 @@ from scm.params.optimizers.base import BaseOptimizer, MinimizeResult
 from scm.params.parameterinterfaces.reaxff import ReaxParams
 
 from glompo.interfaces.params import ReaxFFError, GlompoParamsWrapper, setup_reax_from_classic
-from glompo.interfaces.params.glompo_opt import _FunctionWrapper
+from glompo.interfaces.params.glompoopt import _FunctionWrapper
 from glompo.opt_selectors.baseselector import BaseSelector
 from glompo.optimizers.baseoptimizer import BaseOptimizer
 from glompo.common.namedtuples import Result

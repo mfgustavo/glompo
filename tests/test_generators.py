@@ -4,7 +4,7 @@ import pytest
 from glompo.common.namedtuples import Result
 from glompo.generators.basinhopping import BasinHoppingGenerator
 from glompo.generators.best import IncumbentGenerator
-from glompo.generators.exploit_explore import ExploitExploreGenerator
+from glompo.generators.exploitexplore import ExploitExploreGenerator
 from glompo.generators.random import RandomGenerator
 from glompo.generators.single import SinglePointGenerator
 
