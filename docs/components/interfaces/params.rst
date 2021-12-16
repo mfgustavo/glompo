@@ -5,10 +5,10 @@ ParAMS
    :maxdepth: 4
    :caption: Table of Contents
 
-   params/glompo_opt
-   params/error_fncs
+   params/glompoopt
+   params/errorfncs
    params/optimization
-   params/params_builders
+   params/paramsbuilders
 
 `ParAMS <https://www.scm.com/doc/params/index.html>`_ is a reparameterization tool for computational chemistry models which ships with SCM's AMS suite. Several interfaces to ParAMS have been included in the GloMPO package. They allow GloMPO to manage ReaxFF and GFN-xTB reparameterisations.
 

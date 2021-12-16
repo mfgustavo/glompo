@@ -1,7 +1,7 @@
 ParAMS as Error Functions
 -------------------------
 
-.. py:currentmodule:: glompo.interfaces.params.error_fncs
+.. py:currentmodule:: glompo.interfaces.params.errorfncs
 
 .. autosummary::
    :nosignatures:
@@ -10,6 +10,6 @@ ParAMS as Error Functions
    ReaxFFError
    XTBError
 
-.. automodule:: glompo.interfaces.params.error_fncs
+.. automodule:: glompo.interfaces.params.errorfncs
    :members:
    :show-inheritance:

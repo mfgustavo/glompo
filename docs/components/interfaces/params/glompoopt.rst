@@ -1,5 +1,5 @@
 GloMPO as ParAMS Optimizer
 --------------------------
 
-.. automodule:: glompo.interfaces.params.glompo_opt
+.. automodule:: glompo.interfaces.params.glompoopt
       :members:
