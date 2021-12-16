@@ -294,7 +294,7 @@ class TestManagement:
             manager.setup(backend='magic', **keys)
 
     @pytest.mark.parametrize("kwargs", [{},
-                                        {'x0_generator': RandomGenerator(((0, 1), (0, 1)))},
+                                        {'x0_generator': RandomGenerator()},
                                         {'convergence_checker': KillsAfterConvergence()},
                                         {'max_jobs': 3},
                                         {'killing_conditions': MinFuncCalls(10)}])
