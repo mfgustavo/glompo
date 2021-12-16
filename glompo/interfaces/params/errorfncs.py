@@ -1,6 +1,6 @@
 import warnings
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import tables as tb
@@ -621,7 +621,7 @@ class ReaxFFError(BaseParamsError):
                             by_block: bool = False,
                             by_block_index: bool = False,
                             by_equation: bool = False,
-                            by_description: bool = False) -> Tuple[List[Tuple], np.ndarray]:
+                            by_description: bool = False) -> Tuple[List[Tuple[Any]], np.ndarray]:
         """ Returns a grouping matrix for use in the analysis tools (see :class:`.EstimatedEffects` and
         :attr:`.EstimatedEffects.groupings`). Various default groupings are provided.
 
