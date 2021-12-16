@@ -635,11 +635,13 @@ class GloMPOManager:
             Path to GloMPO checkpoint file.
 
         task_loader
-            Method to reconstruct :attr:`task` from files in the checkpoint.
+            Optional method to reconstruct :attr:`task` from files in the checkpoint. Must accept a path to a directory
+            containing the checkpoint files and return a callable which is the task itself. If not provided a direct
+            unpickling of the task file will be attempted (see Notes).
 
         task
-            In the case that the checkpoint does not contain a record of the :attr:`task`, it can be provided
-            directly here.
+            Direct specification of the optimization task. Will take precedence over any other form of task
+            specification i.e. `task_loader` or direct unpickling.
 
         **glompo_kwargs
             Most arguments supplied to :meth:`setup` can also be provided here. This will overwrite the values
@@ -649,15 +651,11 @@ class GloMPOManager:
         -----
 
         #. When making a checkpoint, GloMPO attempts to persist the :attr:`task` directly. If this is not possible
-           it will attempt to call :meth:`checkpoint_save <glompo.core.function.BaseFunction.checkpoint_save>` to
-           produce some files into the checkpoint. `task_loader` is the function or method which can return a
-           :attr:`task` from files within the checkpoint (see :meth:`.BaseFunction.checkpoint_load`).
+           it will attempt to call :meth:`.BaseFunction.checkpoint_save` to produce some files into the checkpoint.
+           `task_loader` is the function or method which can return a :attr:`task` from files within the checkpoint
+           (see :meth:`.BaseFunction.checkpoint_load`).
 
-           `task_loader` must accept a path to a directory containing the checkpoint files and return a callable
-           which is the task itself.
-
-           If both `task_loader` and `task` are provided, the manager will first attempt to use the `task_loader` and
-           then only use `task` if that fails otherwise task is ignored.
+        #. If both `task_loader` and `task` are provided, the manager will use `task` directly and ignore `task_loader`.
 
         #. .. caution::
 
@@ -723,18 +721,16 @@ class GloMPOManager:
         # Setup Task
         try:
             self.task = None
-            if (tmp_dir / 'task').exists():
-                with (tmp_dir / 'task').open('rb') as file:
-                    try:
-                        self.task = dill.load(file)
-                        self.logger.info("Task successfully unpickled")
-                    except PickleError as e:
-                        self.logger.error("Unpickling task failed.")
-                        raise e
-            else:
-                self.logger.warning('No task detected in checkpoint, task or task_loader required.')
 
-            if not self.task and task_loader:
+            if task:
+                try:
+                    self.task = task
+                    assert callable(self.task)
+                except AssertionError as e:
+                    self.logger.error("Could not set task, not callable")
+                    raise e
+
+            elif task_loader:
                 try:
                     self.task = task_loader(tmp_dir)
                     assert callable(self.task)
@@ -743,13 +739,17 @@ class GloMPOManager:
                     self.logger.error("Use of task_loader failed.")
                     raise e
 
-            if not self.task and task:
-                try:
-                    self.task = task
-                    assert callable(self.task)
-                except AssertionError as e:
-                    self.logger.error("Could not set task, not callable")
-                    raise e
+            else:
+                if not (tmp_dir / 'task').exists():
+                    raise FileNotFoundError("No task detected in checkpoint, task or task_loader required.")
+
+                with (tmp_dir / 'task').open('rb') as file:
+                    try:
+                        self.task = dill.load(file)
+                        self.logger.info("Task successfully unpickled")
+                    except PickleError as e:
+                        self.logger.error("Unpickling task failed.")
+                        raise e
 
             assert self.task is not None
 

@@ -1061,13 +1061,11 @@ class TestCheckpointing:
 
         manager.load_checkpoint(input_files / 'no_task_chkpt.tar.gz', task_loader=mock_taskloader)
         assert manager.task([4, 8, 8]) == 20
-        assert "No task detected in checkpoint, task or task_loader required." in caplog.messages
         assert "Task successfully loaded." in caplog.messages
 
     def test_load_newtask(self, input_files, manager, caplog):
         manager.load_checkpoint(input_files / 'no_task_chkpt.tar.gz', task=lambda x: x[0] + x[1] + x[2])
         assert manager.task([4, 8, 8]) == 20
-        assert "No task detected in checkpoint, task or task_loader required." in caplog.messages
 
     @pytest.mark.parametrize('new_max_jobs, raises', [(1, pytest.raises(CheckpointingError, match="Insufficient max")),
                                                       (2, does_not_raise())])
