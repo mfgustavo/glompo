@@ -137,7 +137,7 @@ class CMAOptimizer(BaseOptimizer):
         """
         task_settings = copy.deepcopy(self.cmasettings)
 
-        if sigma0 <= 0:
+        if sigma0 <= 0 and not self.is_restart:
             self.logger.critical('sigma0 value invalid. Please select a positive value.')
             raise ValueError('sigma0 value invalid. Please select a positive value.')
 
