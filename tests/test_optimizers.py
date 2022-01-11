@@ -6,7 +6,6 @@ from time import sleep, time
 from typing import Callable, NamedTuple, Sequence, Tuple
 
 import pytest
-
 from glompo.common.namedtuples import IterationResult
 from glompo.core.function import BaseFunction
 from glompo.optimizers.baseoptimizer import BaseOptimizer, MinimizeResult, _MessagingWrapper
@@ -30,11 +29,12 @@ except ModuleNotFoundError:
     pass
 
 try:
-    from glompo.optimizers.nevergrad import Nevergrad
+    from glompo.optimizers.scipy import ScipyOptimizeWrapper
 
-    AVAILABLE_CLASSES['Nevergrad'] = (Nevergrad, {}, {})
+    AVAILABLE_CLASSES['ScipyOptimizeWrapper'] = (ScipyOptimizeWrapper, {}, {})
+    HAS_SCIPY = True
 except ModuleNotFoundError:
-    pass
+    HAS_SCIPY = False
 
 
 class PlainOptimizer(BaseOptimizer):
@@ -348,6 +348,8 @@ class TestSubclassesGlompoCompatible:
 
     def test_checkpointing(self, opti, init_kwargs, call_kwargs, mp_package, task, tmp_path):
         pytest.importorskip('dill', reason="dill package needed to test and use checkpointing")
+        if HAS_SCIPY and opti is ScipyOptimizeWrapper:
+            pytest.skip("Checkpointing not supported by ScipyOptimizeWrapper.")
 
         opti = opti(_results_queue=mp_package.queue,
                     _signal_pipe=mp_package.c_pipe,
