@@ -7,44 +7,9 @@ from scm.params.common.reaxff_converter import geo_to_params, trainset_to_params
 from scm.params.core.dataset import DataSet
 from scm.params.core.jobcollection import JobCollection
 from scm.params.parameterinterfaces.reaxff import ReaxParams
-from scm.params.parameterinterfaces.xtb import XTBParams
 from scm.plams.interfaces.adfsuite.reaxff import reaxff_control_to_settings
 
 PARAMS_VERSION_INFO = tuple(map(int, PARAMS_VERSION.split('.')))
-
-
-def _setup_collections_from_params(path: Union[Path, str]) -> Tuple[DataSet, JobCollection]:
-    """ Loads ParAMS produced ReaxFF files into ParAMS objects.
-
-    Parameters
-    ----------
-    path
-        Path to folder containing:
-            ``data_set.yml`` OR ``data_set.pkl``
-                Contains the description of the items in the training set. A YAML file must be of the form produced by
-                :meth:`~scm.params.core.dataset.DataSet.store`, a pickle file must be of the form produced by
-                :meth:`~scm.params.core.dataset.DataSet.pickle_dump`. If both files are present, the pickle is given
-                priority.
-            ``job_collection.yml`` OR ``job_collection.pkl``
-                Contains descriptions of the AMS jobs to evaluate. A YAML file must be of the form produced by
-                :meth:`~scm.params.core.jobcollection.JobCollection.store`, a pickle file must be of the form produced
-                by :meth:`scm.params.core.jobcollection.JobCollection.pickle_dump`.  If both files are present, the
-                pickle is given priority.
-    """
-    dat_set = DataSet()
-    job_col = JobCollection()
-
-    for name, params_obj in {'data_set': dat_set, 'job_collection': job_col}.items():
-        built = False
-        for suffix, loader in {'.pkl': 'pickle_load', '.yml': 'load'}.items():
-            file = Path(path, name + suffix)
-            if file.exists():
-                getattr(params_obj, loader)(str(file))
-                built = True
-        if not built:
-            raise FileNotFoundError(f"No {name.replace('_', ' ')} data found")
-
-    return dat_set, job_col
 
 
 def setup_reax_from_classic(path: Union[Path, str], **kwargs) -> Tuple[DataSet, JobCollection, ReaxParams]:
@@ -158,54 +123,43 @@ def setup_reax_from_classic(path: Union[Path, str], **kwargs) -> Tuple[DataSet, 
     return dat_set, job_col, rxf_eng
 
 
-def setup_reax_from_params(path: Union[Path, str]) -> Tuple[DataSet, JobCollection, ReaxParams]:
+def setup_from_params(path: Union[Path, str], *,
+                      jc_path: Union[Path, str, None] = None,
+                      ts_path: Union[Path, str, None] = None,
+                      pi_path: Union[Path, str, None] = None) -> Tuple[DataSet, JobCollection, ReaxParams]:
     """ Loads ParAMS produced ReaxFF files into ParAMS objects.
 
     Parameters
     ----------
     path
-        Path to folder containing:
-            ``data_set.yml`` OR ``data_set.pkl``
-                Contains the description of the items in the training set. A YAML file must be of the form produced by
-                :meth:`~scm.params.core.dataset.DataSet.store`, a pickle file must be of the form produced by
-                :meth:`~scm.params.core.dataset.DataSet.pickle_dump`. If both files are present, the pickle is given
-                priority.
-            ``job_collection.yml`` OR ``job_collection.pkl``
-                Contains descriptions of the AMS jobs to evaluate. A YAML file must be of the form produced by
-                :meth:`~scm.params.core.jobcollection.JobCollection.store`, a pickle file must be of the form produced
-                by :meth:`~scm.params.core.jobcollection.JobCollection.pickle_dump`.  If both files are present, the
-                pickle is given priority.
-            ``reax_params.pkl``
-                Pickle produced by :meth:`~scm.params.parameterinterfaces.base.BaseParameters.pickle_dump`, representing
-                the force field, active parameters and their ranges.
+        A path to a directory containing:
+            ``job_collection.yaml``
+                Contains descriptions of the AMS jobs to evaluate. Must be of the form produced by
+                :meth:`~scm.params.core.jobcollection.JobCollection.store`.
+            ``training_set.yaml``
+                Contains the description of the items in the training set. Must be of the form produced by
+                :meth:`~scm.params.core.dataset.DataSet.store`.
+            ``parameter_interface.yaml``
+                Contains the parameter information produced by
+                :meth:`~scm.params.parameterinterfaces.base.BaseParameters.yaml_store` representing
+                the parameter values, metadata, and their ranges.
+    jc_path
+    ts_path
+    pi_path
+        Custom paths to the job collection, training set and parameter interface YAML files respectively if they do not
+        have the expected default names or are not all in the same directory. If provided they will take precedence over
+        `path` which will be the fallback for any ones which are not provided.
     """
-    dat_set, job_col = _setup_collections_from_params(path)
-    rxf_eng = ReaxParams.pickle_load(str(Path(path, 'reax_params.pkl')))
+    job_collection = JobCollection()
+    training_set = DataSet()
 
-    return dat_set, job_col, rxf_eng
+    path = Path(path)
+    jc_path = Path(jc_path) if jc_path else path / 'job_collection.yaml'
+    ts_path = Path(ts_path) if ts_path else path / 'training_set.yaml'
+    pi_path = Path(pi_path) if pi_path else path / 'parameter_interface.yaml'
 
+    job_collection.load_yaml(str(jc_path))
+    training_set.load(str(ts_path))
+    reaxff_engine = ReaxParams.yaml_load(str(pi_path))
 
-def setup_xtb_from_params(path: Union[Path, str]) -> Tuple[DataSet, JobCollection, XTBParams]:
-    """ Loads ParAMS produced ReaxFF files into ParAMS objects.
-
-    Parameters
-    ----------
-    path
-        Path to folder containing:
-            ``data_set.yml`` OR ``data_set.pkl``
-                Contains the description of the items in the training set. A YAML file must be of the form produced by
-                :meth:`~scm.params.core.dataset.DataSet.store`, a pickle file must be of the form produced by
-                :meth:`~scm.params.core.dataset.DataSet.pickle_dump`. If both files are present, the pickle is given
-                priority.
-            ``job_collection.yml`` OR ``job_collection.pkl``
-                Contains descriptions of the AMS jobs to evaluate. A YAML file must be of the form produced by
-                :meth:`~scm.params.core.jobcollection.JobCollection.store`, a pickle file must be of the form produced
-                by :meth:`~scm.params.core.jobcollection.JobCollection.pickle_dump`.  If both files are present, the
-                pickle is given priority.
-            ``elements.xtbpar``, ``basis.xtbpar``, ``globals.xtbpar``, ``additional_parameters.yaml``, ``metainfo.yaml``, ``atomic_configurations.xtbpar``, ``metals.xtbpar``
-                Classic xTB parameter files.
-    """
-    dat_set, job_col = _setup_collections_from_params(path)
-    xtb_eng = XTBParams(str(path))
-
-    return dat_set, job_col, xtb_eng
+    return training_set, job_collection, reaxff_engine

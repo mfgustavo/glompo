@@ -12,7 +12,7 @@ from scm.params.core.lossfunctions import SSE
 from scm.params.parameterinterfaces.base import BaseParameters
 from scm.plams.core.errors import ResultsError
 
-from .paramsbuilders import setup_reax_from_classic, setup_reax_from_params, setup_xtb_from_params
+from .paramsbuilders import setup_from_params, setup_reax_from_classic
 
 try:
     from scm.params.core.dataset import DataSetEvaluationError
@@ -79,6 +79,26 @@ class BaseParamsError:
     val_set : ~scm.params.core.dataset.DataSet
         Optional validation set to evaluate in parallel to the training set.
     """
+
+    @classmethod
+    def from_params_files(cls,
+                          path: Union[Path, str],
+                          validation_dataset: Optional[DataSet] = None,
+                          scale_residuals: bool = False,
+                          jc_path: Union[Path, str, None] = None,
+                          ts_path: Union[Path, str, None] = None,
+                          pi_path: Union[Path, str, None] = None) -> 'BaseParamsError':
+        """ Initializes the error function from ParAMS data files.
+
+        Parameters
+        ----------
+        Inherited, path jc_path ts_path pi_path
+            See :func:`.setup_from_params`).
+        Inherited, validation_dataset scale_residuals
+            See :class:`.BaseParamsError`.
+        """
+        dat_set, job_col, rxf_eng = setup_from_params(path, jc_path=jc_path, ts_path=ts_path, pi_path=pi_path)
+        return cls(dat_set, job_col, rxf_eng, validation_dataset, scale_residuals)
 
     def __init__(self, data_set: DataSet, job_collection: JobCollection, parameters: BaseParameters,
                  validation_dataset: Optional[DataSet] = None,
@@ -216,8 +236,13 @@ class BaseParamsError:
 
         return residuals
 
-    def save(self, path: Union[Path, str], filenames: Optional[Dict[str, str]] = None,
-             parameters: Optional[Sequence[float]] = None):
+    def checkpoint_save(self, path: Union[Path, str]):
+        """ Used to store files into a GloMPO checkpoint (at path) suitable to reconstruct the task when the checkpoint
+        is loaded.
+        """
+        self.save(path)
+
+    def save(self, path: Union[Path, str], filenames: Optional[Dict[str, str]] = None):
         """ Writes the :attr:`dat_set` and :attr:`job_col` to YAML files.
         Writes the engine object to an appropriate parameter file.
 
@@ -230,23 +255,19 @@ class BaseParamsError:
             below. This example contains the default names used if not given::
 
                 {'ds': 'data_set.yml', 'jc': 'job_collection.yml', 'ff': 'ffield'}
-
-        parameters
-            Optional parameters to be written into the force field file. If not given, the parameters currently
-            therein will be used.
         """
         path = Path(path).resolve(True)
 
         if not filenames:
             filenames = {}
 
-        names = {'ds': filenames['ds'] if 'ds' in filenames else 'data_set.yml',
-                 'jc': filenames['jc'] if 'jc' in filenames else 'job_collection.yml',
-                 'ff': filenames['ff'] if 'ff' in filenames else 'ffield'}
+        names = {'ds': filenames['ds'] if 'ds' in filenames else 'data_set.yaml',
+                 'jc': filenames['jc'] if 'jc' in filenames else 'job_collection.yaml',
+                 'ff': filenames['ff'] if 'ff' in filenames else 'parameter_interface.yaml'}
 
         self.dat_set.store(str(path / names['ds']))
         self.job_col.store(str(path / names['jc']))
-        self.par_eng.write(str(path / names['ff']), parameters)
+        self.par_eng.yaml_store(str(path / names['ff']))
 
     def set_parameters(self, x: Sequence[float], space: str, full: bool = False):
         """ Store parameters in the class.
@@ -545,24 +566,6 @@ class ReaxFFError(BaseParamsError):
         dat_set, job_col, rxf_eng = setup_reax_from_classic(path, **kwargs)
         return cls(dat_set, job_col, rxf_eng, validation_dataset, scale_residuals)
 
-    @classmethod
-    def from_params_files(cls,
-                          path: Union[Path, str],
-                          validation_dataset: Optional[DataSet] = None,
-                          scale_residuals: bool = False, ) -> 'ReaxFFError':
-        """ Initializes the error function from ParAMS data files.
-
-        Parameters
-        ----------
-        path
-            Path to directory containing ParAMS data set, job collection and ReaxFF engine files (see
-            :func:`.setup_reax_from_params`).
-        Inherited, validation_dataset scale_residuals
-            See :class:`.BaseParamsError`.
-        """
-        dat_set, job_col, rxf_eng = setup_reax_from_params(path)
-        return cls(dat_set, job_col, rxf_eng, validation_dataset, scale_residuals)
-
     def toggle_parameter(self, parameters: Union[Sequence[int], Sequence[str]], toggle: Union[str, bool] = None,
                          force: bool = False):
         """ De/Activate parameters.
@@ -605,15 +608,6 @@ class ReaxFFError(BaseParamsError):
         else:
             valid_parameters = parameters
         super().toggle_parameter(valid_parameters, toggle)
-
-    def checkpoint_save(self, path: Union[Path, str]):
-        """ Used to store files into a GloMPO checkpoint (at path) suitable to reconstruct the task when the checkpoint
-        is loaded.
-        """
-        path = Path(path).resolve(True)
-        self.dat_set.pickle_dump(str(path / 'data_set.pkl'))
-        self.job_col.pickle_dump(str(path / 'job_collection.pkl'))
-        self.par_eng.pickle_dump(str(path / 'reax_params.pkl'))
 
     def get_grouping_matrix(self, *,
                             active_only: bool = False,
@@ -699,30 +693,3 @@ class ReaxFFError(BaseParamsError):
 
 class XTBError(BaseParamsError):
     """ GFN-xTB error function. """
-
-    @classmethod
-    def from_params_files(cls,
-                          path: Union[Path, str],
-                          validation_dataset: Optional[DataSet] = None,
-                          scale_residuals: bool = False, ) -> 'XTBError':
-        """ Initializes the error function from ParAMS data files.
-
-        Parameters
-        ----------
-        path
-            Path to directory containing ParAMS data set, job collection and parameter engine files (see
-            :func:`.setup_xtb_from_params`).
-        Inherited, validation_dataset scale_residuals
-            See :class:`.BaseParamsError`.
-        """
-        dat_set, job_col, rxf_eng = setup_xtb_from_params(path)
-        return cls(dat_set, job_col, rxf_eng, validation_dataset, scale_residuals)
-
-    def checkpoint_save(self, path: Union[Path, str]):
-        """ Used to store files into a GloMPO checkpoint (at path) suitable to reconstruct the task when the checkpoint
-        is loaded.
-        """
-        path = Path(path).resolve(True)
-        self.dat_set.pickle_dump(str(path / 'data_set.pkl'))
-        self.job_col.pickle_dump(str(path / 'job_collection.pkl'))
-        self.par_eng.write(str(path))
