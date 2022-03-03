@@ -1,7 +1,7 @@
 import numpy as np
-from glompo.core.manager import GloMPOManager
 
 from .basegenerator import BaseGenerator
+from ..core.manager import GloMPOManager
 
 __all__ = ("BasinHoppingGenerator",)
 
