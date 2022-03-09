@@ -122,7 +122,10 @@ class BaseLogger:
 
     def put_metadata(self, opt_id: int, key: str, value: Any):
         """ Adds optimizer metadata to storage. """
-        self._storage[opt_id]['metadata'][key] = value
+        try:
+            self._storage[opt_id]['metadata'][key] = value
+        except KeyError:
+            pass
 
     def put_manager_metadata(self, key: str, value: Any):
         pass
@@ -428,10 +431,7 @@ class FileLogger(BaseLogger):
             self.flush(iter_res.opt_id)
 
     def put_metadata(self, opt_id: int, key: str, value: Any):
-        try:
-            super().put_metadata(opt_id, key, value)
-        except KeyError:
-            pass
+        super().put_metadata(opt_id, key, value)
         self._get_group(opt_id)._v_attrs[key] = value
 
     def put_manager_metadata(self, key: str, value: Any):
