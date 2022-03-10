@@ -593,8 +593,9 @@ class TestManagement:
     def test_resource_logging(self, manager, tmp_path):
         try:
             import psutil
-        except (ImportError, ModuleNotFoundError):
-            pytest.xfail("psutil not detected.")
+            assert psutil.version_info >= (5, 6, 2)
+        except (ModuleNotFoundError, TypeError, AssertionError):
+            pytest.xfail("psutil >= 5.6.2 not detected.")
 
         manager: GloMPOManager
         manager._process = psutil.Process()
@@ -856,7 +857,7 @@ class TestCheckpointing:
         manager.load_checkpoint(path=checkpoint_path,
                                 working_dir=tmp_path,
                                 summary_files=1,
-                                convergence_checker=MaxSeconds(session_max=3),
+                                convergence_checker=MaxFuncCalls(10),
                                 backend='threads',
                                 force_terminations_after=60,
                                 visualisation_args={'x_range': (0, 4000)})
@@ -892,10 +893,10 @@ class TestCheckpointing:
                       max_jobs=2,
                       backend=backend,
                       summary_files=1,
-                      convergence_checker=MaxSeconds(session_max=3),
+                      convergence_checker=MaxFuncCalls(10),
                       x0_generator=None,
                       killing_conditions=None,
-                      checkpoint_control=CheckpointingControl(checkpoint_time_frequency=2.5,
+                      checkpoint_control=CheckpointingControl(checkpoint_iter_frequency=5,
                                                               naming_format='chkpt_%(count)',
                                                               checkpointing_dir=tmp_path),
                       visualisation=True,
@@ -905,7 +906,7 @@ class TestCheckpointing:
 
         assert manager.f_counter > 0
         assert manager.o_counter > 0
-        assert manager.t_end - manager.t_start > 3
+        assert manager.t_end - manager.t_start > 0
         assert manager.result.fx
 
         assert (tmp_path / 'chkpt_000.tar.gz').exists()
@@ -928,7 +929,7 @@ class TestCheckpointing:
         manager = GloMPOManager.load_manager(path=checkpoint_path,
                                              working_dir=tmp_path,
                                              backend=backend,
-                                             convergence_checker=MaxSeconds(overall_max=5),
+                                             convergence_checker=MaxFuncCalls(50),
                                              checkpointing_control=None)
 
         init_f_count = manager.f_counter
@@ -938,7 +939,6 @@ class TestCheckpointing:
         assert init_f_count > 0
         assert manager.o_counter == 2
         assert manager.visualisation
-        assert 2.5 < manager.t_used < 3.5
         assert manager.t_start is None
         assert manager.opt_crashed is False
         assert manager.last_opt_spawn == (0, 0)
@@ -946,11 +946,9 @@ class TestCheckpointing:
         manager.start_manager()
         assert (tmp_path / 'glompo_manager_log.yml').exists()
         assert manager.f_counter > init_f_count
-        assert manager.t_end - manager.t_start < 3
 
     @pytest.mark.parametrize("delete, raises, warns",
-                             [(['scope'], does_not_raise(), pytest.warns(RuntimeWarning, match="Could not load scope")),
-                              (['manager'], does_not_raise(), pytest.raises(CheckpointingError,
+                             [(['manager'], does_not_raise(), pytest.raises(CheckpointingError,
                                                                             match="Error loading manager. Aborting.")),
                               (['optimizers/0001'], pytest.warns(RuntimeWarning,
                                                                  match="Failed to initialise opt"), does_not_raise()),
