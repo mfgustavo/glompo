@@ -170,7 +170,7 @@ class BaseOptimizer(ABC):
 
     .. important::
 
-       Make sure to call the superclass initialisation method when creating your own optimizers::
+       Make sure to call the superclass initialization method when creating your own optimizers:
 
           super().__init__(_opt_id,
                            _signal_pipe,
