@@ -44,16 +44,14 @@ class RandomOptimizer(BaseOptimizer):
                  callbacks: Callable = None, **kwargs) -> MinimizeResult:
 
         best_f = self.result.fx if self.is_restart else np.inf
+        bounds = np.transpose(bounds)
 
         while self.used_iters < self.max_iters:
             if self.stop_called:
                 break
 
             self.used_iters += 1
-            vector = []
-            for bnd in bounds:
-                vector.append(np.random.uniform(bnd[0], bnd[1]))
-            vector = np.array(vector)
+            vector = np.random.uniform(bounds[0], bounds[1])
             self.logger.debug("Generated vector = %s", vector)
 
             self.logger.debug("Evaluating function.")
