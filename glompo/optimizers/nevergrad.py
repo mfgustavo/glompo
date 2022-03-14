@@ -79,8 +79,8 @@ class Nevergrad(BaseOptimizer):
             self.stop = False
             self.logger.debug("Loaded nevergrad optimizer")
         else:
-            self.optimizer = self.opt_algo(parametrization=parametrization, budget=int(4e50),
-                                           num_workers=self.workers, **self.opt_init_kwargs)
+            self.optimizer = self.opt_algo(parametrization=parametrization, num_workers=self.workers,
+                                           **self.opt_init_kwargs)
             self.ng_callbacks = _NevergradCallbacksWrapper(self, callbacks)
             self.logger.debug("Created nevergrad optimizer object")
 
