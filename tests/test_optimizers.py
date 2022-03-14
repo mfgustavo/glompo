@@ -36,6 +36,13 @@ try:
 except ModuleNotFoundError:
     HAS_SCIPY = False
 
+try:
+    from scm.glompo.optimizers.nevergrad import Nevergrad
+
+    AVAILABLE_CLASSES['Nevergrad'] = (Nevergrad, {}, {})
+except ModuleNotFoundError:
+    pass
+
 
 class PlainOptimizer(BaseOptimizer):
 
