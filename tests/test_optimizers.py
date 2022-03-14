@@ -39,7 +39,7 @@ except ModuleNotFoundError:
 try:
     from scm.glompo.optimizers.nevergrad import Nevergrad
 
-    AVAILABLE_CLASSES['Nevergrad'] = (Nevergrad, {}, {})
+    AVAILABLE_CLASSES['Nevergrad'] = (Nevergrad, {'budget': 100}, {})
 except ModuleNotFoundError:
     pass
 
