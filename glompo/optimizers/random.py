@@ -1,6 +1,7 @@
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
+from queue import Queue
+from threading import Event
 from typing import Callable, Optional, Sequence, Tuple
 
 import numpy as np
@@ -41,7 +42,7 @@ class RandomOptimizer(BaseOptimizer):
         self.logger.debug("Setup optimizer")
 
     def minimize(self,
-                 function: Callable,
+                 function: Callable[[Sequence[float]], float],
                  x0: Sequence[float],
                  bounds: Sequence[Tuple[float, float]],
                  **kwargs) -> MinimizeResult:
