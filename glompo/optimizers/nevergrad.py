@@ -3,10 +3,10 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from multiprocessing import Event, Queue
 from multiprocessing.connection import Connection
 from pathlib import Path
-from typing import Callable, Optional, Sequence, Set, Union
 
 import nevergrad as ng
 import numpy as np
+from typing import Callable, Optional, Sequence, Set, Tuple, Union
 
 from .baseoptimizer import BaseOptimizer, MinimizeResult
 
@@ -16,6 +16,7 @@ __all__ = ('Nevergrad',)
 class Nevergrad(BaseOptimizer):
     """ Provides access to the optimizers available through the
     `nevergrad <https://facebookresearch.github.io/nevergrad/>`_ package.
+    Tested with v. 0.4.3.post3.
 
     Parameters
     ----------
@@ -25,6 +26,10 @@ class Nevergrad(BaseOptimizer):
         String key to the desired optimizer. See nevergrad documentation for a list of available algorithms.
     zero
         Will stop the optimization when this cost function value is reached.
+    warn
+        If :obj:`True`, suppresses all nevergrad warnings.
+    **kwargs
+        Extra initialisation arguments passed to the optimizer.
     """
 
     def __init__(self,
@@ -36,8 +41,11 @@ class Nevergrad(BaseOptimizer):
                  workers: int = 1,
                  backend: str = 'processes',
                  optimizer: str = 'TBPSA',
-                 zero: float = -float('inf')):
-        super().__init__(_opt_id, _signal_pipe, _results_queue, _pause_flag, _is_log_detailed, workers, backend)
+                 zero: float = -float('inf'),
+                 warn=False,
+                 **kwargs):
+        super().__init__(_opt_id, _signal_pipe, _results_queue, _pause_flag, _is_log_detailed, workers, backend,
+                         optimizer=optimizer, zero=zero, warn=warn, **kwargs)
 
         self.opt_algo = ng.optimizers.registry[optimizer]
         self.optimizer = None
@@ -48,8 +56,19 @@ class Nevergrad(BaseOptimizer):
         self.zero = zero
         self.stop = False
         self.ng_callbacks = None
+        self.opt_init_kwargs = kwargs
 
-    def minimize(self, function, x0, bounds, callbacks=None, **kwargs) -> MinimizeResult:
+        if warn is False:
+            warnings.filterwarnings('ignore', module='nevergrad')
+
+    def minimize(self,
+                 function: Callable[[Sequence[float]], float],
+                 x0: Sequence[float],
+                 bounds: Sequence[Tuple[float, float]],
+                 callbacks: Union[None,
+                                  Callable[[ng.optimizers.base.Optimizer, Sequence[float], float], bool],
+                                  Sequence[Callable[[ng.optimizers.base.Optimizer, Sequence[float], float],
+                                                    bool]]] = None) -> MinimizeResult:
         lower, upper = np.transpose(bounds)
         parametrization = ng.p.Array(init=x0)
         parametrization.set_bounds(lower, upper)
@@ -61,7 +80,7 @@ class Nevergrad(BaseOptimizer):
             self.logger.debug("Loaded nevergrad optimizer")
         else:
             self.optimizer = self.opt_algo(parametrization=parametrization, budget=int(4e50),
-                                           num_workers=self.workers, **kwargs)
+                                           num_workers=self.workers, **self.opt_init_kwargs)
             self.ng_callbacks = _NevergradCallbacksWrapper(self, callbacks)
             self.logger.debug("Created nevergrad optimizer object")
 
@@ -92,7 +111,10 @@ class Nevergrad(BaseOptimizer):
     def callstop(self, *args):
         self.stop = True
 
-    def checkpoint_save(self, path: Union[Path, str], force: Optional[Set[str]] = None):
+    def checkpoint_save(self,
+                        path: Union[Path, str],
+                        force: Optional[Set[str]] = None,
+                        block: Optional[Set[str]] = None):
         # Remove attributes which should not be saved
         if self.ng_callbacks:
             self.ng_callbacks.parent = None
