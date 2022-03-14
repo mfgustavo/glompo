@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from multiprocessing.connection import Connection
 from pathlib import Path
 from threading import Event
-from typing import Callable, List, Optional, Sequence, Set, Tuple, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Type, Union
 
 from ..common.helpers import LiteralWrapper
 from ..common.namedtuples import IterationResult
@@ -42,12 +42,17 @@ class MinimizeResult:
         Dictionary with configurations details of the optimizer which produced the result.
     """
 
-    def __init__(self):
-        self.success = False
-        self.x = None
-        self.fx = float('inf')
-        self.stats = None
-        self.origin = None
+    def __init__(self,
+                 success: bool = False,
+                 x: Optional[Sequence[float]] = None,
+                 fx: float = float('inf'),
+                 stats: Optional[Dict[str, Any]] = None,
+                 origin: Optional[Dict[str, Any]] = None):
+        self.success = success
+        self.x = x
+        self.fx = fx
+        self.stats = stats
+        self.origin = origin
 
 
 class _MessagingWrapper:
@@ -359,7 +364,10 @@ class BaseOptimizer(ABC):
         """ Breaks out of the :meth:`minimize` minimization loop. """
 
     @needs_optional_package('dill')
-    def checkpoint_save(self, path: Union[Path, str], force: Optional[Set[str]] = None):
+    def checkpoint_save(self,
+                        path: Union[Path, str],
+                        force: Optional[Set[str]] = None,
+                        block: Optional[Set[str]] = None):
         """ Save current state, suitable for restarting.
 
         Parameters
@@ -369,6 +377,9 @@ class BaseOptimizer(ABC):
         force
             Set of variable names which will be forced into the dumped file. Convenient shortcut for overwriting if
             fails for a particular optimizer because a certain variable is filtered out of the data dump.
+        block
+            Set of variable names which are typically caught in the construction of the checkpoint but should be
+            excluded. Useful for excluding some properties
 
         Notes
         -----
@@ -378,15 +389,19 @@ class BaseOptimizer(ABC):
         #. This method will almost never be called directly by the user. Rather it will called (via signals) by the
            manager.
 
-        #. This is a basic implementation which should suit most optimizers; may need to be overwritten.
+        #. This is a basic implementation which should suit most optimizers; may need to be overwritten. Typically it is
+           sufficient to call the super method and use the `force` and `block` parameters to get a working
+           implementation.
         """
         self.logger.debug("Creating restart file.")
 
         force = set(force) if force else set()
+        block = set(block) if block else set()
         dump_collection = {}
         for var in dir(self):
             if not callable(getattr(self, var)) and \
                     not var.startswith('_') and \
+                    var not in block and \
                     all([var != forbidden for forbidden in ('logger', 'is_restart', 'opt_id', 'n_iter')]) or \
                     var in force:
                 dump_collection[var] = getattr(self, var)
