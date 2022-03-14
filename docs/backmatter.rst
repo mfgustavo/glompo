@@ -24,13 +24,13 @@ Raising Issues
    :start-after: issue-start
    :end-before: issue-end
 
-.. ***************************
-.. Citing GloMPO in Your Work
-.. **************************
-..
-.. If you make use of GloMPO in your work, please consider citing the following article in your work:
-..
-..    Freitas Gustavo, M. & Verstraelen, T. (2021)
+***************************
+Citing GloMPO in Your Work
+**************************
+
+.. include:: ../README.rst
+   :start-after: citation-start
+   :end-before: citation-end
 
 **********
 References

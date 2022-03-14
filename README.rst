@@ -235,12 +235,14 @@ GloMPO is licensed under `GPL-3.0 <https://opensource.org/licenses/GPL-3.0>`_.
 
 .. license-end
 
-.. ########
-.. Citation
-.. ########
+########
+Citation
+########
 
 .. citation-start
 
-.. If you find GloMPO useful, please consider citing the follow article in your work:
+If you find GloMPO useful, please cite the follow article in your work:
+
+Freitas Gustavo, M., Verstraelen, T. GloMPO (Globally Managed Parallel Optimization): a tool for expensive, black-box optimizations, application to ReaxFF reparameterizations. J Cheminform 14, 7 (2022). https://doi.org/10.1186/s13321-022-00581-z
 
 .. citation-end
