@@ -16,7 +16,7 @@ __all__ = ('Nevergrad',)
 class Nevergrad(BaseOptimizer):
     """ Provides access to the optimizers available through the
     `nevergrad <https://facebookresearch.github.io/nevergrad/>`_ package.
-    Tested with v. 0.4.3.post3.
+    Tested with v. 0.3.2.
 
     Parameters
     ----------
