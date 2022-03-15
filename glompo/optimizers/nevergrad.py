@@ -13,6 +13,11 @@ from .baseoptimizer import BaseOptimizer, MinimizeResult
 __all__ = ('Nevergrad',)
 
 
+if tuple(ng.__version__.split('.')) >= ('0', '4'):
+    warnings.warn("A known bug in Nevergrad >= 0.4 will break the python logging system. "
+                  "Please downgrade to 0.3.2 to regain control of the logging system.", ImportWarning)
+
+
 class Nevergrad(BaseOptimizer):
     """ Provides access to the optimizers available through the
     `nevergrad <https://facebookresearch.github.io/nevergrad/>`_ package.
