@@ -2,9 +2,9 @@ import warnings
 from multiprocessing import Event
 from multiprocessing.connection import Connection
 from queue import Queue
-from typing import Callable, Sequence, Tuple
 
 from scipy.optimize import basinhopping, differential_evolution, dual_annealing, minimize, shgo
+from typing import Callable, Sequence, Tuple
 
 from .baseoptimizer import BaseOptimizer, MinimizeResult
 
@@ -47,6 +47,9 @@ class ScipyOptimizeWrapper(BaseOptimizer):
        callbacks do not function consistently. Therefore, most GloMPO functionality like checkpointing and information
        sharing is not available. Users are advised to try :class:`.Nevergrad` instead which offers an interface to the
        SciPy optimizers with full GloMPO functionality.
+
+       This optimizer is also prone to hanging in certain edge cases, thus you are advised to set `end_timeout` in the
+       :class:`.GloMPOManager` to a reasonable value.
 
     Parameters
     ----------
