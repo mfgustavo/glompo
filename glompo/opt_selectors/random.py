@@ -1,4 +1,5 @@
 import random
+
 from typing import Any, Dict, Tuple, Type, Union
 
 from .baseselector import BaseSelector
@@ -15,7 +16,7 @@ class RandomSelector(BaseSelector):
                          slots_available: int) -> Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]],
                                                         None, bool]:
 
-        if not self.allow_spawn(manager):
+        if not all((spawner(manager) for spawner in self.allow_spawn)):
             return False
 
         viable = []

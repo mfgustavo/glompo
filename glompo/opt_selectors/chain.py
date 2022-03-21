@@ -43,7 +43,7 @@ class ChainSelector(BaseSelector):
                  *avail_opts: Union[Type[BaseOptimizer],
                                     Tuple[Type[BaseOptimizer], Optional[Dict[str, Any]], Optional[Dict[str, Any]]]],
                  fcall_thresholds: List[float],
-                 allow_spawn: Optional[Callable[['GloMPOManager'], bool]] = None):
+                 allow_spawn: Optional[List[Callable[['GloMPOManager'], bool]]] = None):
         super().__init__(*avail_opts, allow_spawn=allow_spawn)
         self.fcall_thresholds = fcall_thresholds
         n = len(avail_opts)
@@ -53,7 +53,7 @@ class ChainSelector(BaseSelector):
     def select_optimizer(self, manager: 'GloMPOManager', log: BaseLogger, slots_available: int) -> \
             Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]], None, bool]:
 
-        if not self.allow_spawn(manager):
+        if not all((spawner(manager) for spawner in self.allow_spawn)):
             return False
 
         if self.toggle < len(self.fcall_thresholds) and manager.f_counter >= self.fcall_thresholds[self.toggle]:

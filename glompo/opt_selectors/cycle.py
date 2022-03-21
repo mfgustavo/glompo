@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, Optional, Tuple, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 from .baseselector import BaseSelector
 from ..core.optimizerlogger import BaseLogger
@@ -27,7 +27,7 @@ class CycleSelector(BaseSelector):
     def __init__(self,
                  *avail_opts: Union[Type[BaseOptimizer],
                                     Tuple[Type[BaseOptimizer], Optional[Dict[str, Any]], Optional[Dict[str, Any]]]],
-                 allow_spawn: Optional[Callable] = None):
+                 allow_spawn: Optional[List[Callable]] = None):
         super().__init__(*avail_opts, allow_spawn=allow_spawn)
         self.i = -1
         self.old = -1
@@ -38,7 +38,7 @@ class CycleSelector(BaseSelector):
                          slots_available: int) -> Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]],
                                                         None, bool]:
 
-        if not self.allow_spawn(manager):
+        if not all((spawner(manager) for spawner in self.allow_spawn)):
             return False
 
         self.old = self.i

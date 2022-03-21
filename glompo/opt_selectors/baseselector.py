@@ -2,7 +2,8 @@
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, Optional, Tuple, Type, Union
+
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 from .spawncontrol import _AlwaysSpawn
 from ..core.optimizerlogger import BaseLogger
@@ -64,7 +65,7 @@ class BaseSelector(ABC):
     def __init__(self,
                  *avail_opts: Union[Type[BaseOptimizer],
                                     Tuple[Type[BaseOptimizer], Optional[Dict[str, Any]], Optional[Dict[str, Any]]]],
-                 allow_spawn: Optional[Callable[['GloMPOManager'], bool]] = None):
+                 allow_spawn: Optional[List[Callable[['GloMPOManager'], bool]]] = None):
         self.logger = logging.getLogger('glompo.selector')
 
         self.avail_opts = []
@@ -97,15 +98,17 @@ class BaseSelector(ABC):
                                  f"Dict[str, Any], Dict[str, Any]]] expected.") from e
 
         if callable(allow_spawn):
+            self.allow_spawn = [allow_spawn]
+        elif isinstance(allow_spawn, list):
             self.allow_spawn = allow_spawn
         else:
-            self.allow_spawn = _AlwaysSpawn()
+            self.allow_spawn = [_AlwaysSpawn()]
 
     @abstractmethod
     def select_optimizer(self,
                          manager: 'GloMPOManager',
                          log: BaseLogger,
-                         slots_available: int) -> Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]],
+                         slots_available: int) -> Union[Tuple[Type[BaseOptimizer], Dict[str, Any]],
                                                         None, bool]:
         """ Selects an optimizer to start from the available options.
 
@@ -124,7 +127,7 @@ class BaseSelector(ABC):
 
         Returns
         -------
-        Union[Tuple[Type[BaseOptimizer], Dict[str, Any], Dict[str, Any]], None, bool]
+        Union[Tuple[Type[BaseOptimizer], Dict[str, Any], None, bool]
             Optimizer class and configuration parameters: Tuple of optimizer class, dictionary of initialisation
             parameters, and dictionary of minimization parameters (see :class:`__init__ <.BaseSelector>`). Manager will
             use this to initialise and start a new optimizer.
