@@ -78,7 +78,7 @@ class CMAOptimizer(BaseOptimizer):
         self.verbose = verbose
         self.es = None
         self.result = None
-        self.keep_files = Path(keep_files) if keep_files is not None else None
+        self.keep_files = Path(keep_files) if (keep_files is not None) and (keep_files is not False) else None
         self.cmasettings = cmasettings
         self.popsize = cmasettings['popsize'] if 'popsize' in cmasettings else None
 
