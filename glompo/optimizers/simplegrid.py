@@ -47,6 +47,8 @@ class SimpleGridOptimizer(BaseOptimizer):
         pargrid = np.linspace(bounds[0], bounds[1], self.nsteps + 1).T
 
         def full_return(x):
+            if self.stop:
+                raise StopIteration
             return x, function(x)
 
         if self.workers > 1:

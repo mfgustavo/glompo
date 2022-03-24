@@ -52,6 +52,8 @@ class RandomOptimizer(BaseOptimizer):
         bounds = np.transpose(bounds)
 
         def evaluate(_):
+            if self.stop_called:
+                raise StopIteration
             x = np.random.uniform(bounds[0], bounds[1])
             fx = function(x)
             return x, fx
