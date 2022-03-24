@@ -251,7 +251,7 @@ class MaxCallsCallback:
 
                           (CycleSelector((RandomOptimizer, {'workers': 1, 'popsize': 10},
                                           {'callbacks': MaxCallsCallback(100, 1)}), allow_spawn=IterSpawnStop(300)),
-                           'Selector: CycleSelector\nAllow Spawn:\n  IterSpawnStop:\n    max_calls: 300\n'
+                           'Selector: CycleSelector\nAllow Spawn:\n- IterSpawnStop:\n    max_calls: 300\n'
                            'Available Optimizers:\n  0:\n    type: RandomOptimizer\n    init_kwargs:\n'
                            '      workers: 1\n      popsize: 10\n    call_kwargs:\n      callbacks:\n        '
                            'MaxCallsCallback:\n          calls_per_iter: 1\n          iters_used: 0\n          '

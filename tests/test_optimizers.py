@@ -205,9 +205,9 @@ class TestBase:
         opti = PlainOptimizer(1, mp_package.c_pipe, mp_package.queue, mp_package.event)
         opti.workers = 685
         process = mp.Process(target=opti.minimize, args=(None, None, None))
-        process.start()
 
         mp_package.p_pipe.send((0, tmp_path / '0001'))  # checkpoint_save
+        process.start()
         mp_package.p_pipe.send(1)  # callstop
         process.join()
 
