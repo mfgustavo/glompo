@@ -26,7 +26,7 @@ Raising Issues
 
 ***************************
 Citing GloMPO in Your Work
-**************************
+***************************
 
 .. include:: ../README.rst
    :start-after: citation-start
