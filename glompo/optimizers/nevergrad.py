@@ -73,7 +73,7 @@ class Nevergrad(BaseOptimizer):
                  callbacks: Union[None,
                                   Callable[[ng.optimizers.base.Optimizer, Sequence[float], float], bool],
                                   Sequence[Callable[[ng.optimizers.base.Optimizer, Sequence[float], float],
-                                                    bool]]] = None) -> MinimizeResult:
+                                                    bool]]] = None, **kwargs) -> MinimizeResult:
         lower, upper = np.transpose(bounds)
         parametrization = ng.p.Array(init=x0)
         parametrization.set_bounds(lower, upper)

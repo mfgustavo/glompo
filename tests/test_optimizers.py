@@ -37,7 +37,7 @@ except ModuleNotFoundError:
     HAS_SCIPY = False
 
 try:
-    from scm.glompo.optimizers.nevergrad import Nevergrad
+    from glompo.optimizers.nevergrad import Nevergrad
 
     AVAILABLE_CLASSES['Nevergrad'] = (Nevergrad, {'budget': 100}, {})
 except ModuleNotFoundError:
@@ -470,7 +470,7 @@ class TestCMA:
 
     def test_save(self, monkeypatch, tmp_path, optimizer):
         monkeypatch.chdir(tmp_path)
-        optimizer.keep_files = True
+        optimizer.keep_files = tmp_path
         optimizer.minimize(function=lambda x: x[0] ** 2 + x[1] ** 2,
                            x0=[1, 1],
                            bounds=[(-3, 3), (-3, 3)],

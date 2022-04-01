@@ -45,7 +45,7 @@ class RandomOptimizer(BaseOptimizer):
                  function: Callable[[Sequence[float]], float],
                  x0: Sequence[float],
                  bounds: Sequence[Tuple[float, float]],
-                 **kwargs) -> MinimizeResult:
+                 callbacks: Callable = None, **kwargs) -> MinimizeResult:
         if self.seed:
             np.random.seed(self.seed)
 

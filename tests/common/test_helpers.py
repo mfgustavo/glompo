@@ -257,7 +257,7 @@ class MaxCallsCallback:
                            'MaxCallsCallback:\n          calls_per_iter: 1\n          iters_used: 0\n          '
                            'max_iter: 100\n'),
 
-                          (RandomGenerator([(6, 7)] * 30), 'Generator: RandomGenerator\nn_params: 30\n'),
+                          (RandomGenerator(), 'Generator: RandomGenerator\n'),
 
                           (np.full(5, 3), '[3, 3, 3, 3, 3]\n'),
 
