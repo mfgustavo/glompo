@@ -34,6 +34,7 @@ __all__ = ("SplitOptimizerLogs",
            "unknown_object_presenter",
            "WorkInDirectory",
            "CheckpointingError",
+           "StopInterrupt",
            )
 
 """ Sundry Code Stubs """
@@ -545,3 +546,7 @@ class WorkInDirectory:
 
 class CheckpointingError(RuntimeError):
     """ Error raised during creation of a checkpoint which would result in an incomplete checkpoint. """
+
+
+class StopInterrupt(Exception):
+    """ Raised if a file called STOP_ALL is found in the working directory. """

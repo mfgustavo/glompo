@@ -49,7 +49,7 @@ from .optimizerlogger import BaseLogger, FileLogger
 from ..common.helpers import LiteralWrapper, literal_presenter, nested_string_formatting, \
     unknown_object_presenter, generator_presenter, optimizer_selector_presenter, present_memory, FlowList, \
     flow_presenter, numpy_array_presenter, numpy_dtype_presenter, BoundGroup, bound_group_presenter, \
-    CheckpointingError, is_bounds_valid, infer_headers
+    CheckpointingError, StopInterrupt, is_bounds_valid, infer_headers
 from ..common.namedtuples import Bound, IterationResult, OptimizerPackage, ProcessPackage, Result, OptimizerCheckpoint
 from ..common.wrappers import process_print_redirect
 from ..convergence import BaseChecker, KillsAfterConvergence, MaxFuncCalls
@@ -1049,7 +1049,7 @@ class GloMPOManager:
             self.logger.debug("Cleaning up multiprocessing")
             self._stop_all_children()
 
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, StopInterrupt):
             caught_exception = "User Interrupt"
             reason = caught_exception
             self.logger.error("Caught User Interrupt, closing GloMPO gracefully.")
@@ -1560,6 +1560,8 @@ class GloMPOManager:
 
         stop_files = self.working_dir.glob('STOP_*')
         for file in stop_files:
+            if file.name == 'STOP_ALL':
+                raise StopInterrupt  # Caught and treated like a KeyboardInterrupt
             try:
                 _, opt_id = file.name.split('_')
                 opt_id = int(opt_id)
